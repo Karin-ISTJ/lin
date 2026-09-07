@@ -4564,6 +4564,7 @@
         ensureWorldbookDepsReady: ensureWorldbookDepsReady,
         buildWorldbookBundle: buildWorldbookBundle,
         buildSystemPrompt: buildSystemPrompt,
+        buildStPresetMessages: buildStPresetMessages,
         buildApiMessages: buildApiMessages,
         setPendingOnlineReturnPrompt: function (chatId, text) {
             var key = String(chatId || '').trim();
