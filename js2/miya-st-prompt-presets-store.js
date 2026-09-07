@@ -276,12 +276,10 @@
       prompts.forEach(function (p) {
         if (!p) return;
         var ident = p.identifier != null ? String(p.identifier) : '';
+        var key = ident || '';
         if (ident && used[ident]) return;
         if (!ident) {
-          // 无 identifier：用 name 粗去重
-          var nkey = 'name:' + String(p.name || '');
-          if (p.name && used[nkey]) return;
-          if (p.name) used[nkey] = true;
+          // name-based already handled loosely
         }
         pushFromPrompt(p, p.marker ? false : true, entries.length);
       });
@@ -312,30 +310,6 @@
     return { pack: pack, added: entries.length, total: entries.length };
   }
 
-  /** 按 id 数组重排当前预设包条目，并重写 order */
-  function reorderEntries(orderedIds) {
-    return updateActiveEntries(function (pack) {
-      var map = Object.create(null);
-      (pack.entries || []).forEach(function (e) {
-        if (e && e.id) map[e.id] = e;
-      });
-      var next = [];
-      (orderedIds || []).forEach(function (id) {
-        if (map[id]) {
-          next.push(map[id]);
-          delete map[id];
-        }
-      });
-      Object.keys(map).forEach(function (id) {
-        next.push(map[id]);
-      });
-      next.forEach(function (e, i) {
-        e.order = i;
-      });
-      pack.entries = next;
-    });
-  }
-
   function getEnabledForRequest() {
     return listEntries().filter(function (e) {
       return e.enabled && !e.marker && String(e.content || '').trim();
@@ -357,7 +331,6 @@
     removeEntry: removeEntry,
     setEnabled: setEnabled,
     clearActiveEntries: clearActiveEntries,
-    reorderEntries: reorderEntries,
     importFromStJson: importFromStJson,
     getEnabledForRequest: getEnabledForRequest
   };

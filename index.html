@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=5">
   <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=4">
   <link rel="stylesheet" href="css/miya-apps.css?v=30">
-  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=3">
+  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=2">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=19">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=4">
@@ -6093,7 +6093,7 @@
       <button type="button" class="stp-btn" id="stp-pack-rename">改名</button>
       <button type="button" class="stp-btn" id="stp-pack-delete">删除套</button>
       <input type="file" id="stp-file" accept="application/json,.json" hidden />
-      <p class="stp-hint">可保存多套预设并切换。导入按 prompt_order 保留顺序与开关。按住左侧 ≡ 拖动可改顺序。仅开启且有正文的条目会进请求。</p>
+      <p class="stp-hint">可保存多套预设并切换。导入时按 JSON 的 prompt_order 保留顺序与开关。仅「开启」且有正文的条目会进聊天请求。</p>
     </div>
     <div class="stp-body">
       <div id="stp-list"></div>
@@ -6302,8 +6302,8 @@
 
   <script defer src="miya-auth/auth.js?v=5"></script>
   <script defer src="js2/miya-github-plugins.js?v=2"></script>
-  <script defer src="js2/miya-st-prompt-presets-store.js?v=4"></script>
-  <script defer src="js2/miya-st-prompt-presets-app.js?v=4"></script>
+  <script defer src="js2/miya-st-prompt-presets-store.js?v=3"></script>
+  <script defer src="js2/miya-st-prompt-presets-app.js?v=3"></script>
   <script defer src="js1/app.js?v=62"></script>
 </body>
 </html>
