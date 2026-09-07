@@ -213,11 +213,11 @@
         var userName = String((profile && profile.name) || '用户');
         return (
             '【叙事引擎·线下】\n' +
-            '你正在进行一段与用户共同推进的线下互动，不是即时线上聊天。\n' +
-            '须完整消化联系人档案与世界书后再回应。\n' +
-            '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写。\n' +
+            '当前场景参与角色：' + roleName + '；互动对象：' + userName + '。\n' +
+            '须完整消化联系人档案、用户资料与世界书后再回应。\n' +
+            '角色与用户的人设、口吻和心理必须分开，禁止混写。\n' +
             '世界书分两类：绑定该联系人的设定，以及调参里额外挂载的规则/番外；先归类后再回应。'
-        )
+        );
     }
 
     function buildAppointmentModeBlock(contact, profile, castContacts) {
@@ -236,11 +236,9 @@
                   '；与用户「' +
                   String((profile && profile.name) || '用户') +
                   '」共同推进。'
-                : '当前是线下互动。你以「' +
-                  String((contact && contact.name) || '对方') +
-                  '」的身份与「' +
-                  String((profile && profile.name) || '用户') +
-                  '」互动。',
+                : '当前是线下互动。参与角色：「' +
+                  String((contact && contact.name) || '对方') + '」；互动对象：「' +
+                  String((profile && profile.name) || '用户') + '」。',
             '- 禁止线上专属格式（语音-/表情包-/引用-等）。',
         ];
         if (multi) {
@@ -826,16 +824,15 @@
             }
         }
 
-        var debugResult = {
-            messages: apiMessages.map(function (m, i) {
-                return { index: i, role: m.role, content: String(m.content || '') };
-            }),
-            stFront: stPresetFrontMessages.map(function (m) { return Object.assign({}, m); }),
-            stBack: stPresetBackMessages.map(function (m) { return Object.assign({}, m); }),
-            chatId: chatId,
-            sessionId: sessionId
-        };
-        try { global.__MiyaLastOfflinePrompt = debugResult; } catch (eDbg) {}
+        try {
+            global.__MiyaLastOfflinePrompt = {
+                messages: apiMessages.map(function (m, i) { return { index: i, role: m.role, content: String(m.content || '') }; }),
+                stFront: stPresetFrontMessages.map(function (m) { return Object.assign({}, m); }),
+                stBack: stPresetBackMessages.map(function (m) { return Object.assign({}, m); }),
+                chatId: chatId, sessionId: sessionId
+            };
+        } catch (eDbg) {}
+
         return {
             messages: apiMessages,
             contact: contact,
@@ -843,8 +840,7 @@
             chat: chat,
             session: sess,
             preset: preset,
-            htmlMode: !!htmlMode,
-            debug: debugResult
+            htmlMode: !!htmlMode
         };
     }
 
@@ -1511,7 +1507,6 @@
         splitDisplayLines: splitDisplayLines,
         splitDisplayParagraphs: splitDisplayParagraphs,
         parseThinkingPayload: parseThinkingPayload,
-        getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,
