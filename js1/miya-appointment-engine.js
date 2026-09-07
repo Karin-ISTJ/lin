@@ -215,12 +215,9 @@
             '【叙事引擎·线下】\n' +
             '你正在进行一段与用户共同推进的线下互动，不是即时线上聊天。\n' +
             '须完整消化联系人档案与世界书后再回应。\n' +
-            '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写；思维链（<thinking>）也绝不是角色内心独白、第一人称日记或“我被要求……”式的元话语。\n' +
-            '思维链只记录本轮真正执行任务时的规则落地：先从已启用 ST 预设中找出与本轮有关的具体规则，再说明这些规则如何改变当前场景、身份、行为、叙事或格式的决策。禁止使用“我们被要求以角色身份回应”“根据系统要求”“我被要求”“需要遵守指令”等空泛的提示词复述作为思维链主体。\n' +
-            '思维链第一优先级必须是 ST 的具体内容，而不是“角色身份”这个抽象概念；如果 ST 写明了具体身份、环境、世界观、行为或写法，必须直接点名这些具体规则并说明本轮怎样采用。\n' +
-            'ST 预设是本场可编辑的规则来源：思维链应服从其中关于人称、叙事、格式、行为和输出结构的具体要求，而不是另起一套“角色心理规则”。\n' +
+            '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写。\n' +
             '世界书分两类：绑定该联系人的设定，以及调参里额外挂载的规则/番外；先归类后再回应。'
-        );
+        )
     }
 
     function buildAppointmentModeBlock(contact, profile, castContacts) {
@@ -829,6 +826,16 @@
             }
         }
 
+        var debugResult = {
+            messages: apiMessages.map(function (m, i) {
+                return { index: i, role: m.role, content: String(m.content || '') };
+            }),
+            stFront: stPresetFrontMessages.map(function (m) { return Object.assign({}, m); }),
+            stBack: stPresetBackMessages.map(function (m) { return Object.assign({}, m); }),
+            chatId: chatId,
+            sessionId: sessionId
+        };
+        try { global.__MiyaLastOfflinePrompt = debugResult; } catch (eDbg) {}
         return {
             messages: apiMessages,
             contact: contact,
@@ -836,7 +843,8 @@
             chat: chat,
             session: sess,
             preset: preset,
-            htmlMode: !!htmlMode
+            htmlMode: !!htmlMode,
+            debug: debugResult
         };
     }
 
@@ -1503,6 +1511,8 @@
         splitDisplayLines: splitDisplayLines,
         splitDisplayParagraphs: splitDisplayParagraphs,
         parseThinkingPayload: parseThinkingPayload,
+        getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
+        getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,
         resolveProfileForContact: resolveProfileForContact,
