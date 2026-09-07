@@ -784,17 +784,38 @@
         });
 
         /*
-         * ST 执行层：所有已启用 ST 条目在这里再次以完整原文进入线下请求。
-         * 不再按名称猜测哪些条目属于 COT；身份、环境、叙事和 COT 都必须可见。
-         * 这里是生成前的规则上下文，不伪造 reasoning_content；真正的 reasoning 仍由模型/API 产生。
+         * 关键修复：当前用户消息必须是请求里的最后一条 user。
+         * 旧版先 push user、再追加世界书 back，导致「当前用户」后面还有 system，
+         * ST/世界书的后置层不再是真正的生成末端。
+         */
+        if (engRef && typeof engRef.appendWorldbookBackMessages === 'function') {
+            engRef.appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
+        } else {
+            (wbBundle.backLayers || []).forEach(function (layer) {
+                var t = String(layer || '').trim();
+                if (t) apiMessages.push({ role: 'system', content: t });
+            });
+        }
+
+        /*
+         * ST 最终执行层：必须是所有 system 规则里的最后一层，紧贴本轮 user。
+         * 这样即使世界书存在后置注入，也不能把 ST COT/身份/环境规则隔开。
          */
         if (stEngine && typeof stEngine.buildStCotPromptBlock === 'function') {
             try {
-                var stCotBlock = stEngine.buildStCotPromptBlock();
-                if (stCotBlock) {
-                    apiMessages.push({ role: 'system', content: stCotBlock });
+                var stFinalBlock = stEngine.buildStCotPromptBlock();
+                if (stFinalBlock) {
+                    apiMessages.push({
+                        role: 'system',
+                        content:
+                            stFinalBlock +
+                            '\n\n【ST 最终执行要求】\n' +
+                            '本轮生成前，必须以以上已启用 ST 条目作为实际规则集进行任务分析。\n' +
+                            '如果接口返回 reasoning_content/reasoning，推理过程必须体现这些 ST 规则对本轮决策的实际作用；不要只复述“已读取”。\n' +
+                            '尤其要先落实身份、环境、叙事和行为约束，再生成正文。'
+                    });
                 }
-            } catch (cotErr) {}
+            } catch (cotFinalErr) {}
         }
 
         if (extra) {
@@ -804,15 +825,6 @@
             } else {
                 apiMessages.push({ role: 'user', content: extra });
             }
-        }
-
-        if (engRef && typeof engRef.appendWorldbookBackMessages === 'function') {
-            engRef.appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
-        } else {
-            (wbBundle.backLayers || []).forEach(function (layer) {
-                var t = String(layer || '').trim();
-                if (t) apiMessages.push({ role: 'system', content: t });
-            });
         }
 
         if (htmlMode && hpApiEarly) {
