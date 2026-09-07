@@ -91,7 +91,14 @@
         'js1/miya-deep-app.js?v=25'
       ]
     },
-
+    forum: {
+      css: ['css/miya-forum.css?v=16'],
+      js: [
+        'js2/miya-forum-store.js?v=9',
+        'js2/miya-forum-bridge.js?v=17',
+        'js2/miya-forum-app.js?v=19'
+      ]
+    },
     simulator: {
       css: ['css/miya-simulator.css?v=10'],
       js: [
@@ -129,6 +136,7 @@
     theaterUi: {
       css: ['css/miya-theater.css?v=3'],
       js: [
+        'js2/miya-forum-bridge.js?v=17',
         'js2/miya-theater-app.js?v=3'
       ]
     },
@@ -139,6 +147,7 @@
     weatherUi: {
       css: ['css/miya-weather.css?v=9'],
       js: [
+        'js2/miya-forum-bridge.js?v=17',
         'js2/miya-weather-app.js?v=12'
       ]
     },
@@ -153,6 +162,7 @@
     matchUi: {
       css: ['css/miya-match.css?v=4'],
       js: [
+        'js2/miya-forum-bridge.js?v=17',
         'js2/miya-match-store.js?v=3',
         'js2/miya-match-bridge.js?v=5',
         'js2/miya-match-app.js?v=6'
@@ -161,6 +171,7 @@
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],
       js: [
+        'js2/miya-forum-bridge.js?v=17',
         'js2/miya-fun-sayguess-store.js?v=3',
         'js2/miya-fun-sayguess-bridge.js?v=6',
         'js2/miya-fun-sayguess-app.js?v=9',
@@ -171,7 +182,7 @@
 
   var APP_TO_GROUPS = {
     deep: ['deep'],
-
+    memo: ['forum'],
     pen: ['simulator'],
     couple: ['coupleUi'],
     notes: ['diaryUi'],

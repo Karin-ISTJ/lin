@@ -381,6 +381,7 @@ html.is-mobile.is-low-end #cp-ripple-canvas {
 }
 
 html.is-mobile.is-low-end .miya-chat-app.is-open,
+html.is-mobile.is-low-end .miya-forum-app.is-open,
 html.is-mobile.is-low-end #miya-couple-app.is-open {
   contain: layout style;
 }

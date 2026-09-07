@@ -11,10 +11,10 @@
   var GUARD_STYLE_ID = 'miya-chat-app-bf-guard';
 
   var BUILTIN_THEMES = [
-    { id: 'default-orange', label: '默认橙', sub: '暖灰底 · 珊瑚点缀 · 当前默认' }
+    { id: 'default-orange', label: '默认橙', sub: '暖灰底 · 珊瑚点缀 · 当前默认' },
+    { id: 'ins-white', label: 'ins白', sub: '纯白底 · 黑字描边 · 极简圆角' },
+    { id: 'fresh-green', label: '清新绿', sub: '鼠尾草绿 · 左侧导航 · 自然圆角' }
   ];
-  /* 已移除内置主题 ins-white / fresh-green 及其样式依赖 */
-  var REMOVED_THEME_IDS = { 'ins-white': 1, 'fresh-green': 1 };
 
   var THEME_CLASS_PREFIX = 'chat-bf-theme-';
   var stateCache = null;
@@ -98,9 +98,7 @@
     var d = defaultState();
     if (!raw || typeof raw !== 'object') return Object.assign({}, d, { decoItems: [] });
     var themeId = String(raw.themeId || d.themeId);
-    if (REMOVED_THEME_IDS[themeId] || BUILTIN_THEMES.every(function (t) { return t.id !== themeId; })) {
-      themeId = d.themeId;
-    }
+    if (BUILTIN_THEMES.every(function (t) { return t.id !== themeId; })) themeId = d.themeId;
     var items = Array.isArray(raw.decoItems)
       ? raw.decoItems.map(normalizeDecoItem).filter(Boolean)
       : [];
