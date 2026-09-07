@@ -215,9 +215,10 @@
             '【叙事引擎·线下】\n' +
             '你正在进行一段与用户共同推进的线下互动，不是即时线上聊天。\n' +
             '须完整消化联系人档案与世界书后再回应。\n' +
-            '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写；但思维链（<thinking>）不是角色内心独白，也不是角色第一人称日记。\n' +
-            '思维链只用于执行当前任务：先识别并落实已启用的 ST 预设规则，再结合聊天历史、世界书和本轮用户请求决定如何生成正文。不要把“角色在想什么”当成思维链的主要内容；除非 ST 预设明确要求，否则不要把思维链写成角色内心戏。\n' +
-            'ST 预设是本场可编辑的规则来源：思维链应服从其中关于人称、叙事、格式、行为和输出结构的要求，而不是另起一套“角色心理规则”。\n' +
+            '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写；思维链（<thinking>）也绝不是角色内心独白、第一人称日记或“我被要求……”式的元话语。\n' +
+            '思维链只记录本轮真正执行任务时的规则落地：先从已启用 ST 预设中找出与本轮有关的具体规则，再说明这些规则如何改变当前场景、身份、行为、叙事或格式的决策。禁止使用“我们被要求以角色身份回应”“根据系统要求”“我被要求”“需要遵守指令”等空泛的提示词复述作为思维链主体。\n' +
+            '思维链第一优先级必须是 ST 的具体内容，而不是“角色身份”这个抽象概念；如果 ST 写明了具体身份、环境、世界观、行为或写法，必须直接点名这些具体规则并说明本轮怎样采用。\n' +
+            'ST 预设是本场可编辑的规则来源：思维链应服从其中关于人称、叙事、格式、行为和输出结构的具体要求，而不是另起一套“角色心理规则”。\n' +
             '世界书分两类：绑定该联系人的设定，以及调参里额外挂载的规则/番外；先归类后再回应。'
         );
     }
@@ -801,6 +802,17 @@
          * ST 最终执行层：必须是所有 system 规则里的最后一层，紧贴本轮 user。
          * 这样即使世界书存在后置注入，也不能把 ST COT/身份/环境规则隔开。
          */
+        if (htmlMode && hpApiEarly) {
+            apiMessages.push({
+                role: 'system',
+                content: hpApiEarly.buildHtmlGenerationRules({
+                    mode: 'offline',
+                    fromUserMeta: true
+                })
+            });
+        }
+        appendOfflineUserMetaTail(apiMessages, turnUserText);
+
         if (stEngine && typeof stEngine.buildStCotPromptBlock === 'function') {
             try {
                 var stFinalBlock = stEngine.buildStCotPromptBlock();
@@ -811,14 +823,16 @@
                             stFinalBlock +
                             '\n\n【ST 最终执行要求】\n' +
                             '本轮必须真正执行以上 ST 条目，而不是只把它们当作参考资料。先逐条判断哪些规则影响本轮，再据此决定角色身份、环境、行为、叙事与正文。\n' +
-                            '必须输出可解析的思维链：正文之前先输出 <thinking>...</thinking>；其中必须写出本轮实际采用的 ST 规则及其对当前用户请求的具体影响，至少点明最关键的身份/环境/行为规则，不得只写“已读取 ST”。\n' +
-                            '这里的 <thinking> 是任务执行说明，不是角色第一人称内心独白；完成后再输出正文。不要把 ST 原文整段机械复制进 thinking，而要说明本轮如何应用它。\n' +
+                            '必须输出可解析的思维链：正文之前先输出 <thinking>...</thinking>；thinking 的首要内容必须是本轮实际采用的 ST 具体规则及其对当前请求的具体影响。至少直接点名一个实际启用的 ST 条目/身份/环境规则，并说明它改变了什么生成决策。\n' +
+                            '严禁把 thinking 写成“我们被要求以角色身份回应”“根据系统要求”“我需要遵守指令”之类的元提示复述；这些句子不能作为思维链主体。必须写具体规则与具体应用，例如 ST 指定的身份、环境、世界观、行为或格式，以及本轮如何执行。\n' +
+                            '这里的 <thinking> 是 ST 规则执行记录，不是角色第一人称内心独白，也不是对系统提示词的总结。不要机械复制 ST 全文，但必须真实引用其中决定本轮输出的具体规则。\n' +
                             '如果接口另外返回 reasoning_content/reasoning，也不能因此省略正文中的 <thinking>...</thinking>；客户端将优先把显式 thinking 作为线下思维链。'
                     });
                 }
             } catch (cotFinalErr) {}
         }
 
+        /* 当前轮 user 永远是最后一条消息：ST/HTML/元指令全部位于 user 之前。 */
         if (extra) {
             var last = apiMessages[apiMessages.length - 1];
             if (last && last.role === 'user') {
@@ -827,19 +841,6 @@
                 apiMessages.push({ role: 'user', content: extra });
             }
         }
-
-        if (htmlMode && hpApiEarly) {
-            apiMessages.push({
-                role: 'system',
-                content: hpApiEarly.buildHtmlGenerationRules({
-                    mode: 'offline',
-                    fromUserMeta: true
-                })
-            });
-        }
-
-
-        appendOfflineUserMetaTail(apiMessages, turnUserText);
 
         return {
             messages: apiMessages,
