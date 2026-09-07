@@ -1378,9 +1378,14 @@
         var wanted = position === 'back' ? 'back' : position === 'front' ? 'front' : '';
         try {
             var stpStore = global.miyaStPromptPresetsStore;
-            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
-                ? (stpStore.getEnabledForRequest() || [])
-                : [];
+            var snapshot = stpStore && typeof stpStore.getRequestSnapshot === 'function'
+                ? stpStore.getRequestSnapshot()
+                : null;
+            var entries = snapshot && Array.isArray(snapshot.entries)
+                ? snapshot.entries
+                : (stpStore && typeof stpStore.getEnabledForRequest === 'function'
+                    ? (stpStore.getEnabledForRequest() || [])
+                    : []);
             entries.forEach(function (entry, idx) {
                 var body = String(entry && entry.content || '').trim();
                 if (!body) return;

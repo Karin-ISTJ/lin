@@ -726,6 +726,15 @@
         var stEngine = global.miyaChatEngine;
         var stPresetFrontMessages = [];
         var stPresetBackMessages = [];
+        var stSnapshot = null;
+        try {
+            var stStore = global.miyaStPromptPresetsStore;
+            if (stStore && typeof stStore.getRequestSnapshot === 'function') {
+                stSnapshot = stStore.getRequestSnapshot();
+            }
+        } catch (stSnapErr) {
+            stSnapshot = { error: String(stSnapErr && stSnapErr.message || stSnapErr || 'unknown') };
+        }
         if (stEngine && typeof stEngine.buildStPresetMessages === 'function') {
             try {
                 stPresetFrontMessages = stEngine.buildStPresetMessages('front') || [];
@@ -832,6 +841,8 @@
             }),
             stFront: stPresetFrontMessages.map(function (m) { return Object.assign({}, m); }),
             stBack: stPresetBackMessages.map(function (m) { return Object.assign({}, m); }),
+            stSnapshot: stSnapshot,
+            stReadCount: stPresetFrontMessages.length + stPresetBackMessages.length,
             chatId: chatId,
             sessionId: sessionId
         };
@@ -1511,7 +1522,6 @@
         splitDisplayLines: splitDisplayLines,
         splitDisplayParagraphs: splitDisplayParagraphs,
         parseThinkingPayload: parseThinkingPayload,
-        getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,

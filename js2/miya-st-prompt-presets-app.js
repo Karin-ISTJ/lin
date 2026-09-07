@@ -250,7 +250,9 @@
     var eng = global.MiyaAppointmentEngine;
     var dbg = eng && typeof eng.getLastOfflinePromptDebug === 'function' ? eng.getLastOfflinePromptDebug() : global.__MiyaLastOfflinePrompt;
     if (!dbg || !Array.isArray(dbg.messages) || !dbg.messages.length) { toast('请先生成一次线下回复'); return; }
-    var text = dbg.messages.map(function (m) {
+    var head = 'ST读取检查：' + String(dbg.stReadCount != null ? dbg.stReadCount : 0) + ' 条';
+    if (dbg.stSnapshot && dbg.stSnapshot.packName) head += '｜预设包：' + dbg.stSnapshot.packName;
+    var text = head + '\n\n' + dbg.messages.map(function (m) {
       return '[' + m.index + '] ' + String(m.role || 'system') + '\n' + String(m.content || '');
     }).join('\n\n==========\n\n');
     if (navigator.clipboard && navigator.clipboard.writeText) {

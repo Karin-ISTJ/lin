@@ -362,8 +362,31 @@
 
   function getEnabledForRequest() {
     return listEntries().filter(function (e) {
-      return e.enabled && !e.marker && String(e.content || '').trim();
+      return e && e.enabled !== false && !e.marker && String(e.content || '').trim();
+    }).map(function (e, idx) {
+      // 旧存档可能没有新加入的 ST 注入字段；读取时补齐，避免“界面有条目、请求层读不到”。
+      var x = Object.assign({}, e);
+      x.role = (x.role === 'user' || x.role === 'assistant') ? x.role : 'system';
+      x.position = normalizePosition(x.position !== undefined ? x.position : x.injection_position);
+      x.injection_position = x.position === 'back' || Number(x.injection_position) === 1 ? 1 : 0;
+      x.injection_depth = Number.isFinite(Number(x.injection_depth)) ? Math.max(0, Number(x.injection_depth)) : 4;
+      x.injection_order = Number.isFinite(Number(x.injection_order)) ? Number(x.injection_order) : 100;
+      x.order = Number.isFinite(Number(x.order)) ? Number(x.order) : idx;
+      x.identifier = String(x.identifier || x.id || '');
+      return x;
     });
+  }
+
+  function getRequestSnapshot() {
+    var pack = getActivePack();
+    var entries = getEnabledForRequest();
+    return {
+      packId: pack ? String(pack.id || '') : '',
+      packName: pack ? String(pack.name || '') : '',
+      totalEntries: pack && Array.isArray(pack.entries) ? pack.entries.length : 0,
+      enabledEntries: entries.length,
+      entries: entries
+    };
   }
 
   global.miyaStPromptPresetsStore = {
@@ -384,6 +407,7 @@
     setEnabled: setEnabled,
     clearActiveEntries: clearActiveEntries,
     importFromStJson: importFromStJson,
-    getEnabledForRequest: getEnabledForRequest
+    getEnabledForRequest: getEnabledForRequest,
+    getRequestSnapshot: getRequestSnapshot
   };
 })(typeof window !== 'undefined' ? window : this);
