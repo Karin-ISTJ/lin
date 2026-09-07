@@ -796,6 +796,9 @@
             '<div class="qq-room__head-name" id="qq-room-title"></div>' +
             '<div class="qq-room__head-status" id="qq-room-head-status"></div>' +
           '</div>' +
+          '<button type="button" class="qq-room__menu qq-room__offline-btn" id="qq-room-offline" aria-label="线下" title="线下">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' +
+          '</button>' +
           '<button type="button" class="qq-room__menu" id="qq-room-more" aria-label="更多">' +
             '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>' +
           '</button>' +
@@ -5052,6 +5055,13 @@
       }
       close();
     });
+    var offlineBtn = $('qq-room-offline');
+    if (offlineBtn) {
+      offlineBtn.addEventListener('click', function () {
+        if (global.miyaLaunchApp) global.miyaLaunchApp('store');
+        else if (global.miyaOfflineApp && global.miyaOfflineApp.open) global.miyaOfflineApp.open();
+      });
+    }
     var moreBtn = $('qq-room-more');
     if (moreBtn) {
       moreBtn.addEventListener('click', function () {

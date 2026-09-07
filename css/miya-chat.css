@@ -6331,3 +6331,17 @@ html.is-ios .qq-room__input {
 }
 .qq-room__row--card .qq-card-sayguess { margin: 2px 0; }
 
+
+
+/* 聊天顶栏 · 线下入口（三点旁） */
+.qq-room__head-profile {
+  display: flex;
+  align-items: center;
+}
+.qq-room__offline-btn {
+  margin-right: 2px;
+}
+.qq-room__offline-btn svg {
+  width: 20px;
+  height: 20px;
+}

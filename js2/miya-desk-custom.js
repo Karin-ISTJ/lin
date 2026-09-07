@@ -11,7 +11,7 @@
   var DOCK_SLOT_COUNT = 4;
 
   var CUSTOM_GRID_APPS = [
-    'music', 'memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store',
+    'music', 'memo', 'set', 'book', 'memory', 'chat', 'beauty', 'stpreset',
     'couple', 'itinerary', 'cstore',
     'deep', 'notes', 'fun', 'log',
     'theater'
@@ -41,7 +41,7 @@
 
   var APP_LABELS = {
     music: '音乐', memo: '论坛', set: '设置', book: '世界书',
-    memory: '记忆', chat: '聊天', beauty: '美化', store: '线下',
+    memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设', store: '线下',
     couple: '情侣空间', itinerary: '行程轨迹', cstore: '74号便利店', rift: '错位时空',
     deep: '深入', notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',
     weather: '天气', map: '地图', apps: '应用', theater: '剧场',
@@ -2407,9 +2407,13 @@
   }
 
   function getLayoutMode() {
+    /* 仅保留自定义桌面，不再使用默认四页杂志桌面 */
     var synced = hydrateLayoutModeSync();
-    if (synced) return synced;
-    return layoutModeCache || 'fixed';
+    if (synced === 'custom') return 'custom';
+    if (layoutModeCache === 'custom') return 'custom';
+    layoutModeCache = 'custom';
+    try { persistLayoutMode('custom'); } catch (eForce) {}
+    return 'custom';
   }
 
   function persistLayoutMode(mode) {
@@ -2423,7 +2427,7 @@
   }
 
   function setLayoutMode(mode) {
-    var next = mode === 'custom' ? 'custom' : 'fixed';
+    var next = 'custom';
     layoutModeCache = next;
     persistLayoutMode(next);
     document.documentElement.dataset.miyaDeskLayout = next;
@@ -4555,6 +4559,35 @@
       body.appendChild(sec);
     }
 
+    
+    /* 应用图标（未放到桌面的） */
+    (function addAppsSection() {
+      var layout = getLayout();
+      var used = placedAppKeys(layout);
+      var ids = ALL_APPS.filter(function (k) { return !used[k]; });
+      if (!ids.length) return;
+      var sec = document.createElement('section');
+      sec.className = 'desk-custom-wg-picker__section';
+      sec.innerHTML = '<h4>应用</h4>';
+      var grid = document.createElement('div');
+      grid.className = 'desk-custom-wg-picker__grid desk-custom-wg-picker__grid--apps';
+      ids.forEach(function (key) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'desk-custom-wg-picker__item desk-custom-wg-picker__item--app';
+        btn.setAttribute('data-app-pick', key);
+        btn.innerHTML =
+          '<span class="desk-custom-wg-picker__preview desk-custom-wg-picker__preview--1x1 desk-custom-wg-picker__preview--app">' +
+            '<span class="ic__box glass" data-i="' + key + '"></span>' +
+          '</span>' +
+          '<span class="desk-custom-wg-picker__name">' + (APP_LABELS[key] || key) + '</span>';
+        grid.appendChild(btn);
+      });
+      sec.appendChild(grid);
+      body.appendChild(sec);
+      if (global.miyaFillAppIcons) global.miyaFillAppIcons(sec);
+    })();
+
     addSection('4×1', ['blank_4x1_1', 'blank_4x1_2', 'blank_4x1_3', 'blank_4x1_8', 'blank_4x1_4', 'blank_4x1_5', 'blank_4x1_6', 'blank_4x1_7'].concat(customIdsForSize(4, 1)));
     addSection('4×2', ['blank_4x2_1', 'blank_4x2_2', 'blank_4x2_3', 'blank_4x2_4', 'blank_4x2_5', 'blank_4x2_6', 'blank_4x2_8'].concat(customIdsForSize(4, 2)));
     addSection('4×3', ['blank_4x3_1', 'blank_4x3_2', 'blank_4x3_3', 'blank_4x3_4', 'blank_4x3_5'].concat(customIdsForSize(4, 3)));
@@ -4576,6 +4609,46 @@
     if (!picker) return;
     picker.hidden = true;
     picker.setAttribute('aria-hidden', 'true');
+  }
+
+  function placedAppKeys(layout) {
+    var used = Object.create(null);
+    (layout.dockSlots || []).forEach(function (k) { if (k) used[k] = true; });
+    (layout.pages || []).forEach(function (pg) {
+      (pg.items || []).forEach(function (it) {
+        if (it && it.kind === 'app' && it.key) used[it.key] = true;
+      });
+    });
+    return used;
+  }
+
+  function placeApp(appKey) {
+    if (!appKey || ALL_APPS.indexOf(appKey) < 0) return false;
+    var layout = getLayout();
+    if (placedAppKeys(layout)[appKey]) return false;
+    var page = layout.pages[currentPage];
+    if (!page) return false;
+    var spot = findEmptyRect(page.items, 1, 1);
+    if (!spot) {
+      /* 当前页满则新开一页 */
+      layout.pages.push({ items: [] });
+      currentPage = layout.pages.length - 1;
+      page = layout.pages[currentPage];
+      spot = findEmptyRect(page.items, 1, 1);
+    }
+    if (!spot) return false;
+    page.items.push({
+      id: genItemId(),
+      kind: 'app',
+      key: appKey,
+      x: spot.x,
+      y: spot.y,
+      w: 1,
+      h: 1
+    });
+    saveLayout(layout);
+    renderCustomLayout();
+    return true;
   }
 
   function placeWidget(widgetId) {
@@ -4640,6 +4713,18 @@
     if (picker) {
       picker.addEventListener('click', function (e) {
         if (e.target === picker) closeWidgetPicker();
+        var appPick = e.target.closest('[data-app-pick]');
+        if (appPick) {
+          var appOk = placeApp(appPick.getAttribute('data-app-pick'));
+          if (appOk) {
+            closeWidgetPicker();
+            if (global.miyaFillAppIcons) {
+              var vp = $('desk-custom-viewport');
+              if (vp) global.miyaFillAppIcons(vp);
+            }
+          }
+          return;
+        }
         var pick = e.target.closest('[data-wg-pick]');
         if (!pick) return;
         var ok = placeWidget(pick.getAttribute('data-wg-pick'));

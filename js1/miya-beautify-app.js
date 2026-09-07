@@ -986,10 +986,11 @@
         var next = btn.getAttribute('data-bf-layout') === 'custom' ? 'custom' : 'fixed';
         if (next === (isCustomLayoutMode() ? 'custom' : 'fixed')) return;
         if (!global.miyaSwitchDeskLayout) return;
+        next = 'custom';
         global.miyaSwitchDeskLayout(next).then(function () {
           syncUiFromTheme();
           refreshIconPreviews();
-          toast(next === 'custom' ? '已切换至自定义布局' : '已切换至固定布局');
+          toast(next === 'custom' ? '已切换至自定义布局' : '已改为仅使用自定义桌面');
         });
       });
     }

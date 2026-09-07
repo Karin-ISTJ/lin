@@ -1273,3 +1273,21 @@ html.is-custom-wg-editing .desk-custom-viewport {
 .ins-archive-list--clickable .ins-archive-item--clickable:active {
   background: rgba(180, 150, 90, 0.08);
 }
+
+
+.desk-custom-wg-picker__grid--apps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.desk-custom-wg-picker__item--app .desk-custom-wg-picker__preview--app {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+}
+.desk-custom-wg-picker__item--app .ic__box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}

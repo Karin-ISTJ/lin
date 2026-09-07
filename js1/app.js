@@ -84,6 +84,8 @@
   };
 
   var SVG = SVG_CLASSIC;
+  if (SVG_CLASSIC.book) SVG_CLASSIC.stpreset = SVG_CLASSIC.book;
+  if (SVG_ALT && SVG_ALT.book) SVG_ALT.stpreset = SVG_ALT.book;
 
   var NAMES = {
     music: '音乐', memo: '论坛', set: '设置', book: '世界书',
