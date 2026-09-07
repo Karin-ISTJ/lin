@@ -257,6 +257,12 @@
             id: id,
             name: String(raw.name || '').trim() || '未命名预设',
             builtin: false,
+            // 旧参数预设可能还带这些字段：继续保存，避免升级时破坏已有数据；
+            // appointment-engine 已不再读取它们作为输出硬规则。
+            outputWordCount: raw.outputWordCount,
+            styleGuide: String(raw.styleGuide || '').trim(),
+            rolePerson: ['first', 'second', 'third'].indexOf(raw.rolePerson) >= 0 ? raw.rolePerson : undefined,
+            userPerson: ['first', 'second', 'third'].indexOf(raw.userPerson) >= 0 ? raw.userPerson : undefined,
             worldbookBindings: normalizeBindings(raw.worldbookBindings),
             updatedAt: Number(raw.updatedAt) || Date.now()
         });
@@ -1237,7 +1243,14 @@
             return load().presets.find(function (p) { return p.id === id; }) || null;
         },
         getBuiltinPreset: function () {
-            return null;
+            // 仅保留兼容层：这是运行时默认参数，不是可见的内置预设，
+            // 不包含任何文风、人称或字数规则。
+            return Object.assign({}, defaultContactParams(), {
+                id: '__ap_runtime_default__',
+                name: '线下默认',
+                builtin: false,
+                worldbookBindings: []
+            });
         },
         upsertPreset: function (patch) {
             load();
@@ -1281,7 +1294,12 @@
         resolvePresetForContact: function (contactId) {
             var cid = String(contactId || '').trim();
             load();
-            var merged = defaultContactParams();
+            var merged = Object.assign({}, defaultContactParams(), {
+                id: '__ap_runtime_default__',
+                name: '线下默认',
+                builtin: false,
+                worldbookBindings: []
+            });
             if (cid && cache.contactParams[cid]) {
                 var cp = normalizeContactParams(cache.contactParams[cid]);
                 if (cp) merged = Object.assign(merged, cp);
