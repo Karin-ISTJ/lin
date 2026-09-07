@@ -202,7 +202,7 @@
 }
 
 /* 条目操作：拖拽 / 编辑 / 垃圾桶 */
-.stp-row { touch-action: none; }
+.stp-row { touch-action: pan-y; }
 .stp-row__drag {
   flex: 0 0 24px;
   width: 24px;
@@ -215,6 +215,7 @@
   letter-spacing: -4px;
   padding: 0 4px 0 0;
   cursor: grab;
+  touch-action: none;
 }
 .stp-row__drag:active { cursor: grabbing; }
 .stp-row.is-dragging { opacity: .72; box-shadow: 0 8px 24px rgba(0,0,0,.12); }

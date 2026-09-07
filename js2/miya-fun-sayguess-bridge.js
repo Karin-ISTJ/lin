@@ -21,7 +21,7 @@
   }
 
   function callApi(systemHint, userContent, reqOpts) {
-    var br = global.miyaForumBridge;
+    var br = global.miyaApiBridge;
     var opts = Object.assign({
       max_tokens: 1200,
       temperature: 0.9,
@@ -40,7 +40,7 @@
   }
 
   function extractJson(text) {
-    var br = global.miyaForumBridge;
+    var br = global.miyaApiBridge;
     var cleaned = stripThinkingNoise(text);
     if (br && typeof br.extractJsonObject === 'function') {
       var obj = br.extractJsonObject(cleaned);

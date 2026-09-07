@@ -21,7 +21,7 @@
   }
 
   function callApi(systemHint, userContent, reqOpts) {
-    var br = global.miyaForumBridge;
+    var br = global.miyaApiBridge;
     if (br && typeof br.callItineraryCompletionsRaw === 'function') {
       return br.callItineraryCompletionsRaw(systemHint, userContent, undefined, reqOpts);
     }
