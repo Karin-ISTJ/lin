@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=5">
   <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=4">
   <link rel="stylesheet" href="css/miya-apps.css?v=30">
-  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=4">
+  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=3">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=19">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=4">
@@ -6090,47 +6090,13 @@
     <div class="stp-toolbar">
       <select class="stp-pack-select" id="stp-pack-select" aria-label="切换预设"></select>
       <button type="button" class="stp-btn stp-btn--primary" id="stp-import">导入</button>
-      <button type="button" class="stp-btn" id="stp-add">新建</button>
       <button type="button" class="stp-btn" id="stp-pack-rename">改名</button>
       <button type="button" class="stp-btn" id="stp-pack-delete">删除套</button>
       <input type="file" id="stp-file" accept="application/json,.json" hidden />
-      <p class="stp-hint">导入整包或点「新建」；点条目名称可编辑。按住 ≡ 拖动排序。仅开启且有正文的条目会进请求。</p>
+      <p class="stp-hint">可保存多套预设并切换。导入按 prompt_order 保留顺序与开关。按住左侧 ≡ 拖动可改顺序。仅开启且有正文的条目会进请求。</p>
     </div>
     <div class="stp-body">
       <div id="stp-list"></div>
-    </div>
-    <div class="stp-editor" id="stp-editor" hidden>
-      <h2 class="stp-editor__title" id="stp-ed-title">编辑条目</h2>
-      <input type="hidden" id="stp-ed-id" />
-      <div class="stp-field">
-        <label for="stp-ed-name">名称</label>
-        <input id="stp-ed-name" type="text" placeholder="例如 Main Prompt" />
-      </div>
-      <div class="stp-editor__row">
-        <div class="stp-field">
-          <label for="stp-ed-role">角色</label>
-          <select id="stp-ed-role">
-            <option value="system">system</option>
-            <option value="user">user</option>
-            <option value="assistant">assistant</option>
-          </select>
-        </div>
-        <div class="stp-field">
-          <label for="stp-ed-identifier">identifier</label>
-          <input id="stp-ed-identifier" type="text" placeholder="main" />
-        </div>
-      </div>
-      <div class="stp-field">
-        <label for="stp-ed-content">内容</label>
-        <textarea id="stp-ed-content" placeholder="写入指令正文…"></textarea>
-      </div>
-      <div class="stp-field">
-        <label class="stp-check"><input type="checkbox" id="stp-ed-enabled" checked /> 启用</label>
-      </div>
-      <div class="stp-editor__foot">
-        <button type="button" class="stp-btn" id="stp-ed-cancel">取消</button>
-        <button type="button" class="stp-btn stp-btn--primary" id="stp-ed-save">保存</button>
-      </div>
     </div>
     <div class="stp-toast" id="stp-toast"></div>
   </div>
@@ -6337,7 +6303,7 @@
   <script defer src="miya-auth/auth.js?v=5"></script>
   <script defer src="js2/miya-github-plugins.js?v=2"></script>
   <script defer src="js2/miya-st-prompt-presets-store.js?v=4"></script>
-  <script defer src="js2/miya-st-prompt-presets-app.js?v=5"></script>
+  <script defer src="js2/miya-st-prompt-presets-app.js?v=4"></script>
   <script defer src="js1/app.js?v=62"></script>
 </body>
 </html>

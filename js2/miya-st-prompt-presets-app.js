@@ -1,5 +1,5 @@
 /**
- * ST preset manager — packs, drag reorder, add/edit entries.
+ * ST preset manager — compact rows, multi-pack switch, drag reorder.
  */
 (function (global) {
   'use strict';
@@ -90,7 +90,7 @@
     var entries = st.listEntries();
     if (!entries.length) {
       box.innerHTML =
-        '<div class="stp-empty">当前预设包没有条目。<br/>可「导入」或点「新建」。点名称可编辑；按住 ≡ 可拖排序。</div>';
+        '<div class="stp-empty">当前预设包没有条目。<br/>点「导入」添加一套，可多套切换；长按左侧 ≡ 可拖动排序。</div>';
       return;
     }
     box.innerHTML = entries
@@ -100,93 +100,23 @@
           (e.enabled ? '' : ' is-off') +
           '" data-id="' +
           esc(e.id) +
-          '">' +
-          '<button type="button" class="stp-row__handle" data-act="drag" aria-label="拖动排序">≡</button>' +
+          '" draggable="false">' +
+          '<button type="button" class="stp-row__handle" data-act="drag" aria-label="拖动排序" title="拖动排序">≡</button>' +
           '<label class="stp-switch" title="启用">' +
           '<input type="checkbox" data-act="toggle" ' +
           (e.enabled ? 'checked' : '') +
-          ' /><span></span></label>' +
-          '<button type="button" class="stp-row__name" data-act="edit" title="点击编辑">' +
+          ' />' +
+          '<span></span></label>' +
+          '<div class="stp-row__name" title="' +
+          esc(e.identifier || e.name) +
+          '">' +
           esc(e.name) +
-          '</button>' +
+          '</div>' +
           '<button type="button" class="stp-row__del" data-act="del" aria-label="删除">删</button>' +
           '</div>'
         );
       })
       .join('');
-  }
-
-  function openEditor(entry) {
-    var panel = $('stp-editor');
-    if (!panel) return;
-    panel.hidden = false;
-    $('stp-ed-id').value = entry && entry.id ? entry.id : '';
-    $('stp-ed-name').value = entry && entry.name ? entry.name : '';
-    $('stp-ed-role').value = entry && entry.role ? entry.role : 'system';
-    $('stp-ed-identifier').value = entry && entry.identifier ? entry.identifier : '';
-    $('stp-ed-content').value = entry && entry.content ? entry.content : '';
-    $('stp-ed-enabled').checked = !entry || entry.enabled !== false;
-    $('stp-ed-title').textContent = entry && entry.id ? '编辑条目' : '新建条目';
-    try {
-      $('stp-ed-name').focus();
-    } catch (e) {}
-  }
-
-  function closeEditor() {
-    var panel = $('stp-editor');
-    if (panel) panel.hidden = true;
-  }
-
-  function saveEditor() {
-    var st = requireStore();
-    if (!st) return;
-    if (!st.getActivePack()) {
-      /* 无包时自动建一套 */
-      st.importFromStJson({ prompts: [] }, '手动预设');
-      /* import with empty prompts might throw - use pack create differently */
-    }
-    if (!st.getActivePack()) {
-      var state = st.load();
-      var pack = {
-        id: 'pack_manual_' + Date.now().toString(36),
-        name: '手动预设',
-        createdAt: Date.now(),
-        entries: []
-      };
-      state.packs.push(pack);
-      state.activeId = pack.id;
-      st.save(state);
-    }
-    var id = $('stp-ed-id').value.trim();
-    var name = $('stp-ed-name').value.trim() || '未命名条目';
-    st.upsertEntry({
-      id: id || undefined,
-      name: name,
-      role: $('stp-ed-role').value || 'system',
-      identifier: $('stp-ed-identifier').value.trim(),
-      content: $('stp-ed-content').value,
-      enabled: $('stp-ed-enabled').checked,
-      marker: false
-    });
-    closeEditor();
-    renderList();
-    toast('已保存');
-  }
-
-  function ensureActivePack(st) {
-    if (st.getActivePack()) return true;
-    var state = st.load();
-    var pack = {
-      id: 'pack_manual_' + Date.now().toString(36),
-      name: '手动预设',
-      createdAt: Date.now(),
-      entries: []
-    };
-    state.packs = state.packs || [];
-    state.packs.push(pack);
-    state.activeId = pack.id;
-    st.save(state);
-    return true;
   }
 
   function collectOrderIds() {
@@ -203,7 +133,14 @@
     st.reorderEntries(collectOrderIds());
   }
 
-  var drag = { active: false, id: '', row: null, ghost: null };
+  /* ── 拖拽排序（指针事件，兼容手机） ── */
+  var drag = {
+    active: false,
+    id: '',
+    row: null,
+    startY: 0,
+    ghost: null
+  };
 
   function clearDrag() {
     if (drag.row) drag.row.classList.remove('is-dragging');
@@ -215,29 +152,32 @@
   }
 
   function onDragStart(e, row) {
-    if (!store()) return;
+    var st = store();
+    if (!st) return;
     var id = row.getAttribute('data-id');
     if (!id) return;
     drag.active = true;
     drag.id = id;
     drag.row = row;
+    drag.startY = e.clientY;
     row.classList.add('is-dragging');
     var ghost = row.cloneNode(true);
     ghost.classList.add('stp-row--ghost');
     ghost.style.width = row.offsetWidth + 'px';
-    var rect = row.getBoundingClientRect();
-    ghost.style.left = rect.left + 'px';
-    ghost.style.top = rect.top + 'px';
+    ghost.style.left = row.getBoundingClientRect().left + 'px';
+    ghost.style.top = row.getBoundingClientRect().top + 'px';
     document.body.appendChild(ghost);
     drag.ghost = ghost;
     try {
-      if (e.pointerId != null && row.setPointerCapture) row.setPointerCapture(e.pointerId);
+      e.pointerId != null && row.setPointerCapture && row.setPointerCapture(e.pointerId);
     } catch (err) {}
   }
 
   function onDragMove(e) {
     if (!drag.active || !drag.row) return;
-    if (drag.ghost) drag.ghost.style.top = e.clientY - 20 + 'px';
+    if (drag.ghost) {
+      drag.ghost.style.top = e.clientY - 20 + 'px';
+    }
     var box = $('stp-list');
     if (!box) return;
     var rows = Array.prototype.slice.call(box.querySelectorAll('.stp-row'));
@@ -246,13 +186,17 @@
     for (var i = 0; i < rows.length; i++) {
       if (rows[i] === drag.row) continue;
       var r = rows[i].getBoundingClientRect();
-      if (y < r.top + r.height / 2) {
+      var mid = r.top + r.height / 2;
+      if (y < mid) {
         target = rows[i];
         break;
       }
     }
-    if (target) box.insertBefore(drag.row, target);
-    else if (rows.length) box.appendChild(drag.row);
+    if (target) {
+      box.insertBefore(drag.row, target);
+    } else if (rows.length) {
+      box.appendChild(drag.row);
+    }
   }
 
   function onDragEnd() {
@@ -291,15 +235,7 @@
     app._stpBound = true;
 
     var back = $('stp-back');
-    if (back) {
-      back.addEventListener('click', function () {
-        if ($('stp-editor') && !$('stp-editor').hidden) {
-          closeEditor();
-          return;
-        }
-        close();
-      });
-    }
+    if (back) back.addEventListener('click', close);
 
     var list = $('stp-list');
     if (list) {
@@ -313,10 +249,6 @@
         var st = requireStore();
         if (!st) return;
         var id = row.getAttribute('data-id');
-        if (act === 'edit') {
-          openEditor(st.getEntry(id));
-          return;
-        }
         if (act === 'del') {
           if (!confirm('删除该条目？')) return;
           st.removeEntry(id);
@@ -333,6 +265,7 @@
         st.setEnabled(row.getAttribute('data-id'), e.target.checked);
         row.classList.toggle('is-off', !e.target.checked);
       });
+
       list.addEventListener('pointerdown', function (e) {
         var handle = e.target.closest('[data-act="drag"]');
         if (!handle) return;
@@ -360,16 +293,6 @@
       });
       fileInput.addEventListener('change', function () {
         if (fileInput.files && fileInput.files[0]) importFile(fileInput.files[0]);
-      });
-    }
-
-    var addBtn = $('stp-add');
-    if (addBtn) {
-      addBtn.addEventListener('click', function () {
-        var st = requireStore();
-        if (!st) return;
-        ensureActivePack(st);
-        openEditor(null);
       });
     }
 
@@ -418,38 +341,12 @@
         toast('预设包已删除');
       });
     }
-
-    var edCancel = $('stp-ed-cancel');
-    var edSave = $('stp-ed-save');
-    if (edCancel) edCancel.addEventListener('click', closeEditor);
-    if (edSave) {
-      edSave.addEventListener('click', function () {
-        var st = requireStore();
-        if (!st) return;
-        ensureActivePack(st);
-        var id = $('stp-ed-id').value.trim();
-        var name = $('stp-ed-name').value.trim() || '未命名条目';
-        st.upsertEntry({
-          id: id || undefined,
-          name: name,
-          role: $('stp-ed-role').value || 'system',
-          identifier: $('stp-ed-identifier').value.trim(),
-          content: $('stp-ed-content').value,
-          enabled: $('stp-ed-enabled').checked,
-          marker: false
-        });
-        closeEditor();
-        renderList();
-        toast('已保存');
-      });
-    }
   }
 
   function open() {
     var app = root();
     if (!app) return;
     bind();
-    closeEditor();
     renderList();
     app.hidden = false;
     app.setAttribute('aria-hidden', 'false');
@@ -463,7 +360,6 @@
     var app = root();
     if (!app) return;
     clearDrag();
-    closeEditor();
     app.classList.remove('is-open');
     setTimeout(function () {
       if (!app.classList.contains('is-open')) {
