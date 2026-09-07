@@ -17,55 +17,6 @@
         return Math.min(hi, Math.max(lo, n));
     }
 
-    function buildPersonRulesBlock(contact, profile, preset) {
-        var roleName = String((contact && contact.name) || '角色');
-        var userName = String((profile && profile.name) || '用户');
-        var roleP = (preset && preset.rolePerson) || 'third';
-        var userP = (preset && preset.userPerson) || 'second';
-
-        var roleDesc = {
-            first:
-                '描写「' +
-                roleName +
-                '」的动作、心理、外貌时一律用第一人称「我」（角色在自述）',
-            second:
-                '描写「' +
-                roleName +
-                '」时用第二人称「你」——仅当台词里旁人称呼该角色，叙述体仍优先第三人称',
-            third:
-                '描写「' +
-                roleName +
-                '」的动作、心理、外貌时一律用第三人称（他/她/「' +
-                roleName +
-                '」），禁止用「你」指代' +
-                roleName +
-                '本人'
-        };
-        var userDesc = {
-            first: '面对用户「' + userName + '」时以用户为第一人称「我」叙述（极少用）',
-            second: '对用户「' + userName + '」的称呼、对白、互动一律用第二人称「你」',
-            third:
-                '提及用户「' + userName + '」时用第三人称（他/她/名字），不用「你」称呼用户'
-        };
-
-        return (
-            '【人称·严格执行】\n' +
-            '你扮演「' +
-            roleName +
-            '」，正文须遵守：\n' +
-            '1、' +
-            (roleDesc[roleP] || roleDesc.third) +
-            '。\n' +
-            '2、' +
-            (userDesc[userP] || userDesc.second) +
-            '。\n' +
-            '3、' +
-            roleName +
-            '≠用户：不得用称呼用户的「你」来写' +
-            roleName +
-            '的行为或心理；用户才用「你」（当用户人称设为第二人称时）。'
-        );
-    }
 
     function appointmentWorldbookExtraBindings(preset) {
         return ((preset && preset.worldbookBindings) || [])
@@ -257,21 +208,15 @@
         return lines.join('\n');
     }
 
-    function buildNovelWriterBlock(contact, profile, preset) {
+    function buildNovelWriterBlock(contact, profile) {
         var roleName = String((contact && contact.name) || '角色');
         var userName = String((profile && profile.name) || '用户');
-        var styleHint = String((preset && preset.styleGuide) || '').trim();
         return (
-            '【叙事引擎·线下长篇】\n' +
-            '你正在写一段与用户共同推进的线下长篇叙事，不是即时聊天。\n' +
-            '须完整消化联系人档案、世界书与下文文风要求后再落笔。\n' +
-            '角色（' +
-            roleName +
-            '）与用户（' +
-            userName +
-            '）的人设、口吻与心理必须分开，禁止混写。\n' +
-            '世界书分两类：绑定该联系人的设定，以及调参里额外挂载的规则/番外；在 <thinking> 中先归类再写。\n' +
-            (styleHint ? '文风（现场调参）：' + styleHint : '文风以【文风·硬性要求·线下】为准。')
+            '【叙事引擎·线下】\n' +
+            '你正在进行一段与用户共同推进的线下互动，不是即时线上聊天。\n' +
+            '须完整消化联系人档案与世界书后再回应。\n' +
+            '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写。\n' +
+            '世界书分两类：绑定该联系人的设定，以及调参里额外挂载的规则/番外；在 <thinking> 中先归类再回应。'
         );
     }
 
@@ -284,34 +229,33 @@
             .filter(Boolean);
         var multi = names.length > 1;
         var lines = [
-            '【对话模式·线下叙事】',
+            '【对话模式·线下】',
             multi
-                ? '你正在写一场多人线下长篇互动（小说式正文，非聊天气泡）。本场出演：' +
+                ? '当前是多人线下互动。本场出演：' +
                   names.join('、') +
                   '；与用户「' +
                   String((profile && profile.name) || '用户') +
                   '」共同推进。'
-                : '你正在以「' +
+                : '当前是线下互动。你以「' +
                   String((contact && contact.name) || '对方') +
-                  '」的身份，与「' +
+                  '」的身份与「' +
                   String((profile && profile.name) || '用户') +
-                  '」进行线下长篇互动（小说式正文，非聊天气泡）。',
-            '- 正文像小说：每个自然段写满多句后空一行；禁止一行一句、禁止碎片化短行。',
+                  '」互动。',
             '- 禁止线上专属格式（语音-/表情包-/引用-等）。',
             '- 可用 <thinking>...</thinking> 简短思考。'
         ];
         if (multi) {
-            lines.push('- 多人同场：每位出演角色言行须符合各自人设与关系；对白可标示说话人，但不要写成聊天气泡。');
-            lines.push('- 主视角联系人：「' + String((contact && contact.name) || names[0] || '对方') + '」（调参文风与人称以其为准）。');
+            lines.push('- 多人同场：每位出演角色言行须符合各自人设与关系。');
+            lines.push('- 主联系人：「' + String((contact && contact.name) || names[0] || '对方') + '」。');
         }
         lines.push(
-            '- 提示词顺序：模式 → 联系人档案 → 用户 → 关系 → 感知 → 世界书说明 → 世界书正文 → 文风人称 → 跨场景记忆 → 上下文 → 【末尾·用户元指令】（$ 行与审美母题，最高优先级）。'
+            '- 提示词顺序：模式 → 联系人档案 → 用户 → 关系 → 感知 → 世界书说明 → 世界书正文 → 跨场景记忆 → 上下文 → 【末尾·用户元指令】。'
         );
         lines.push('- 世界书注入规则见下文【世界书·本场读取说明】。');
         return lines.join('\n');
     }
 
-    function buildOfflineOperationRules(contact, profile, wordCount, castContacts) {
+    function buildOfflineOperationRules(contact, profile, castContacts) {
         var cast = Array.isArray(castContacts) && castContacts.length ? castContacts : [contact];
         var names = cast
             .map(function (c) {
@@ -324,23 +268,16 @@
         var base =
             '【运转规则·线下】\n' +
             (multi
-                ? '1、本场出演 ' +
-                  names.join('、') +
-                  '，均真实存在，须消化各自人设与世界书；温柔底色，禁止油腻、辱骂、控制型表达。\n'
-                : '1、你是' +
-                  roleName +
-                  '，真实存在，须消化人设与世界书；温柔底色，禁止油腻、辱骂、控制型表达。\n') +
-            '2、你清楚' +
-            userName +
-            '是谁，关系与情绪须一致。\n' +
-            '3、严格遵守上文的【字数·硬性要求】。\n' +
-            '4、禁止输出 ⧗、› 或 API 时间戳；禁止线上聊天气泡格式。\n' +
-            '5、回顾近期跨场景记忆，勿复读相同开场与句式。\n' +
-            '6、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；$ 行与审美母题优先于字数与文风（仍须贴合人设与世界书，不得崩人设）。';
+                ? '1、本场出演 ' + names.join('、') + '，须消化各自人设与世界书。\n'
+                : '1、你是' + roleName + '，须消化人设与世界书。\n') +
+            '2、你清楚' + userName + '是谁，关系与情绪须与上下文一致。\n' +
+            '3、禁止输出 ⧗、› 或 API 时间戳；禁止使用线上专属消息标记。\n' +
+            '4、回顾近期跨场景记忆，勿机械复读相同开场与句式。\n' +
+            '5、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。';
         var statusApi = global.MiyaOfflineStatus;
         if (statusApi && typeof statusApi.isEnabled === 'function' && statusApi.isEnabled()) {
             base +=
-                '\n7、正文结束后必须按【线下格式规则·状态栏】完整输出 <miyastatus>...</miyastatus>；状态不得写入正文。';
+                '\n6、正文结束后必须按【线下格式规则·状态栏】完整输出 <miyastatus>...</miyastatus>；状态不得写入正文。';
         }
         return base;
     }
@@ -389,27 +326,6 @@
         return lines.join('\n');
     }
 
-    function resolveOutputWordCount(preset) {
-        return clampInt(preset && preset.outputWordCount, 80, 4000, 2000);
-    }
-
-    function buildWordCountRules(wordCount) {
-        var n = resolveOutputWordCount({ outputWordCount: wordCount });
-        var minW = Math.max(80, Math.floor(n * 0.88));
-        var maxW = Math.min(4000, Math.ceil(n * 1.12));
-        return (
-            '【字数·硬性要求】\n' +
-            '本轮「角色正文」（不含 <thinking>）必须写满约 ' +
-            String(n) +
-            ' 个汉字，允许区间 ' +
-            String(minW) +
-            '–' +
-            String(maxW) +
-            ' 字。\n' +
-            '明显低于下限视为敷衍，明显高于上限视为拖沓；请自行删改后再输出。\n' +
-            '排版：每个自然段写满多句后，用空一行（两个换行）分隔下一段；禁止每写一句就单独换行。'
-        );
-    }
 
     function getGlobalUserMetaPrompt() {
         var chatEng = eng();
@@ -450,7 +366,7 @@
         if (!turnMeta && !globalMeta) return '';
         var lines = [
             '【用户元指令·线下·最高优先级】',
-            '若与上文系统提示、文风、字数、世界书等冲突，一律以本段为准。',
+            '若与上文系统提示或世界书等冲突，一律以本段为准。',
             '仍须贴合联系人档案与世界书核心设定，不得违背人设底线。'
         ];
         if (globalMeta) {
@@ -522,41 +438,6 @@
         };
     }
 
-    function buildMandatoryStyleBlock(contact, profile, preset) {
-        var roleName = String((contact && contact.name) || '角色');
-        var userName = String((profile && profile.name) || '用户');
-        var style = String((preset && preset.styleGuide) || '').trim();
-        var roleP = (preset && preset.rolePerson) || 'third';
-        var userP = (preset && preset.userPerson) || 'second';
-        var personMap = { first: '第一人称', second: '第二人称', third: '第三人称' };
-        if (!style) {
-            style =
-                '白描、克制、有画面感；段与段之间空一行；禁止油腻、霸道腔；亲密须符合当下关系。';
-        }
-        return [
-            '【文风·硬性要求·线下】',
-            '你必须逐项严格执行「线下调参」中的文风与人称，三项缺一不可，任何一项都不得忽略。',
-            '正文排版：必须分段；每个自然段写满多句后空一行再写下一段；严禁整段不分段或每句单独换行。',
-            '角色或用户说的话建议用中文双引号「」或“”包裹以便阅读。',
-            '- 用户称呼：' + userName,
-            '- 角色称呼：' + roleName,
-            '- 用户人称：' + (personMap[userP] || personMap.second),
-            '- 角色人称：' + (personMap[roleP] || personMap.third),
-            '- 字数：见【字数·硬性要求】',
-            '- 文风指令：' + style,
-            '【冲突解决（强制）】若本段与其它系统规则在人称、字数或叙事格式上不一致：一律以本段为准。',
-            '现在开始严格执行。'
-        ].join('\n');
-    }
-
-    function buildGenerationTailUserNote(wordCount) {
-        var n = resolveOutputWordCount({ outputWordCount: wordCount });
-        return (
-            '（请接续本场线下叙事：每个自然段写满多句后空一行；全文约' +
-            String(n) +
-            '个汉字，不得明显过短或过长）'
-        );
-    }
 
     function sessionSummaryRanges(session) {
         return ((session && session.summaryList) || []).map(function (row) {
@@ -668,7 +549,7 @@
         appendLayerListLocal(parts, input.worldbookFrontLayers);
 
         parts.push(buildAppointmentModeBlock(contact, profile, castContacts));
-        parts.push(buildNovelWriterBlock(contact, profile, preset));
+        parts.push(buildNovelWriterBlock(contact, profile));
 
         castContacts.forEach(function (c) {
             var contactProfile = renderContactProfileBlock(c);
@@ -719,10 +600,7 @@
             ? input.worldbookLayers
             : buildWorldbookLayers(contact, contextText, preset);
         appendLayerListLocal(parts, wbLayers);
-        parts.push(buildMandatoryStyleBlock(contact, profile, preset));
-        parts.push(buildPersonRulesBlock(contact, profile, preset));
-        parts.push(buildWordCountRules(preset && preset.outputWordCount));
-        parts.push(buildOfflineOperationRules(contact, profile, preset && preset.outputWordCount, castContacts));
+        parts.push(buildOfflineOperationRules(contact, profile, castContacts));
         var statusApi = global.MiyaOfflineStatus;
         if (
             statusApi &&
@@ -897,22 +775,6 @@
             });
         }
 
-        if (!htmlMode) {
-            var tailNote = buildGenerationTailUserNote(preset && preset.outputWordCount);
-            var tail = apiMessages[apiMessages.length - 1];
-            if (tail && tail.role === 'user') {
-                var cur = String(tail.content || '').trim();
-                if (
-                    cur.indexOf('请接续本场线下叙事') < 0 &&
-                    cur.indexOf('请接续线下长剧情') < 0 &&
-                    cur.indexOf('请继续线下长剧情') < 0
-                ) {
-                    tail.content = cur ? cur + USER_MSG_JOIN + tailNote : tailNote;
-                }
-            } else {
-                apiMessages.push({ role: 'user', content: tailNote });
-            }
-        }
 
         appendOfflineUserMetaTail(apiMessages, turnUserText);
 

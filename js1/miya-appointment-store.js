@@ -3,46 +3,16 @@
 
     var LS_KEY = 'miya-appointment-v1';
     var LS_BACKUP_KEY = 'miya-appointment-v1-backup';
-    var BUILTIN_PRESET_ID = '__ap_builtin_cool__';
-    /** 递增后会把内置预设的写法说明 / 字数 / 自动纪要同步为 defaultBuiltinPreset */
-    var BUILTIN_DEFAULTS_REV = 2;
+    var LEGACY_BUILTIN_PRESET_ID = '__ap_builtin_cool__';
+    var DEFAULT_SUMMARY_PROMPT =
+        '以时间线客观总结本段线下剧情，区分双方，保留关键情节、情绪转折与约定；100–280字，不要复述修辞。';
 
-    var cache = null;
-    var _hydrated = false;
-    var _hydratePromise = null;
-    var _lastRecoveryInfo = null;
-    var _saveTimer = 0;
-    var SAVE_DEBOUNCE_MS = 280;
-
-    function uid(prefix) {
-        return (prefix || 'ap') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-    }
-
-    function clampInt(v, lo, hi, fb) {
-        var n = parseInt(v, 10);
-        if (!Number.isFinite(n)) return fb;
-        return Math.min(hi, Math.max(lo, n));
-    }
-
-    function defaultBuiltinPreset() {
+    function defaultContactParams() {
         return {
-            id: BUILTIN_PRESET_ID,
-            name: '内置·漫画分镜',
-            builtin: true,
             summaryTrigger: 15,
-            outputWordCount: 2000,
-            styleGuide:
-                '按黑白漫画分镜写长篇散文：用镜头语言组织段落——远景定场、中景交锋、特写收束，格与格之间空一行。\n' +
-                '节奏允许快切：一场戏内可连跳多个画面，但每格须写满多句完整叙述，禁止聊天气泡式一行一句。\n' +
-                '台词可独立成段，叙述要有肌理；情绪靠动作线、光影对比与停顿推进，少用形容词堆砌。\n' +
-                '禁止油腻霸总腔、过度撒娇发情与露骨描写；亲密用暗示与留白，须符合当下关系。\n' +
-                '可偶有拟声或画面留白感，不必真写音效字；忌文艺腔过头。全文控制在用户设定的篇幅内。',
-            rolePerson: 'third',
-            userPerson: 'second',
-            summaryPrompt:
-                '以时间线客观总结本段线下长剧情，区分双方，保留关键情节、情绪转折与约定；100–280字，不要复述修辞。',
-            worldbookBindings: [],
+            summaryPrompt: DEFAULT_SUMMARY_PROMPT,
             showThinking: true,
+            enterToSend: true,
             textDecor: true,
             updatedAt: Date.now()
         };
@@ -164,7 +134,7 @@
     function defaultState() {
         return {
             version: 1,
-            presets: [defaultBuiltinPreset()],
+            presets: [],
             contactPresetId: {},
             contactParams: {},
             contactWorldbook: {},
@@ -221,13 +191,10 @@
 
     function normalizeContactParams(raw) {
         if (!raw || typeof raw !== 'object') return null;
+        var d = defaultContactParams();
         return {
-            summaryTrigger: clampInt(raw.summaryTrigger, 0, 500, 15),
-            outputWordCount: clampInt(raw.outputWordCount, 80, 4000, 2000),
-            styleGuide: String(raw.styleGuide || '').trim(),
-            rolePerson: ['first', 'second', 'third'].indexOf(raw.rolePerson) >= 0 ? raw.rolePerson : 'third',
-            userPerson: ['first', 'second', 'third'].indexOf(raw.userPerson) >= 0 ? raw.userPerson : 'second',
-            summaryPrompt: String(raw.summaryPrompt || '').trim(),
+            summaryTrigger: clampInt(raw.summaryTrigger, 0, 500, d.summaryTrigger),
+            summaryPrompt: String(raw.summaryPrompt || '').trim() || d.summaryPrompt,
             showThinking: raw.showThinking !== false,
             enterToSend: raw.enterToSend !== false,
             textDecor: raw.textDecor !== false,
@@ -264,71 +231,18 @@
             });
     }
 
-    function isLegacyBuiltinContent(preset) {
-        if (!preset) return false;
-        var style = String(preset.styleGuide || '');
-        if (style.indexOf('文风为日常白描') >= 0 || style.indexOf('冷调白描') >= 0) return true;
-        var trig = clampInt(preset.summaryTrigger, 0, 500, -1);
-        var words = clampInt(preset.outputWordCount, 80, 4000, -1);
-        return trig === 28 && words === 480;
-    }
-
-    function applyNewBuiltinFields(preset, def) {
-        return Object.assign({}, preset, {
-            summaryTrigger: def.summaryTrigger,
-            outputWordCount: def.outputWordCount,
-            styleGuide: def.styleGuide,
-            summaryPrompt: def.summaryPrompt,
-            updatedAt: Date.now()
-        });
-    }
-
-    function mergeBuiltinDefaults(preset) {
-        if (!preset || preset.id !== BUILTIN_PRESET_ID) return preset;
-        var def = defaultBuiltinPreset();
-        var rev = clampInt(preset.builtinDefaultsRev, 0, 99, 0);
-        var legacy = isLegacyBuiltinContent(preset);
-        if (rev >= BUILTIN_DEFAULTS_REV && !legacy) return preset;
-        return applyNewBuiltinFields(
-            Object.assign({}, preset, {
-                name: def.name,
-                builtin: true,
-                builtinDefaultsRev: BUILTIN_DEFAULTS_REV
-            }),
-            def
-        );
-    }
-
-    function migrateLegacyPresetFields(preset) {
-        if (!preset || preset.id === BUILTIN_PRESET_ID) return preset;
-        if (!isLegacyBuiltinContent(preset)) return preset;
-        return applyNewBuiltinFields(preset, defaultBuiltinPreset());
-    }
-
     function normalizePreset(raw) {
         if (!raw || typeof raw !== 'object') return null;
         var id = String(raw.id || '').trim() || uid('preset');
-        var def = id === BUILTIN_PRESET_ID ? defaultBuiltinPreset() : null;
-        var styleRaw = String(raw.styleGuide || '').trim();
-        var row = {
+        if (id === LEGACY_BUILTIN_PRESET_ID) return null;
+        var params = normalizeContactParams(raw) || defaultContactParams();
+        return Object.assign({}, params, {
             id: id,
             name: String(raw.name || '').trim() || '未命名预设',
-            builtin: !!raw.builtin || id === BUILTIN_PRESET_ID,
-            builtinDefaultsRev: clampInt(raw.builtinDefaultsRev, 0, 99, 0),
-            summaryTrigger: clampInt(raw.summaryTrigger, 0, 500, 15),
-            outputWordCount: clampInt(raw.outputWordCount, 80, 4000, 2000),
-            styleGuide: styleRaw || (def ? def.styleGuide : ''),
-            rolePerson: ['first', 'second', 'third'].indexOf(raw.rolePerson) >= 0 ? raw.rolePerson : 'third',
-            userPerson: ['first', 'second', 'third'].indexOf(raw.userPerson) >= 0 ? raw.userPerson : 'second',
-            summaryPrompt:
-                String(raw.summaryPrompt || '').trim() || (def ? def.summaryPrompt : ''),
+            builtin: false,
             worldbookBindings: normalizeBindings(raw.worldbookBindings),
-            showThinking: raw.showThinking !== false,
-            enterToSend: raw.enterToSend !== false,
-            textDecor: raw.textDecor !== false,
             updatedAt: Number(raw.updatedAt) || Date.now()
-        };
-        return migrateLegacyPresetFields(mergeBuiltinDefaults(row));
+        });
     }
 
     function normalizeSummary(row, i) {
@@ -613,7 +527,7 @@
         if (!state || typeof state !== 'object') return 0;
         var n = 0;
         n += (state.savedParamPresets || []).length * 3;
-        n += Math.max(0, ((state.presets || []).length || 0) - 1);
+        n += ((state.presets || []).length || 0);
         n += Object.keys(state.contactParams || {}).length;
         n += Object.keys(state.contactOpeningPresets || {}).length * 2;
         return n;
@@ -649,15 +563,11 @@
         var presetDirty = false;
         if (parsed && typeof parsed === 'object') {
             d.version = Number(parsed.version) || 1;
-            var presets = Array.isArray(parsed.presets) ? parsed.presets.map(normalizePreset).filter(Boolean) : [];
-            if (!presets.some(function (p) { return p.id === BUILTIN_PRESET_ID; })) {
-                presets.unshift(defaultBuiltinPreset());
+            var rawPresets = Array.isArray(parsed.presets) ? parsed.presets : [];
+            if (rawPresets.some(function (p) { return p && String(p.id || '') === LEGACY_BUILTIN_PRESET_ID; })) {
+                presetDirty = true;
             }
-            d.presets = presets.map(function (p) {
-                var merged = migrateLegacyPresetFields(mergeBuiltinDefaults(p));
-                if (merged !== p) presetDirty = true;
-                return merged;
-            });
+            d.presets = rawPresets.map(normalizePreset).filter(Boolean);
             d.contactPresetId =
                 parsed.contactPresetId && typeof parsed.contactPresetId === 'object'
                     ? parsed.contactPresetId
@@ -977,7 +887,7 @@
         if (!filtered || !filtered.byChat) return null;
         return {
             version: 1,
-            presets: [defaultBuiltinPreset()],
+            presets: [],
             contactPresetId: {},
             contactParams: {},
             contactWorldbook: {},
@@ -1262,7 +1172,7 @@
     }
 
     var store = {
-        BUILTIN_PRESET_ID: BUILTIN_PRESET_ID,
+        BUILTIN_PRESET_ID: null,
         load: load,
         save: save,
         whenReady: ensureHydrated,
@@ -1310,7 +1220,7 @@
             return load().presets.find(function (p) { return p.id === id; }) || null;
         },
         getBuiltinPreset: function () {
-            return mergeBuiltinDefaults(store.getPreset(BUILTIN_PRESET_ID) || defaultBuiltinPreset());
+            return null;
         },
         upsertPreset: function (patch) {
             load();
@@ -1318,9 +1228,6 @@
             if (!row) return null;
             var idx = cache.presets.findIndex(function (p) { return p.id === row.id; });
             if (idx >= 0) {
-                if (cache.presets[idx].builtin && row.id === BUILTIN_PRESET_ID) {
-                    row.builtin = true;
-                }
                 cache.presets[idx] = Object.assign({}, cache.presets[idx], row, { updatedAt: Date.now() });
             } else {
                 cache.presets.push(row);
@@ -1330,7 +1237,7 @@
         },
         deletePreset: function (presetId) {
             var id = String(presetId || '').trim();
-            if (!id || id === BUILTIN_PRESET_ID) return false;
+            if (!id) return false;
             load();
             var before = cache.presets.length;
             cache.presets = cache.presets.filter(function (p) { return p.id !== id; });
@@ -1342,9 +1249,9 @@
         },
         getContactPresetId: function (contactId) {
             var cid = String(contactId || '').trim();
-            if (!cid) return BUILTIN_PRESET_ID;
+            if (!cid) return '';
             load();
-            return cache.contactPresetId[cid] || BUILTIN_PRESET_ID;
+            return cache.contactPresetId[cid] || '';
         },
         setContactPresetId: function (contactId, presetId) {
             var cid = String(contactId || '').trim();
@@ -1357,20 +1264,17 @@
         resolvePresetForContact: function (contactId) {
             var cid = String(contactId || '').trim();
             load();
-            var base = store.getBuiltinPreset();
-            var merged = Object.assign({}, base);
+            var merged = defaultContactParams();
             if (cid && cache.contactParams[cid]) {
                 var cp = normalizeContactParams(cache.contactParams[cid]);
                 if (cp) merged = Object.assign(merged, cp);
             }
-            if (cid && cache.contactWorldbook[cid]) {
-                merged.worldbookBindings = normalizeBindings(cache.contactWorldbook[cid]);
-            }
-            merged.id = base.id;
-            merged.name = base.name;
-            merged.builtin = true;
+            merged.worldbookBindings = cid && cache.contactWorldbook[cid]
+                ? normalizeBindings(cache.contactWorldbook[cid])
+                : [];
             return merged;
         },
+
         getContactParams: function (contactId) {
             var cid = String(contactId || '').trim();
             if (!cid) return null;

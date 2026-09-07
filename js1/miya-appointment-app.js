@@ -28,18 +28,6 @@
 
     var SCROLL_PIN_THRESHOLD = 72;
 
-    /** 角色人称 × 用户人称 · 九种叙事组合 */
-    var POV_COMBOS = [
-        { rolePerson: 'third', userPerson: 'second', label: '他看她 · 对你', hint: '经典长篇：角色第三人称，对你用「你」' },
-        { rolePerson: 'third', userPerson: 'third', label: '他看她 · 看他', hint: '双第三人称，像纸上小说旁观' },
-        { rolePerson: 'third', userPerson: 'first', label: '他看她 · 我是你', hint: '角色第三人称，把你写成第一人称「我」' },
-        { rolePerson: 'second', userPerson: 'second', label: '你就是她 · 你也是你', hint: '面对面第二人称，对白感强' },
-        { rolePerson: 'second', userPerson: 'third', label: '你就是她 · 看他', hint: '角色对你用「你」，提及用户用第三人称' },
-        { rolePerson: 'second', userPerson: 'first', label: '你就是她 · 我是你', hint: '角色第二人称，用户第一人称' },
-        { rolePerson: 'first', userPerson: 'second', label: '我是她 · 对你', hint: '角色自述「我」，对你用「你」' },
-        { rolePerson: 'first', userPerson: 'third', label: '我是她 · 看他', hint: '角色第一人称，用户第三人称' },
-        { rolePerson: 'first', userPerson: 'first', label: '双「我」', hint: '角色与用户皆第一人称，慎用' }
-    ];
 
     /* 统一简约 Ins 线框图标（stroke 1.5 / round） */
     var _I = 'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"';
@@ -2089,9 +2077,6 @@ function renderWriter() {
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.status = 'idle';
-        if (ui.contactId) {
-            apStore().setContactPresetId(ui.contactId, apStore().getContactPresetId(ui.contactId));
-        }
         ui.view = 'story';
         render();
     }
@@ -2427,9 +2412,9 @@ function renderWriter() {
         sheet.innerHTML =
             '<div class="xw-drawer__panel">' +
             '<div class="xw-drawer__head xw-manga-head">' +
-            '<span class="xw-drawer__kicker">分镜 · 调参</span>' +
-            '<h3>这一场怎么写</h3>' +
-            '<p>叙事视角、篇幅与纪要在本场生效；记忆与线上互通。参数按角色保存，世界书绑定亦按角色独立。</p></div>' +
+            '<span class="xw-drawer__kicker">线下 · 设置</span>' +
+            '<h3>这一场的设置</h3>' +
+            '<p>文风、人称、篇幅与分段完全由 ST 预设控制；这里仅保留线下模块自身的功能设置。</p></div>' +
             '<section class="xw-manga-panel">' +
             '<div class="xw-field xw-field--panel"><label>参数预设</label>' +
             '<div class="xw-field--split">' +
@@ -2439,22 +2424,10 @@ function renderWriter() {
             '<button type="button" class="xw-btn" id="mol-preset-save">存为预设</button>' +
             '<button type="button" class="xw-btn" id="mol-preset-del">删预设</button></div>' +
             '<p class="xw-field__hint">预设不含世界书；读取后写入表单，须点「保存参数」才会绑定到当前角色。</p></div>' +
-            '<div class="xw-field xw-field--panel"><label>叙事视角</label>' +
-            '<select id="mol-pov-combo">' +
-            personComboOptions(preset.rolePerson, preset.userPerson) +
-            '</select>' +
-            '<p class="xw-field__hint" id="mol-pov-hint"></p></div>' +
-            '<div class="xw-field xw-field--panel"><label>写法说明</label>' +
-            '<textarea id="mol-style" rows="5">' +
-            esc(preset.styleGuide) +
-            '</textarea></div>' +
-            '<div class="xw-field xw-field--panel xw-field--split">' +
-            '<div><label>每镜字数</label><input type="number" id="mol-word-count" min="80" max="4000" value="' +
-            preset.outputWordCount +
-            '"></div>' +
-            '<div><label>自动纪要（0 关）</label><input type="number" id="xw-note-trigger" min="0" max="500" value="' +
+            '<div class="xw-field xw-field--panel"><label>自动纪要（0 关）</label>' +
+            '<input type="number" id="xw-note-trigger" min="0" max="500" value="' +
             preset.summaryTrigger +
-            '"></div></div>' +
+            '"></div>' +
             '<div class="xw-field xw-field--panel"><label>输出方式</label><select id="mol-stream-mode">' +
             (function () {
                 var cfg =
@@ -2587,21 +2560,11 @@ function renderWriter() {
             }
         }
 
-        function defaultSummaryPrompt() {
-            var builtin = apStore().getBuiltinPreset();
-            return String((builtin && builtin.summaryPrompt) || '').trim();
-        }
-
         function readFormParams() {
             persistAppointmentStreamMode();
-            var pov = parsePovCombo($('mol-pov-combo').value);
             return {
                 summaryTrigger: parseInt($('xw-note-trigger').value, 10) || 0,
-                outputWordCount: parseInt($('mol-word-count').value, 10) || 2000,
-                styleGuide: $('mol-style').value,
-                rolePerson: pov.rolePerson,
-                userPerson: pov.userPerson,
-                summaryPrompt: defaultSummaryPrompt(),
+                summaryPrompt: String((preset && preset.summaryPrompt) || '').trim(),
                 showThinking: $('mol-show-thinking').value !== 'false',
                 enterToSend: $('mol-enter-send').value !== 'false',
                 textDecor: $('mol-text-decor').value !== 'false'
@@ -2621,13 +2584,6 @@ function renderWriter() {
 
         function applyParamsToForm(params) {
             if (!params) return;
-            var povSel = $('mol-pov-combo');
-            if (povSel) {
-                povSel.value = povComboValue(params.rolePerson, params.userPerson);
-                updatePovHint();
-            }
-            if ($('mol-style')) $('mol-style').value = params.styleGuide || '';
-            if ($('mol-word-count')) $('mol-word-count').value = params.outputWordCount || 2000;
             if ($('xw-note-trigger')) $('xw-note-trigger').value = params.summaryTrigger != null ? params.summaryTrigger : 15;
             if ($('mol-show-thinking')) {
                 $('mol-show-thinking').value = params.showThinking !== false ? 'true' : 'false';
@@ -2790,18 +2746,6 @@ function renderWriter() {
 
         persistAppointmentPresetFromSheet = persistPresetFromForm;
 
-        function updatePovHint() {
-            var hintEl = $('mol-pov-hint');
-            var sel = $('mol-pov-combo');
-            if (!hintEl || !sel) return;
-            var combo = POV_COMBOS.find(function (c) {
-                return povComboValue(c.rolePerson, c.userPerson) === sel.value;
-            });
-            hintEl.textContent = combo ? combo.hint : '';
-        }
-
-        $('mol-pov-combo').addEventListener('change', updatePovHint);
-        updatePovHint();
 
         $('xw-note-run').addEventListener('click', function () {
             persistPresetFromForm();
@@ -2995,38 +2939,6 @@ function renderWriter() {
         }
     }
 
-    function povComboValue(rolePerson, userPerson) {
-        return String(rolePerson || 'third') + '|' + String(userPerson || 'second');
-    }
-
-    function parsePovCombo(val) {
-        var parts = String(val || '').split('|');
-        var role = parts[0];
-        var user = parts[1];
-        var ok = function (p) {
-            return ['first', 'second', 'third'].indexOf(p) >= 0;
-        };
-        if (!ok(role) || !ok(user)) {
-            return { rolePerson: 'third', userPerson: 'second' };
-        }
-        return { rolePerson: role, userPerson: user };
-    }
-
-    function personComboOptions(rolePerson, userPerson) {
-        var cur = povComboValue(rolePerson, userPerson);
-        return POV_COMBOS.map(function (c) {
-            var v = povComboValue(c.rolePerson, c.userPerson);
-            return (
-                '<option value="' +
-                esc(v) +
-                '"' +
-                (v === cur ? ' selected' : '') +
-                '>' +
-                esc(c.label) +
-                '</option>'
-            );
-        }).join('');
-    }
 
     function deleteFromMessage(msgId) {
         var sess = apStore().getSession(ui.chatId, ui.sessionId);
