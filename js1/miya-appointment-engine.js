@@ -783,6 +783,21 @@
             });
         });
 
+        /*
+         * COT 专用层：ST 中明确标记为 COT/思维链的启用条目，必须在历史之后、
+         * 当前用户发言之前再次以原文进入线下请求。普通 ST 条目仍按前/后位置工作。
+         * 注意：这里是“把 COT 规则送进模型的生成上下文”，不是伪造 reasoning_content；
+         * 真正的 reasoning 仍由模型/API 产生。
+         */
+        if (stEngine && typeof stEngine.buildStCotPromptBlock === 'function') {
+            try {
+                var stCotBlock = stEngine.buildStCotPromptBlock();
+                if (stCotBlock) {
+                    apiMessages.push({ role: 'system', content: stCotBlock });
+                }
+            } catch (cotErr) {}
+        }
+
         if (extra) {
             var last = apiMessages[apiMessages.length - 1];
             if (last && last.role === 'user') {

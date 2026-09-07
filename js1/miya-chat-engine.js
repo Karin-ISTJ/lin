@@ -1304,6 +1304,43 @@
      * - back：相对聊天记录后置，紧挨历史，更适合强执行规则
      * 不传 position 时保持旧行为：返回全部启用条目（兼容外部调用）。
      */
+    /**
+     * ST COT/思维链条目：用于把预设中明确属于 COT 的规则单独送到
+     * 生成前的最近位置。这里只负责识别与原文保留，不伪造模型的隐藏 reasoning。
+     */
+    function buildStCotPromptBlock() {
+        var rows = [];
+        try {
+            var stpStore = global.miyaStPromptPresetsStore;
+            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
+                ? (stpStore.getEnabledForRequest() || [])
+                : [];
+            entries.forEach(function (entry) {
+                var body = String(entry && entry.content || '').trim();
+                if (!body) return;
+                var name = String(entry && (entry.name || entry.identifier) || '').trim();
+                var id = String(entry && entry.identifier || '').trim();
+                var mark = (name + ' ' + id + ' ' + body).toLowerCase();
+                if (/(?:\bcot\b|chain[-_ ]?of[-_ ]?thought|reasoning|思维链|思考过程|推理规则|推理过程)/i.test(mark)) {
+                    rows.push({ name: name || 'COT', content: body });
+                }
+            });
+        } catch (e) {}
+        if (!rows.length) return '';
+        var out = [
+            '【ST 预设·COT 执行层】',
+            '以下为本轮已启用、明确属于 COT/思维链的 ST 预设条目。它们不是角色内心独白，也不是可有可无的背景资料；生成回复前必须逐条读取，并将其中要求实际落实到本轮思考与输出决策中。',
+            '不要只在正文里间接体现，也不要用角色心理活动替代这些规则。若模型输出 <thinking>，其内容应体现这些 COT 规则对当前任务的实际执行。',
+            ''
+        ];
+        rows.forEach(function (row, i) {
+            out.push('【COT-' + (i + 1) + '｜' + row.name + '】');
+            out.push(row.content);
+            out.push('');
+        });
+        return out.join('\n').trim();
+    }
+
     function buildStPresetMessages(position) {
         var out = [];
         var hasAnyEnabled = false;
@@ -4594,6 +4631,7 @@
         buildWorldbookBundle: buildWorldbookBundle,
         buildSystemPrompt: buildSystemPrompt,
         buildStPresetMessages: buildStPresetMessages,
+        buildStCotPromptBlock: buildStCotPromptBlock,
         buildApiMessages: buildApiMessages,
         setPendingOnlineReturnPrompt: function (chatId, text) {
             var key = String(chatId || '').trim();
