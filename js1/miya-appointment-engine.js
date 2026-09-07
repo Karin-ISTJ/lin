@@ -810,9 +810,10 @@
                         content:
                             stFinalBlock +
                             '\n\n【ST 最终执行要求】\n' +
-                            '本轮生成前，必须以以上已启用 ST 条目作为实际规则集进行任务分析。\n' +
-                            '如果接口返回 reasoning_content/reasoning，推理过程必须体现这些 ST 规则对本轮决策的实际作用；不要只复述“已读取”。\n' +
-                            '尤其要先落实身份、环境、叙事和行为约束，再生成正文。'
+                            '本轮必须真正执行以上 ST 条目，而不是只把它们当作参考资料。先逐条判断哪些规则影响本轮，再据此决定角色身份、环境、行为、叙事与正文。\n' +
+                            '必须输出可解析的思维链：正文之前先输出 <thinking>...</thinking>；其中必须写出本轮实际采用的 ST 规则及其对当前用户请求的具体影响，至少点明最关键的身份/环境/行为规则，不得只写“已读取 ST”。\n' +
+                            '这里的 <thinking> 是任务执行说明，不是角色第一人称内心独白；完成后再输出正文。不要把 ST 原文整段机械复制进 thinking，而要说明本轮如何应用它。\n' +
+                            '如果接口另外返回 reasoning_content/reasoning，也不能因此省略正文中的 <thinking>...</thinking>；客户端将优先把显式 thinking 作为线下思维链。'
                     });
                 }
             } catch (cotFinalErr) {}
@@ -1175,10 +1176,22 @@
         if (!streamOn) {
             var body = Object.assign({}, payload);
             body.stream = false;
-            return fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(body)
+            function doFetch(bodyToSend) {
+                return fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(bodyToSend)
+                });
+            }
+            return doFetch(body).then(function (res) {
+                if (!res.ok && body.thinking && [400, 404, 422].indexOf(res.status) >= 0) {
+                    return res.text().catch(function () { return ''; }).then(function () {
+                        var retryBody = Object.assign({}, body);
+                        delete retryBody.thinking;
+                        return doFetch(retryBody);
+                    });
+                }
+                return res;
             }).then(function (res) {
                 if (!res.ok) {
                     return res.text().then(function (t) {
@@ -1206,10 +1219,22 @@
 
         var req = Object.assign({}, payload);
         req.stream = true;
-        return fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(req)
+        function doStreamFetch(bodyToSend) {
+            return fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(bodyToSend)
+            });
+        }
+        return doStreamFetch(req).then(function (res) {
+            if (!res.ok && req.thinking && [400, 404, 422].indexOf(res.status) >= 0) {
+                return res.text().catch(function () { return ''; }).then(function () {
+                    var retryReq = Object.assign({}, req);
+                    delete retryReq.thinking;
+                    return doStreamFetch(retryReq);
+                });
+            }
+            return res;
         }).then(function (res) {
             if (!res.ok) {
                 return res.text().then(function (t) {
@@ -1389,7 +1414,9 @@
             var payload = {
                 model: model,
                 messages: built.messages,
-                temperature: cfg.temperature != null ? Number(cfg.temperature) : 1
+                temperature: cfg.temperature != null ? Number(cfg.temperature) : 1,
+                /* 线下优先走显式 <thinking> 路径；不让原生 reasoning_content 抢占 ST 的可编辑思维链。 */
+                thinking: { type: 'disabled' }
             };
             var useStream = appointmentStreamEnabled(cfg);
             return fetchAppointmentCompletion(
