@@ -185,11 +185,7 @@
   }
 
   function allThemeClasses() {
-    var list = BUILTIN_THEMES.map(function (t) { return THEME_CLASS_PREFIX + t.id; });
-    Object.keys(REMOVED_THEME_IDS).forEach(function (id) {
-      list.push(THEME_CLASS_PREFIX + id);
-    });
-    return list;
+    return BUILTIN_THEMES.map(function (t) { return THEME_CLASS_PREFIX + t.id; });
   }
 
   function injectGuardCss() {
@@ -284,12 +280,7 @@
   function applyThemeClasses(app, state) {
     if (!app) return;
     allThemeClasses().forEach(function (cls) { app.classList.remove(cls); });
-    /* 兜底：去掉任何残留的 chat-bf-theme-*（含已删除主题） */
-    Array.prototype.slice.call(app.classList || []).forEach(function (cls) {
-      if (cls && cls.indexOf(THEME_CLASS_PREFIX) === 0) app.classList.remove(cls);
-    });
     var tid = state.themeId || 'default-orange';
-    if (REMOVED_THEME_IDS[tid]) tid = 'default-orange';
     app.classList.add(THEME_CLASS_PREFIX + tid);
     app.classList.toggle('chat-bf-has-custom-css', !!(state.customCss && state.customCss.trim()));
   }
