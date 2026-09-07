@@ -7,6 +7,23 @@
     var DEFAULT_SUMMARY_PROMPT =
         '以时间线客观总结本段线下剧情，区分双方，保留关键情节、情绪转折与约定；100–280字，不要复述修辞。';
 
+    var cache = null;
+    var _hydrated = false;
+    var _hydratePromise = null;
+    var _lastRecoveryInfo = null;
+    var _saveTimer = 0;
+    var SAVE_DEBOUNCE_MS = 280;
+
+    function uid(prefix) {
+        return (prefix || 'ap') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function clampInt(v, lo, hi, fb) {
+        var n = parseInt(v, 10);
+        if (!Number.isFinite(n)) return fb;
+        return Math.min(hi, Math.max(lo, n));
+    }
+
     function defaultContactParams() {
         return {
             summaryTrigger: 15,
