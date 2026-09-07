@@ -1533,3 +1533,68 @@
 .theme-soft .qq-msg-menu__btn.is-danger:active {
   background: rgba(216, 86, 104, 0.1);
 }
+
+
+/* miya avatar size guards — 防止主题残留/自定义 CSS 把头像撑满屏 */
+.miya-chat-app .soft-thread__ava,
+.miya-chat-app .qq-chat-item__ava,
+.miya-chat-app img.soft-thread__ava,
+.miya-chat-app img.qq-chat-item__ava {
+  width: 48px !important;
+  height: 48px !important;
+  max-width: 48px !important;
+  max-height: 48px !important;
+  object-fit: cover !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+}
+.miya-chat-app .soft-thread__ava-wrap {
+  width: 48px !important;
+  height: 48px !important;
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+}
+.miya-chat-app .soft-profile-card__ava-wrap {
+  width: 70px !important;
+  height: 70px !important;
+  max-width: 70px !important;
+  max-height: 70px !important;
+  overflow: hidden !important;
+}
+.miya-chat-app .soft-profile-card__ava,
+.miya-chat-app .qq-mine-profile__ava,
+.miya-chat-app #soft-me-avatar-img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 70px !important;
+  max-height: 70px !important;
+  object-fit: cover !important;
+}
+.miya-chat-app .qq-contact-row__ava {
+  width: 40px !important;
+  height: 40px !important;
+  max-width: 40px !important;
+  max-height: 40px !important;
+  object-fit: cover !important;
+}
+#qq-room .qq-room__head-avatar {
+  width: 44px !important;
+  height: 44px !important;
+  max-width: 44px !important;
+  max-height: 44px !important;
+  overflow: hidden !important;
+  flex-shrink: 0 !important;
+}
+#qq-room .qq-room__head-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+#qq-room .qq-room__bubble-ava {
+  width: 32px !important;
+  height: 32px !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
+  object-fit: cover !important;
+  flex-shrink: 0 !important;
+}
