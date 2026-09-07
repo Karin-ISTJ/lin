@@ -6082,7 +6082,7 @@
       <button type="button" class="stp-btn" id="stp-pack-rename">改名</button>
       <button type="button" class="stp-btn" id="stp-pack-delete">删除套</button>
       <input type="file" id="stp-file" accept="application/json,.json" hidden />
-      <p class="stp-hint">可手动新增、编辑、拖拽排序。拖住条目左侧手柄调整顺序；仅「开启」且有正文的条目会进聊天请求。</p>
+      <p class="stp-hint">可手动新增、编辑、拖拽排序，并指定相对聊天记录的注入位置。「前置」作为背景设定，「后置」紧挨聊天记录，更适合必须直接执行的人称、格式与本轮行为规则。</p>
     </div>
     <div class="stp-body">
       <div id="stp-list"></div>
@@ -6102,8 +6102,9 @@
         <label class="stp-editor__field"><span>正文</span><textarea id="stp-edit-content" rows="10" placeholder="输入要注入聊天请求的 prompt 内容"></textarea></label>
         <div class="stp-editor__grid">
           <label class="stp-editor__field"><span>角色</span><select id="stp-edit-role"><option value="system">system</option><option value="user">user</option><option value="assistant">assistant</option></select></label>
-          <label class="stp-editor__field"><span>Identifier（可选）</span><input id="stp-edit-identifier" type="text" maxlength="120" autocomplete="off"></label>
+          <label class="stp-editor__field"><span>相对聊天记录位置</span><select id="stp-edit-position"><option value="front">前置 · 聊天记录之前</option><option value="back">后置 · 聊天记录之后</option></select></label>
         </div>
+        <label class="stp-editor__field"><span>Identifier（可选）</span><input id="stp-edit-identifier" type="text" maxlength="120" autocomplete="off"></label>
         <div class="stp-editor__checks">
           <label><input id="stp-edit-enabled" type="checkbox" checked> 启用</label>
           <label><input id="stp-edit-system" type="checkbox" checked> system_prompt</label>

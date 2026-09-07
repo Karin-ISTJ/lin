@@ -81,7 +81,7 @@
         '<label class="stp-switch" title="启用"><input type="checkbox" data-act="toggle" ' + (e.enabled ? 'checked' : '') + ' /><span></span></label>' +
         '<button type="button" class="stp-row__edit" data-act="edit" title="编辑条目">' +
           '<span class="stp-row__name" title="' + esc(e.identifier || e.name) + '">' + esc(e.name) + '</span>' +
-          '<span class="stp-row__meta">' + esc(e.role || 'system') + '</span>' +
+          '<span class="stp-row__meta">' + esc(e.role || 'system') + ' · ' + (e.position === 'back' ? '后置' : '前置') + '</span>' +
         '</button>' +
         '<button type="button" class="stp-row__del" data-act="del" aria-label="删除" title="删除">' +
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8v10m4-10v10m4-10v10M5 6h14M10 6V4h4v2m-8 0 1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
@@ -107,6 +107,7 @@
     $('stp-edit-name').value = e ? e.name : '';
     $('stp-edit-content').value = e ? e.content : '';
     $('stp-edit-role').value = e ? e.role : 'system';
+    $('stp-edit-position').value = e ? (e.position || 'front') : 'front';
     $('stp-edit-identifier').value = e ? e.identifier : '';
     $('stp-edit-enabled').checked = e ? e.enabled !== false : true;
     $('stp-edit-system').checked = e ? e.system_prompt !== false : true;
@@ -141,6 +142,7 @@
       name: name,
       content: content,
       role: $('stp-edit-role').value,
+      position: $('stp-edit-position').value === 'back' ? 'back' : 'front',
       identifier: String($('stp-edit-identifier').value || '').trim(),
       enabled: $('stp-edit-enabled').checked,
       system_prompt: $('stp-edit-system').checked,

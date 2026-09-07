@@ -16,6 +16,14 @@
     return { version: 2, activeId: '', packs: [] };
   }
 
+  function normalizePosition(v) {
+    /* ST/本项目统一只暴露「前置 / 后置」两档；兼容常见 ST 数值 injection_position。 */
+    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'back' || String(v || '').toLowerCase() === '后置') {
+      return 'back';
+    }
+    return 'front';
+  }
+
   function normalizeEntry(raw, order) {
     var e = raw && typeof raw === 'object' ? raw : {};
     var role = e.role ? String(e.role) : 'system';
@@ -25,6 +33,10 @@
       name: String(e.name || e.identifier || '未命名').trim() || '未命名',
       content: e.content != null ? String(e.content) : '',
       role: role,
+      position: normalizePosition(
+        e.position !== undefined ? e.position :
+        (e.injection_position !== undefined ? e.injection_position : 'front')
+      ),
       enabled: e.enabled === undefined ? true : !!e.enabled,
       identifier: e.identifier != null ? String(e.identifier) : '',
       system_prompt: e.system_prompt !== false,
@@ -281,6 +293,7 @@
             name: p.name || ident || '条目',
             content: p.content || '',
             role: p.role || 'system',
+            position: p.position !== undefined ? p.position : p.injection_position,
             identifier: ident,
             system_prompt: p.system_prompt !== false,
             marker: !!p.marker,

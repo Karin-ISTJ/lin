@@ -718,24 +718,25 @@
         var apiMessages = [];
         /*
          * 线下与线上共用同一套 ST 主预设。
-         * ST 规则必须位于线下运行上下文之前；世界书仍由下方
-         * buildAppointmentSystemPrompt 按原有机制注入，因此顺序为：
-         * ST 预设 → 线下上下文/世界书 → 会话历史 → 当前用户消息。
+         * ST 前置规则位于线下运行上下文之前；ST 后置规则则在会话历史之后、
+         * 当前用户消息之前。世界书仍由下方 buildAppointmentSystemPrompt 按原有机制注入，
+         * 因此整体顺序为：ST 前置 → 线下上下文/世界书 → 会话历史 → ST 后置 → 当前用户消息。
          * 不在这里复制或生成任何文风、人称、字数、分段规则。
          */
         var stEngine = global.miyaChatEngine;
+        var stPresetFrontMessages = [];
+        var stPresetBackMessages = [];
         if (stEngine && typeof stEngine.buildStPresetMessages === 'function') {
             try {
-                var stPresetMessages = stEngine.buildStPresetMessages();
-                if (Array.isArray(stPresetMessages)) {
-                    stPresetMessages.forEach(function (m) {
-                        if (!m || !String(m.content || '').trim()) return;
-                        apiMessages.push({
-                            role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
-                            content: String(m.content || '').trim()
-                        });
+                stPresetFrontMessages = stEngine.buildStPresetMessages('front') || [];
+                stPresetBackMessages = stEngine.buildStPresetMessages('back') || [];
+                stPresetFrontMessages.forEach(function (m) {
+                    if (!m || !String(m.content || '').trim()) return;
+                    apiMessages.push({
+                        role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
+                        content: String(m.content || '').trim()
                     });
-                }
+                });
             } catch (e) {}
         }
         var systemContent = buildAppointmentSystemPrompt({
@@ -767,6 +768,18 @@
         }
 
         appendSessionHistory(apiMessages, slice, settings, sess);
+
+        /*
+         * ST 后置层：严格放在线下 session 历史之后、当前轮 extra 用户消息之前。
+         * 这样线下也与线上一致，且不会被历史/世界书前置层稀释成背景。
+         */
+        stPresetBackMessages.forEach(function (m) {
+            if (!m || !String(m.content || '').trim()) return;
+            apiMessages.push({
+                role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
+                content: String(m.content || '').trim()
+            });
+        });
 
         if (extra) {
             var last = apiMessages[apiMessages.length - 1];

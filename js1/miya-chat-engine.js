@@ -1297,8 +1297,17 @@
      * ST 预设：正常聊天的唯一可编辑规则入口。
      * 没有启用条目时只保留极短的代码级兜底，世界书不依赖旧的思维链/运转规则模块。
      */
-    function buildStPresetMessages() {
+    /**
+     * ST 预设：正常聊天的唯一可编辑规则入口。
+     * position 可传 front/back：
+     * - front：相对聊天记录前置，作为背景/身份设定
+     * - back：相对聊天记录后置，紧挨历史，更适合强执行规则
+     * 不传 position 时保持旧行为：返回全部启用条目（兼容外部调用）。
+     */
+    function buildStPresetMessages(position) {
         var out = [];
+        var hasAnyEnabled = false;
+        var wanted = position === 'back' ? 'back' : position === 'front' ? 'front' : '';
         try {
             var stpStore = global.miyaStPromptPresetsStore;
             var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
@@ -1307,14 +1316,19 @@
             entries.forEach(function (entry) {
                 var body = String(entry && entry.content || '').trim();
                 if (!body) return;
+                hasAnyEnabled = true;
+                var entryPosition = entry && entry.position === 'back' ? 'back' : 'front';
+                if (wanted && entryPosition !== wanted) return;
                 var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
-                out.push({ role: role, content: body });
+                out.push({ role: role, content: body, position: entryPosition });
             });
         } catch (e) {}
-        if (!out.length) {
+        /* 仅在完全没有任何可用 ST 条目时保留代码级兜底；后置层绝不凭空生成兜底。 */
+        if (!out.length && !hasAnyEnabled && (!wanted || wanted === 'front')) {
             out.push({
                 role: 'system',
-                content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。'
+                content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。',
+                position: 'front'
             });
         }
         return out;
@@ -2516,8 +2530,12 @@
                 .join('\n') +
             '\n' +
             userText;
-        /* 先读取 ST 规则；世界书随后按当前上下文匹配并填充。最终消息顺序也保持 ST 在前。 */
-        var stPresetMessages = buildStPresetMessages();
+        /*
+         * ST 预设分成相对聊天记录的「前置 / 后置」两层。
+         * 前置保留背景设定语义；后置在历史注入后再追加，给人称/格式/行为等强执行规则更高的就近性。
+         */
+        var stPresetFrontMessages = buildStPresetMessages('front');
+        var stPresetBackMessages = buildStPresetMessages('back');
 
         var wbBundle = buildWorldbookBundle(contact, contextText, null, {
             promptContext: 'online',
@@ -2589,7 +2607,7 @@
             }
         }
 
-        var apiMessages = stPresetMessages.concat([{ role: 'system', content: systemContent }]);
+        var apiMessages = stPresetFrontMessages.concat([{ role: 'system', content: systemContent }]);
         var awInject = global.MiyaChatAwareness;
         var summaryBlock =
             awInject && typeof awInject.buildSummaryContextBlock === 'function'
@@ -2693,6 +2711,17 @@
         if (!opts.callMode && !opts.appointmentMode) {
             attachTrailingRoundPhotosToApiMessages(apiMessages, sliceAppend);
         }
+        /*
+         * ST 后置层必须紧挨聊天历史：先让模型读完真实时间线，再读必须直接执行的规则。
+         * 当前用户消息尚未追加，因此后置层仍处于「历史之后、本轮发言之前」的位置。
+         */
+        stPresetBackMessages.forEach(function (m) {
+            if (!m || !String(m.content || '').trim()) return;
+            apiMessages.push({
+                role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
+                content: String(m.content || '').trim()
+            });
+        });
         appendOnlineHeartVoicePriorityMessage(apiMessages, contact, settings, opts);
         var historyTailState = getTrailingSpeakerState(sliceAppend);
         /*
