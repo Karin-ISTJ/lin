@@ -453,7 +453,7 @@
   }
 
   function loadForumBridgeIfNeeded() {
-    if (global.miyaApiBridge && typeof global.miyaApiBridge.callItineraryCompletionsRaw === 'function') {
+    if (global.miyaForumBridge && typeof global.miyaForumBridge.callItineraryCompletionsRaw === 'function') {
       return Promise.resolve();
     }
     if (global.miyaLazyEnsure) {
@@ -466,7 +466,7 @@
 
   function callDialogueApi(systemHint, userContent) {
     return loadForumBridgeIfNeeded().then(function () {
-      var br = global.miyaApiBridge;
+      var br = global.miyaForumBridge;
       // 优先走对话（聊天）API，与日记/行程的专用配置区分
       if (br && typeof br.callMainChatCompletionsRaw === 'function') {
         return br.callMainChatCompletionsRaw(systemHint, userContent, undefined, {

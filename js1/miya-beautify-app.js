@@ -3,6 +3,7 @@
 
   var ICON_LABELS = {
     music: '音乐',
+    memo: '论坛',
     set: '设置',
     book: '世界书',
     memory: '记忆',

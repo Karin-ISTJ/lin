@@ -598,7 +598,7 @@
   }
 
   function callApi(systemHint, userContent) {
-    var br = global.miyaApiBridge;
+    var br = global.miyaForumBridge;
     if (br && typeof br.callCstoreCompletionsRaw === 'function') {
       return br.callCstoreCompletionsRaw(systemHint, userContent);
     }

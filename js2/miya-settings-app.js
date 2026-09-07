@@ -35,6 +35,7 @@
   var MUSIC_APPEARANCE_PRESETS_KEY = 'miya-music-appearance-presets-v1';
   var MUSIC_APPEARANCE_BACKUP_KEY = 'miya-music-appearance-backup-v1';
   var DIARY_KEY = 'miya-diary-v1';
+  var FORUM_KEY = 'miya-forum-v1';
   var TYPEWRITER_KEY = 'miya-typewriter-v1';
   var TYPEWRITER_SETTINGS_KEY = 'miya-typewriter-settings-v1';
   var TYPEWRITER_READ_KEY = 'miya-typewriter-read-together-v1';
@@ -101,6 +102,7 @@
       musicLocalAudioIdb: true
     },
     { id: 'diary', title: '日记', lsKeys: [DIARY_KEY], widgetKvKeys: [DIARY_KEY] },
+    { id: 'forum', title: '论坛', lsKeys: [FORUM_KEY], widgetKvKeys: [FORUM_KEY] },
     {
       id: 'typewriter',
       title: '打字机',
@@ -1017,6 +1019,9 @@
     if (cat.id === 'simulator' && global.MiyaSimulatorStore && global.MiyaSimulatorStore.invalidateCache) {
       global.MiyaSimulatorStore.invalidateCache();
     }
+    if (cat.id === 'forum' && global.miyaForumStore && global.miyaForumStore.invalidateCache) {
+      global.miyaForumStore.invalidateCache();
+    }
     if (cat.id === 'typewriter') {
       if (global.miyaTypewriterStore && global.miyaTypewriterStore.invalidateCache) global.miyaTypewriterStore.invalidateCache();
       if (global.miyaTypewriterSettings && global.miyaTypewriterSettings.invalidateCache) global.miyaTypewriterSettings.invalidateCache();
@@ -1070,6 +1075,7 @@
     if (global.miyaChatStore && global.miyaChatStore.invalidateCache) global.miyaChatStore.invalidateCache();
     if (global.miyaChatGlobalSettings && global.miyaChatGlobalSettings.invalidateCache) global.miyaChatGlobalSettings.invalidateCache();
     if (global.MiyaSimulatorStore && global.MiyaSimulatorStore.invalidateCache) global.MiyaSimulatorStore.invalidateCache();
+    if (global.miyaForumStore && global.miyaForumStore.invalidateCache) global.miyaForumStore.invalidateCache();
     if (global.miyaTypewriterStore && global.miyaTypewriterStore.invalidateCache) global.miyaTypewriterStore.invalidateCache();
     if (global.miyaTypewriterSettings && global.miyaTypewriterSettings.invalidateCache) global.miyaTypewriterSettings.invalidateCache();
     if (global.miyaTypewriterReadTogetherStore && global.miyaTypewriterReadTogetherStore.invalidateCache) {
@@ -1191,6 +1197,10 @@
     return slice;
   }
 
+  function readForumApiForm() {
+    return { forumApi: readScopedApiForm('forum') };
+  }
+
   function readCstoreApiForm() {
     return { cstoreApi: readScopedApiForm('cstore') };
   }
@@ -1270,7 +1280,8 @@
   function syncFormsFromConfig() {
     var cfg = getApiConfig();
     var mm = cfg.minimaxTts && typeof cfg.minimaxTts === 'object' ? cfg.minimaxTts : {};
-      var cstore = cfg.cstoreApi && typeof cfg.cstoreApi === 'object' ? cfg.cstoreApi : {};
+    var forum = cfg.forumApi && typeof cfg.forumApi === 'object' ? cfg.forumApi : {};
+    var cstore = cfg.cstoreApi && typeof cfg.cstoreApi === 'object' ? cfg.cstoreApi : {};
     var chatTemp = cfg.temperature != null ? cfg.temperature : 1;
     syncChatApiPanelForms();
     syncScopedApiForm('forum', forum, chatTemp);
@@ -1611,6 +1622,9 @@
     }
     if (global.MiyaSimulatorStore && typeof global.MiyaSimulatorStore.invalidateCache === 'function') {
       global.MiyaSimulatorStore.invalidateCache();
+    }
+    if (global.miyaForumStore && typeof global.miyaForumStore.invalidateCache === 'function') {
+      global.miyaForumStore.invalidateCache();
     }
     if (global.miyaTypewriterStore && typeof global.miyaTypewriterStore.invalidateCache === 'function') {
       global.miyaTypewriterStore.invalidateCache();
@@ -2395,6 +2409,7 @@
       });
     }
 
+    bindScopedFetch('forum', '请填写论坛 API 或对话 API 的地址与密钥');
     bindScopedFetch('cstore', '请填写便利店 API 或对话 API 的地址与密钥');
 
     var mmSpeedIn = $('miya-st-mm-speed');
@@ -2429,6 +2444,15 @@
       setApiConfig(Object.assign({}, getApiConfig(), readChatApiSavePayload()));
       toast('已保存');
     });
+
+    var forumSaveBtn = $('miya-st-forum-save');
+    if (forumSaveBtn) {
+      forumSaveBtn.addEventListener('click', function () {
+        setApiConfig(Object.assign({}, getApiConfig(), readForumApiForm()));
+        toast('已保存论坛 API');
+      });
+    }
+
     var cstoreSaveBtn = $('miya-st-cstore-save');
     if (cstoreSaveBtn) {
       cstoreSaveBtn.addEventListener('click', function () {
@@ -2456,7 +2480,7 @@
     onClick('miya-st-preset-save', function () {
       var name = ($('miya-st-preset-name') || {}).value ? $('miya-st-preset-name').value.trim() : '';
       if (!name) { toast('请输入预设名称'); return; }
-      var cfg = Object.assign({}, getApiConfig(), readChatApiSavePayload(), readCstoreApiForm(), { minimaxTts: readMinimaxForm() });
+      var cfg = Object.assign({}, getApiConfig(), readChatApiSavePayload(), readForumApiForm(), readCstoreApiForm(), { minimaxTts: readMinimaxForm() });
       var baseList = apiPresetsCache != null ? apiPresetsCache.slice() : null;
       var loadPromise = baseList ? Promise.resolve(baseList) : loadApiPresetsArr();
       loadPromise.then(function (list) {

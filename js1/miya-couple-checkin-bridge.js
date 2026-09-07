@@ -50,7 +50,7 @@
   }
 
   function callApi(systemHint, userContent, reqOpts, imageParts) {
-    var br = global.miyaApiBridge;
+    var br = global.miyaForumBridge;
     if (br && typeof br.callItineraryCompletionsRaw === 'function') {
       return br.callItineraryCompletionsRaw(systemHint, userContent, imageParts, reqOpts);
     }
@@ -64,7 +64,7 @@
   }
 
   function callCommentApi(systemHint, userContent, imageParts, reqOpts) {
-    var br = global.miyaApiBridge;
+    var br = global.miyaForumBridge;
     reqOpts = reqOpts && typeof reqOpts === 'object' ? reqOpts : {};
     var opts = Object.assign({
       temperature: 0.88,

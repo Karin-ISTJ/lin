@@ -407,7 +407,7 @@
   }
 
   function callApi(systemHint, userContent, reqOpts) {
-    var br = global.miyaApiBridge;
+    var br = global.miyaForumBridge;
     reqOpts = reqOpts && typeof reqOpts === 'object' ? reqOpts : {};
     var opts = Object.assign({
       skipUniversalWorldbook: true,

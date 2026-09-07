@@ -245,8 +245,8 @@
     var cleaned = stripThinkingNoise(text);
     if (!cleaned) return null;
     var obj = parseJsonPayload(cleaned);
-    if (!obj && global.miyaApiBridge && typeof global.miyaApiBridge.extractJsonObject === 'function') {
-      obj = global.miyaApiBridge.extractJsonObject(cleaned);
+    if (!obj && global.miyaForumBridge && typeof global.miyaForumBridge.extractJsonObject === 'function') {
+      obj = global.miyaForumBridge.extractJsonObject(cleaned);
     }
     if (!obj) {
       var loose = extractDaysArrayFromLooseText(cleaned);
@@ -319,7 +319,7 @@
   }
 
   function callApi(systemHint, userContent, reqOpts) {
-    var br = global.miyaApiBridge;
+    var br = global.miyaForumBridge;
     if (br && typeof br.callItineraryCompletionsRaw === 'function') {
       return br.callItineraryCompletionsRaw(systemHint, userContent, undefined, reqOpts);
     }
