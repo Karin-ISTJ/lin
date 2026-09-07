@@ -18,7 +18,6 @@
       charPortraitBlobId: '',
       userPortraitBlobId: '',
       bgBlobId: '',
-      customStyleGuide: '',
       autoVoice: false,
       updatedAt: Date.now()
     };
@@ -72,7 +71,6 @@
       charPortraitBlobId: trim(raw.charPortraitBlobId),
       userPortraitBlobId: trim(raw.userPortraitBlobId),
       bgBlobId: trim(raw.bgBlobId),
-      customStyleGuide: trim(raw.customStyleGuide),
       autoVoice: !!raw.autoVoice,
       updatedAt: Number(raw.updatedAt) || Date.now()
     };

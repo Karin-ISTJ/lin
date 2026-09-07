@@ -106,13 +106,6 @@
     return { contact: contact, profile: resolveProfileForContact(st, contact, chat), chat: chat };
   }
 
-  function getDefaultStyleGuide(contactId) {
-    var aps = apStore();
-    if (!aps || typeof aps.resolvePresetForContact !== 'function') return '';
-    var preset = aps.resolvePresetForContact(contactId);
-    return trim(preset && preset.styleGuide);
-  }
-
   function formatLineForApi(line) {
     if (!line) return '';
     if (line.type === 'narration') return '【旁白】' + line.text;
@@ -192,11 +185,6 @@
       if (rel) parts.push(rel);
       var netBlock = aw.buildChronicleRelationshipBlock(contact);
       if (netBlock) parts.push(netBlock);
-    }
-
-    var styleGuide = trim(roomSettings && roomSettings.customStyleGuide) || getDefaultStyleGuide(contact.id);
-    if (styleGuide) {
-      parts.push('【文风·硬性要求】\n' + styleGuide);
     }
 
     var limit = settings && settings.memoryCount
@@ -399,7 +387,6 @@
 
   global.miyaCoupleWhisperEngine = {
     resolveChatForContact: resolveChatForContact,
-    getDefaultStyleGuide: getDefaultStyleGuide,
     runCompletion: runCompletion,
     parseWhisperReply: parseWhisperReply,
     fmtApiErr: fmtApiErr,

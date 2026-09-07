@@ -240,8 +240,6 @@
     if (!wpStore() || !state.contactId) return;
     state.roomSettings = wpStore().getRoomSettings(state.contactId);
     var rs = state.roomSettings;
-    var styleEl = $('cp-whisper-style');
-    if (styleEl) styleEl.value = rs.customStyleGuide || '';
     var toggle = $('cp-whisper-auto-voice');
     if (toggle) {
       toggle.classList.toggle('is-on', !!rs.autoVoice);
@@ -280,10 +278,8 @@
 
   function saveSettingsForm() {
     if (!wpStore() || !state.contactId) return;
-    var styleEl = $('cp-whisper-style');
     var toggle = $('cp-whisper-auto-voice');
     var patch = {
-      customStyleGuide: styleEl ? trim(styleEl.value) : '',
       autoVoice: toggle ? toggle.classList.contains('is-on') : false
     };
     if (state.roomSettings) {
