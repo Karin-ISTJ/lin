@@ -1404,12 +1404,12 @@
 
   function isInsWhiteTheme() {
     var app = document.getElementById('miya-chat-app');
-    return !!(app && app.classList.contains('chat-bf-theme-ins-white'));
+    return false; /* ins-white 主题已移除 */
   }
 
   function isFreshGreenTheme() {
     var app = document.getElementById('miya-chat-app');
-    return !!(app && app.classList.contains('chat-bf-theme-fresh-green'));
+    return false; /* fresh-green 主题已移除 */
   }
 
   function buildMineMenuHtml() {

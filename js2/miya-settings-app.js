@@ -102,7 +102,7 @@
       musicLocalAudioIdb: true
     },
     { id: 'diary', title: '日记', lsKeys: [DIARY_KEY], widgetKvKeys: [DIARY_KEY] },
-    { id: 'forum', title: '论坛', lsKeys: [FORUM_KEY], widgetKvKeys: [FORUM_KEY] },
+    { id: title: '论坛', lsKeys: [FORUM_KEY], widgetKvKeys: [FORUM_KEY] },
     {
       id: 'typewriter',
       title: '打字机',
@@ -1284,7 +1284,7 @@
     var cstore = cfg.cstoreApi && typeof cfg.cstoreApi === 'object' ? cfg.cstoreApi : {};
     var chatTemp = cfg.temperature != null ? cfg.temperature : 1;
     syncChatApiPanelForms();
-    syncScopedApiForm('forum', forum, chatTemp);
+    syncScopedApiForm(forum, chatTemp);
     syncScopedApiForm('cstore', cstore, chatTemp);
     if ($('miya-st-mm-key')) $('miya-st-mm-key').value = mm.apiKey || '';
     if ($('miya-st-mm-group')) $('miya-st-mm-group').value = mm.groupId || '';
@@ -2379,7 +2379,7 @@
       });
     }
 
-    ['forum', 'cstore'].forEach(function (prefix) {
+    ['cstore'].forEach(function (prefix) {
       var tempIn = $('miya-st-' + prefix + '-temp');
       var tempLbl = $('miya-st-' + prefix + '-temp-lbl');
       if (tempIn) {
@@ -2409,7 +2409,6 @@
       });
     }
 
-    bindScopedFetch('forum', '请填写论坛 API 或对话 API 的地址与密钥');
     bindScopedFetch('cstore', '请填写便利店 API 或对话 API 的地址与密钥');
 
     var mmSpeedIn = $('miya-st-mm-speed');

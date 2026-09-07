@@ -3,7 +3,7 @@
   (function resetOverlayApps() {
     document.body.classList.remove('miya-app-open');
     document.querySelectorAll(
-      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-forum-app, #miya-cstore-app, #miya-itinerary-app, #miya-couple-app, #miya-deep-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
+      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-cstore-app, #miya-itinerary-app, #miya-couple-app, #miya-deep-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
     ).forEach(function (el) {
       if (!el.classList.contains('is-open')) {
         el.setAttribute('hidden', '');
@@ -88,7 +88,7 @@
   if (SVG_ALT && SVG_ALT.book) SVG_ALT.stpreset = SVG_ALT.book;
 
   var NAMES = {
-    music: '音乐', memo: '论坛', set: '设置', book: '世界书',
+    music: '音乐', set: '设置', book: '世界书',
     memory: '记忆', stpreset: 'ST预设', chat: '聊天', board: '论坛', play: '游戏',
     beauty: '美化', store: '线下', photo: '多相', world: '世界',
     phone: '电话', contacts: '联系人', pet: '打字机', pen: '模拟器',
@@ -394,9 +394,7 @@
     pet: function () {
       if (window.miyaTypewriterApp && window.miyaTypewriterApp.open) window.miyaTypewriterApp.open();
     },
-    memo: function () {
-      if (window.miyaForumApp && window.miyaForumApp.open) window.miyaForumApp.open();
-    },
+
     cstore: function () {
       if (window.miyaCstoreApp && window.miyaCstoreApp.open) window.miyaCstoreApp.open();
     },
@@ -770,3 +768,180 @@
     window.miyaRequestPersistentStorage();
   }
 })();
+
+
+/* ── 右侧边缘左滑返回（应用内返回，减少误触浏览器退出） ── */
+(function (global) {
+  'use strict';
+
+  var EDGE = 28;
+  var THRESH = 56;
+  var startX = 0;
+  var startY = 0;
+  var tracking = false;
+  var depth = 0;
+
+  function isAppLayerOpen() {
+    if (document.body.classList.contains('miya-app-open')) return true;
+    var sel = [
+      '.miya-settings-app.is-open', '.miya-beautify-app.is-open', '.miya-worldbook-app.is-open',
+      '.miya-contacts-app.is-open', '#miya-chat-app.is-open', '#miya-music-app.is-open',
+      '#miya-memory-app.is-open', '#miya-st-presets-app.is-open', '#miya-diary-app.is-open',
+      '#miya-theater-app.is-open', '#miya-offline-app.is-open', '#miya-typewriter-app.is-open',
+      '#miya-cstore-app.is-open', '#miya-itinerary-app.is-open',
+      '#miya-couple-app.is-open', '#miya-deep-app.is-open', '#miya-fun-app.is-open',
+      '#miya-match-app.is-open', '#qq-room.is-open', '.qq-room.is-open'
+    ];
+    for (var i = 0; i < sel.length; i++) {
+      if (document.querySelector(sel[i])) return true;
+    }
+    return false;
+  }
+
+  function tryCloseTop() {
+    /* 聊天室优先 */
+    var room = document.getElementById('qq-room');
+    if (room && !room.hidden && room.getAttribute('aria-hidden') !== 'true') {
+      if (global.miyaChatRoom && typeof global.miyaChatRoom.close === 'function') {
+        global.miyaChatRoom.close();
+        return true;
+      }
+      var back = document.getElementById('qq-room-back');
+      if (back) { back.click(); return true; }
+    }
+    var closers = [
+      ['miyaSettingsApp', 'close'],
+      ['miyaBeautifyApp', 'close'],
+      ['miyaWorldbookApp', 'close'],
+      ['miyaContactsApp', 'close'],
+      ['miyaChatApp', 'close'],
+      ['miyaMusicApp', 'close'],
+      ['miyaMemoryApp', 'close'],
+      ['miyaStPromptPresetsApp', 'close'],
+      ['miyaDiaryApp', 'close'],
+      ['miyaTheaterApp', 'close'],
+      ['miyaOfflineApp', 'close'],
+      ['miyaTypewriterApp', 'close'],
+            ['miyaCstoreApp', 'close'],
+      ['miyaItineraryApp', 'close'],
+      ['miyaCoupleApp', 'close'],
+      ['miyaDeepApp', 'close'],
+      ['miyaFunApp', 'close'],
+      ['miyaMatchApp', 'close']
+    ];
+    for (var i = 0; i < closers.length; i++) {
+      var api = global[closers[i][0]];
+      if (api && typeof api[closers[i][1]] === 'function') {
+        var elMap = {
+          miyaSettingsApp: '.miya-settings-app.is-open',
+          miyaBeautifyApp: '.miya-beautify-app.is-open',
+          miyaWorldbookApp: '.miya-worldbook-app.is-open',
+          miyaContactsApp: '.miya-contacts-app.is-open',
+          miyaChatApp: '#miya-chat-app.is-open',
+          miyaMusicApp: '#miya-music-app.is-open',
+          miyaMemoryApp: '#miya-memory-app.is-open',
+          miyaStPromptPresetsApp: '#miya-st-presets-app.is-open',
+          miyaDiaryApp: '#miya-diary-app.is-open',
+          miyaTheaterApp: '#miya-theater-app.is-open',
+          miyaOfflineApp: '#miya-offline-app.is-open',
+          miyaTypewriterApp: '#miya-typewriter-app.is-open',
+                    miyaCstoreApp: '#miya-cstore-app.is-open',
+          miyaItineraryApp: '#miya-itinerary-app.is-open',
+          miyaCoupleApp: '#miya-couple-app.is-open',
+          miyaDeepApp: '#miya-deep-app.is-open',
+          miyaFunApp: '#miya-fun-app.is-open',
+          miyaMatchApp: '#miya-match-app.is-open'
+        };
+        var sel = elMap[closers[i][0]];
+        if (sel && document.querySelector(sel)) {
+          api[closers[i][1]]();
+          return true;
+        }
+      }
+    }
+    /* settings has-panel: back to list */
+    var st = document.getElementById('miya-settings-app');
+    if (st && st.classList.contains('is-open') && st.classList.contains('has-panel')) {
+      var hdr = document.getElementById('miya-st-panel-header-back');
+      if (hdr) { hdr.click(); return true; }
+    }
+    return false;
+  }
+
+  function pushLayer() {
+    try {
+      depth += 1;
+      history.pushState({ miyaEdgeBack: true, d: depth }, '');
+    } catch (e) {}
+  }
+
+  function onPopState() {
+    if (tryCloseTop()) {
+      /* 吞掉浏览器返回，留在本页 */
+      try {
+        if (isAppLayerOpen()) history.pushState({ miyaEdgeBack: true }, '');
+      } catch (e2) {}
+    }
+  }
+
+  function onTouchStart(e) {
+    if (!e.touches || e.touches.length !== 1) return;
+    var t = e.touches[0];
+    var w = window.innerWidth || document.documentElement.clientWidth;
+    if (t.clientX < w - EDGE) {
+      tracking = false;
+      return;
+    }
+    if (!isAppLayerOpen()) {
+      tracking = false;
+      return;
+    }
+    tracking = true;
+    startX = t.clientX;
+    startY = t.clientY;
+  }
+
+  function onTouchMove(e) {
+    if (!tracking || !e.touches || e.touches.length !== 1) return;
+    var t = e.touches[0];
+    var dx = t.clientX - startX;
+    var dy = t.clientY - startY;
+    if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) {
+      tracking = false;
+      return;
+    }
+    /* 从右侧向左滑 */
+    if (dx < -THRESH && Math.abs(dx) > Math.abs(dy)) {
+      tracking = false;
+      if (tryCloseTop()) {
+        try { e.preventDefault(); } catch (err) {}
+      }
+    }
+  }
+
+  function onTouchEnd() {
+    tracking = false;
+  }
+
+  /* 打开应用时压一层 history，浏览器左缘返回优先关应用 */
+  var _launch = global.miyaLaunchApp;
+  if (typeof _launch === 'function') {
+    global.miyaLaunchApp = function (id) {
+      var r = _launch.apply(this, arguments);
+      if (r) {
+        setTimeout(function () {
+          if (isAppLayerOpen()) pushLayer();
+        }, 50);
+      }
+      return r;
+    };
+  }
+
+  window.addEventListener('popstate', onPopState);
+  document.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+  document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+  document.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
+  document.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
+
+  global.miyaEdgeBack = { closeTop: tryCloseTop, push: pushLayer };
+})(window);
