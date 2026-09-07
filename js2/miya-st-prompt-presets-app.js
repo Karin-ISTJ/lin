@@ -246,20 +246,6 @@
     reader.readAsText(file, 'utf-8');
   }
 
-  function copyLastOfflinePrompt() {
-    var eng = global.MiyaAppointmentEngine;
-    var dbg = eng && typeof eng.getLastOfflinePromptDebug === 'function' ? eng.getLastOfflinePromptDebug() : global.__MiyaLastOfflinePrompt;
-    if (!dbg || !Array.isArray(dbg.messages) || !dbg.messages.length) { toast('请先生成一次线下回复'); return; }
-    var text = dbg.messages.map(function (m) { return '[' + m.index + '] ' + String(m.role || 'system') + '\n' + String(m.content || ''); }).join('\n\n==========\n\n');
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){toast('已复制上次线下 Prompt');}).catch(function(){fallbackCopy(text);});
-    else fallbackCopy(text);
-  }
-  function fallbackCopy(text) {
-    var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); toast('已复制上次线下 Prompt'); } catch(e) { toast('复制失败'); }
-    document.body.removeChild(ta);
-  }
-
   function bind() {
     var app = root();
     if (!app || app._stpBound) return;
@@ -298,9 +284,6 @@
         row.classList.toggle('is-off', !e.target.checked);
       });
     }
-
-    var copyOfflineBtn = $('stp-copy-offline-prompt');
-    if (copyOfflineBtn) copyOfflineBtn.addEventListener('click', copyLastOfflinePrompt);
 
     var addBtn = $('stp-add');
     if (addBtn) addBtn.addEventListener('click', function () { openEditor(''); });
