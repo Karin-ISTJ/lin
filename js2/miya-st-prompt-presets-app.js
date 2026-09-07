@@ -1,6 +1,5 @@
 /**
- * Independent ST prompt-preset manager UI.
- * Import / list / enable / edit / delete — does not affect chat requests yet.
+ * ST preset manager — compact rows, multi-pack switch.
  */
 (function (global) {
   'use strict';
@@ -8,11 +7,9 @@
   function store() {
     return global.miyaStPromptPresetsStore || null;
   }
-
   function $(id) {
     return document.getElementById(id);
   }
-
   function esc(s) {
     return String(s || '')
       .replace(/&/g, '&amp;')
@@ -30,141 +27,91 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
       el.classList.remove('is-show');
-    }, 2400);
+    }, 2200);
   }
 
   function root() {
     return $('miya-st-presets-app');
   }
 
-  function renderList() {
+  function renderPackSelect() {
     var st = store();
-    var box = $('stp-list');
-    if (!box || !st) return;
-    var entries = st.listEntries();
-    if (!entries.length) {
-      box.innerHTML =
-        '<div class="stp-empty">暂无条目。请导入 Default.json 或点击「新建」。</div>';
+    var sel = $('stp-pack-select');
+    if (!st || !sel) return;
+    var packs = st.listPacks();
+    var active = st.getActivePack();
+    var activeId = active ? active.id : '';
+    if (!packs.length) {
+      sel.innerHTML = '<option value="">暂无预设包</option>';
+      sel.disabled = true;
       return;
     }
-    box.innerHTML = entries
-      .map(function (e) {
-        var badge = e.marker ? '<span class="stp-badge">marker</span>' : '';
-        var idBadge = e.identifier
-          ? '<span class="stp-badge stp-badge--id">' + esc(e.identifier) + '</span>'
-          : '';
-        var preview = String(e.content || '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 80);
-        if (!preview && e.marker) preview = '（占位标记，无正文）';
+    sel.disabled = false;
+    sel.innerHTML = packs
+      .map(function (p) {
         return (
-          '<article class="stp-card' +
-          (e.enabled ? '' : ' is-off') +
-          '" data-id="' +
-          esc(e.id) +
-          '">' +
-          '<div class="stp-card__top">' +
-          '<label class="stp-switch" title="启用">' +
-          '<input type="checkbox" data-act="toggle" ' +
-          (e.enabled ? 'checked' : '') +
-          ' />' +
-          '<span></span></label>' +
-          '<div class="stp-card__title">' +
-          esc(e.name) +
-          badge +
-          idBadge +
-          '</div>' +
-          '<div class="stp-card__actions">' +
-          '<button type="button" class="stp-mini" data-act="edit">编辑</button>' +
-          '<button type="button" class="stp-mini stp-mini--danger" data-act="del">删除</button>' +
-          '</div></div>' +
-          '<p class="stp-card__preview">' +
-          esc(preview || '（空内容）') +
-          '</p>' +
-          '<div class="stp-card__meta">role: ' +
-          esc(e.role) +
-          (e.enabled ? ' · 已启用' : ' · 已关闭') +
-          '</div></article>'
+          '<option value="' +
+          esc(p.id) +
+          '"' +
+          (p.id === activeId ? ' selected' : '') +
+          '>' +
+          esc(p.name) +
+          '（' +
+          (p.entries ? p.entries.length : 0) +
+          '）</option>'
         );
       })
       .join('');
   }
 
-  function openEditor(entry) {
-    var panel = $('stp-editor');
-    if (!panel) return;
-    panel.hidden = false;
-    $('stp-ed-id').value = entry && entry.id ? entry.id : '';
-    $('stp-ed-name').value = entry && entry.name ? entry.name : '';
-    $('stp-ed-role').value = entry && entry.role ? entry.role : 'system';
-    $('stp-ed-identifier').value = entry && entry.identifier ? entry.identifier : '';
-    $('stp-ed-content').value = entry && entry.content ? entry.content : '';
-    $('stp-ed-enabled').checked = !entry || entry.enabled !== false;
-    $('stp-ed-title').textContent = entry && entry.id ? '编辑条目' : '新建条目';
-  }
-
-  function closeEditor() {
-    var panel = $('stp-editor');
-    if (panel) panel.hidden = true;
-  }
-
-  function saveEditor() {
+  function renderList() {
     var st = store();
-    if (!st) return;
-    var id = $('stp-ed-id').value.trim();
-    var name = $('stp-ed-name').value.trim() || '未命名条目';
-    st.upsertEntry({
-      id: id || undefined,
-      name: name,
-      role: $('stp-ed-role').value || 'system',
-      identifier: $('stp-ed-identifier').value.trim(),
-      content: $('stp-ed-content').value,
-      enabled: $('stp-ed-enabled').checked,
-      marker: false
-    });
-    closeEditor();
-    renderList();
-    toast('已保存');
-  }
-
-  function onListClick(e) {
-    var card = e.target.closest('.stp-card');
-    if (!card) return;
-    var id = card.getAttribute('data-id');
-    var actEl = e.target.closest('[data-act]');
-    if (!actEl) return;
-    var act = actEl.getAttribute('data-act');
-    var st = store();
-    if (!st) return;
-
-    if (act === 'toggle') {
-      st.setEnabled(id, actEl.checked);
-      renderList();
+    var box = $('stp-list');
+    if (!box || !st) return;
+    renderPackSelect();
+    var entries = st.listEntries();
+    if (!entries.length) {
+      box.innerHTML =
+        '<div class="stp-empty">当前预设包没有条目。<br/>点「导入」添加一套，可多套切换。</div>';
       return;
     }
-    if (act === 'edit') {
-      openEditor(st.getEntry(id));
-      return;
-    }
-    if (act === 'del') {
-      if (!confirm('确定删除该条目？')) return;
-      st.removeEntry(id);
-      renderList();
-      toast('已删除');
-    }
+    box.innerHTML = entries
+      .map(function (e) {
+        return (
+          '<div class="stp-row' +
+          (e.enabled ? '' : ' is-off') +
+          '" data-id="' +
+          esc(e.id) +
+          '">' +
+          '<label class="stp-switch" title="启用">' +
+          '<input type="checkbox" data-act="toggle" ' +
+          (e.enabled ? 'checked' : '') +
+          ' />' +
+          '<span></span></label>' +
+          '<div class="stp-row__name" title="' +
+          esc(e.identifier || e.name) +
+          '">' +
+          esc(e.name) +
+          '</div>' +
+          '<button type="button" class="stp-row__del" data-act="del" aria-label="删除">删</button>' +
+          '</div>'
+        );
+      })
+      .join('');
   }
 
   function importFile(file) {
     if (!file) return;
+    var defaultName = String(file.name || '').replace(/\.json$/i, '') || '导入预设';
     var reader = new FileReader();
     reader.onload = function () {
       try {
         var obj = JSON.parse(String(reader.result || ''));
-        var st = store();
-        var result = st.importFromStJson(obj);
+        var name = window.prompt('为这套预设起个名字（方便以后切换）', defaultName);
+        if (name === null) return;
+        var result = store().importFromStJson(obj, name || defaultName);
         renderList();
-        toast('已导入 ' + result.added + ' 条（共 ' + result.total + ' 条）');
+        toast('已导入「' + result.pack.name + '」· ' + result.added + ' 条');
       } catch (err) {
         toast(err.message || '导入失败');
       }
@@ -181,25 +128,36 @@
     app._stpBound = true;
 
     var back = $('stp-back');
-    if (back) {
-      back.addEventListener('click', function () {
-        close();
-      });
-    }
+    if (back) back.addEventListener('click', close);
 
     var list = $('stp-list');
-    if (list) list.addEventListener('click', onListClick);
-    // toggle change
     if (list) {
-      list.addEventListener('change', function (e) {
-        if (e.target && e.target.getAttribute('data-act') === 'toggle') {
-          onListClick(e);
+      list.addEventListener('click', function (e) {
+        var row = e.target.closest('.stp-row');
+        if (!row) return;
+        var id = row.getAttribute('data-id');
+        var actEl = e.target.closest('[data-act]');
+        if (!actEl) return;
+        var act = actEl.getAttribute('data-act');
+        var st = store();
+        if (act === 'del') {
+          if (!confirm('删除该条目？')) return;
+          st.removeEntry(id);
+          renderList();
+          toast('已删除');
         }
+      });
+      list.addEventListener('change', function (e) {
+        if (!e.target || e.target.getAttribute('data-act') !== 'toggle') return;
+        var row = e.target.closest('.stp-row');
+        if (!row) return;
+        store().setEnabled(row.getAttribute('data-id'), e.target.checked);
+        row.classList.toggle('is-off', !e.target.checked);
       });
     }
 
-    var importBtn = $('stp-import');
     var fileInput = $('stp-file');
+    var importBtn = $('stp-import');
     if (importBtn && fileInput) {
       importBtn.addEventListener('click', function () {
         fileInput.value = '';
@@ -210,27 +168,46 @@
       });
     }
 
-    var addBtn = $('stp-add');
-    if (addBtn) {
-      addBtn.addEventListener('click', function () {
-        openEditor(null);
-      });
-    }
-
-    var clearBtn = $('stp-clear');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function () {
-        if (!confirm('清空全部条目？不可恢复。')) return;
-        store().clearAll();
+    var sel = $('stp-pack-select');
+    if (sel) {
+      sel.addEventListener('change', function () {
+        if (!sel.value) return;
+        store().setActivePack(sel.value);
         renderList();
-        toast('已清空');
+        toast('已切换预设');
       });
     }
 
-    var edCancel = $('stp-ed-cancel');
-    var edSave = $('stp-ed-save');
-    if (edCancel) edCancel.addEventListener('click', closeEditor);
-    if (edSave) edSave.addEventListener('click', saveEditor);
+    var renameBtn = $('stp-pack-rename');
+    if (renameBtn) {
+      renameBtn.addEventListener('click', function () {
+        var pack = store().getActivePack();
+        if (!pack) {
+          toast('没有可重命名的预设');
+          return;
+        }
+        var name = window.prompt('预设名称', pack.name);
+        if (name === null) return;
+        store().renamePack(pack.id, name);
+        renderList();
+        toast('已重命名');
+      });
+    }
+
+    var delPackBtn = $('stp-pack-delete');
+    if (delPackBtn) {
+      delPackBtn.addEventListener('click', function () {
+        var pack = store().getActivePack();
+        if (!pack) {
+          toast('没有可删除的预设');
+          return;
+        }
+        if (!confirm('删除整套预设「' + pack.name + '」？')) return;
+        store().removePack(pack.id);
+        renderList();
+        toast('预设包已删除');
+      });
+    }
   }
 
   function open() {
@@ -249,19 +226,14 @@
   function close() {
     var app = root();
     if (!app) return;
-    closeEditor();
     app.classList.remove('is-open');
     setTimeout(function () {
       if (!app.classList.contains('is-open')) {
         app.hidden = true;
         app.setAttribute('aria-hidden', 'true');
       }
-    }, 320);
+    }, 300);
   }
 
-  global.miyaStPromptPresetsApp = {
-    open: open,
-    close: close,
-    refresh: renderList
-  };
+  global.miyaStPromptPresetsApp = { open: open, close: close, refresh: renderList };
 })(typeof window !== 'undefined' ? window : this);

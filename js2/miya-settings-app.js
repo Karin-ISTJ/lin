@@ -1329,13 +1329,15 @@
     var app = $('miya-settings-app');
     var panel = $('miya-st-panel-chat');
     if (!app || !panel) return;
+    /* 若当前正在展示对话 API 面板，预热后必须保留 is-active，否则只剩顶栏返回键 */
+    var keepActive = panel.classList.contains('is-active');
     app.classList.add('is-priming-chat-panel');
     try {
       panel.classList.add('is-active');
       void panel.offsetHeight;
       void panel.scrollHeight;
     } finally {
-      panel.classList.remove('is-active');
+      if (!keepActive) panel.classList.remove('is-active');
       app.classList.remove('is-priming-chat-panel');
       panel.dataset.primed = '1';
     }
