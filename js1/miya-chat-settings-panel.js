@@ -116,9 +116,7 @@
 
   function fillForm(prefix, slice) {
     slice = slice || {};
-    var ta = slice.timeAwareness || {};
     var bg = slice.backgroundMessage || {};
-    setToggle(prefix + '-time-en', !!ta.enabled);
     setVal(prefix + '-memory-count', slice.memoryCount != null ? slice.memoryCount : 40);
     setVal(prefix + '-summary-trigger', slice.summaryTrigger != null ? slice.summaryTrigger : 0);
     setToggle(prefix + '-bg-active', !!bg.activeEnabled);
@@ -130,13 +128,6 @@
 
   function readForm(prefix, baseSlice) {
     baseSlice = baseSlice || {};
-    var ta = Object.assign({}, baseSlice.timeAwareness || {}, {
-      enabled: isToggleOn(prefix + '-time-en'),
-      mode: 'real',
-      real: Object.assign({}, (baseSlice.timeAwareness && baseSlice.timeAwareness.real) || {}, {
-        strength: 'strong'
-      })
-    });
     var qStart = timeStrToMin(readVal(prefix + '-bg-quiet-start'));
     var qEnd = timeStrToMin(readVal(prefix + '-bg-quiet-end'));
     var bg = Object.assign({}, baseSlice.backgroundMessage || {}, {
@@ -149,7 +140,6 @@
       quietEndMin: Number.isFinite(qEnd) ? qEnd : 420
     });
     return {
-      timeAwareness: ta,
       memoryCount: readNum(prefix + '-memory-count', 40),
       summaryTrigger: readNum(prefix + '-summary-trigger', 0),
       backgroundMessage: bg
@@ -159,10 +149,6 @@
   function formBlock(prefix, title) {
     return '<section class="miya-ct-section" data-form-prefix="' + prefix + '">' +
       (title ? '<h3 class="miya-ct-section__title">' + esc(title) + '</h3>' : '') +
-      '<div class="miya-ct-card">' +
-        '<p class="miya-ct-card__kicker">时间感知</p>' +
-        toggleRow(prefix + '-time-en', '启用时间感知', '向模型注入真实时间上下文') +
-      '</div>' +
       '<div class="miya-ct-card">' +
         '<p class="miya-ct-card__kicker">记忆</p>' +
         fieldRow('上下文条数', '<input type="number" class="miya-ct-input" id="' + prefix + '-memory-count" min="1" max="500" value="40">') +
@@ -186,7 +172,7 @@
 
   function renderPanelHtml() {
     return '<div class="miya-ct-chat-panel">' +
-      '<p class="miya-ct-intro">配置时间感知、记忆与后台消息。默认对所有联系人生效，也可为单人单独覆盖。</p>' +
+      '<p class="miya-ct-intro">配置记忆与后台消息。默认对所有联系人生效，也可为单人单独覆盖。</p>' +
       '<div class="miya-ct-card miya-ct-card--accent">' +
         toggleRow('miya-ct-chat-use-global', '全员使用全局配置', '关闭后可按联系人单独设置') +
       '</div>' +

@@ -410,12 +410,6 @@
                 return cs.whenReady();
             });
         }
-        var opMod = global.MiyaChatOperationRules;
-        if (opMod && typeof opMod.ensureLoaded === 'function') {
-            chain = chain.then(function () {
-                return opMod.ensureLoaded();
-            });
-        }
         return chain;
     }
 
@@ -756,66 +750,6 @@
         return parts.filter(Boolean).join('\n\n');
     }
 
-    /** 运转规则 1–6：人设与对话风格（可被自定义预设覆盖） */
-    function buildOperationRulesHead(contact, profile) {
-        var roleName = String((contact && contact.name) || '对方');
-        var userName = String((profile && profile.name) || '用户');
-        return (
-            '1、你是' +
-            roleName +
-            '，是真实存在的人，有自己的生活和想法，有自己的感觉和态度，你并非在扮演，你必须消化好人设与世界书中的内容，作出符合当下情境的对话；不要油腻、不要凶很、禁止评判/威胁/控制的表达方式，要以温柔为底色，不要极端的去表达自己想要的东西/控制用户\n' +
-            '2、你知道' +
-            userName +
-            '是谁，知道自己和' +
-            userName +
-            '的关系，严禁对用户做出辱骂等行为，你要思考你和' +
-            userName +
-            '的关系，作出符合关系的对话\n' +
-            '3、现在是线上聊天，须具备真人聊天的跳跃性、活跃性与不连续性：可碎片化、一句话拆成多条发、中途转话题、隔几条再续上、语气忽然变轻或变冲；不必每轮都完整接话或逻辑闭环，在符合人设的前提下拥抱不确定感\n' +
-            '4、根据人设与当下情绪善用表达工具：emoji、颜文字、标点节奏（…！！？？～等）及表情包（走「表情包-名称」格式）；开朗活泼可多符号，内敛克制可少用；禁止每轮堆砌同款表情或固定句式\n' +
-            '5、禁止总是重复相同句式：对照近期已发原文换说法与节奏，勿每轮套用同一开场、撒娇模板或抱怨等结构\n' +
-            '6、每次回复之前输出思维过程，以<thinking>…</thinking>为格式（开闭标签均必填）；思维链只写在此段，禁止写进正文；禁止输出 [正文]、[/thinking] 等标记'
-        );
-    }
-
-    /** 运转规则格式条正文（不含序号，共 7 条）
-     * 心声字段细则只在「线上格式规则·心声」中定义：系统默认四行或自定义预设二选一，此处不写死四行。 */
-    function getOperationRulesFormatTailItems() {
-        return [
-            '每一轮须按顺序输出三段：<thinking> → 正文（每行一气泡，必须换行）→ <miyavoice>；禁止一大坨无换行文字',
-            '世界书已注入系统提示，你必须在 <thinking> 中体现对当前生效世界书条目的消化，并在正文中落实',
-            '发送前必须回顾上下文中你方近期已发原文：禁止频繁重复相同话题、相同描写/意象、相同动作套路、相同句式或同质化撒娇/抱怨；<miyavoice> 各字段也不得与近几轮雷同；主动找话题时勿反复提天气，勿复制上一轮结构与节奏',
-            '正文每行仅一条气泡，且整轮正文只输出一遍；禁止相同句子/气泡行出现两次；引用时「引用-摘抄」独占一行，每条回复各占一行',
-            '每轮末尾必须按照要求完整输出 <miyavoice> 心声段，须严格按当前「线上格式规则·心声」中定义的字段逐行写满（字段名与行数以该规则为准），禁止省略、禁止截断；心声字段行不得出现在正文气泡里',
-            '禁止编造关于用户的经历、共同回忆、偏好或说过/做过的事：仅可使用上下文中已明确出现的对话原文，以及系统注入的长期记忆/角色记忆/朋友圈记忆、联系人档案与用户档案；无依据时不得假称「记得」「上次你说」「我们以前」等',
-            '须通读上下文中按时间顺序注入的完整近期对话（用户与角色的消息均已包含；开启时间感知时须逐条区分双方发言早晚）后再回复：衔接取决于对话最新状态——若上下文末条为用户新发言，则按该消息真实发送时刻回应；若上几条已是你方发言而用户未回，则从你方最近一条自然续写或推进，禁止每条回复都重新瞄准用户更早的旧句当作「本轮必答对象」；判断用户失联多久须按用户上次发言起算'
-        ];
-    }
-
-    function buildOperationRulesFormatTailFrom(startNum) {
-        var n = Math.max(1, parseInt(startNum, 10) || 7);
-        return getOperationRulesFormatTailItems()
-            .map(function (text, i) {
-                return n + i + '、' + text;
-            })
-            .join('\n');
-    }
-
-    /** 运转规则 7 起：输出格式与对话纪律硬性要求（始终注入，不可被自定义覆盖） */
-    function buildOperationRulesFormatTail() {
-        return buildOperationRulesFormatTailFrom(7);
-    }
-
-    /** 运转规则：所有线上对话必须注入 */
-    function buildOperationRules(contact, profile) {
-        return (
-            '【运转规则·必读】\n' +
-            buildOperationRulesHead(contact, profile) +
-            '\n' +
-            buildOperationRulesFormatTail()
-        );
-    }
-
     function buildPromptCapabilitiesBlock(chatSettings) {
         var caps = (chatSettings && chatSettings.promptCapabilities) || {};
         var lines = [
@@ -966,7 +900,7 @@
                 }
             } else {
                 lines.push(
-                    '上下文末条为用户发言：本轮须回应自你方上一条回复之后、截止上下文末尾连续出现的用户消息；须按这些消息真实发送时刻理解（勿默认当成刚刚/今天早上）；更早用户发言仅作背景，禁止逐条复读或接续好几轮之前的旧话题，除非用户在本轮末尾再次明确提起。'
+                    '上下文末条为用户发言：本轮须回应自你方上一条回复之后、截止上下文末尾连续出现的用户消息；更早用户发言仅作背景，禁止逐条复读或接续好几轮之前的旧话题，除非用户在本轮末尾再次明确提起。'
                 );
             }
         } else if (state === 'assistant_spoke_last') {
@@ -1048,19 +982,6 @@
             blocks.push(global.MiyaChatLifeLike.buildNextPushRulesBlock(contact, s));
         }
         var isProactiveTurn = !!(opts.isAutoPush || opts.isOffline || opts.isLifeLike);
-        /* 主动/离线轮已有 systemLead 时间块，避免再叠时间感知；衔接状态仍按注入历史判断（与普通回复同一套） */
-        if (
-            !isProactiveTurn &&
-            !opts.callMode &&
-            !opts.appointmentMode &&
-            global.MiyaChatAwareness &&
-            typeof global.MiyaChatAwareness.buildPerTurnTimeAwarenessBlock === 'function' &&
-            Array.isArray(opts.history) &&
-            opts.history.length
-        ) {
-            var timeTurn = global.MiyaChatAwareness.buildPerTurnTimeAwarenessBlock(s, opts.history);
-            if (timeTurn) blocks.push(timeTurn);
-        }
         if (
             !opts.isRegenerate &&
             !opts.callMode &&
@@ -1297,8 +1218,6 @@
         var aw = global.MiyaChatAwareness;
         if (!aw) return [];
         var blocks = [];
-        var timeRules = aw.buildTimeAwarenessRules(chatSettings, history, profile);
-        if (timeRules) blocks.push(timeRules);
         var itBr = global.miyaItineraryBridge;
         if (itBr && typeof itBr.buildChatItineraryBlock === 'function' && contact) {
             var itBlock = itBr.buildChatItineraryBlock(contact, chatSettings);
@@ -1312,8 +1231,8 @@
     }
 
     /**
-     * 系统提示词块顺序：世界书前 → 全局 → 模式 → 用户身份 → 关系 → 人际脉络 → 感知 → 世界书中 → 能力 → 线上格式
-     * （世界书后 / 联系人档案 / 思维链 / 运转规则在 buildApiMessages 末尾单独注入）
+     * 系统主提示：角色资料、世界书、记忆/感知与线上格式等基础上下文。
+     * ST 预设会在 buildApiMessages 中作为最前面的规则层注入。
      */
     function buildSystemPrompt(input) {
         var cfg = input && typeof input === 'object' ? input : {};
@@ -1374,85 +1293,43 @@
         apiMessages.push({ role: 'system', content: chronicle });
     }
 
-    /** 思维链：风格指引（可被自定义预设覆盖） */
-    function buildThinkingRulesHead(contact, profile) {
-        var roleName = String((contact && contact.name) || '对方');
-        var userName = String((profile && profile.name) || '用户');
-        return (
-            '你是' +
-            roleName +
-            '，须在 <thinking> 标签内完成回复前的内部思考。\n' +
-            '须消化人设与世界书、把握与' +
-            userName +
-            '的关系及当下情绪，回顾你方近期已发原文避免重复话题与同质化描写，并规划本轮正文气泡与格式。'
-        );
-    }
-
-    /** 思维链：格式硬性要求（始终注入，不可被自定义覆盖） */
-    function getThinkingRulesFormatTailItems() {
-        return [
-            '思维链只写在此段；禁止写入正文；禁止输出 [正文]、[/thinking] 等结构标记。'
-        ];
-    }
-
-    function buildThinkingRulesFormatTail() {
-        return getThinkingRulesFormatTailItems().join('\n');
-    }
-
-    /** 思维链：置末注入（运转规则之前） */
-    function buildThinkingRules(contact, profile) {
-        return (
-            '【思维链·必读】\n' +
-            buildThinkingRulesHead(contact, profile) +
-            '\n' +
-            buildThinkingRulesFormatTail()
-        );
-    }
-
-    /** 线上单聊：思维链置末注入（联系人档案之后、运转规则之前） */
-    function appendOnlineThinkingRulesMessage(apiMessages, contact, profile, opts) {
-        opts = opts && typeof opts === 'object' ? opts : {};
-        if (!Array.isArray(apiMessages)) return;
-        if (opts.callMode || opts.appointmentMode || opts.isMomentsAuto) return;
-        var block = null;
-        var thMod = global.MiyaChatThinkingRules;
-        if (thMod && typeof thMod.resolveForChat === 'function') {
-            block = thMod.resolveForChat(opts.chatSettings, contact, profile);
+    /**
+     * ST 预设：正常聊天的唯一可编辑规则入口。
+     * 没有启用条目时只保留极短的代码级兜底，世界书不依赖旧的思维链/运转规则模块。
+     */
+    function buildStPresetMessages() {
+        var out = [];
+        try {
+            var stpStore = global.miyaStPromptPresetsStore;
+            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
+                ? (stpStore.getEnabledForRequest() || [])
+                : [];
+            entries.forEach(function (entry) {
+                var body = String(entry && entry.content || '').trim();
+                if (!body) return;
+                var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
+                out.push({ role: role, content: body });
+            });
+        } catch (e) {}
+        if (!out.length) {
+            out.push({
+                role: 'system',
+                content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。'
+            });
         }
-        if (!block) block = buildThinkingRules(contact, profile);
-        if (!block) return;
-        apiMessages.push({ role: 'system', content: block });
+        return out;
     }
 
-    /** 线上单聊：运转规则置末注入（所有其它 system / 历史 / 本轮块 / 联系人档案之后） */
-    function appendOnlineOperationRulesMessage(apiMessages, contact, profile, opts) {
+    function appendOnlineHeartVoicePriorityMessage(apiMessages, contact, settings, opts) {
         opts = opts && typeof opts === 'object' ? opts : {};
-        if (!Array.isArray(apiMessages)) return;
-        if (opts.callMode || opts.appointmentMode || opts.isMomentsAuto) return;
-        var block = null;
-        var opMod = global.MiyaChatOperationRules;
-        if (opMod && typeof opMod.resolveForChat === 'function') {
-            block = opMod.resolveForChat(opts.chatSettings, contact, profile);
-        }
-        if (!block) block = buildOperationRules(contact, profile);
-        if (!block) return;
+        if (!Array.isArray(apiMessages) || opts.callMode || opts.appointmentMode || opts.isMomentsAuto) return;
         var hvTpl = global.MiyaChatHeartVoiceTemplates;
-        var hvPreset =
-            hvTpl && typeof hvTpl.resolvePresetForChat === 'function'
-                ? hvTpl.resolvePresetForChat(opts.chatSettings)
-                : null;
-        if (hvPreset && typeof hvTpl.rewriteDefaultHeartVoiceMentions === 'function') {
-            block = hvTpl.rewriteDefaultHeartVoiceMentions(block);
-        }
-        apiMessages.push({ role: 'system', content: block });
-        /* 自定义心声：再置末一条最高优先级块，确保提示词真正压过默认四行 */
-        if (hvPreset && typeof hvTpl.buildCustomHeartVoicePriorityBlock === 'function') {
-            var roleName = String((contact && contact.name) || '角色');
-            var hvPriority = hvTpl.buildCustomHeartVoicePriorityBlock(roleName, hvPreset);
-            if (hvPriority) {
-                apiMessages.push({ role: 'system', content: hvPriority });
-            }
-        }
+        if (!hvTpl || typeof hvTpl.resolvePresetForChat !== 'function' || typeof hvTpl.buildCustomHeartVoicePriorityBlock !== 'function') return;
+        var hvPreset = hvTpl.resolvePresetForChat(settings);
+        if (!hvPreset) return;
+        var roleName = String((contact && contact.name) || '角色');
+        var block = hvTpl.buildCustomHeartVoicePriorityBlock(roleName, hvPreset);
+        if (block) apiMessages.push({ role: 'system', content: block });
     }
 
     function extractThinkingBlock(rawText) {
@@ -1978,8 +1855,6 @@
         transfer: '待确认转账',
         per_turn_inject: '本轮注入（格式/心声/单聊锁定）',
         chronicle: '角色档案（人设·背景）',
-        operation_rules: '运转规则·必读（置末）',
-        thinking_rules: '思维链·必读（置末）',
         call: '通话态指令',
         call_vision: '通话画面/视觉',
         group_memory: '群聊记忆摘录',
@@ -2074,15 +1949,6 @@
             }
             if (text.indexOf('【线上回归') >= 0 || text.indexOf('【从线下回归') >= 0) {
                 return row('return_prompt');
-            }
-            if (
-                text.indexOf('【运转规则·必读】') === 0 ||
-                text.indexOf('【运转规则·自定义】') === 0
-            ) {
-                return row('operation_rules');
-            }
-            if (text.indexOf('【思维链·必读】') === 0 || text.indexOf('【思维链·自定义】') === 0) {
-                return row('thinking_rules');
             }
             if (text.indexOf('【角色·档案·') === 0) {
                 return row('chronicle');
@@ -2650,6 +2516,9 @@
                 .join('\n') +
             '\n' +
             userText;
+        /* 先读取 ST 规则；世界书随后按当前上下文匹配并填充。最终消息顺序也保持 ST 在前。 */
+        var stPresetMessages = buildStPresetMessages();
+
         var wbBundle = buildWorldbookBundle(contact, contextText, null, {
             promptContext: 'online',
             includeAllBoundLocal: true
@@ -2720,7 +2589,7 @@
             }
         }
 
-        var apiMessages = [{ role: 'system', content: systemContent }];
+        var apiMessages = stPresetMessages.concat([{ role: 'system', content: systemContent }]);
         var awInject = global.MiyaChatAwareness;
         var summaryBlock =
             awInject && typeof awInject.buildSummaryContextBlock === 'function'
@@ -2816,10 +2685,15 @@
         ) {
             apMem.injectCrossMemoryToApiMessages(apiMessages, offlineCrossSlots, '线下');
         }
-        appendHistoryToApiMessages(apiMessages, sliceAppend, settings);
+        var historySettings = settings;
+        if (!opts.callMode && !opts.appointmentMode) {
+            historySettings = Object.assign({}, settings || {}, { timeAwareness: { enabled: false } });
+        }
+        appendHistoryToApiMessages(apiMessages, sliceAppend, historySettings);
         if (!opts.callMode && !opts.appointmentMode) {
             attachTrailingRoundPhotosToApiMessages(apiMessages, sliceAppend);
         }
+        appendOnlineHeartVoicePriorityMessage(apiMessages, contact, settings, opts);
         var historyTailState = getTrailingSpeakerState(sliceAppend);
         /*
          * 主动/离线的 systemLead 必须紧挨历史之后：先看见带时间戳的对话，再读触发说明。
@@ -3102,36 +2976,6 @@
                 });
             }
         }
-        appendOnlineThinkingRulesMessage(
-            apiMessages,
-            contact,
-            profile,
-            Object.assign({}, opts, { chatSettings: settings })
-        );
-        appendOnlineOperationRulesMessage(
-            apiMessages,
-            contact,
-            profile,
-            Object.assign({}, opts, { chatSettings: settings })
-        );
-
-        /* ST 预设条目：启用的条目写入实际请求（与包内 API 预设无关） */
-        try {
-            var stpStore = global.miyaStPromptPresetsStore;
-            if (stpStore && typeof stpStore.getEnabledForRequest === 'function') {
-                var stEntries = stpStore.getEnabledForRequest() || [];
-                if (stEntries.length) {
-                    var insertAt = 1;
-                    stEntries.forEach(function (entry) {
-                        var body = String(entry.content || '').trim();
-                        if (!body) return;
-                        var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
-                        apiMessages.splice(insertAt, 0, { role: role, content: body });
-                        insertAt += 1;
-                    });
-                }
-            }
-        } catch (stErr) { /* ignore preset inject errors */ }
 
         return {
             messages: apiMessages,
@@ -4753,9 +4597,6 @@
         extractReplyContent: extractReplyContent,
         extractThinkingBlock: extractThinkingBlock,
         extractThinkingFromResponse: extractThinkingFromResponse,
-        buildThinkingRules: buildThinkingRules,
-        buildThinkingRulesHead: buildThinkingRulesHead,
-        buildThinkingRulesFormatTail: buildThinkingRulesFormatTail,
         getThinkingRulesFormatTailItems: getThinkingRulesFormatTailItems,
         buildOperationRules: buildOperationRules,
         buildOperationRulesHead: buildOperationRulesHead,

@@ -9,7 +9,6 @@
 
   /** 由全局模块管理的字段（weatherAwareness 仅 per-contact 聊天设置里配置，不在此列） */
   var MANAGED_KEYS = [
-    'timeAwareness',
     'memoryCount',
     'summaryTrigger',
     'summaryLength',

@@ -2266,12 +2266,6 @@
         if (target === 'miya-st-panel-imagegen' && global.MiyaImageGen) {
           global.MiyaImageGen.onSettingsPanelOpen();
         }
-        if (target === 'miya-st-panel-operation-rules' && global.MiyaChatOperationRules) {
-          global.MiyaChatOperationRules.onSettingsPanelOpen();
-        }
-        if (target === 'miya-st-panel-thinking-rules' && global.MiyaChatThinkingRules) {
-          global.MiyaChatThinkingRules.onSettingsPanelOpen();
-        }
       });
     });
 
@@ -2554,12 +2548,6 @@
       }
       if (panelId === 'miya-st-panel-imagegen' && global.MiyaImageGen) {
         global.MiyaImageGen.onSettingsPanelOpen();
-      }
-      if (panelId === 'miya-st-panel-operation-rules' && global.MiyaChatOperationRules) {
-        global.MiyaChatOperationRules.onSettingsPanelOpen();
-      }
-      if (panelId === 'miya-st-panel-thinking-rules' && global.MiyaChatThinkingRules) {
-        global.MiyaChatThinkingRules.onSettingsPanelOpen();
       }
     } else {
       app.classList.remove('has-panel');

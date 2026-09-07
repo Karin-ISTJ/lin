@@ -785,8 +785,6 @@
                 refUrl: '',
                 refBlobId: null
             },
-            operationRulesPreset: '',
-            thinkingRulesPreset: '',
             heartVoicePreset: '',
             heartVoicePresetSnapshot: null
         };
@@ -1194,16 +1192,6 @@
         if (!out.locationAwareness || typeof out.locationAwareness !== 'object') out.locationAwareness = d.locationAwareness;
         out.promptCapabilities = normalizePromptCapabilities(out.promptCapabilities);
         out.chatBeautify = normalizeChatBeautify(out.chatBeautify);
-        out.operationRulesPreset = String(
-            out.operationRulesPreset != null
-                ? out.operationRulesPreset
-                : (out.operationRules && out.operationRules.presetName) || ''
-        ).trim();
-        out.thinkingRulesPreset = String(
-            out.thinkingRulesPreset != null
-                ? out.thinkingRulesPreset
-                : (out.thinkingRules && out.thinkingRules.presetName) || ''
-        ).trim();
         out.heartVoicePreset = String(
             out.heartVoicePreset != null ? out.heartVoicePreset : ''
         ).trim();

@@ -633,64 +633,6 @@
     return momentsAuto;
   }
 
-  function findLastSystemBlock(messages, prefixRe) {
-    var found = '';
-    (messages || []).forEach(function (m) {
-      if (!m || m.role !== 'system') return;
-      var t = String(m.content || '');
-      if (prefixRe.test(t)) found = t;
-    });
-    return found;
-  }
-
-  function patchBreakdownRuleGroup(breakdown, key, block, eng) {
-    if (!breakdown || !block) return;
-    var chars = block.length;
-    var tokens = eng && typeof eng.estimateTokensFromText === 'function'
-      ? eng.estimateTokensFromText(block)
-      : Math.max(0, Math.ceil(chars / 1.6));
-    if (Array.isArray(breakdown.grouped)) {
-      var hit = false;
-      breakdown.grouped = breakdown.grouped.map(function (g) {
-        if (g.key !== key) return g;
-        hit = true;
-        return Object.assign({}, g, { chars: chars, tokens: tokens });
-      });
-      if (!hit) {
-        var labels = {
-          operation_rules: '运转规则·必读（置首）',
-          thinking_rules: '思维链·必读（置末）'
-        };
-        breakdown.grouped.push({
-          key: key,
-          label: labels[key] || key,
-          chars: chars,
-          tokens: tokens,
-          count: 1,
-          items: [{ key: key, label: labels[key] || key, chars: chars, tokens: tokens }]
-        });
-        breakdown.grouped.sort(function (a, b) {
-          return (b.chars || 0) - (a.chars || 0);
-        });
-      }
-    }
-    if (Array.isArray(breakdown.sources)) {
-      var srcHit = false;
-      breakdown.sources = breakdown.sources.map(function (s) {
-        if (s.key !== key) return s;
-        srcHit = true;
-        return Object.assign({}, s, { chars: chars, tokens: tokens });
-      });
-      if (!srcHit) {
-        breakdown.sources.push({
-          key: key,
-          label: key,
-          chars: chars,
-          tokens: tokens
-        });
-      }
-    }
-  }
 
   function buildContextUsageSettings(chatId) {
     if (!store || !store.getChatSettings) return null;
@@ -701,17 +643,7 @@
     var root = pageEl.querySelector('[data-mq-set-body]');
     if (!root) return settings;
     var merged = Object.assign({}, settings);
-    var opMod = global.MiyaChatOperationRules;
-    var thMod = global.MiyaChatThinkingRules;
     var hvMod = global.MiyaChatHeartVoiceTemplates;
-    if (opMod && typeof opMod.readChatPresetFromRoot === 'function') {
-      var opFromDom = opMod.readChatPresetFromRoot(root, settings.operationRulesPreset);
-      merged.operationRulesPreset = opFromDom || String(settings.operationRulesPreset || '').trim();
-    }
-    if (thMod && typeof thMod.readChatPresetFromRoot === 'function') {
-      var thFromDom = thMod.readChatPresetFromRoot(root, settings.thinkingRulesPreset);
-      merged.thinkingRulesPreset = thFromDom || String(settings.thinkingRulesPreset || '').trim();
-    }
     if (hvMod && typeof hvMod.readChatPresetFromRoot === 'function') {
       var hvFromDom = hvMod.readChatPresetFromRoot(root, settings.heartVoicePreset);
       merged.heartVoicePreset = hvFromDom || String(settings.heartVoicePreset || '').trim();
@@ -799,12 +731,6 @@
     if (!built || built.error) {
       return { error: (built && built.error) || 'build_failed' };
     }
-    var opPresetName = usageSettings && usageSettings.operationRulesPreset
-      ? String(usageSettings.operationRulesPreset).trim()
-      : '';
-    var thPresetName = usageSettings && usageSettings.thinkingRulesPreset
-      ? String(usageSettings.thinkingRulesPreset).trim()
-      : '';
     var pm = built.promptMeta || {};
     var wb = built.worldbookMeta || {};
     var entries = Array.isArray(wb.matchedSummary) ? wb.matchedSummary : [];
@@ -816,33 +742,9 @@
       typeof eng.buildPromptSourceBreakdown === 'function'
         ? eng.buildPromptSourceBreakdown(built.messages, wb)
         : null;
-    var opMod = global.MiyaChatOperationRules;
-    var thMod = global.MiyaChatThinkingRules;
-    var opInjected = findLastSystemBlock(built.messages, /^【运转规则·(必读|自定义)】/);
-    var thInjected = findLastSystemBlock(built.messages, /^【思维链·(必读|自定义)】/);
-    var opInspect = opMod && typeof opMod.inspectForChat === 'function'
-      ? opMod.inspectForChat(usageSettings, built.contact, built.profile)
-      : null;
-    var thResolved = thMod && typeof thMod.resolveForChat === 'function'
-      ? thMod.resolveForChat(usageSettings, built.contact, built.profile)
-      : null;
-    var opBlock = opInjected || '';
-    if (opInspect && opInspect.block) {
-      if (!opBlock || (opPresetName && opInspect.block.length > opBlock.length)) {
-        opBlock = opInspect.block;
-      }
-    }
-    var thBlock = thInjected || thResolved || '';
-    if (breakdown) {
-      if (opBlock) patchBreakdownRuleGroup(breakdown, 'operation_rules', opBlock, eng);
-      if (thBlock) patchBreakdownRuleGroup(breakdown, 'thinking_rules', thBlock, eng);
-    }
     /* 对话总结记忆：只认实际注入的 system 块，禁止分类误伤导致虚高 */
     var summaryMeasured = forceSummaryBreakdownFromMessages(breakdown, built.messages, eng);
-    var opRulesUsedDefault = !!opPresetName && (!opInspect || !opInspect.block);
-    var opRulesInjectFallback = !!opPresetName && !!opInspect && !!opInspect.block &&
       opInjected && opInspect.block.length > opInjected.length + 32;
-    var opRulesFailReason = opInspect && opInspect.reason ? opInspect.reason : '';
     var chat = store && store.findChat ? store.findChat(chatId) : null;
     var lastUsage = chat && chat.lastTokenUsage ? chat.lastTokenUsage : null;
     var activeThinking = chat && chat.activeThinking ? String(chat.activeThinking).trim() : '';
@@ -883,13 +785,6 @@
       roleIds: Array.isArray(wb.roleIds) ? wb.roleIds : [],
       breakdown: breakdown,
       summaryInject: summaryInject,
-      operationRulesPreset: opPresetName,
-      thinkingRulesPreset: thPresetName,
-      operationRulesUsedDefault: opRulesUsedDefault,
-      operationRulesInjectFallback: opRulesInjectFallback,
-      operationRulesFailReason: opRulesFailReason,
-      operationRulesLibraryCount: opInspect ? opInspect.libraryCount : 0,
-      operationRulesItemCount: opInspect ? opInspect.itemCount : 0,
       lastTokenUsage: lastUsage,
       activeThinking: activeThinking,
       thinkingChars: thinkingChars,
@@ -912,14 +807,6 @@
     }
     if (cs && typeof cs.whenReady === 'function') {
       chain = chain.then(function () { return cs.whenReady(); });
-    }
-    if (global.MiyaChatOperationRules && global.MiyaChatOperationRules.ensureLoaded) {
-      chain = chain.then(function () { return global.MiyaChatOperationRules.ensureLoaded(); });
-    } else if (global.MiyaChatOperationRules && global.MiyaChatOperationRules.whenPresetsReady) {
-      chain = chain.then(function () { return global.MiyaChatOperationRules.whenPresetsReady(); });
-    }
-    if (global.MiyaChatThinkingRules && global.MiyaChatThinkingRules.whenPresetsReady) {
-      chain = chain.then(function () { return global.MiyaChatThinkingRules.whenPresetsReady(); });
     }
     return chain;
   }
@@ -965,32 +852,7 @@
       : [];
     var promptRows = grouped.map(function (g) {
       var sub = g.count > 1 ? '×' + g.count : '';
-      if (g.key === 'operation_rules') {
-        if (snapshot.operationRulesPreset) {
-          sub = '预设：' + snapshot.operationRulesPreset;
-          if (snapshot.operationRulesItemCount > 0) {
-            sub += ' · ' + snapshot.operationRulesItemCount + ' 条';
-          }
-          if (snapshot.operationRulesUsedDefault) {
-            if (snapshot.operationRulesFailReason === 'preset_not_found') {
-              sub += ' · 预设库中未找到（库内 ' + (snapshot.operationRulesLibraryCount || 0) + ' 个）';
-            } else if (snapshot.operationRulesFailReason === 'preset_empty') {
-              sub += ' · 预设正文为空，请重新保存';
-            } else {
-              sub += ' · 内容未加载，已回退默认';
-            }
-          } else if (snapshot.operationRulesInjectFallback) {
-            sub += ' · 已按预设正文校正统计';
-          }
-          if (g.count > 1) sub += ' · ×' + g.count;
-        } else {
-          sub = '默认规则' + (g.count > 1 ? ' · ×' + g.count : '');
-        }
-      } else if (g.key === 'thinking_rules') {
-        sub = snapshot.thinkingRulesPreset
-          ? '预设：' + snapshot.thinkingRulesPreset + (sub ? ' · ' + sub : '')
-          : '默认思维链' + (sub ? ' · ' + sub : '');
-      } else if (g.key === 'summary' && snapshot.summaryInject) {
+      if (g.key === 'summary' && snapshot.summaryInject) {
         var si = snapshot.summaryInject;
         var actualChars = si.actualInjectedChars != null ? si.actualInjectedChars : si.contentChars;
         sub =
@@ -1120,7 +982,6 @@
     var chatId = state.chatId;
     ensureContextUsageDeps().then(function () {
       if (!state.chatId || String(state.chatId) !== String(chatId)) return;
-      var opMod = global.MiyaChatOperationRules;
       var loadChain = opMod && typeof opMod.ensureLoaded === 'function'
         ? opMod.ensureLoaded()
         : Promise.resolve();
@@ -1245,56 +1106,12 @@
       '</div>' +
 
       renderZone('api', 'API 配置', '管理各模块的服务端点与密钥',
-        subBlock('', '', formCard(
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>' +
-              '<div><div class="st-card-label">对话 API</div><div class="st-card-desc">主线路与副线路配置</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-voice">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>' +
-              '<div><div class="st-card-label">语音合成</div><div class="st-card-desc">MiniMax 语音接口</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--gray"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>' +
-              '<div><div class="st-card-label">论坛 API</div><div class="st-card-desc">留空则沿用对话 API</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-cstore">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--green"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>' +
-              '<div><div class="st-card-label">便利店 API</div><div class="st-card-desc">留空则沿用对话 API</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-imagegen">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>' +
-              '<div><div class="st-card-label">生图 API</div><div class="st-card-desc">OpenAI 兼容 / NovelAI</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-operation-rules">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>' +
-              '<div><div class="st-card-label">线上运转规则</div><div class="st-card-desc">自定义置末规则 · 预设库</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-thinking-rules">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>' +
-              '<div><div class="st-card-label">线上思维链</div><div class="st-card-desc">自定义思维链 · 预设库</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>'
-        ))
+        '<div class="st-form-card ins-form-block">' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">对话 API</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-voice">语音合成</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-cstore">便利店 API</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-imagegen">生图 API</button>' +
+        '</div>'
       ) +
 
       renderZone('basic', '基础', '身份、头像、通知与主动消息',
@@ -1457,17 +1274,7 @@
           : '请先在设置中启用生图 API', renderImageGenBlock(s))
       ) +
 
-      renderZone('model', '模型高级', '运转规则、思维链与 Token 用量',
-        subBlock('线上运转规则', '', formCard(
-          (global.MiyaChatOperationRules
-            ? global.MiyaChatOperationRules.buildChatSettingsPickerHtml(s.operationRulesPreset)
-            : '<p class="st-form-hint">运转规则模块未加载</p>')
-        )) +
-        subBlock('线上思维链', '', formCard(
-          (global.MiyaChatThinkingRules
-            ? global.MiyaChatThinkingRules.buildChatSettingsPickerHtml(s.thinkingRulesPreset)
-            : '<p class="st-form-hint">思维链模块未加载</p>')
-        )) +
+      renderZone('model', '上下文用量', '查看下一次请求的 Token 分区来源',
         subBlock('上下文用量', '点按卡片查看 Token 分区来源', formCard(
           '<div class="mi-ctx-usage" data-mq-set-ctx-usage><p class="mi-empty-hint">正在计算…</p></div>'
         ))
@@ -1681,14 +1488,6 @@
     var chatBeautify = bfMod
       ? bfMod.readChatBeautifyFromRoot(root, s.chatBeautify)
       : Object.assign({}, s.chatBeautify || {});
-    var opMod = global.MiyaChatOperationRules;
-    var operationRulesPreset = opMod
-      ? opMod.readChatPresetFromRoot(root, s.operationRulesPreset)
-      : String(s.operationRulesPreset || '').trim();
-    var thMod = global.MiyaChatThinkingRules;
-    var thinkingRulesPreset = thMod
-      ? thMod.readChatPresetFromRoot(root, s.thinkingRulesPreset)
-      : String(s.thinkingRulesPreset || '').trim();
     var hvMod = global.MiyaChatHeartVoiceTemplates;
     var heartVoicePreset = hvMod
       ? hvMod.readChatPresetFromRoot(root, s.heartVoicePreset)
@@ -1732,8 +1531,6 @@
       minimaxVoiceId: String((root.querySelector('[data-mq-set-voice-id]') || {}).value || '').trim(),
       minimaxLanguageBoost: (root.querySelector('[data-mq-set-lang]') || {}).value || 'auto',
       chatBeautify: chatBeautify,
-      operationRulesPreset: operationRulesPreset,
-      thinkingRulesPreset: thinkingRulesPreset,
       heartVoicePreset: heartVoicePreset,
       heartVoicePresetSnapshot: heartVoicePresetSnapshot,
       momentsAuto: momentsAuto,
@@ -1859,15 +1656,6 @@
       if (presetPick && p.chatBeautify.presetName != null) presetPick.value = p.chatBeautify.presetName;
     }
 
-    if (p.operationRulesPreset != null) {
-      var opPick = root.querySelector('[data-mq-set-oprules-preset]');
-      if (opPick) opPick.value = p.operationRulesPreset;
-    }
-
-    if (p.thinkingRulesPreset != null) {
-      var thPick = root.querySelector('[data-mq-set-thrules-preset]');
-      if (thPick) thPick.value = p.thinkingRulesPreset;
-    }
 
     if (p.heartVoicePreset != null) {
       var hvPick = root.querySelector('[data-mq-set-hv-tpl-preset]');
@@ -2126,14 +1914,6 @@
     var chain = Promise.resolve();
     if (global.MiyaChatBeautify && global.MiyaChatBeautify.whenPresetsReady) {
       chain = chain.then(function () { return global.MiyaChatBeautify.whenPresetsReady(); });
-    }
-    if (global.MiyaChatOperationRules && global.MiyaChatOperationRules.ensureLoaded) {
-      chain = chain.then(function () { return global.MiyaChatOperationRules.ensureLoaded(); });
-    } else if (global.MiyaChatOperationRules && global.MiyaChatOperationRules.whenPresetsReady) {
-      chain = chain.then(function () { return global.MiyaChatOperationRules.whenPresetsReady(); });
-    }
-    if (global.MiyaChatThinkingRules && global.MiyaChatThinkingRules.whenPresetsReady) {
-      chain = chain.then(function () { return global.MiyaChatThinkingRules.whenPresetsReady(); });
     }
     if (global.MiyaChatHeartVoiceTemplates && global.MiyaChatHeartVoiceTemplates.whenPresetsReady) {
       chain = chain.then(function () { return global.MiyaChatHeartVoiceTemplates.whenPresetsReady(); });
