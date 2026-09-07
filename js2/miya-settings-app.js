@@ -2122,6 +2122,96 @@
     if (el) el.addEventListener('click', fn);
   }
 
+
+  function renderGithubPluginList() {
+    var box = $('miya-st-plugin-list');
+    if (!box) return;
+    var api = global.MiyaGithubPlugins;
+    if (!api || typeof api.list !== 'function') {
+      box.innerHTML = '<p class="st-form-hint" style="padding:8px 16px">插件模块未加载</p>';
+      return;
+    }
+    var list = api.list();
+    if (!list.length) {
+      box.innerHTML = '<p class="st-form-hint" style="padding:8px 16px">暂无已安装插件</p>';
+      return;
+    }
+    box.innerHTML = list.map(function (row) {
+      return (
+        '<div class="st-card-row" style="pointer-events:auto" data-gh-plugin-id="' + String(row.id || '').replace(/"/g, '') + '">' +
+          '<div class="st-card-row-left" style="flex:1;min-width:0">' +
+            '<div><div class="st-card-label">' + String(row.name || '插件').replace(/</g, '&lt;') +
+            (row.version ? ' · ' + String(row.version).replace(/</g, '&lt;') : '') + '</div>' +
+            '<div class="st-card-desc" style="word-break:break-all">' + String(row.scriptUrl || '').replace(/</g, '&lt;') + '</div></div>' +
+          '</div>' +
+          '<button type="button" class="ins-toggle' + (row.enabled ? ' is-on' : '') + '" data-gh-plugin-toggle role="switch" aria-checked="' + (row.enabled ? 'true' : 'false') + '"></button>' +
+          '<button type="button" class="ins-icon-btn" data-gh-plugin-del title="卸载">×</button>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function bindGithubPluginsUi() {
+    if (bindGithubPluginsUi._done) return;
+    bindGithubPluginsUi._done = true;
+    var installBtn = $('miya-st-plugin-install');
+    if (installBtn) {
+      installBtn.addEventListener('click', function () {
+        var input = $('miya-st-plugin-url');
+        var url = input ? String(input.value || '').trim() : '';
+        if (!url) { toast('请填写 GitHub 地址'); return; }
+        var api = global.MiyaGithubPlugins;
+        if (!api || typeof api.installFromUrl !== 'function') {
+          toast('插件模块未加载');
+          return;
+        }
+        installBtn.disabled = true;
+        toast('安装中…');
+        api.installFromUrl(url).then(function (row) {
+          toast('已安装：' + (row && row.name ? row.name : '插件'));
+          if (input) input.value = '';
+          renderGithubPluginList();
+        }).catch(function (err) {
+          toast((err && err.message) ? err.message : '安装失败');
+        }).then(function () {
+          installBtn.disabled = false;
+        });
+      });
+    }
+    var list = $('miya-st-plugin-list');
+    if (list) {
+      list.addEventListener('click', function (e) {
+        var row = e.target.closest('[data-gh-plugin-id]');
+        if (!row) return;
+        var id = row.getAttribute('data-gh-plugin-id');
+        var api = global.MiyaGithubPlugins;
+        if (!api) return;
+        if (e.target.closest('[data-gh-plugin-del]')) {
+          if (!confirm('卸载该插件？')) return;
+          api.removePlugin(id);
+          renderGithubPluginList();
+          toast('已卸载（刷新后完全生效）');
+          return;
+        }
+        if (e.target.closest('[data-gh-plugin-toggle]')) {
+          var on = !e.target.closest('[data-gh-plugin-toggle]').classList.contains('is-on');
+          api.setEnabled(id, on);
+          renderGithubPluginList();
+          toast(on ? '已启用（已尝试加载）' : '已禁用（刷新后停止）');
+          if (on) {
+            var item = api.list().filter(function (x) { return x.id === id; })[0];
+            if (item && item.scriptUrl) {
+              var s = document.createElement('script');
+              s.src = item.scriptUrl;
+              s.async = true;
+              document.head.appendChild(s);
+            }
+          }
+        }
+      });
+    }
+  }
+
   function bindSettingsEvents() {
     var app = $('miya-settings-app');
     if (!app || app.dataset.bound) return;
@@ -2181,6 +2271,9 @@
         if (target === 'miya-st-panel-contact-chat' && global.miyaChatSettingsPanel) {
           global.miyaChatSettingsPanel.onPanelOpen();
         }
+        if (target === 'miya-st-panel-plugins') {
+          renderGithubPluginList();
+        }
         if (target === 'miya-st-panel-msg-sound' && global.MiyaMsgSound) {
           global.MiyaMsgSound.onPanelOpen();
         }
@@ -2195,6 +2288,8 @@
         }
       });
     });
+
+    bindGithubPluginsUi();
 
     bindSwitch($('miya-st-sw-notify'), function (on) {
       if (!getNotificationApi()) {

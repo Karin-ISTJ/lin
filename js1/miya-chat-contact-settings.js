@@ -7,7 +7,7 @@
   var store = null;
   var pageEl = null;
   var state = { chatId: null, searchQuery: '', formDraft: null, wbSortOpen: false, zoneOpen: {} };
-  var DEFAULT_ZONE_OPEN = { basic: true };
+  var DEFAULT_ZONE_OPEN = { api: true, basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
 
@@ -1234,6 +1234,70 @@
         '<p class="mi-set-title-bar__meta">' + formatNum(msgCount) + ' 条消息</p>' +
       '</header>' +
 
+      '<div class="st-feature-card mi-set-api-pin" style="margin:0 0 12px">' +
+        '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat" style="width:100%">' +
+          '<div class="st-card-row-left">' +
+            '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>' +
+            '<div><div class="st-card-label">对话 API 设置</div><div class="st-card-desc">网关 · 密钥 · 模型（置顶）</div></div>' +
+          '</div>' +
+          '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+        '</button>' +
+      '</div>' +
+
+      renderZone('api', 'API 配置', '管理各模块的服务端点与密钥',
+        subBlock('', '', formCard(
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>' +
+              '<div><div class="st-card-label">对话 API</div><div class="st-card-desc">主线路与副线路配置</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-voice">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>' +
+              '<div><div class="st-card-label">语音合成</div><div class="st-card-desc">MiniMax 语音接口</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-forum">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--gray"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>' +
+              '<div><div class="st-card-label">论坛 API</div><div class="st-card-desc">留空则沿用对话 API</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-cstore">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--green"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>' +
+              '<div><div class="st-card-label">便利店 API</div><div class="st-card-desc">留空则沿用对话 API</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-imagegen">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>' +
+              '<div><div class="st-card-label">生图 API</div><div class="st-card-desc">OpenAI 兼容 / NovelAI</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-operation-rules">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>' +
+              '<div><div class="st-card-label">线上运转规则</div><div class="st-card-desc">自定义置末规则 · 预设库</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-thinking-rules">' +
+            '<div class="st-card-row-left">' +
+              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>' +
+              '<div><div class="st-card-label">线上思维链</div><div class="st-card-desc">自定义思维链 · 预设库</div></div>' +
+            '</div>' +
+            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>'
+        ))
+      ) +
+
       renderZone('basic', '基础', '身份、头像、通知与主动消息',
         subBlock('身份与显示', '', formCard(
           fieldBlock('用哪张面具', '和 Ta 聊天时你是谁', '<select class="ins-select" data-mq-set-mask>' + maskOpts + '</select>') +
@@ -1392,60 +1456,6 @@
         subBlock('生图', (global.MiyaImageGen && global.MiyaImageGen.isGlobalEnabled && global.MiyaImageGen.isGlobalEnabled())
           ? '角色文字图将调用生图 API'
           : '请先在设置中启用生图 API', renderImageGenBlock(s))
-      ) +
-
-      renderZone('api', 'API 配置', '管理各模块的服务端点与密钥',
-        subBlock('', '', formCard(
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>' +
-              '<div><div class="st-card-label">对话 API</div><div class="st-card-desc">主线路与副线路配置</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-voice">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>' +
-              '<div><div class="st-card-label">语音合成</div><div class="st-card-desc">MiniMax 语音接口</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-forum">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--gray"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>' +
-              '<div><div class="st-card-label">论坛 API</div><div class="st-card-desc">留空则沿用对话 API</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-cstore">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--green"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>' +
-              '<div><div class="st-card-label">便利店 API</div><div class="st-card-desc">留空则沿用对话 API</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-imagegen">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>' +
-              '<div><div class="st-card-label">生图 API</div><div class="st-card-desc">OpenAI 兼容 / NovelAI</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-operation-rules">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>' +
-              '<div><div class="st-card-label">线上运转规则</div><div class="st-card-desc">自定义置末规则 · 预设库</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-thinking-rules">' +
-            '<div class="st-card-row-left">' +
-              '<div class="st-card-icon st-card-icon--warm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>' +
-              '<div><div class="st-card-label">线上思维链</div><div class="st-card-desc">自定义思维链 · 预设库</div></div>' +
-            '</div>' +
-            '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-          '</button>'
-        ))
       ) +
 
       renderZone('model', '模型高级', '运转规则、思维链与 Token 用量',

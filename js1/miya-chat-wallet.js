@@ -108,29 +108,41 @@
     function settleRoleOutgoingTransfer(opts) {
         opts = opts && typeof opts === 'object' ? opts : {};
         var st = store();
-        if (!st || !shouldSettle(opts.redPacket)) return Promise.resolve(false);
-        var amt = roundMoney(opts.amount);
+        var rp = opts.redPacket;
+        if (!st || !rp || typeof rp !== 'object') return Promise.resolve(false);
+        if (rp.walletSettled) return Promise.resolve(false);
+        var amt = roundMoney(opts.amount != null ? opts.amount : rp.amount);
         if (!(amt > 0)) return Promise.resolve(false);
         var contactId = String(opts.contactId || '').trim();
         var profileId = String(opts.profileId || '').trim();
+        if (!profileId && st.getActiveProfile) {
+            var ap = st.getActiveProfile();
+            if (ap && ap.id) profileId = String(ap.id);
+        }
         var action = opts.action === 'refund' ? 'refund' : 'accept';
+        var held = rp.walletHeld === true;
         var chain;
         if (action === 'accept') {
-            if (!profileId) return Promise.resolve(false);
+            /* 确认收款：用户当前面具钱包增加 */
+            if (!profileId || typeof st.adjustWalletBalance !== 'function') {
+                return Promise.resolve(false);
+            }
             chain = st.adjustWalletBalance(profileId, amt);
         } else {
+            /* 退回：仅当曾从角色钱包扣款托管时，才退回角色 */
+            if (!held) return Promise.resolve(true);
             if (!contactId || typeof st.adjustContactWalletBalance !== 'function') {
                 return Promise.resolve(false);
             }
             chain = st.adjustContactWalletBalance(contactId, amt);
         }
         return chain
-            .then(function () {
+            .then(function (bal) {
                 notifyWalletChanged();
-                return true;
+                return { ok: true, balance: bal, amount: amt, profileId: profileId };
             })
-            .catch(function () {
-                return false;
+            .catch(function (err) {
+                return { ok: false, error: err && err.message ? err.message : 'fail' };
             });
     }
 

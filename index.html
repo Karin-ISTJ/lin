@@ -1379,6 +1379,13 @@
             </div>
             <button type="button" class="ins-toggle" id="miya-st-sw-notify" role="switch" aria-checked="false"></button>
           </div>
+          <button type="button" class="st-card-row" data-st-nav="miya-st-panel-plugins">
+            <div class="st-card-row-left">
+              <div class="st-card-icon st-card-icon--blue"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+              <div><div class="st-card-label">GitHub 插件</div><div class="st-card-desc">粘贴仓库地址安装扩展脚本</div></div>
+            </div>
+            <svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
           <button type="button" class="st-card-row" data-st-nav="miya-st-panel-msg-sound">
             <div class="st-card-row-left">
               <div class="st-card-icon st-card-icon--green"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></div>
@@ -1690,6 +1697,20 @@
               <div class="st-msgsound-list" id="miya-st-msgsound-custom-list"></div>
             </div>
           </section>
+        </div>
+      </div>
+
+
+      <div class="ins-vault-panel" id="miya-st-panel-plugins" data-panel-title="GitHub 插件">
+        <div class="st-form">
+          <p class="st-form-hint ins-vault-note">输入 GitHub 仓库地址或 .js 文件地址，将通过 jsDelivr 加载脚本。仓库根目录建议提供 miya-plugin.json（name / main）或 miya-plugin.js。</p>
+          <div class="st-form-card ins-form-block">
+            <label class="ins-field-label" for="miya-st-plugin-url">项目地址</label>
+            <input type="text" class="ins-text-input" id="miya-st-plugin-url" placeholder="https://github.com/user/repo 或 .../plugin.js" autocomplete="off" spellcheck="false">
+            <button type="button" class="st-save-btn ins-chip ins-chip--gold ins-chip--block" id="miya-st-plugin-install" style="margin-top:12px">安装插件</button>
+          </div>
+          <h4 class="st-form-section__title">已安装</h4>
+          <div id="miya-st-plugin-list" class="st-form-card ins-form-block" style="padding:8px 0"></div>
         </div>
       </div>
 
@@ -6658,7 +6679,7 @@
   <script defer src="js1/miya-beautify-app.js?v=26"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=4"></script>
-  <script defer src="js2/miya-settings-app.js?v=53"></script>
+  <script defer src="js2/miya-settings-app.js?v=55"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
@@ -6689,7 +6710,7 @@
   <script defer src="js1/miya-chat-image.js?v=4"></script>
   <script defer src="js1/miya-chat-album.js?v=8"></script>
   <script defer src="js1/miya-chat-moments.js?v=17"></script>
-  <script defer src="js1/miya-chat-wallet.js?v=1"></script>
+  <script defer src="js1/miya-chat-wallet.js?v=3"></script>
   <script defer src="js1/miya-chat-calls.js?v=1"></script>
   <script defer src="js1/miya-chat-html.js?v=3"></script>
   <script defer src="js1/miya-chat-operation-rules.js?v=16"></script>
@@ -6717,12 +6738,12 @@
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=4"></script>
   <script defer src="js1/miya-chat-me.js?v=25"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=57"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=59"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=3"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=3"></script>
   <script defer src="js1/miya-chat-love-poem.js?v=1"></script>
-  <script defer src="js1/miya-chat-room.js?v=87"></script>
+  <script defer src="js1/miya-chat-room.js?v=89"></script>
   <script defer src="js1/miya-chat-settings-panel.js?v=13"></script>
   <script defer src="js1/miya-chat-ui-theme.js?v=4"></script>
   <script defer src="js1/miya-chat-app.js?v=40"></script>
@@ -6752,6 +6773,7 @@
   <script defer src="js2/miya-mode-switch.js?v=3"></script>
 
   <script defer src="miya-auth/auth.js?v=5"></script>
+  <script defer src="js2/miya-github-plugins.js?v=2"></script>
   <script defer src="js2/miya-st-prompt-presets-store.js?v=3"></script>
   <script defer src="js2/miya-st-prompt-presets-app.js?v=3"></script>
   <script defer src="js1/app.js?v=60"></script>

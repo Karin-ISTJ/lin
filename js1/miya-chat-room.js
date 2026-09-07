@@ -4744,34 +4744,54 @@
     if (!msg || !msg.redPacket || msg.redPacket.status !== 'pending') return;
     var ctx = getChatContext(state.chatId);
     var walletApi = global.MiyaChatWallet;
-    var settleChain = Promise.resolve();
-    if (
-      walletApi &&
-      typeof walletApi.settleRoleOutgoingTransfer === 'function' &&
-      ctx &&
-      ctx.contact &&
-      ctx.profile
-    ) {
+    var profileId = ctx && ctx.profile && ctx.profile.id ? ctx.profile.id : '';
+    if (!profileId && store.getActiveProfile) {
+      var ap = store.getActiveProfile();
+      if (ap && ap.id) profileId = ap.id;
+    }
+    var contactId = ctx && ctx.contact ? ctx.contact.id : '';
+    var settleChain = Promise.resolve({ ok: true });
+    if (walletApi && typeof walletApi.settleRoleOutgoingTransfer === 'function') {
       settleChain = walletApi.settleRoleOutgoingTransfer({
-        contactId: ctx.contact.id,
-        profileId: ctx.profile.id,
+        contactId: contactId,
+        profileId: profileId,
         amount: msg.redPacket.amount,
         action: action === 'accept' ? 'accept' : 'refund',
         redPacket: msg.redPacket
       });
     }
-    settleChain.then(function () {
+    settleChain.then(function (result) {
+      var ok = result === true || (result && result.ok !== false && result.error == null);
+      /* settle 返回 {ok:false} 时不要标已结算 */
+      if (result && typeof result === 'object' && result.ok === false) {
+        toast(action === 'accept' ? '入账失败，请重试' : '退回失败');
+        return null;
+      }
       return store.updateMessage(state.chatId, msgId, {
         redPacket: Object.assign({}, msg.redPacket, {
           status: action === 'accept' ? 'accepted' : 'refunded',
           dir: 'in',
           resolvedAt: Date.now(),
-          walletSettled: !!(msg.redPacket && msg.redPacket.walletHeld)
+          walletSettled: true
         })
+      }).then(function () {
+        return result;
       });
-    }).then(function () {
+    }).then(function (result) {
+      if (result == null) return;
       renderMessages(state.chatId);
-      toast(action === 'accept' ? '已收款' : '已退回');
+      if (action === 'accept') {
+        var amt = msg.redPacket && msg.redPacket.amount != null ? msg.redPacket.amount : '';
+        var balHint = '';
+        if (result && result.balance != null && walletApi && walletApi.formatDisplay) {
+          balHint = ' · 余额 ' + walletApi.formatDisplay(result.balance);
+        } else if (profileId && store.getWallet && walletApi && walletApi.formatDisplay) {
+          balHint = ' · 余额 ' + walletApi.formatDisplay(store.getWallet(profileId).balance);
+        }
+        toast('已收款' + (amt !== '' ? ' ¥' + amt : '') + balHint);
+      } else {
+        toast('已退回');
+      }
     }).catch(function () {
       toast('操作失败');
     });
