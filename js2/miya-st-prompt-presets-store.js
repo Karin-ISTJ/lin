@@ -93,6 +93,20 @@
     return state.packs[0];
   }
 
+  function createPack(name) {
+    var state = load();
+    var pack = {
+      id: uid('pack'),
+      name: String(name || '').trim() || '手动预设',
+      createdAt: Date.now(),
+      entries: []
+    };
+    state.packs.push(pack);
+    state.activeId = pack.id;
+    save(state);
+    return pack;
+  }
+
   function setActivePack(id) {
     var state = load();
     for (var i = 0; i < state.packs.length; i++) {
@@ -189,6 +203,23 @@
     return updateActiveEntries(function (pack) {
       pack.entries = pack.entries.filter(function (e) { return e.id !== id; });
       pack.entries.forEach(function (e, i) { e.order = i; });
+    });
+  }
+
+  function reorderEntries(ids) {
+    ids = Array.isArray(ids) ? ids.map(String) : [];
+    return updateActiveEntries(function (pack) {
+      var byId = Object.create(null);
+      (pack.entries || []).forEach(function (e) { byId[String(e.id)] = e; });
+      var next = [];
+      ids.forEach(function (id) {
+        if (byId[id]) { next.push(byId[id]); delete byId[id]; }
+      });
+      (pack.entries || []).forEach(function (e) {
+        if (byId[String(e.id)]) next.push(e);
+      });
+      next.forEach(function (e, i) { e.order = i; });
+      pack.entries = next;
     });
   }
 
@@ -321,6 +352,7 @@
     load: load,
     save: save,
     listPacks: listPacks,
+    createPack: createPack,
     getActivePack: getActivePack,
     setActivePack: setActivePack,
     renamePack: renamePack,
@@ -329,6 +361,7 @@
     getEntry: getEntry,
     upsertEntry: upsertEntry,
     removeEntry: removeEntry,
+    reorderEntries: reorderEntries,
     setEnabled: setEnabled,
     clearActiveEntries: clearActiveEntries,
     importFromStJson: importFromStJson,

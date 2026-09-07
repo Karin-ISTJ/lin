@@ -3,7 +3,7 @@
   (function resetOverlayApps() {
     document.body.classList.remove('miya-app-open');
     document.querySelectorAll(
-      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-forum-app, #miya-cstore-app, #miya-itinerary-app, #miya-couple-app, #miya-deep-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
+      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-cstore-app, #miya-itinerary-app, #miya-couple-app, #miya-deep-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
     ).forEach(function (el) {
       if (!el.classList.contains('is-open')) {
         el.setAttribute('hidden', '');
@@ -17,7 +17,6 @@
 
   var SVG_CLASSIC = {
     music: '<svg viewBox="0 0 24 24" fill="none"><path d="M9 17V5l11-2v12" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="17" r="2" stroke="rgba(130,136,145,0.65)" stroke-width="1.2"/><circle cx="18" cy="15" r="2" stroke="rgba(130,136,145,0.65)" stroke-width="1.2"/></svg>',
-    memo: '<svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M9 8h6M9 12h6M9 16h4" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/></svg>',
     set: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="rgba(130,136,145,0.65)" stroke-width="1.2"/><path d="M12.22 4h-.44a1.4 1.4 0 00-1.4 1.4v.12a1.4 1.4 0 01-.7 1.22l-.1.06a1.4 1.4 0 01-1.54-.26l-.08-.08a1.4 1.4 0 00-1.98.61l-.14.24a1.4 1.4 0 00.51 1.92l.1.06a1.4 1.4 0 01.7 1.22v.12a1.4 1.4 0 01-.7 1.22l-.1.06a1.4 1.4 0 00-.51 1.92l.14.24a1.4 1.4 0 001.98.61l.08-.08a1.4 1.4 0 011.54-.26l.1.06a1.4 1.4 0 01.7 1.22V18.6a1.4 1.4 0 001.4 1.4h.44a1.4 1.4 0 001.4-1.4v-.12a1.4 1.4 0 01.7-1.22l.1-.06a1.4 1.4 0 011.54.26l.08.08a1.4 1.4 0 001.98-.61l.14-.24a1.4 1.4 0 00-.51-1.92l-.1-.06a1.4 1.4 0 01-.7-1.22v-.12a1.4 1.4 0 01.7-1.22l.1-.06a1.4 1.4 0 00.51-1.92l-.14-.24a1.4 1.4 0 00-1.98-.61l-.08.08a1.4 1.4 0 01-1.54.26l-.1-.06a1.4 1.4 0 01-.7-1.22V5.4a1.4 1.4 0 00-1.4-1.4z" stroke="rgba(70,74,80,0.82)" stroke-width="1.05" stroke-linejoin="round"/></svg>',
     book: '<svg viewBox="0 0 24 24" fill="none"><path d="M5 5h7v14H6a1 1 0 01-1-1V5zM12 5h7a1 1 0 011 1v12h-8V5z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/></svg>',
     memory: '<svg viewBox="0 0 24 24" fill="none"><path d="M9 18h6M10 22h4M12 2a6 6 0 00-4 10.5V16h8v-3.5A6 6 0 0012 2z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -52,7 +51,6 @@
 
   var SVG_ALT = {
     music: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h12v2H3zm0-5h12v2H3zm0 10h9v2H3zm14-9v8.05a2.5 2.5 0 1 0-.5 4.95 2.5 2.5 0 0 0 2.5-2.5V8h2V6h-3c-.55 0-1 .45-1 1"></path></svg>',
-    memo: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.93 3.07c-1.27-1.27-3.42-1.42-6.06-.4-.94.36-1.9.86-2.87 1.46-.97-.61-1.93-1.1-2.87-1.46-2.63-1.01-4.79-.87-6.06.4C1.28 4.86 1.8 8.31 4.12 12c-2.32 3.69-2.84 7.14-1.05 8.93.71.71 1.7 1.07 2.89 1.07.94 0 2.01-.22 3.17-.67.94-.36 1.9-.86 2.87-1.46.97.61 1.93 1.1 2.87 1.46 1.16.45 2.23.67 3.17.67 1.19 0 2.18-.36 2.89-1.07 1.79-1.79 1.27-5.24-1.05-8.93 2.32-3.69 2.84-7.14 1.05-8.93M4.48 4.48C4.8 4.16 5.31 4 5.97 4c.68 0 1.52.18 2.44.53.58.22 1.18.51 1.79.85-.87.67-1.74 1.43-2.56 2.25-.84.84-1.58 1.69-2.25 2.55-1.45-2.6-1.79-4.82-.91-5.7M12 6.54c1 .72 2 1.56 2.95 2.51.97.97 1.8 1.97 2.5 2.95-.7.98-1.53 1.97-2.5 2.95C14 15.9 13 16.74 12 17.46c-1-.72-2-1.56-2.95-2.51-.97-.97-1.8-1.97-2.5-2.95.7-.98 1.53-1.97 2.5-2.95C10 8.1 11 7.26 12 6.54M8.41 19.46c-1.8.69-3.27.71-3.93.05-.88-.88-.54-3.1.91-5.7.66.85 1.41 1.71 2.25 2.55a25 25 0 0 0 2.56 2.25c-.61.34-1.2.63-1.79.85m11.1.05c-.66.66-2.13.64-3.93-.05-.58-.22-1.18-.51-1.79-.85.87-.67 1.74-1.43 2.56-2.25.84-.84 1.58-1.69 2.25-2.55 1.45 2.6 1.79 4.82.91 5.7m-.91-9.33c-.66-.85-1.41-1.71-2.25-2.55a25 25 0 0 0-2.56-2.25c.61-.34 1.2-.63 1.79-.85.92-.35 1.76-.53 2.44-.53s1.16.16 1.49.48c.88.88.54 3.1-.91 5.7"></path><path d="M13.77 13.77c.98-.98.98-2.56 0-3.54s-2.56-.98-3.54 0-.98 2.56 0 3.54 2.56.98 3.54 0"></path></svg>',
     set: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m21.16 7.86-1-1.73a1.997 1.997 0 0 0-2.73-.73l-.53.31c-.58-.46-1.22-.83-1.9-1.11V4c0-1.1-.9-2-2-2h-2c-1.1 0-2 .9-2 2v.6c-.67.28-1.31.66-1.9 1.11l-.53-.31c-.96-.55-2.18-.22-2.73.73l-1 1.73c-.55.96-.22 2.18.73 2.73l.5.29c-.05.37-.08.74-.08 1.11s.03.74.08 1.11l-.5.29c-.96.55-1.28 1.78-.73 2.73l1 1.73c.55.95 1.78 1.28 2.73.73l.53-.31c.58.46 1.22.83 1.9 1.11v.6c0 1.1.9 2 2 2h2c1.1 0 2-.9 2-2v-.6a8.7 8.7 0 0 0 1.9-1.11l.53.31c.96.55 2.18.22 2.73-.73l1-1.73c.55-.96.22-2.18-.73-2.73l-.5-.29c.05-.37.08-.74.08-1.11s-.03-.74-.08-1.11l.5-.29c.96-.55 1.28-1.78.73-2.73M12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4"></path></svg>',
     book: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H6C4.35 2 3 3.35 3 5v14c0 1.65 1.35 3 3 3h15v-2H6c-.55 0-1-.45-1-1s.45-1 1-1h14c.55 0 1-.45 1-1V3c0-.55-.45-1-1-1m-3 6H8V6h9z"></path></svg>',
     memory: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 22h12c1.1 0 2-.9 2-2V6c0-.27-.11-.52-.29-.71l-3-3A1 1 0 0 0 16 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2m7-17h2v4h-2zm-3 0h2v4h-2zM7 5h2v4H7z"></path></svg>',
@@ -88,8 +86,8 @@
   if (SVG_ALT && SVG_ALT.book) SVG_ALT.stpreset = SVG_ALT.book;
 
   var NAMES = {
-    music: '音乐', memo: '论坛', set: '设置', book: '世界书',
-    memory: '记忆', stpreset: 'ST预设', chat: '聊天', board: '论坛', play: '游戏',
+    music: '音乐', set: '设置', book: '世界书',
+    memory: '记忆', stpreset: 'ST预设', chat: '聊天', play: '游戏',
     beauty: '美化', store: '线下', photo: '多相', world: '世界',
     phone: '电话', contacts: '联系人', pet: '打字机', pen: '模拟器',
     deep: '深入', notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',

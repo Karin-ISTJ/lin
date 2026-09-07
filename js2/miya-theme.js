@@ -194,7 +194,6 @@
     { key: 'music', label: '音乐', selectors: ['.miya-music-app'] },
     { key: 'book', label: '世界书', selectors: ['.miya-worldbook-app'] },
     { key: 'memory', label: '记忆', selectors: ['.miya-memory-app'] },
-    { key: 'memo', label: '论坛', selectors: ['.miya-forum-app'] },
     { key: 'store', label: '线下', selectors: ['.miya-offline-app'] },
     { key: 'contacts', label: '联系人', selectors: ['.miya-contacts-app'] },
     { key: 'pet', label: '打字机', selectors: ['.miya-typewriter-app'] },

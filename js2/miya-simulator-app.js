@@ -32,7 +32,6 @@
     { id: 'memory', label: '记忆', glyph: '忆' },
     { id: 'review', label: '回顾', glyph: '回' },
     { id: 'contacts', label: '联络', glyph: '络' },
-    { id: 'forum', label: '论坛', glyph: '坛' },
     { id: 'todo', label: '待办', glyph: '办' },
     { id: 'next_turn', label: '下一回合', glyph: '续', accent: true }
   ];
