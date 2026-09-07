@@ -287,77 +287,6 @@
     window.addEventListener('mouseup', onUp);
   })();
 
-  (function initDeskPager() {
-    var viewport = document.getElementById('desk-viewport');
-    var track = document.getElementById('desk-track');
-    var pager = document.getElementById('desk-pager');
-    if (!viewport || !track) return;
-
-    var PAGE_COUNT = 4;
-    var page = 0;
-    var scrollRaf = 0;
-
-    function pageWidth() {
-      return track.clientWidth || 1;
-    }
-
-    function updateUI(n) {
-      page = Math.max(0, Math.min(PAGE_COUNT - 1, n));
-      viewport.setAttribute('data-desk-page', String(page));
-      var dots = document.querySelectorAll('.desk-pager__dot');
-      dots.forEach(function (dot, i) {
-        var on = i === page;
-        dot.classList.toggle('is-active', on);
-        dot.setAttribute('aria-current', on ? 'page' : 'false');
-      });
-    }
-
-    function setPage(n, behavior) {
-      var target = Math.max(0, Math.min(PAGE_COUNT - 1, n));
-      updateUI(target);
-      if (behavior === 'auto') track.classList.add('is-programmatic');
-      track.scrollTo({ left: target * pageWidth(), behavior: behavior || 'smooth' });
-      if (behavior === 'auto') {
-        requestAnimationFrame(function () {
-          track.classList.remove('is-programmatic');
-        });
-      }
-    }
-
-    function onScroll() {
-      if (scrollRaf) return;
-      scrollRaf = requestAnimationFrame(function () {
-        scrollRaf = 0;
-        var i = Math.round(track.scrollLeft / pageWidth());
-        if (i !== page) updateUI(i);
-      });
-    }
-
-    if (!track._deskScrollBound) {
-      track._deskScrollBound = true;
-      track.addEventListener('scroll', onScroll, { passive: true });
-    }
-
-    if (pager && !pager._deskPagerBound) {
-      pager._deskPagerBound = true;
-      pager.addEventListener('click', function (e) {
-        var dot = e.target.closest('[data-desk-page]');
-        if (!dot) return;
-        setPage(parseInt(dot.getAttribute('data-desk-page'), 10) || 0, 'smooth');
-      });
-    }
-
-    window.addEventListener('resize', function () {
-      track.scrollTo({ left: page * pageWidth(), behavior: 'auto' });
-    });
-
-    updateUI(0);
-    track.scrollTo({ left: 0, behavior: 'auto' });
-    if (window.miyaBindScrollBlur) {
-      window.miyaBindScrollBlur(track, { idleMs: 120 });
-    }
-  })();
-
   var APP_HANDLERS = {
     music: function () {
       if (window.miyaMusicApp && window.miyaMusicApp.open) window.miyaMusicApp.open();
@@ -706,56 +635,6 @@
     });
 
     syncBar();
-  })();
-
-  (function initP4MistRail() {
-    var desk = document.querySelector('.desk--p4');
-    var rail = document.getElementById('p4-haze-rail');
-    var knob = document.getElementById('p4-haze-knob');
-    var track = document.getElementById('p4-haze-track');
-    if (!desk || !rail || !knob || !track) return;
-
-    var dragging = false;
-
-    function setHaze(ratio) {
-      var t = Math.max(0.08, Math.min(0.95, ratio));
-      desk.style.setProperty('--p4-haze', String(Math.round(t * 100) / 100));
-      knob.style.left = (t * 100) + '%';
-    }
-
-    function ratioFromEvent(e) {
-      var rect = track.getBoundingClientRect();
-      var clientX = e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX;
-      if (!rect.width) return 0.55;
-      return (clientX - rect.left) / rect.width;
-    }
-
-    function onDown(e) {
-      dragging = true;
-      rail.classList.add('is-dragging');
-      setHaze(ratioFromEvent(e));
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    function onMove(e) {
-      if (!dragging) return;
-      setHaze(ratioFromEvent(e));
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    function onUp() {
-      if (!dragging) return;
-      dragging = false;
-      rail.classList.remove('is-dragging');
-    }
-
-    setHaze(0.55);
-    rail.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove, { passive: false });
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
   })();
 
   if (window.miyaBootstrapKvStoresIdle) {
