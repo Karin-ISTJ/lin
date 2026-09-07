@@ -41,7 +41,10 @@
       identifier: e.identifier != null ? String(e.identifier) : '',
       system_prompt: e.system_prompt !== false,
       marker: !!e.marker,
-      order: typeof order === 'number' ? order : (typeof e.order === 'number' ? e.order : 0)
+      order: typeof order === 'number' ? order : (typeof e.order === 'number' ? e.order : 0),
+      injection_position: e.injection_position === 1 || e.position === 'back' ? 1 : 0,
+      injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 4,
+      injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100
     };
   }
 
@@ -297,7 +300,10 @@
             identifier: ident,
             system_prompt: p.system_prompt !== false,
             marker: !!p.marker,
-            enabled: !!en
+            enabled: !!en,
+            injection_position: p.injection_position === 1 || p.position === 'back' ? 1 : 0,
+            injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 4,
+            injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100
           },
           order
         )

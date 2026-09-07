@@ -108,6 +108,10 @@
     $('stp-edit-content').value = e ? e.content : '';
     $('stp-edit-role').value = e ? e.role : 'system';
     $('stp-edit-position').value = e ? (e.position || 'front') : 'front';
+    var depthEl = $('stp-edit-depth');
+    var orderEl = $('stp-edit-injection-order');
+    if (depthEl) depthEl.value = e && e.injection_depth != null ? String(e.injection_depth) : '4';
+    if (orderEl) orderEl.value = e && e.injection_order != null ? String(e.injection_order) : '100';
     $('stp-edit-identifier').value = e ? e.identifier : '';
     $('stp-edit-enabled').checked = e ? e.enabled !== false : true;
     $('stp-edit-system').checked = e ? e.system_prompt !== false : true;
@@ -143,6 +147,9 @@
       content: content,
       role: $('stp-edit-role').value,
       position: $('stp-edit-position').value === 'back' ? 'back' : 'front',
+      injection_position: $('stp-edit-position').value === 'back' ? 1 : 0,
+      injection_depth: Math.max(0, Number($('stp-edit-depth') ? $('stp-edit-depth').value : 4) || 4),
+      injection_order: Number($('stp-edit-injection-order') ? $('stp-edit-injection-order').value : 100) || 100,
       identifier: String($('stp-edit-identifier').value || '').trim(),
       enabled: $('stp-edit-enabled').checked,
       system_prompt: $('stp-edit-system').checked,

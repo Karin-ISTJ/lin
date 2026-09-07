@@ -6102,7 +6102,9 @@
         <label class="stp-editor__field"><span>正文</span><textarea id="stp-edit-content" rows="10" placeholder="输入要注入聊天请求的 prompt 内容"></textarea></label>
         <div class="stp-editor__grid">
           <label class="stp-editor__field"><span>角色</span><select id="stp-edit-role"><option value="system">system</option><option value="user">user</option><option value="assistant">assistant</option></select></label>
-          <label class="stp-editor__field"><span>相对聊天记录位置</span><select id="stp-edit-position"><option value="front">前置 · 聊天记录之前</option><option value="back">后置 · 聊天记录之后</option></select></label>
+          <label class="stp-editor__field"><span>相对聊天记录位置</span><select id="stp-edit-position"><option value="front">前置 · 聊天记录之前</option><option value="back">后置 · 聊天记录之后</option></select>
+                    <label class="stp-field"><span>In-Chat 深度</span><input id="stp-edit-depth" type="number" min="0" max="100" step="1" value="4"><small>仅后置生效；0=紧贴最新历史，4=距离最新历史 4 条。</small></label>
+                    <label class="stp-field"><span>In-Chat 优先级</span><input id="stp-edit-injection-order" type="number" step="1" value="100"><small>同一深度时按 ST injection_order 排序。</small></label></label>
         </div>
         <label class="stp-editor__field"><span>Identifier（可选）</span><input id="stp-edit-identifier" type="text" maxlength="120" autocomplete="off"></label>
         <div class="stp-editor__checks">

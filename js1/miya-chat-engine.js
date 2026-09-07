@@ -1361,34 +1361,94 @@
         return out.join('\n').trim();
     }
 
+    /**
+     * ST-compatible prompt export.
+     *
+     * SillyTavern does NOT implement "back" as simply appending a system message.
+     * It has two concepts:
+     *   injection_position = 0 (relative): participate in the ordered prompt stack.
+     *   injection_position = 1 (in-chat): inject into chat history at injection_depth,
+     *   with injection_order controlling priority when several prompts share a depth.
+     *
+     * Miya's UI keeps the friendly front/back labels, but the request layer now
+     * preserves these ST semantics.
+     */
     function buildStPresetMessages(position) {
         var out = [];
-        var hasAnyEnabled = false;
         var wanted = position === 'back' ? 'back' : position === 'front' ? 'front' : '';
         try {
             var stpStore = global.miyaStPromptPresetsStore;
             var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
                 ? (stpStore.getEnabledForRequest() || [])
                 : [];
-            entries.forEach(function (entry) {
+            entries.forEach(function (entry, idx) {
                 var body = String(entry && entry.content || '').trim();
                 if (!body) return;
-                hasAnyEnabled = true;
-                var entryPosition = entry && entry.position === 'back' ? 'back' : 'front';
+                var entryPosition = entry && (entry.position === 'back' || Number(entry.injection_position) === 1) ? 'back' : 'front';
                 if (wanted && entryPosition !== wanted) return;
                 var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
-                out.push({ role: role, content: body, position: entryPosition });
+                out.push({
+                    role: role,
+                    content: body,
+                    position: entryPosition,
+                    injection_position: entryPosition === 'back' ? 1 : 0,
+                    injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 4,
+                    injection_order: Number.isFinite(Number(entry.injection_order)) ? Number(entry.injection_order) : 100,
+                    order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : idx,
+                    identifier: String(entry.identifier || entry.id || '')
+                });
             });
         } catch (e) {}
-        /* 仅在完全没有任何可用 ST 条目时保留代码级兜底；后置层绝不凭空生成兜底。 */
-        if (!out.length && !hasAnyEnabled && (!wanted || wanted === 'front')) {
+        if (!out.length && !wanted) {
             out.push({
                 role: 'system',
                 content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。',
-                position: 'front'
+                position: 'front', injection_position: 0, injection_depth: 4, injection_order: 100, order: 0,
+                identifier: '__fallback__'
             });
         }
         return out;
+    }
+
+    /**
+     * Apply SillyTavern's in-chat injection semantics to a flat API message list.
+     * historyStart points to the first message belonging to chat history.
+     * Depth 0 = immediately after the latest history message; depth 4 = four
+     * history messages from the end, matching ST's in-chat concept.
+     */
+    function injectStInChatMessages(apiMessages, historyStart, stEntries) {
+        if (!Array.isArray(apiMessages) || !Array.isArray(stEntries) || !stEntries.length) return;
+        var historyEnd = apiMessages.length;
+        var historyLength = Math.max(0, historyEnd - historyStart);
+        if (!historyLength) {
+            stEntries.forEach(function (m) {
+                apiMessages.push({ role: m.role, content: m.content });
+            });
+            return;
+        }
+
+        var groups = Object.create(null);
+        stEntries.forEach(function (m) {
+            var depth = Number.isFinite(Number(m.injection_depth)) ? Math.max(0, Number(m.injection_depth)) : 4;
+            var key = String(depth);
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(m);
+        });
+
+        Object.keys(groups).map(Number).sort(function (a, b) { return b - a; }).forEach(function (depth) {
+            var group = groups[String(depth)] || [];
+            group.sort(function (a, b) {
+                var ao = Number.isFinite(Number(a.injection_order)) ? Number(a.injection_order) : 100;
+                var bo = Number.isFinite(Number(b.injection_order)) ? Number(b.injection_order) : 100;
+                return bo - ao; // ST: higher order is inserted first within the same depth
+            });
+            var idx = Math.max(historyStart, historyEnd - Math.min(depth, historyLength));
+            var msgs = group.map(function (m) {
+                return { role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system', content: m.content };
+            });
+            apiMessages.splice(idx, 0, ...msgs);
+            historyEnd += msgs.length;
+        });
     }
 
     function appendOnlineHeartVoicePriorityMessage(apiMessages, contact, settings, opts) {
@@ -2764,21 +2824,16 @@
         if (!opts.callMode && !opts.appointmentMode) {
             historySettings = Object.assign({}, settings || {}, { timeAwareness: { enabled: false } });
         }
+        var onlineHistoryStart = apiMessages.length;
         appendHistoryToApiMessages(apiMessages, sliceAppend, historySettings);
         if (!opts.callMode && !opts.appointmentMode) {
             attachTrailingRoundPhotosToApiMessages(apiMessages, sliceAppend);
         }
         /*
-         * ST 后置层必须紧挨聊天历史：先让模型读完真实时间线，再读必须直接执行的规则。
-         * 当前用户消息尚未追加，因此后置层仍处于「历史之后、本轮发言之前」的位置。
+         * ST-compatible In-Chat injection. Do not append these prompts as a generic
+         * system tail: they belong at injection_depth inside the conversation.
          */
-        stPresetBackMessages.forEach(function (m) {
-            if (!m || !String(m.content || '').trim()) return;
-            apiMessages.push({
-                role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
-                content: String(m.content || '').trim()
-            });
-        });
+        injectStInChatMessages(apiMessages, onlineHistoryStart, stPresetBackMessages);
         appendOnlineHeartVoicePriorityMessage(apiMessages, contact, settings, opts);
         var historyTailState = getTrailingSpeakerState(sliceAppend);
         /*
@@ -4651,6 +4706,7 @@
         buildWorldbookBundle: buildWorldbookBundle,
         buildSystemPrompt: buildSystemPrompt,
         buildStPresetMessages: buildStPresetMessages,
+        injectStInChatMessages: injectStInChatMessages,
         buildStCotPromptBlock: buildStCotPromptBlock,
         buildApiMessages: buildApiMessages,
         setPendingOnlineReturnPrompt: function (chatId, text) {

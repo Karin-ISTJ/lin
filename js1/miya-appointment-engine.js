@@ -770,19 +770,24 @@
             }
         }
 
+        var historyStart = apiMessages.length;
         appendSessionHistory(apiMessages, slice, settings, sess);
 
         /*
-         * ST 后置层：严格放在线下 session 历史之后、当前轮 extra 用户消息之前。
-         * 这样线下也与线上一致，且不会被历史/世界书前置层稀释成背景。
+         * 真正按 SillyTavern 的 In-Chat 方式注入：
+         * injection_position=1 不是“历史后面再 append 一条 system”，而是
+         * 按 injection_depth / injection_order 插入聊天记录内部。
          */
-        stPresetBackMessages.forEach(function (m) {
-            if (!m || !String(m.content || '').trim()) return;
-            apiMessages.push({
-                role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
-                content: String(m.content || '').trim()
+        if (stEngine && typeof stEngine.injectStInChatMessages === 'function') {
+            try {
+                stEngine.injectStInChatMessages(apiMessages, historyStart, stPresetBackMessages);
+            } catch (e) {}
+        } else {
+            stPresetBackMessages.forEach(function (m) {
+                if (!m || !String(m.content || '').trim()) return;
+                apiMessages.push({ role: m.role, content: String(m.content || '').trim() });
             });
-        });
+        }
 
         /*
          * 关键修复：当前用户消息必须是请求里的最后一条 user。
@@ -813,24 +818,6 @@
         }
         appendOfflineUserMetaTail(apiMessages, turnUserText);
 
-        if (stEngine && typeof stEngine.buildStCotPromptBlock === 'function') {
-            try {
-                var stFinalBlock = stEngine.buildStCotPromptBlock();
-                if (stFinalBlock) {
-                    apiMessages.push({
-                        role: 'system',
-                        content:
-                            stFinalBlock +
-                            '\n\n【ST 最终执行要求】\n' +
-                            '本轮必须真正执行以上 ST 条目，而不是只把它们当作参考资料。先逐条判断哪些规则影响本轮，再据此决定角色身份、环境、行为、叙事与正文。\n' +
-                            '必须输出可解析的思维链：正文之前先输出 <thinking>...</thinking>；thinking 的首要内容必须是本轮实际采用的 ST 具体规则及其对当前请求的具体影响。至少直接点名一个实际启用的 ST 条目/身份/环境规则，并说明它改变了什么生成决策。\n' +
-                            '严禁把 thinking 写成“我们被要求以角色身份回应”“根据系统要求”“我需要遵守指令”之类的元提示复述；这些句子不能作为思维链主体。必须写具体规则与具体应用，例如 ST 指定的身份、环境、世界观、行为或格式，以及本轮如何执行。\n' +
-                            '这里的 <thinking> 是 ST 规则执行记录，不是角色第一人称内心独白，也不是对系统提示词的总结。不要机械复制 ST 全文，但必须真实引用其中决定本轮输出的具体规则。\n' +
-                            '如果接口另外返回 reasoning_content/reasoning，也不能因此省略正文中的 <thinking>...</thinking>；客户端将优先把显式 thinking 作为线下思维链。'
-                    });
-                }
-            } catch (cotFinalErr) {}
-        }
 
         /* 当前轮 user 永远是最后一条消息：ST/HTML/元指令全部位于 user 之前。 */
         if (extra) {
@@ -1416,8 +1403,6 @@
                 model: model,
                 messages: built.messages,
                 temperature: cfg.temperature != null ? Number(cfg.temperature) : 1,
-                /* 线下优先走显式 <thinking> 路径；不让原生 reasoning_content 抢占 ST 的可编辑思维链。 */
-                thinking: { type: 'disabled' }
             };
             var useStream = appointmentStreamEnabled(cfg);
             return fetchAppointmentCompletion(
