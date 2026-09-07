@@ -1,5 +1,9 @@
 /* Miya Chat App · 美化编辑面板 */
 
+/* Removed built-in theme chrome stays inert in the shared chat DOM. */
+.ins-chrome,
+.fg-chrome { display: none !important; }
+
 .cab-theme-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -36,14 +40,6 @@
   background: linear-gradient(135deg, #fff 40%, #f0ded2 70%, #ed9b62);
 }
 
-.cab-theme-card__swatch--ins-white {
-  background: linear-gradient(135deg, #fff 60%, #f5f5f5 100%);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.cab-theme-card__swatch--fresh-green {
-  background: linear-gradient(135deg, #f0f4f2 40%, #a3c1ad 75%, #8fb38d);
-}
 
 .cab-theme-card strong {
   font-size: 13px;
@@ -110,9 +106,6 @@
   font-weight: 700;
 }
 
-.cab-preview.chat-bf-theme-ins-white .cab-mock__title {
-  font-size: 24px;
-}
 
 .cab-mock__btn {
   width: 28px;

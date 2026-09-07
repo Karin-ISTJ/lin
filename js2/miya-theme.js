@@ -44,7 +44,6 @@
     tile_match: '.desk--p3 .tile--match',
     tile_fun: '.desk--p3 .tile--fun .tile__film',
     tile_echo: '.desk--p3 .tile--echo',
-    tile_log: '.desk--p3 .tile--log'
   };
 
   var P2_WIDGET_SELECTORS = {

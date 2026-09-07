@@ -1402,47 +1402,8 @@
     dress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" stroke-linejoin="round"/></svg>'
   };
 
-  function isInsWhiteTheme() {
-    var app = document.getElementById('miya-chat-app');
-    return !!(app && app.classList.contains('chat-bf-theme-ins-white'));
-  }
-
-  function isFreshGreenTheme() {
-    var app = document.getElementById('miya-chat-app');
-    return !!(app && app.classList.contains('chat-bf-theme-fresh-green'));
-  }
-
   function buildMineMenuHtml() {
-    if (isFreshGreenTheme()) {
-      var fgItems = [
-        { title: '收藏', action: 'favorites', icon: 'favorites' },
-        { title: '相册', action: 'album', icon: 'album' },
-        { title: '表情', action: 'dress', icon: 'emoji', grid: true },
-        { title: '钱包', action: 'wallet', icon: 'wallet' },
-        { title: '设置', action: 'settings', icon: 'settings', mine: true },
-        { title: '帮助', action: 'settings', icon: 'help', mine: true },
-        { title: '壁纸管理', action: 'wallpapers', icon: 'wallpapers' },
-        { title: '装扮', action: 'dress-app', icon: 'dress', grid: true }
-      ];
-      return fgItems.map(function (item) {
-        var attrs = item.mine
-          ? ' data-mine-action="settings"'
-          : (item.grid ? ' data-mq-mine-grid="' + item.action + '"' : ' data-mq-mine-action="' + item.action + '"');
-        return '<div class="soft-menu__item"' + attrs + '>' +
-          '<span class="soft-menu__item-icon">' + (SOFT_MENU_ICONS[item.icon] || '') + '</span>' +
-          '<span class="soft-menu__item-title">' + esc(item.title) + '</span>' +
-          '<span class="soft-menu__item-arrow">›</span>' +
-        '</div>';
-      }).join('');
-    }
-    var items = isInsWhiteTheme() ? [
-      { title: '收藏', action: 'favorites', icon: 'favorites' },
-      { title: '相册', action: 'album', icon: 'album' },
-      { title: '壁纸管理', action: 'wallpapers', icon: 'wallpapers' },
-      { title: '卡包', action: 'wallet', icon: 'wallet' },
-      { title: '表情', action: 'dress', icon: 'emoji', grid: true },
-      { title: '帮助与反馈', action: 'settings', icon: 'settings', mine: true }
-    ] : [
+    var items = [
       { title: '我的收藏', action: 'favorites', icon: 'favorites' },
       { title: '我的相册', action: 'album', icon: 'album' },
       { title: '壁纸管理', action: 'wallpapers', icon: 'wallpapers' },
@@ -1623,35 +1584,12 @@
     });
   }
 
-  function bindThemeTopbarHome(root) {
-    if (!root) return;
-    root.querySelectorAll('.soft-topbar__titles').forEach(function (el) {
-      if (el.dataset.themeHomeBound) return;
-      el.dataset.themeHomeBound = '1';
-      el.setAttribute('role', 'button');
-      el.setAttribute('tabindex', '0');
-      el.setAttribute('aria-label', '返回主屏幕');
-      el.addEventListener('click', function (e) {
-        if (!isInsWhiteTheme() && !isFreshGreenTheme()) return;
-        e.stopPropagation();
-        closeToHome();
-      });
-      el.addEventListener('keydown', function (e) {
-        if (!isInsWhiteTheme() && !isFreshGreenTheme()) return;
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        closeToHome();
-      });
-    });
-  }
-
   function bindEvents() {
     var app = $('miya-chat-app');
     if (!app || app.dataset.chatBound) return;
     app.dataset.chatBound = '1';
 
     bindAvatarHome(app);
-    bindThemeTopbarHome(app);
     bindMsgSearch();
     bindSoftMineInlineEdit();
 

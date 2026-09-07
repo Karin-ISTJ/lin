@@ -394,9 +394,6 @@
     pet: function () {
       if (window.miyaTypewriterApp && window.miyaTypewriterApp.open) window.miyaTypewriterApp.open();
     },
-    memo: function () {
-      if (window.miyaForumApp && window.miyaForumApp.open) window.miyaForumApp.open();
-    },
     cstore: function () {
       if (window.miyaCstoreApp && window.miyaCstoreApp.open) window.miyaCstoreApp.open();
     },

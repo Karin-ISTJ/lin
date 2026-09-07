@@ -182,7 +182,6 @@
 
   var APP_TO_GROUPS = {
     deep: ['deep'],
-    memo: ['forum'],
     pen: ['simulator'],
     couple: ['coupleUi'],
     notes: ['diaryUi'],

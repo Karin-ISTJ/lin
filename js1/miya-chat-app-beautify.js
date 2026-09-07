@@ -11,9 +11,7 @@
   var GUARD_STYLE_ID = 'miya-chat-app-bf-guard';
 
   var BUILTIN_THEMES = [
-    { id: 'default-orange', label: '默认橙', sub: '暖灰底 · 珊瑚点缀 · 当前默认' },
-    { id: 'ins-white', label: 'ins白', sub: '纯白底 · 黑字描边 · 极简圆角' },
-    { id: 'fresh-green', label: '清新绿', sub: '鼠尾草绿 · 左侧导航 · 自然圆角' }
+    { id: 'default-orange', label: '默认橙', sub: '暖灰底 · 珊瑚点缀 · 当前默认' }
   ];
 
   var THEME_CLASS_PREFIX = 'chat-bf-theme-';
