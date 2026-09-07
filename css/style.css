@@ -118,6 +118,7 @@ html, body {
   min-height: var(--app-height, 100dvh);
   height: var(--app-height, 100dvh);
   overflow: hidden;
+  overscroll-behavior-x: none;
   background: #ffffff;
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
