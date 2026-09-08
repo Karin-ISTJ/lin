@@ -1875,6 +1875,7 @@
         bindEvents();
         document.querySelectorAll('#miya-offline-app .xw-writer__field, #miya-offline-app .xw-journal-writer__field').forEach(function (input) {
             input.setAttribute('placeholder', '');
+            input.removeAttribute('data-placeholder');
         });
         syncDockCollapsedUi();
         hydrateOfflineAvatars(root);

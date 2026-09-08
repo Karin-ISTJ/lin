@@ -1812,3 +1812,24 @@
   color: transparent !important;
   opacity: 0 !important;
 }
+
+/* v43-fix: sparkle menu must be a pure overlay; opening it must not participate in page geometry */
+#miya-offline-app, #miya-offline-app .xw-root, #miya-offline-app .xw-shell { overflow: visible !important; }
+#miya-offline-app .xw-main { scrollbar-gutter: stable; }
+#miya-offline-app .xw-dock {
+  position: fixed !important;
+  contain: layout paint;
+  isolation: isolate;
+  pointer-events: auto;
+}
+#miya-offline-app .xw-dock.is-collapsed {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  display: flex !important;
+}
+#miya-offline-app #xw-dock-expand {
+  position: fixed !important;
+  z-index: 100 !important;
+  contain: layout paint;
+}
