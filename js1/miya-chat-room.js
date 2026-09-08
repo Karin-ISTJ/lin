@@ -312,7 +312,7 @@
     closeMsgMenu();
   }
 
-  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem'];
+  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem', 'search', 'backup'];
   var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
@@ -375,7 +375,11 @@
       '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
       '<path d="M3 10h18" stroke="currentColor" stroke-width="1.5"/>' +
       '<circle cx="12" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
-      '</svg>'
+      '</svg>',
+    search:
+      '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    backup:
+      '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
   };
   var TOOL_LABELS = {
     mic: '语音',
@@ -392,7 +396,9 @@
     narration: '旁白模式',
     thinking: '思维链',
     lovePoem: '情诗',
-    groupRedPacket: '红包'
+    groupRedPacket: '红包',
+    search: '搜索',
+    backup: '备份'
   };
 
   function $(id) { return document.getElementById(id); }
@@ -3381,6 +3387,26 @@
     removeTyping();
   }
 
+  var SEND_ICON_SVG = '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+  var STOP_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
+
+  function setSendButtonGenerating(on) {
+    var send = $('qq-room-send');
+    if (!send) return;
+    if (on) {
+      send.classList.add('is-stop');
+      send.setAttribute('aria-label', '停止生成');
+      send.setAttribute('title', '停止生成');
+      send.innerHTML = STOP_ICON_SVG;
+      send.disabled = false;
+    } else {
+      send.classList.remove('is-stop');
+      send.setAttribute('aria-label', '发送');
+      send.setAttribute('title', '发送');
+      send.innerHTML = SEND_ICON_SVG;
+    }
+  }
+
   function setComposeDisabled(disabled) {
     var input = $('qq-room-input');
     var ai = $('qq-room-ai');
@@ -3389,7 +3415,8 @@
     if (input) input.disabled = !!disabled;
     if (ai) ai.disabled = !!disabled;
     if (toolsToggle) toolsToggle.disabled = !!disabled;
-    if (send) send.disabled = !!disabled;
+    /* 生成中发送钮变为停止，保持可点 */
+    if (send && !send.classList.contains('is-stop')) send.disabled = !!disabled;
   }
 
   function focusComposeInput(preventScroll) {
@@ -3545,6 +3572,7 @@
 
     cancelStaggerReveal();
     state.sending = true;
+    setSendButtonGenerating(true);
     setComposeDisabled(true);
     startTypingWait();
 
@@ -3577,6 +3605,9 @@
           var code = err && err.message ? err.message : String(err);
           if (code === 'api_not_configured') toast('请先在设置中配置对话 API');
           else if (code === 'chat_api_busy') toast('该会话正在请求 API');
+          else if (code === 'aborted' || code === 'AbortError' || (global.MiyaGenerationLifecycle && global.MiyaGenerationLifecycle.isAbortError && global.MiyaGenerationLifecycle.isAbortError(err))) {
+            toast('已停止生成');
+          }
           else if (code === 'empty_reply' || code === 'empty') {
             if (scheduleEmptyReplyRetry()) return;
             toast('角色未返回正文，请重试');
@@ -3587,6 +3618,7 @@
       })
       .finally(function () {
         state.sending = false;
+        setSendButtonGenerating(false);
         if (state.chatId === cid) {
           setComposeDisabled(false);
           restoreComposeAfterOverlay();
@@ -3839,6 +3871,7 @@
 
     cancelStaggerReveal();
     state.sending = true;
+    setSendButtonGenerating(true);
     setComposeDisabled(true);
     startTypingWait();
     engine
@@ -3851,6 +3884,7 @@
       .catch(function (err) {
         stopTypingWait();
         state.sending = false;
+        setSendButtonGenerating(false);
         setComposeDisabled(false);
         var code = err && err.message ? err.message : '';
         if (code === 'no_assistant_round') toast('没有可撤回的角色回复');
@@ -4498,6 +4532,16 @@
     else if (key === 'clock') toggleTimestamps();
     else if (key === 'narration') toggleNarrationMode();
     else if (key === 'lovePoem') openLovePoemPicker();
+    else if (key === 'search') {
+      if (global.MiyaChatSearch && global.MiyaChatSearch.openSearchUi) global.MiyaChatSearch.openSearchUi(state.chatId);
+      else toast('搜索模块未加载');
+    }
+    else if (key === 'backup') {
+      if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {
+        if (global.MiyaChatBackups.exportChatToFile(state.chatId)) toast('已导出聊天备份');
+        else toast('备份失败');
+      } else toast('备份模块未加载');
+    }
   }
 
   function toggleTimestamps() {
@@ -5149,6 +5193,20 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        if (state.sending || (sendBtn.classList.contains('is-stop'))) {
+          var eng = engine || global.miyaChatEngine;
+          if (eng && typeof eng.stopChatGeneration === 'function') {
+            eng.stopChatGeneration(state.chatId);
+          } else if (global.MiyaGenerationLifecycle) {
+            global.MiyaGenerationLifecycle.stop('chat:' + String(state.chatId || ''), { reason: 'user' });
+          }
+          state.sending = false;
+          setSendButtonGenerating(false);
+          setComposeDisabled(false);
+          stopTypingWait();
+          toast('已停止生成');
+          return;
+        }
         handleSend();
       });
     }

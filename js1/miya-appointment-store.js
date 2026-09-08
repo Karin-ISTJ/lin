@@ -303,6 +303,12 @@
         if (row.openingPresetId) out.openingPresetId = String(row.openingPresetId || '').trim();
         var castMirrors = normalizeCastMirrors(row.castMirrors);
         if (castMirrors) out.castMirrors = castMirrors;
+        /* 线下楼层 Swipe 候选 */
+        if (Array.isArray(row.swipes) && row.swipes.length) {
+            out.swipes = row.swipes.map(function (x) { return String(x == null ? '' : x); });
+            var sid = Number(row.swipeId);
+            out.swipeId = Number.isFinite(sid) ? Math.max(0, Math.min(out.swipes.length - 1, Math.floor(sid))) : out.swipes.length - 1;
+        }
         return out;
     }
 
