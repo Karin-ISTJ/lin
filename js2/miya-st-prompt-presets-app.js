@@ -359,12 +359,25 @@
     var genSave = $('stp-gen-save');
     if (genSave) genSave.addEventListener('click', saveGenerationFromUi);
     var genToggle = $('stp-gen-toggle');
-    if (genToggle) genToggle.addEventListener('click', function () {
-      var panel = $('stp-gen-panel');
-      if (!panel) return;
-      var collapsed = panel.classList.toggle('is-collapsed');
-      genToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    });
+    if (genToggle) {
+      var genPanel = $('stp-gen-panel');
+      var genGrid = $('stp-gen-grid');
+      /* 生成参数默认收起；用 hidden + class 双保险，避免旧 CSS 缓存导致手机端大面板一直展开。 */
+      if (genPanel) genPanel.classList.add('is-collapsed');
+      if (genGrid) genGrid.hidden = true;
+      genToggle.setAttribute('aria-expanded', 'false');
+      genToggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var panel = $('stp-gen-panel');
+        var grid = $('stp-gen-grid');
+        if (!panel) return;
+        var collapsed = !panel.classList.contains('is-collapsed');
+        panel.classList.toggle('is-collapsed', collapsed);
+        if (grid) grid.hidden = collapsed;
+        genToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
     var copyOfflineBtn = $('stp-copy-offline-prompt');
     if (copyOfflineBtn) copyOfflineBtn.addEventListener('click', copyLastOfflinePrompt);
 

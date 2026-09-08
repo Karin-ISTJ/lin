@@ -3599,7 +3599,10 @@
   }
 
   function handleSend() {
-    if (!state.chatId) return Promise.resolve();
+    if (!state.chatId) {
+      toast('当前没有打开聊天会话');
+      return Promise.reject(new Error('chat_not_open'));
+    }
     var input = $('qq-room-input');
     if (!input) return Promise.resolve();
     var text = input.value.trim();
@@ -5105,20 +5108,25 @@
     bindToolbarEvents();
     var sendBtn = $('qq-room-send');
     if (sendBtn) {
-      /* 移动端优先用 pointerup，避免某些 WebView 在 textarea 聚焦后丢失 click。 */
-      sendBtn.addEventListener('pointerup', function (e) {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        sendBtn._miyaPointerSent = Date.now();
-        handleSend().catch(function () {});
-      });
-      sendBtn.addEventListener('click', function (e) {
-        if (sendBtn._miyaPointerSent && Date.now() - sendBtn._miyaPointerSent < 700) return;
-        e.preventDefault();
-        e.stopPropagation();
-        handleSend().catch(function () {});
-      });
+      function runSendFromButton(e) {
+        if (e && e.type === 'pointerup' && e.pointerType === 'mouse' && e.button !== 0) return;
+        if (sendBtn._miyaSendLock && Date.now() - sendBtn._miyaSendLock < 700) return;
+        sendBtn._miyaSendLock = Date.now();
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        handleSend().catch(function (err) {
+          console.warn('[MiyaChatRoom] send button error', err);
+        });
+      }
+      /* 三层兼容：pointerup、touchend、click。锁避免一次触摸重复发送。 */
+      sendBtn.addEventListener('pointerup', runSendFromButton);
+      sendBtn.addEventListener('touchend', runSendFromButton, { passive: false });
+      sendBtn.addEventListener('click', runSendFromButton);
+      /* capture 兜底：即使外层手势处理阻止冒泡，发送按钮仍能触发。 */
+      document.addEventListener('click', function (e) {
+        var t = e.target && e.target.closest ? e.target.closest('#qq-room-send') : null;
+        if (!t || t !== sendBtn) return;
+        runSendFromButton(e);
+      }, true);
     }
     roomEl.addEventListener('pointerup', function (e) {
       if (msgMenuBlockPointerId === e.pointerId) {
@@ -5448,6 +5456,11 @@
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
     state.chatId = chatId;
+    /* 切换/重新进入房间时恢复普通发送控件；真正请求中的状态仍由 requestAiReply 控制。 */
+    if (!engine || typeof engine.isChatApiBusy !== 'function' || !engine.isChatApiBusy(chatId)) {
+      state.sending = false;
+      setComposeDisabled(false);
+    }
     if (store.updateChat) {
       store.updateChat(chatId, { unread: 0 }).catch(function () {});
     }
