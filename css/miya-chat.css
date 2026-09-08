@@ -6355,3 +6355,7 @@ html.is-ios .qq-room__input {
   width: 20px;
   height: 20px;
 }
+
+/* 56: online generation stop state; does not alter bubble/avatar layout */
+.qq-room__send.is-stop { cursor: pointer; }
+.qq-room__stop-icon { display:block; width:10px; height:10px; border-radius:2px; background:currentColor; margin:auto; }

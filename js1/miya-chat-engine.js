@@ -3268,12 +3268,15 @@
         return !!(normalizeBaseUrl(sec.baseUrl) && String(sec.apiKey || '').trim() && String(sec.model || '').trim());
     }
 
-    function fetchChatCompletion(url, headers, payload, attempt) {
+    var activeChatAbortControllers = Object.create(null);
+
+    function fetchChatCompletion(url, headers, payload, attempt, signal) {
         var tryNo = Math.max(1, Number(attempt) || 1);
         return fetch(url, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: signal || undefined
         })
             .then(function (r) {
                 if (!r.ok) {
@@ -3286,7 +3289,7 @@
             .then(function (data) {
                 var replyRaw = extractReplyContent(data);
                 if (!replyRaw && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                    return fetchChatCompletion(url, headers, payload, tryNo + 1);
+                    return fetchChatCompletion(url, headers, payload, tryNo + 1, signal);
                 }
                 return { data: data, replyRaw: replyRaw };
             });
@@ -3758,6 +3761,14 @@
         return !!(chatId && replyInFlight[String(chatId)]);
     }
 
+    function stopChatGeneration(chatId) {
+        var id = String(chatId || '').trim();
+        var controller = id ? activeChatAbortControllers[id] : null;
+        if (!controller) return false;
+        try { controller.abort(); } catch (e) {}
+        return true;
+    }
+
     function isReplyInFlight(chatId) {
         return isChatApiBusy(chatId);
     }
@@ -3791,6 +3802,8 @@
         if (isChatApiBusy(chatId)) return Promise.reject(new Error('chat_api_busy'));
 
         acquireChatApi(chatId);
+        var chatAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        if (chatAbort) activeChatAbortControllers[String(chatId)] = chatAbort;
 
         var cfg = getApiConfig();
         var baseUrl = normalizeBaseUrl(cfg.baseUrl);
@@ -3798,6 +3811,7 @@
         var model = String(cfg.model || '').trim();
         if (!baseUrl || !apiKey || !model) {
             releaseChatApi(chatId);
+            if (chatAbort) delete activeChatAbortControllers[String(chatId)];
             return Promise.reject(new Error('api_not_configured'));
         }
 
@@ -3807,6 +3821,9 @@
 
         function clearInFlight() {
             releaseChatApi(chatId);
+            if (chatAbort && activeChatAbortControllers[String(chatId)] === chatAbort) {
+                delete activeChatAbortControllers[String(chatId)];
+            }
         }
 
         function maybeRefreshWeatherBeforeChat() {
@@ -3893,7 +3910,7 @@
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
                 reqPayload.stream = false;
-                return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
+                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, chatAbort ? chatAbort.signal : null).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
                     return completion;
@@ -3902,6 +3919,7 @@
 
             var primarySlice = resolveChatApiSlice(cfg, false);
             return callWithSlice(primarySlice, false).catch(function (err) {
+                if (err && err.name === 'AbortError') throw err;
                 if (!cfg.fallbackToSecondary || !hasSecondaryApiConfigured(cfg)) throw err;
                 return callWithSlice(resolveChatApiSlice(cfg, true), true);
             }).then(function (completion) {
@@ -4740,6 +4758,7 @@
         releaseChatApi: releaseChatApi,
         isChatApiBusy: isChatApiBusy,
         isReplyInFlight: isReplyInFlight,
+        stopChatGeneration: stopChatGeneration,
         estimateTokensFromText: estimateTokensFromText,
         estimateTokensFromCharCount: estimateTokensFromCharCount,
         estimateMessagesTokens: estimateMessagesTokens,
