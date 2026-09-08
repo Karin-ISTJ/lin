@@ -3387,9 +3387,32 @@
     var toolsToggle = $('qq-room-tools-toggle');
     var send = $('qq-room-send');
     if (input) input.disabled = !!disabled;
-    if (ai) ai.disabled = !!disabled;
+    if (ai) ai.disabled = false;
     if (toolsToggle) toolsToggle.disabled = !!disabled;
     if (send) send.disabled = !!disabled;
+  }
+
+  function syncReplyButton() {
+    var ai = $('qq-room-ai');
+    if (!ai) return;
+    ai.classList.toggle('is-stop', !!state.sending);
+    ai.setAttribute('aria-label', state.sending ? '停止生成' : '触发回复');
+    ai.setAttribute('title', state.sending ? '停止生成' : '触发回复');
+    ai.innerHTML = state.sending
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"></rect></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,3 20,12 12,21 12,15 4,15 4,9 12,9"></polygon></svg>';
+  }
+
+  function stopCharacterReply() {
+    var cid = state.chatId;
+    if (!cid) return false;
+    if (!state.sending) return false;
+    if (engine && typeof engine.abortChat === 'function') {
+      engine.abortChat(cid);
+      toast('已停止生成');
+      return true;
+    }
+    return false;
   }
 
   function focusComposeInput(preventScroll) {
@@ -3546,6 +3569,7 @@
     cancelStaggerReveal();
     state.sending = true;
     setComposeDisabled(true);
+    syncReplyButton();
     startTypingWait();
 
     function scheduleEmptyReplyRetry() {
@@ -3587,6 +3611,7 @@
       })
       .finally(function () {
         state.sending = false;
+        syncReplyButton();
         if (state.chatId === cid) {
           setComposeDisabled(false);
           restoreComposeAfterOverlay();
@@ -3602,7 +3627,7 @@
       if (e) { e.preventDefault(); e.stopPropagation(); }
       var cid = state.chatId;
       if (!cid) { toast('当前没有打开聊天'); return false; }
-      if (state.sending) { toast('正在等待回复…'); return false; }
+      if (state.sending) { stopCharacterReply(); return false; }
       toast('正在准备角色回复…');
       var p = requestAiReply(false, 0, { directButton: true });
       if (p && typeof p.catch === 'function') { p.catch(function (err) {
@@ -3840,6 +3865,7 @@
     cancelStaggerReveal();
     state.sending = true;
     setComposeDisabled(true);
+    syncReplyButton();
     startTypingWait();
     engine
       .withdrawLastAssistantRound(cid)

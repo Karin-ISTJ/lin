@@ -581,7 +581,8 @@
         var input = $('xw-writer-input');
         if (input) input.disabled = true;
         var sendBtn = $('xw-writer-go');
-        if (sendBtn) sendBtn.disabled = true;
+        if (sendBtn) sendBtn.disabled = false;
+        syncOfflineWriterButton();
         pinScrollToBottom();
         scrollStoryToEnd(true);
         runStream(
@@ -595,6 +596,7 @@
                         input.focus();
                     }
                     if (sendBtn) sendBtn.disabled = false;
+                    syncOfflineWriterButton();
                 })
         );
     }
@@ -741,13 +743,7 @@
                 '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回卷宗列表">' +
                 '<span class="xw-dock__glyph">卷</span><span class="xw-dock__lbl">回去</span></button>';
         } else if (ui.view === 'story') {
-            aria = '场景工具';
-            navInner =
-                renderDockBeautifyBtn() +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-prefs" title="现场参数">' +
-                '<span class="xw-dock__glyph">参</span><span class="xw-dock__lbl">调参</span></button>' +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="往日场景">' +
-                '<span class="xw-dock__glyph">档</span><span class="xw-dock__lbl">卷宗</span></button>';
+            return '';
         } else {
             return '';
         }
@@ -792,27 +788,12 @@
             )
             : '<div class="xw-journal-bar__brand">手帐</div>';
 
-        var toolHtml = '';
-        if (ui.view === 'story' || ui.view === 'history') {
-            toolHtml +=
-                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
-                ICON_ARCHIVE + '</button>';
-        }
-        if (ui.view === 'story' && !ui.viewingArchive) {
-            toolHtml +=
-                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
-                ICON_SET + '</button>';
-        }
-        toolHtml +=
-            '<button type="button" class="xw-journal-bar__ico" id="xw-dock-beautify" title="样式" aria-label="样式">' +
-            ICON_STYLE + '</button>';
-
         return (
             '<header class="xw-journal-bar">' +
             '<button type="button" class="xw-journal-bar__back" id="xw-exit" aria-label="离开">' +
             ICON_BACK + '</button>' +
             whoHtml +
-            '<div class="xw-journal-bar__tools">' + toolHtml + '</div></header>'
+            '</header>'
         );
     }
 
@@ -1918,6 +1899,8 @@
 function renderWriter() {
         return (
             '<footer class="xw-writer">' +
+            '<div class="xw-writer-tool-stubs" hidden><button type="button" id="xw-dock-prefs"></button><button type="button" id="xw-dock-beautify"></button><button type="button" id="xw-dock-vault"></button></div>' +
+            '<button type="button" class="xw-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">⋯</button>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
@@ -1937,6 +1920,8 @@ function renderWriter() {
     function renderJournalWriter() {
         return (
             '<footer class="xw-journal-writer">' +
+            '<div class="xw-writer-tool-stubs" hidden><button type="button" id="xw-dock-prefs"></button><button type="button" id="xw-dock-beautify"></button><button type="button" id="xw-dock-vault"></button></div>' +
+            '<button type="button" class="xw-journal-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">⋯</button>' +
             '<button type="button" class="xw-journal-writer__plus" id="xw-writer-undo" title="重回" aria-label="重回">' +
             ICON_UNDO + '</button>' +
             '<div class="xw-journal-writer__input">' +
@@ -1944,6 +1929,59 @@ function renderWriter() {
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
             ICON_SEND + '</button></footer>'
         );
+    }
+
+    function openWriterTools() {
+        var old = document.getElementById('xw-writer-tools-menu');
+        if (old) { old.remove(); return; }
+        var menu = document.createElement('div');
+        menu.id = 'xw-writer-tools-menu';
+        menu.className = 'xw-writer-tools-menu';
+        menu.innerHTML =
+            '<button type="button" data-wtool="prefs"><span>参</span>调参</button>' +
+            '<button type="button" data-wtool="beautify"><span>式</span>样式</button>' +
+            '<button type="button" data-wtool="vault"><span>档</span>卷宗</button>';
+        document.body.appendChild(menu);
+        var anchor = document.getElementById('xw-writer-tools');
+        if (anchor) {
+            var r = anchor.getBoundingClientRect();
+            menu.style.left = Math.max(8, r.left) + 'px';
+            menu.style.bottom = Math.max(8, window.innerHeight - r.top + 8) + 'px';
+        }
+        menu.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-wtool]');
+            if (!btn) return;
+            var key = btn.getAttribute('data-wtool');
+            var target = key === 'prefs' ? $('xw-dock-prefs') : key === 'beautify' ? $('xw-dock-beautify') : $('xw-dock-vault');
+            if (target) target.click();
+            menu.remove();
+        });
+        setTimeout(function () {
+            document.addEventListener('click', function close(ev) {
+                if (!menu.contains(ev.target) && ev.target !== anchor) { menu.remove(); document.removeEventListener('click', close, true); }
+            }, true);
+        }, 0);
+    }
+
+    function syncOfflineWriterButton() {
+        var btn = $('xw-writer-go');
+        if (!btn) return;
+        var busy = !!(ui.chatId && ui.sessionId && apEngine() && typeof apEngine().isBusy === 'function' && apEngine().isBusy(ui.chatId, ui.sessionId));
+        btn.classList.toggle('is-stop', busy);
+        btn.setAttribute('aria-label', busy ? '停止生成' : '推进场景');
+        btn.setAttribute('title', busy ? '停止生成' : '发送');
+        btn.innerHTML = busy
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"></rect></svg>'
+            : (typeof ICON_SEND !== 'undefined' ? ICON_SEND : '↑');
+    }
+
+    function stopOfflineGeneration() {
+        var eng = apEngine();
+        if (!eng || typeof eng.abortAppointment !== 'function') return false;
+        if (!ui.chatId || !ui.sessionId || !eng.isBusy(ui.chatId, ui.sessionId)) return false;
+        eng.abortAppointment(ui.chatId, ui.sessionId);
+        toast('已停止生成');
+        return true;
     }
 
     function scrollStoryToEnd(force) {
@@ -2193,6 +2231,16 @@ function renderWriter() {
                 patchStoryMeta();
             })
             .catch(function (err) {
+                if (err && (err.name === 'AbortError' || err.message === 'aborted')) {
+                    ui.status = 'idle';
+                    ui.streamingLines = [];
+                    ui.streamingRaw = '';
+                    resetStreamUi();
+                    patchStoryBody();
+                    patchStoryMeta();
+                    syncOfflineWriterButton();
+                    return;
+                }
                 ui.status = 'idle';
                 ui.streamingLines = [];
                 ui.streamingRaw = '';
@@ -2247,8 +2295,12 @@ function renderWriter() {
             } catch (e) {}
         }
         var eng = apEngine();
-        if (!eng || eng.isBusy(ui.chatId, ui.sessionId)) {
-            toast('等上一镜结束再说');
+        if (eng && eng.isBusy(ui.chatId, ui.sessionId)) {
+            stopOfflineGeneration();
+            return;
+        }
+        if (!eng) {
+            toast('线下引擎未加载');
             return;
         }
         var wasEmpty = !storyHasContent();
@@ -2260,7 +2312,8 @@ function renderWriter() {
         input.value = '';
         input.disabled = true;
         var sendBtn = $('xw-writer-go');
-        if (sendBtn) sendBtn.disabled = true;
+        if (sendBtn) sendBtn.disabled = false;
+        syncOfflineWriterButton();
         if (wasEmpty) {
             render();
         } else {
@@ -2281,6 +2334,7 @@ function renderWriter() {
                 .finally(function () {
                     input.disabled = false;
                     if (sendBtn) sendBtn.disabled = false;
+                    syncOfflineWriterButton();
                     input.focus();
                 })
         );
@@ -2319,7 +2373,7 @@ function renderWriter() {
         var input = $('xw-writer-input');
         if (input) input.disabled = true;
         var sendBtn = $('xw-writer-go');
-        if (sendBtn) sendBtn.disabled = true;
+        if (sendBtn) sendBtn.disabled = false;
         runStream(
             Promise.resolve()
                 .then(function () {
@@ -2331,6 +2385,7 @@ function renderWriter() {
                         input.focus();
                     }
                     if (sendBtn) sendBtn.disabled = false;
+                    syncOfflineWriterButton();
                 })
         );
     }
@@ -3029,7 +3084,7 @@ function renderWriter() {
                 var input = $('xw-writer-input');
                 if (input) input.disabled = true;
                 var sendBtn = $('xw-writer-go');
-                if (sendBtn) sendBtn.disabled = true;
+                if (sendBtn) sendBtn.disabled = false;
                 runStream(
                     Promise.resolve()
                         .then(function () {
@@ -3066,7 +3121,7 @@ function renderWriter() {
             var input2 = $('xw-writer-input');
             if (input2) input2.disabled = true;
             var sendBtn2 = $('xw-writer-go');
-            if (sendBtn2) sendBtn2.disabled = true;
+            if (sendBtn2) sendBtn2.disabled = false;
             runStream(
                 Promise.resolve()
                     .then(function () {
@@ -3397,7 +3452,13 @@ function renderWriter() {
                 }
             });
         }
-        if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+        if (sendBtn) sendBtn.addEventListener('click', function () {
+            if (apEngine() && apEngine().isBusy(ui.chatId, ui.sessionId)) { stopOfflineGeneration(); }
+            else sendMessage();
+        });
+        var toolsBtn = $('xw-writer-tools');
+        if (toolsBtn) toolsBtn.addEventListener('click', function (e) { e.stopPropagation(); openWriterTools(); });
+        syncOfflineWriterButton();
 
         var quickRedo = $('xw-writer-undo');
         if (quickRedo) quickRedo.addEventListener('click', quickRedoLastAssistant);

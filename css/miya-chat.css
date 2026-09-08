@@ -6355,3 +6355,13 @@ html.is-ios .qq-room__input {
   width: 20px;
   height: 20px;
 }
+
+
+/* v41：生成中将四角星变为停止键 */
+.qq-room__compose-btn--ai.is-stop {
+  color: #222;
+}
+.qq-room__compose-btn--ai.is-stop svg rect {
+  fill: currentColor;
+  stroke: currentColor;
+}

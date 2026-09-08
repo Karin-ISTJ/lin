@@ -3268,12 +3268,13 @@
         return !!(normalizeBaseUrl(sec.baseUrl) && String(sec.apiKey || '').trim() && String(sec.model || '').trim());
     }
 
-    function fetchChatCompletion(url, headers, payload, attempt) {
+    function fetchChatCompletion(url, headers, payload, attempt, signal) {
         var tryNo = Math.max(1, Number(attempt) || 1);
         return fetch(url, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: signal || undefined
         })
             .then(function (r) {
                 if (!r.ok) {
@@ -3739,6 +3740,7 @@
     }
 
     var replyInFlight = Object.create(null);
+    var replyAbortControllers = Object.create(null);
 
     function acquireChatApi(chatId) {
         var id = String(chatId || '');
@@ -3782,6 +3784,14 @@
         };
     }
 
+    function abortChat(chatId) {
+        var key = String(chatId || '');
+        var controller = key ? replyAbortControllers[key] : null;
+        if (!controller) return false;
+        try { controller.abort(); } catch (e) {}
+        return true;
+    }
+
     function sendChat(chatId, userText, opts) {
         var store = global.miyaChatStore;
         var options = opts && typeof opts === 'object' ? opts : {};
@@ -3791,6 +3801,9 @@
         if (isChatApiBusy(chatId)) return Promise.reject(new Error('chat_api_busy'));
 
         acquireChatApi(chatId);
+        var abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var abortKey = String(chatId);
+        if (abortController) replyAbortControllers[abortKey] = abortController;
 
         var cfg = getApiConfig();
         var baseUrl = normalizeBaseUrl(cfg.baseUrl);
@@ -3798,6 +3811,7 @@
         var model = String(cfg.model || '').trim();
         if (!baseUrl || !apiKey || !model) {
             releaseChatApi(chatId);
+            if (replyAbortControllers[abortKey] === abortController) delete replyAbortControllers[abortKey];
             return Promise.reject(new Error('api_not_configured'));
         }
 
@@ -3807,6 +3821,7 @@
 
         function clearInFlight() {
             releaseChatApi(chatId);
+            if (replyAbortControllers[abortKey] === abortController) delete replyAbortControllers[abortKey];
         }
 
         function maybeRefreshWeatherBeforeChat() {
@@ -3893,7 +3908,7 @@
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
                 reqPayload.stream = false;
-                return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
+                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, abortController ? abortController.signal : null).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
                     return completion;
@@ -3902,6 +3917,7 @@
 
             var primarySlice = resolveChatApiSlice(cfg, false);
             return callWithSlice(primarySlice, false).catch(function (err) {
+                if (err && (err.name === 'AbortError' || err.message === 'aborted')) throw err;
                 if (!cfg.fallbackToSecondary || !hasSecondaryApiConfigured(cfg)) throw err;
                 return callWithSlice(resolveChatApiSlice(cfg, true), true);
             }).then(function (completion) {
@@ -4736,6 +4752,7 @@
             pendingOnlineReturnPromptByChat[key] = String(text || '').trim();
         },
         sendChat: sendChat,
+        abortChat: abortChat,
         acquireChatApi: acquireChatApi,
         releaseChatApi: releaseChatApi,
         isChatApiBusy: isChatApiBusy,

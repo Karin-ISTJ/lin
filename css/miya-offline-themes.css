@@ -1519,3 +1519,18 @@
   font-style: italic;
 }
 
+
+
+/* v41：底部工具入口与停止生成状态 */
+.miya-offline-app.xw-theme-korean .xw-journal-writer__tools {
+  width: 36px; height: 36px; flex-basis: 36px;
+  border: 1px solid rgba(0,0,0,.1); border-radius: 50%;
+  background: rgba(255,255,255,.82); color:#262626;
+  font-size: 20px; padding-bottom: 5px;
+}
+.miya-offline-app.xw-theme-korean .xw-journal-writer__send.is-stop {
+  background: #262626; color:#fff;
+}
+.miya-offline-app.xw-theme-korean .xw-journal-writer__send.is-stop svg rect {
+  fill: currentColor; stroke: none;
+}
