@@ -1177,3 +1177,63 @@
 .miya-worldbook-app .ins-wb-editor-foot .ins-chip {
   padding: 12px !important;
 }
+
+/* ── 再次收紧（尽量让"内容"输入框在首屏内可见） ──
+   之前手机窄屏下 row5 会从 1 行折成 3 行、row2 从 1 行折成 2 行，
+   这是竖向空间被吃掉最多的地方，先把折行方式改紧凑一些。 */
+@media (max-width: 720px) {
+  .miya-wb-st-editor .miya-wb-row5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .miya-wb-st-editor .miya-wb-row2 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+.miya-wb-st-editor .miya-wb-row5,
+.miya-wb-st-editor .miya-wb-row2 {
+  gap: 4px !important;
+  margin-bottom: 2px !important;
+}
+.miya-wb-st-editor .ins-field-label {
+  margin: 2px 0 1px !important;
+  font-size: 10px !important;
+}
+.miya-wb-st-editor .ins-text-input,
+.miya-wb-st-editor .ins-select {
+  padding: 5px 8px !important;
+  min-height: 32px !important;
+}
+.miya-wb-st-editor .miya-wb-checks {
+  gap: 2px !important;
+  padding-bottom: 0 !important;
+}
+.miya-wb-st-editor .miya-wb-check {
+  font-size: 12px !important;
+  gap: 6px !important;
+}
+.miya-wb-advanced {
+  margin: 3px 0 5px !important;
+  padding: 4px 8px !important;
+}
+.miya-wb-advanced > summary {
+  font-size: 12px !important;
+}
+.miya-wb-advanced[open] > summary {
+  margin-bottom: 6px !important;
+}
+.miya-worldbook-app .ins-wb-editor-scroll .st-container {
+  padding-top: 2px !important;
+}
+.miya-worldbook-app .ins-wb-editor .st-navbar {
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) 16px 6px !important;
+  gap: 8px !important;
+}
+.miya-worldbook-app .ins-wb-editor .st-navback {
+  padding: 6px 10px 6px 6px !important;
+}
+.miya-worldbook-app .ins-wb-editor .st-navtitle {
+  font-size: 15px !important;
+}
+.miya-worldbook-app .ins-wb-body-head {
+  margin-top: 2px !important;
+}
