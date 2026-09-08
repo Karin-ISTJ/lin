@@ -312,7 +312,7 @@
     closeMsgMenu();
   }
 
-  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem', 'search', 'backup'];
+  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem', 'backup'];
   var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
@@ -376,8 +376,6 @@
       '<path d="M3 10h18" stroke="currentColor" stroke-width="1.5"/>' +
       '<circle cx="12" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
       '</svg>',
-    search:
-      '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     backup:
       '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
   };
@@ -397,7 +395,6 @@
     thinking: '思维链',
     lovePoem: '情诗',
     groupRedPacket: '红包',
-    search: '搜索',
     backup: '备份'
   };
 
@@ -4532,10 +4529,6 @@
     else if (key === 'clock') toggleTimestamps();
     else if (key === 'narration') toggleNarrationMode();
     else if (key === 'lovePoem') openLovePoemPicker();
-    else if (key === 'search') {
-      if (global.MiyaChatSearch && global.MiyaChatSearch.openSearchUi) global.MiyaChatSearch.openSearchUi(state.chatId);
-      else toast('搜索模块未加载');
-    }
     else if (key === 'backup') {
       if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {
         if (global.MiyaChatBackups.exportChatToFile(state.chatId)) toast('已导出聊天备份');
@@ -5288,12 +5281,6 @@
       if (t.closest('[data-plus="narration"]')) { e.preventDefault(); toggleNarrationMode(); return; }
       if (t.closest('[data-plus="thinking"]')) { e.preventDefault(); openThinkingPop(); return; }
       if (t.closest('[data-plus="lovePoem"]')) { e.preventDefault(); openLovePoemPicker(); return; }
-      if (t.closest('[data-plus="search"]')) {
-        e.preventDefault();
-        if (global.MiyaChatSearch && global.MiyaChatSearch.openSearchUi) global.MiyaChatSearch.openSearchUi(state.chatId);
-        else toast('搜索模块未加载');
-        return;
-      }
       if (t.closest('[data-plus="backup"]')) {
         e.preventDefault();
         if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {

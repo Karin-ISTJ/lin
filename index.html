@@ -1905,10 +1905,6 @@
             <span class="fg-friends-hero__count" id="fg-friends-count">0</span>
           </div>
           <div class="soft-quick-grid">
-            <button type="button" class="soft-quick-card">
-              <span class="soft-quick-card__icon ins-quick-card__icon--new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6" stroke-linecap="round"/></svg></span>
-              <span class="soft-quick-card__label"><span class="ins-quick-label-default">新朋友</span><span class="ins-quick-label-white">新的朋友</span></span>
-            </button>
             <button type="button" class="soft-quick-card" data-mq-grp-create>
               <span class="soft-quick-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
               <span class="soft-quick-card__label">群聊</span>
@@ -1935,7 +1931,9 @@
 
       <!-- ④ 我的 -->
       <div class="qq-page qq-page--mine" data-qq-tab="mine">
-        <header class="soft-topbar">
+        
+        <div class="qq-page__scroll">
+          <header class="soft-topbar">
           <button type="button" class="soft-topbar__back ins-hide-when-white fg-hide-when-green" id="qq-app-back-mine" aria-label="返回主屏幕">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
@@ -1958,7 +1956,6 @@
             </button>
           </div>
         </header>
-        <div class="qq-page__scroll">
           <div class="soft-profile-card">
             <div class="soft-profile-card__main">
               <div class="soft-profile-card__ava-wrap" data-mq-mine-action="profiles" role="button" tabindex="0">
@@ -5773,7 +5770,6 @@
   <script defer src="js1/miya-chat-order-ui.js?v=3"></script>
   <script defer src="js1/miya-chat-love-poem.js?v=1"></script>
   <script defer src="js1/miya-chat-backups.js?v=1"></script>
-  <script defer src="js1/miya-chat-search.js?v=1"></script>
   <script defer src="js1/miya-chat-room.js?v=39"></script>
   <script defer src="js1/miya-chat-settings-panel.js?v=13"></script>
   <script defer src="js1/miya-chat-ui-theme.js?v=4"></script>

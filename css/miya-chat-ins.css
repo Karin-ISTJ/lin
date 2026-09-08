@@ -1533,3 +1533,22 @@
 .theme-soft .qq-msg-menu__btn.is-danger:active {
   background: rgba(216, 86, 104, 0.1);
 }
+
+
+/* ── 我的页：顶栏随内容滚动，不再悬浮固定 ── */
+.qq-page--mine .soft-topbar {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  z-index: 1;
+  margin: 0 0 8px;
+  padding-top: 4px;
+  width: auto;
+}
+.qq-page--mine .qq-page__scroll {
+  padding-top: calc(var(--soft-safe-t) + 8px) !important;
+}
+.miya-chat-app.theme-soft .qq-page--mine .qq-page__scroll {
+  padding-top: calc(var(--soft-safe-t) + 8px) !important;
+}
