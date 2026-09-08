@@ -4472,7 +4472,27 @@
     var aiBtn = $('qq-room-ai');
     if (!aiBtn || aiBtn.dataset.boundReply) return;
     aiBtn.dataset.boundReply = '1';
-    aiBtn.addEventListener('click', function () { requestAiReply(); });
+    aiBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      requestAiReply();
+    });
+  }
+
+  // Character reply button: delegated capture listener.
+  // This survives toolbar re-renders and does not depend on bind timing.
+  function bindCharacterReplyDelegate() {
+    if (global.__miyaCharacterReplyDelegateBound) return;
+    global.__miyaCharacterReplyDelegateBound = true;
+    document.addEventListener('click', function (e) {
+      var target = e.target && e.target.closest ? e.target.closest('#qq-room-ai') : null;
+      if (!target) return;
+      if (!document.body.contains(target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      requestAiReply();
+    }, true);
   }
 
   function ensureToolbarFresh() {
@@ -5037,6 +5057,7 @@
   function bindRoomEvents() {
     if (!roomEl || roomEl.dataset.bound) return;
     roomEl.dataset.bound = '1';
+    bindCharacterReplyDelegate();
     bindGlobalCallClicks();
     bindMatchCardExpand();
     bindGlobalHtmlClicks();
