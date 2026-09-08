@@ -2043,7 +2043,16 @@ function renderWriter() {
     }
 
     function leaveStoryToPick() {
-        closeApp();
+        syncSessionOnLeave();
+        ui.view = 'pick';
+        ui.chatId = '';
+        ui.sessionId = '';
+        ui.contactId = '';
+        ui.pickSelected = [];
+        if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
+            global.MiyaOfflineStatus.hideAll();
+        }
+        render();
     }
 
     function openWithChat(chatId, contactId, castOpt) {
@@ -3406,11 +3415,15 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
+        ui.view = 'pick';
+        ui.chatId = '';
+        ui.sessionId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.pickSelected = [];
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
+        render();
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
@@ -3435,23 +3448,10 @@ function renderWriter() {
          * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
         hydrate
             .then(function () {
-                var cs = chatStore();
-                var contacts = cs && cs.getContacts ? cs.getContacts('all') : [];
-                if (contacts && contacts.length) {
-                    var c = contacts[0];
-                    var chat = ensureChatForContact(c.id);
-                    if (chat) {
-                        openWithChat(String(chat.id), String(c.id));
-                        applyOfflineBeautify();
-                        return;
-                    }
-                }
-                toast('还没有可登场的人，请先在聊天里添加联系人');
-                closeApp();
+                render();
+                applyOfflineBeautify();
             })
-            .catch(function () {
-                closeApp();
-            });
+            .catch(function () {});
     }
 
     function closeApp() {

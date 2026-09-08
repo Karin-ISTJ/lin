@@ -1182,7 +1182,36 @@
   }
 
   function setViewOnOpen() {
-    showPickView();
+    var st = store();
+    var cs = chatStore();
+    if (!st || !cs) {
+      toast('线下页面加载失败');
+      return;
+    }
+
+    var contacts = (cs.getContacts && cs.getContacts() || []).filter(function (c) {
+      return c && c.id && !c.isGroup;
+    });
+
+    st.getMeta().then(function (meta) {
+      var lastId = String((meta && meta.lastContactId) || '').trim();
+      var contact = lastId ? getContact(lastId) : null;
+
+      if (!contact || contact.isGroup) {
+        contact = contacts[0] || null;
+      }
+
+      if (!contact) {
+        toast('还没有可进入的角色');
+        return;
+      }
+
+      enterPhone(contact.id);
+    }).catch(function () {
+      var fallback = contacts[0] || null;
+      if (fallback) enterPhone(fallback.id);
+      else toast('还没有可进入的角色');
+    });
   }
 
   function bindEvents() {
