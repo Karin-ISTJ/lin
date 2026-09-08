@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-miya-desk-layout="custom">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
@@ -251,6 +251,14 @@
 
   })();
   </script>
+  <script>
+  (function () {
+    try {
+      document.documentElement.setAttribute('data-miya-desk-layout', 'custom');
+      try { localStorage.setItem('miya-desk-layout-mode', 'custom'); } catch (e0) {}
+    } catch (e) {}
+  })();
+  </script>
 </head>
 <body class="miya-mode-phone">
   <!-- 锁屏 -->
@@ -328,440 +336,7 @@
     </div>
 
     <div class="desk-shell">
-      <div class="desk-viewport" id="desk-viewport">
-        <div class="desk-track" id="desk-track">
-    <main class="desk desk--p1">
-      <!-- 个人名片 -->
-      <section class="p1-hero" aria-label="个人名片">
-        <article class="wg wg-profile" id="wg-profile" aria-label="个人名片">
-          <div class="wg-profile__cover" aria-hidden="true">
-            <div class="wg-profile__cover-bg"></div>
-          </div>
-          <div class="wg-profile__body">
-            <div class="wg-profile__avatar" id="wg-profile-avatar" aria-hidden="true"></div>
-            <div class="wg-profile__info">
-              <h2 class="wg-profile__name" data-miya-copy="profileName">半醒手记</h2>
-              <p class="wg-profile__bio" data-miya-copy="profileBio">白日太长，适合慢慢过</p>
-            </div>
-            <div class="itinerary-home-status" id="itinerary-home-status" hidden aria-live="polite">
-              <span id="itinerary-home-status-text"></span>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <!-- 双头像 MEMO + 四应用 -->
-      <div class="p1-dock">
-        <article class="wg wg-memo" aria-label="MEMO">
-          <div class="wg-memo__pair">
-            <div class="wg-memo__person">
-              <p class="wg-memo__bubble" data-miya-copy="memoLine1"><span class="wg-memo__label">01</span> 猫在键盘上踩字</p>
-              <div class="wg-memo__ava" aria-hidden="true"></div>
-            </div>
-            <div class="wg-memo__person">
-              <p class="wg-memo__bubble" data-miya-copy="memoLine2"><span class="wg-memo__label">02</span> 冰箱还有布丁</p>
-              <div class="wg-memo__ava" aria-hidden="true"></div>
-            </div>
-          </div>
-          <div class="wg-memo__days">
-            <span class="wg-memo__wing wg-memo__wing--l" aria-hidden="true"></span>
-            <p class="wg-memo__pill" data-miya-copy="memoLine3"><span class="wg-memo__label">03</span> 别忘记交电费</p>
-            <span class="wg-memo__wing wg-memo__wing--r" aria-hidden="true"></span>
-          </div>
-        </article>
-        <button class="ic ic--dock1" data-app="music"><span class="ic__box glass" data-i="music"></span><span class="ic__lbl">音乐</span></button>
-        <button class="ic ic--dock3" data-app="set"><span class="ic__box glass" data-i="set"></span><span class="ic__lbl">设置</span></button>
-        <button class="ic ic--dock4" data-app="book"><span class="ic__box glass" data-i="book"></span><span class="ic__lbl">世界书</span></button>
-      </div>
-
-      <!-- 下方应用 + 叠放拍立得 -->
-      <button class="ic" data-app="memory"><span class="ic__box glass" data-i="memory"></span><span class="ic__lbl">记忆</span></button>
-      <button class="ic" data-app="stpreset"><span class="ic__box glass" data-i="book"></span><span class="ic__lbl">ST预设</span></button>
-      <button class="ic" data-app="chat"><span class="ic__box glass" data-i="chat"></span><span class="ic__lbl">聊天</span></button>
-
-      <article class="wg wg-polaroid" aria-label="拍立得">
-        <div class="wg-polaroid__stack">
-          <div class="wg-polaroid__card wg-polaroid__card--3" aria-hidden="true">
-            <div class="wg-polaroid__photo"></div>
-            <p class="wg-polaroid__cap" data-miya-copy="polaroidCap3">archive · 02</p>
-          </div>
-          <div class="wg-polaroid__card wg-polaroid__card--2" aria-hidden="true">
-            <div class="wg-polaroid__photo wg-polaroid__photo--b"></div>
-            <p class="wg-polaroid__cap" data-miya-copy="polaroidCap2">window seat</p>
-          </div>
-          <div class="wg-polaroid__card wg-polaroid__card--1">
-            <span class="wg-polaroid__tape" aria-hidden="true"></span>
-            <div class="wg-polaroid__photo wg-polaroid__photo--c"></div>
-            <p class="wg-polaroid__cap" data-miya-copy="polaroidCap1">三楼拐角见</p>
-            <span class="wg-polaroid__date" data-miya-copy="polaroidDate">24.06.02</span>
-          </div>
-        </div>
-      </article>
-
-      <button class="ic" data-app="beauty"><span class="ic__box glass" data-i="beauty"></span><span class="ic__lbl">美化</span></button>
-      <button class="ic" data-app="store"><span class="ic__box glass" data-i="store"></span><span class="ic__lbl">线下</span></button>
-    </main>
-
-    <!-- 第二页 · 底片匣手帐 -->
-    <main class="desk desk--p2" aria-label="主屏幕第二页">
-      <div class="p2f-board" id="p2f-board">
-        <div class="p2f-board__art" aria-hidden="true"></div>
-        <div class="p2f-board__grain" aria-hidden="true"></div>
-
-        <header class="p2f-head">
-          <div class="p2f-head__brand">
-            <span class="p2f-head__tape" aria-hidden="true"></span>
-            <p class="p2f-head__vol" data-miya-copy="p2fVol">Vol. 02 · Scrap</p>
-            <h2 class="p2f-head__title" data-miya-copy="p2fTitle">底片匣</h2>
-            <p class="p2f-head__sub" data-miya-copy="p2fSub">Film Journal · 手帐拼贴</p>
-          </div>
-          <div class="p2f-head__meta">
-            <div class="p2f-datechip" aria-label="今日日期">
-              <time class="p2f-datechip__day" id="p2f-date-day">15</time>
-              <span class="p2f-datechip__meta" id="p2f-date-meta">JUN · SAT</span>
-            </div>
-            <div class="p2f-canister">
-              <div class="p2f-canister__lid">
-                <div class="p2f-canister__art"></div>
-                <span class="p2f-canister__lbl" data-miya-copy="p2fCanisterLbl">400TX</span>
-              </div>
-              <div class="p2f-canister__body">
-                <span class="p2f-canister__slot"></span>
-                <span class="p2f-canister__slot"></span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div class="p2f-tape-deco" aria-hidden="true">
-          <div class="p2f-tape-deco__art"></div>
-          <span class="p2f-tape-deco__strip"></span>
-        </div>
-
-        <section class="p2f-zone p2f-zone--polaroids" aria-label="拍立得">
-          <div class="p2f-polaroids">
-            <article class="p2f-polaroid p2f-polaroid--1" data-p2f-flip tabindex="0" role="button" aria-label="拍立得 1 · 点击翻转">
-              <div class="p2f-polaroid__inner">
-                <div class="p2f-polaroid__face p2f-polaroid__face--front">
-                  <div class="p2f-polaroid__photo">
-                    <div class="p2f-polaroid__art"></div>
-                    <div class="p2f-polaroid__leak" aria-hidden="true"></div>
-                  </div>
-                  <p class="p2f-polaroid__cap" data-miya-copy="p2fPolaroidCap1">window seat</p>
-                </div>
-                <div class="p2f-polaroid__face p2f-polaroid__face--back">
-                  <p class="p2f-polaroid__note" data-miya-copy="p2fPolaroidBack1">remember this light</p>
-                </div>
-              </div>
-            </article>
-
-            <article class="p2f-polaroid p2f-polaroid--2" data-p2f-flip tabindex="0" role="button" aria-label="拍立得 2 · 点击翻转">
-              <div class="p2f-polaroid__inner">
-                <div class="p2f-polaroid__face p2f-polaroid__face--front">
-                  <div class="p2f-polaroid__photo">
-                    <div class="p2f-polaroid__art"></div>
-                  </div>
-                  <p class="p2f-polaroid__cap" data-miya-copy="p2fPolaroidCap2">after rain</p>
-                </div>
-                <div class="p2f-polaroid__face p2f-polaroid__face--back">
-                  <p class="p2f-polaroid__note" data-miya-copy="p2fPolaroidBack2">keep every frame</p>
-                </div>
-              </div>
-            </article>
-
-            <article class="p2f-polaroid p2f-polaroid--3" data-p2f-flip tabindex="0" role="button" aria-label="拍立得 3 · 点击翻转">
-              <div class="p2f-polaroid__inner">
-                <div class="p2f-polaroid__face p2f-polaroid__face--front">
-                  <div class="p2f-polaroid__photo">
-                    <div class="p2f-polaroid__art"></div>
-                  </div>
-                  <p class="p2f-polaroid__cap" data-miya-copy="p2fPolaroidCap3">archive · 02</p>
-                </div>
-                <div class="p2f-polaroid__face p2f-polaroid__face--back">
-                  <p class="p2f-polaroid__note" data-miya-copy="p2fPolaroidBack3">developed with care</p>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section class="p2f-zone p2f-zone--reel" aria-label="胶卷条">
-          <div class="p2f-reel-wrap">
-            <div class="p2f-reel__head">
-              <span class="p2f-reel__badge" data-miya-copy="p2fFilmStamp">35mm · Kodak</span>
-              <span class="p2f-reel__xray" data-miya-copy="p2fFilmNote">DO NOT X-RAY</span>
-            </div>
-            <div class="p2f-reel__perfs p2f-reel__perfs--t" aria-hidden="true"></div>
-            <div class="p2f-reel__viewport" id="p2f-reel-viewport">
-              <div class="p2f-reel__track" id="p2f-reel-track">
-                <div class="p2f-reel__frame p2f-reel__frame--1">
-                  <div class="p2f-reel__art"></div>
-                  <span class="p2f-reel__tc">00:01:12:04</span>
-                </div>
-                <div class="p2f-reel__frame p2f-reel__frame--2">
-                  <div class="p2f-reel__art"></div>
-                  <span class="p2f-reel__tc">00:01:17:15</span>
-                </div>
-                <div class="p2f-reel__frame p2f-reel__frame--3">
-                  <div class="p2f-reel__art"></div>
-                  <span class="p2f-reel__tc">00:01:22:08</span>
-                </div>
-                <div class="p2f-reel__frame p2f-reel__frame--4">
-                  <div class="p2f-reel__art"></div>
-                  <span class="p2f-reel__tc">00:01:27:02</span>
-                </div>
-              </div>
-            </div>
-            <div class="p2f-reel__perfs p2f-reel__perfs--b" aria-hidden="true"></div>
-          </div>
-        </section>
-
-        <section class="p2f-zone p2f-zone--notes">
-          <div class="p2f-memo">
-            <div class="p2f-memo__art"></div>
-            <p class="p2f-memo__text" data-miya-copy="p2fTapeNote">今日宜晒片</p>
-            <p class="p2f-memo__scribble" data-miya-copy="p2fScribble">light leaks & coffee stains</p>
-          </div>
-          <div class="p2f-aside">
-            <div class="p2f-stamp-cluster">
-              <div class="p2f-stamp-cluster__art"></div>
-              <span class="p2f-stamp-cluster__ring">
-                <em data-miya-copy="p2fStampText">已显影</em>
-              </span>
-            </div>
-            <div class="p2f-ticket-stack">
-              <div class="p2f-ticket-stack__art"></div>
-              <span class="p2f-ticket-stack__no" data-miya-copy="p2fTicketNo">A-0427</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="p2f-zone p2f-zone--apps" aria-label="应用">
-          <button class="tile tile--couple" data-app="couple" type="button">
-            <span class="tile__glyph">侣</span>
-            <span class="tile__name">情侣空间</span>
-            <span class="tile__hint" data-miya-copy="p2fTileCouple">Together</span>
-          </button>
-          <button class="tile tile--itinerary" data-app="itinerary" type="button">
-            <span class="tile__script" aria-hidden="true">itinerary</span>
-            <span class="tile__name">行程轨迹</span>
-            <span class="tile__hint">Trace</span>
-          </button>
-          <button class="tile tile--cstore" data-app="cstore" type="button">
-            <span class="tile__neon" aria-hidden="true">74</span>
-            <span class="tile__name">74号便利店</span>
-            <span class="tile__hint">No.74</span>
-          </button>
-</section>
-      </div>
-    </main>
-
-    <!-- 第三页 · 刊物切片交叠 -->
-    <main class="desk desk--p3" aria-label="主屏幕第三页">
-      <header class="p2-mast">
-        <p class="p2-mast__vol">Vol. 03</p>
-        <h2 class="p2-mast__title">侧写</h2>
-        <p class="p2-mast__sub" id="p2-meta">Fragments · 切片集</p>
-      </header>
-
-      <!-- 刊物封面小组件 -->
-      <article class="wg wg-folio" aria-label="刊物封面">
-        <div class="wg-folio__art" aria-hidden="true"></div>
-        <div class="wg-folio__grain" aria-hidden="true"></div>
-        <div class="wg-folio__frame" aria-hidden="true"></div>
-        <header class="wg-folio__head">
-          <span class="wg-folio__issue">ISSUE</span>
-          <span class="wg-folio__no">№ 07</span>
-        </header>
-        <div class="wg-folio__hero">
-          <p class="wg-folio__kicker" data-miya-copy="folioKicker">Late Night</p>
-          <h3 class="wg-folio__headline" data-miya-copy="folioHeadline">无人阅读的<br>最后一页</h3>
-        </div>
-        <footer class="wg-folio__foot">
-          <span class="wg-folio__tag">Editorial</span>
-          <span class="wg-folio__date" data-miya-copy="folioDate">Jun · 06</span>
-        </footer>
-        <span class="wg-folio__spine" aria-hidden="true"></span>
-      </article>
-
-      <div class="p2-gap">
-        <p class="p2-script" data-miya-copy="p2Script">still turning</p>
-      </div>
-
-      <!-- 胶片条小组件 -->
-      <article class="wg wg-reel" aria-label="胶片切片">
-        <div class="wg-reel__perfs wg-reel__perfs--t" aria-hidden="true"></div>
-        <div class="wg-reel__strip">
-          <div class="wg-reel__frame wg-reel__frame--a">
-            <span class="wg-reel__tc">00:12:04:08</span>
-            <p class="wg-reel__cap" data-miya-copy="reelCap1">走廊尽头的光</p>
-          </div>
-          <div class="wg-reel__frame wg-reel__frame--b">
-            <span class="wg-reel__tc">00:12:09:15</span>
-            <p class="wg-reel__cap" data-miya-copy="reelCap2">雨停之前</p>
-          </div>
-          <div class="wg-reel__frame wg-reel__frame--c">
-            <span class="wg-reel__tc">00:12:14:02</span>
-            <p class="wg-reel__cap" data-miya-copy="reelCap3">cut to black</p>
-          </div>
-        </div>
-        <div class="wg-reel__perfs wg-reel__perfs--b" aria-hidden="true"></div>
-        <span class="wg-reel__badge">35mm</span>
-      </article>
-
-      <!-- 应用 · 非图标形态 -->
-      <button class="tile tile--deep" data-app="deep" type="button">
-        <span class="tile__spine" aria-hidden="true"></span>
-        <span class="tile__glyph">深</span>
-        <span class="tile__name">深入</span>
-        <span class="tile__hint">Dive</span>
-      </button>
-
-      <button class="tile tile--note" data-app="notes" type="button">
-        <span class="tile__tear" aria-hidden="true"></span>
-        <span class="tile__line" aria-hidden="true"></span>
-        <span class="tile__name">日记</span>
-        <span class="tile__scribble" data-miya-copy="tileNoteScribble">今日一页…</span>
-      </button>
-<button class="tile tile--fun" data-app="fun" type="button">
-        <span class="tile__film" aria-hidden="true">
-          <span class="tile__film-bar"></span>
-        </span>
-        <span class="tile__name">娱乐</span>
-        <span class="tile__fun-ratio">2.39:1</span>
-      </button>
-
-      <!-- 账册切片 · 共鸣与记录之间的空白 -->
-      <article class="wg wg-ledger" id="wg-ledger" aria-label="账册切片">
-        <div class="wg-ledger__face">
-          <div class="wg-ledger__substrate" aria-hidden="true">
-            <div class="wg-ledger__leaf wg-ledger__leaf--3"></div>
-            <div class="wg-ledger__leaf wg-ledger__leaf--2"></div>
-          </div>
-
-          <div class="wg-ledger__sheet">
-            <div class="wg-ledger__grain" aria-hidden="true"></div>
-            <div class="wg-ledger__ruled" aria-hidden="true"></div>
-            <div class="wg-ledger__margin-line" aria-hidden="true"></div>
-            <div class="wg-ledger__foil" aria-hidden="true"></div>
-
-            <header class="wg-ledger__head">
-              <div class="wg-ledger__brand">
-                <span class="wg-ledger__eyebrow">Private Ledger</span>
-                <span class="wg-ledger__serial" id="ledger-serial">№ 2026·06</span>
-              </div>
-              <div class="wg-ledger__datechip">
-                <time class="wg-ledger__day" id="ledger-day">06</time>
-                <div class="wg-ledger__datemeta">
-                  <span id="ledger-mon">JUN</span>
-                  <span id="ledger-dow">SAT</span>
-                </div>
-              </div>
-            </header>
-
-            <div class="wg-ledger__cols" aria-hidden="true">
-              <span>DATE</span><span>ENTRY</span><span>AMT</span>
-            </div>
-
-            <ul class="wg-ledger__rows">
-              <li>
-                <span class="wg-ledger__row-date" id="ledger-row-d1">06</span>
-                <span class="wg-ledger__row-item" data-miya-copy="ledgerRow1">夜间咖啡</span>
-                <span class="wg-ledger__row-amt">−28</span>
-              </li>
-              <li>
-                <span class="wg-ledger__row-date">05</span>
-                <span class="wg-ledger__row-item" data-miya-copy="ledgerRow2">稿费入账</span>
-                <span class="wg-ledger__row-amt wg-ledger__row-amt--plus">+640</span>
-              </li>
-              <li>
-                <span class="wg-ledger__row-date">04</span>
-                <span class="wg-ledger__row-item" data-miya-copy="ledgerRow3">胶片冲洗</span>
-                <span class="wg-ledger__row-amt">−86</span>
-              </li>
-            </ul>
-
-            <footer class="wg-ledger__foot">
-              <span class="wg-ledger__balance-lbl">Balance</span>
-              <span class="wg-ledger__balance" data-miya-copy="ledgerBalance">526.00</span>
-              <span class="wg-ledger__currency">CNY</span>
-            </footer>
-
-            <div class="wg-ledger__seal" aria-hidden="true"><span>记</span></div>
-            <div class="wg-ledger__corner-mark" aria-hidden="true">◆</div>
-          </div>
-
-          <div class="wg-ledger__receipt" aria-hidden="true">
-            <div class="wg-ledger__receipt-perf"></div>
-            <span class="wg-ledger__receipt-tag">Receipt</span>
-            <span class="wg-ledger__receipt-line"></span>
-            <span class="wg-ledger__receipt-amt">28.00</span>
-          </div>
-
-          <div class="wg-ledger__clip" aria-hidden="true"></div>
-          <div class="wg-ledger__shadow" aria-hidden="true"></div>
-        </div>
-      </article>
-
-      <div class="p2-spacer" aria-hidden="true"></div>
-    </main>
-
-    <!-- 第四页 · 雾笺 · 朦胧半透明悬笺 -->
-    <main class="desk desk--p4" aria-label="主屏幕第四页">
-      <div class="p4-veil" aria-hidden="true">
-        <div class="p4-veil__art"></div>
-        <div class="p4-veil__wash"></div>
-        <div class="p4-veil__grain"></div>
-      </div>
-      <div class="p4-glow" aria-hidden="true">
-        <div class="p4-glow__art"></div>
-      </div>
-
-      <div class="p4-stage">
-        <header class="p4-top">
-          <p class="p4-top__brace" data-miya-copy="p4Vol">{ 雾 }</p>
-          <h2 class="p4-top__title" data-miya-copy="p4Title">雾笺</h2>
-          <p class="p4-top__en" data-miya-copy="p4Sub">soft mist · iv</p>
-        </header>
-
-        <section class="p4-hang" aria-label="悬笺">
-          <svg class="p4-hang__wire" viewBox="0 0 340 36" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M6 20 C 48 6, 92 30, 140 14 S 230 4, 280 22 S 318 28, 334 16" fill="none" stroke="rgba(255,255,255,0.78)" stroke-width="1.15" stroke-linecap="round"/>
-          </svg>
-</section>
-
-        <div class="p4-mid">
-          <button class="p4-frame" data-app="theater" type="button" aria-label="剧场">
-            <span class="p4-frame__art" aria-hidden="true"></span>
-            <span class="p4-frame__rim" aria-hidden="true"></span>
-            <span class="p4-frame__shade" aria-hidden="true"></span>
-            <span class="p4-frame__tag" data-miya-copy="p4TheaterTag">剧场</span>
-            <span class="p4-frame__meta" data-miya-copy="p4TheaterMeta">夜场</span>
-          </button>
-
-          <div class="p4-aside">
-            <p class="p4-verse" data-miya-copy="p4Quote">雨把时间放慢了一点</p>
-            <article class="p4-polar" aria-label="雾窗">
-              <div class="p4-polar__art"></div>
-              <div class="p4-polar__veil"></div>
-            </article>
-            <article class="p4-chip" aria-label="小笺">
-              <div class="p4-chip__art"></div>
-              <p class="p4-chip__text" data-miya-copy="p4ChipText">慢</p>
-            </article>
-          </div>
-        </div>
-
-        <div class="p4-rail" id="p4-haze-rail">
-          <span class="p4-rail__track" id="p4-haze-track"></span>
-          <button type="button" class="p4-rail__knob" id="p4-haze-knob" aria-label="调节雾感"></button>
-        </div>
-      </div>
-    </main>
-        </div>
-      </div>
-
-      <div class="desk-custom-viewport" id="desk-custom-viewport" hidden aria-label="自定义主屏幕">
+      <div class="desk-custom-viewport" id="desk-custom-viewport" aria-label="自定义主屏幕">
         <div class="desk-custom-track" id="desk-custom-track"></div>
         <button type="button" class="desk-custom-add-wg" id="desk-custom-add-wg" hidden aria-label="添加小组件">+</button>
       </div>
@@ -800,17 +375,9 @@
         <button type="button" class="desk-pager__dot" data-desk-page="2" aria-label="第三页"></button>
         <button type="button" class="desk-pager__dot" data-desk-page="3" aria-label="第四页"></button>
       </nav>
-      <nav class="foot__dock glass" aria-label="程序坞">
+      <nav class="foot__dock glass foot__dock--custom" aria-label="程序坞">
         <button type="button" class="foot__dock-dismiss" aria-label="隐藏程序坞" tabindex="-1"></button>
-        <button class="foot__dock-item" data-app="contacts">
-          <span class="foot__dock-btn"><span data-i="contacts"></span></span>
-          <span class="foot__dock-lbl">联系人</span>
-        </button>
-        <button class="foot__dock-item" data-app="pet">
-          <span class="foot__dock-btn"><span data-i="pet"></span></span>
-          <span class="foot__dock-lbl">打字机</span>
-        </button>
-</nav>
+      </nav>
     </footer>
   </div>
 
@@ -884,13 +451,9 @@
             <div class="ins-atelier-splash-card__head">
               <p class="ins-atelier-panel-kicker">00 · 布局</p>
               <h2 class="ins-atelier-panel-title">主屏幕布局</h2>
-              <p class="ins-atelier-panel-desc">固定布局为四页杂志风桌面；自定义布局为 4×7 图标网格，长按拖动至任意空格或与其他图标互换位置。</p>
+              <p class="ins-atelier-panel-desc">自定义主屏幕：4×7 图标网格，长按拖动至任意空格或与其他图标互换位置。</p>
             </div>
-            <div class="ins-layout-pick" id="miya-bf-layout-pick" role="group" aria-label="主屏幕布局模式">
-              <button type="button" class="ins-layout-pick__btn is-active" data-bf-layout="fixed">固定布局</button>
-              <button type="button" class="ins-layout-pick__btn" data-bf-layout="custom">自定义布局</button>
-            </div>
-            <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-layout-hint">外观方案预设仅作用于固定布局</p>
+            <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-layout-hint">当前为自定义布局（4×7 图标网格）</p>
           </article>
 
 
@@ -981,8 +544,8 @@
           </div>
           <p class="ins-atelier-panel-desc is-fixed-layout-only">第一页 · 标准图标</p>
           <div class="ins-tile-mosaic ins-tile-mosaic--pick is-fixed-layout-only" id="miya-bf-icon-grid"></div>
-          <p class="ins-atelier-panel-desc is-custom-layout-only" hidden>自定义布局 · 全部应用图标</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--pick is-custom-layout-only" id="miya-bf-custom-icon-grid" hidden></div>
+          <p class="ins-atelier-panel-desc is-custom-layout-only">自定义布局 · 全部应用图标</p>
+          <div class="ins-tile-mosaic ins-tile-mosaic--pick is-custom-layout-only" id="miya-bf-custom-icon-grid"></div>
           <div class="ins-url-replace ins-url-replace--panel">
             <span class="ins-field-label" id="miya-bf-icon-url-label">链接替换</span>
             <input type="url" class="ins-text-input" id="miya-bf-icon-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
@@ -1044,7 +607,7 @@
             <button type="button" class="ins-chip" id="miya-bf-p4-widget-url-apply">应用链接</button>
           </div>
           </div>
-          <div class="is-custom-layout-only" hidden>
+          <div class="is-custom-layout-only">
             <p class="ins-atelier-panel-kicker">03 · 组件</p>
             <h2 class="ins-atelier-panel-title">桌面小组件</h2>
             <p class="ins-atelier-panel-desc">自定义布局可用组件一览；回到主屏点按小组件即可编辑内容与图片，每个实例独立保存。</p>

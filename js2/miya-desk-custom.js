@@ -2485,11 +2485,9 @@
       if (customThemeState) mergeThemeFromRaw(rows[0]);
       else applyThemeFromRaw(rows[0]);
       hydratePresetsFromRaw(rows[1]);
-      var mode = parseLayoutModeValue(rows[2]) || readLayoutModeFromLsPlain() || 'fixed';
+      var mode = 'custom';
       layoutModeCache = mode;
-      if (parseLayoutModeValue(rows[2]) == null && readLayoutModeFromLsPlain()) {
-        persistLayoutMode(mode);
-      }
+      try { persistLayoutMode('custom'); } catch (eForceMode) {}
       var tpl = getCustomWgTpl();
       var ready = tpl && tpl.whenReady ? tpl.whenReady() : Promise.resolve([]);
       return ready.then(function () {
@@ -4417,30 +4415,21 @@
   }
 
   function updateLayoutVisibility(mode) {
-    var isCustom = mode === 'custom';
-    if (!isCustom && editMode) exitEditMode();
-    var fixedVp = $('desk-viewport');
     var customVp = $('desk-custom-viewport');
-    if (fixedVp) fixedVp.hidden = isCustom;
-    if (customVp) customVp.hidden = !isCustom;
-    if (isCustom) paintCustomPager();
-    else restoreFixedPager();
-    document.documentElement.dataset.miyaDeskLayout = mode;
-    if (isCustom) { captureFixedDock(); renderCustomLayout(); }
-    else restoreFixedDock();
+    if (customVp) customVp.hidden = false;
+    paintCustomPager();
+    document.documentElement.dataset.miyaDeskLayout = 'custom';
+    captureFixedDock();
+    renderCustomLayout();
   }
 
   function applyActiveLayout() {
-    var mode = getLayoutMode();
-    updateLayoutVisibility(mode);
-    if (mode === 'custom') return applyCustomDeskTheme();
-    document.documentElement.classList.remove('miya-custom-desk-icon-frameless');
-    if (global.miyaApplyTheme) return global.miyaApplyTheme(global.miyaGetTheme && global.miyaGetTheme());
-    return Promise.resolve();
+    updateLayoutVisibility('custom');
+    return applyCustomDeskTheme();
   }
 
   function switchDeskLayout(mode) {
-    setLayoutMode(mode);
+    setLayoutMode('custom');
     return applyActiveLayout();
   }
 

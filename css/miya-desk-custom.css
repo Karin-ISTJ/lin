@@ -271,6 +271,15 @@ html[data-miya-desk-layout="custom"] .desk-viewport {
   visibility: hidden !important;
 }
 
+/* 自定义布局就绪前，隐藏固定程序坞，避免闪一下默认图标 */
+html[data-miya-desk-layout="custom"] .foot__dock:not(.foot__dock--custom) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html[data-miya-desk-layout="custom"] .foot__dock.foot__dock--custom {
+  opacity: 1;
+}
+
 html[data-miya-desk-layout="custom"] .desk-pager {
   display: flex !important;
   align-items: center;
@@ -1290,4 +1299,15 @@ html.is-custom-wg-editing .desk-custom-viewport {
   width: 40px;
   height: 40px;
   border-radius: 12px;
+}
+
+/* 已移除固定主屏幕：美化面板只保留自定义布局相关 */
+.is-fixed-layout-only {
+  display: none !important;
+}
+.is-custom-layout-only {
+  display: block !important;
+}
+.ins-tile-mosaic.is-custom-layout-only {
+  display: grid !important;
 }
