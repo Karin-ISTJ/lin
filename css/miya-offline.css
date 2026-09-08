@@ -1742,3 +1742,14 @@
 
 /* v38 floor/chat-record mode */
 .xw-floor{position:relative;margin:0 0 14px}.xw-floor__head{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:3px 6px;opacity:.72;font-size:12px}.xw-floor__tools{display:flex;gap:4px}.xw-floor__tool{width:28px;height:28px;border:0;background:transparent;padding:5px;border-radius:8px;cursor:pointer}.xw-floor__tool svg{width:100%;height:100%}.xw-floor.is-floor-hidden>.xw-block,.xw-floor.is-floor-hidden>.xw-chat{display:none!important}.xw-floor.is-floor-hidden:after{content:'这一层已隐藏 · 点击眼睛显示';display:block;padding:12px 14px;border:1px dashed currentColor;opacity:.42;border-radius:10px;font-size:12px}.xw-vault__head{display:flex;align-items:center;justify-content:space-between;gap:12px}.xw-vault__actions{display:flex;gap:6px;flex-wrap:wrap}.xw-vault-card__actions{display:flex;align-items:center;gap:4px;padding:0 10px 10px}.xw-vault-card__mini{border:0;background:transparent;font-size:11px;padding:4px 6px;cursor:pointer;opacity:.72}
+
+
+/* v39: 顶部工具栏布局优化 */
+.xw-journal-bar__tools{display:flex;align-items:center;gap:2px;margin-left:auto;flex:0 0 auto}
+.xw-journal-bar__ico{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;border-radius:10px;padding:7px;cursor:pointer;opacity:.82}
+.xw-journal-bar__ico:active{background:rgba(0,0,0,.055);transform:scale(.96)}
+.xw-journal-bar__ico svg{width:100%;height:100%}
+.xw-status-fab{display:none!important}
+.xw-vault__head{position:sticky;top:0;z-index:3;padding:8px 0 12px;background:var(--xw-paper,#fff)}
+.xw-vault__actions{justify-content:flex-end}
+@media (max-width:560px){.xw-journal-bar__ico{width:34px;height:34px}.xw-vault__head{gap:8px}.xw-vault__actions{gap:4px}}

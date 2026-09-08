@@ -69,7 +69,6 @@
     '| `.xw-dock__lbl` | 按钮标签 |',
     '| `#xw-dock-beautify` | 样式 |',
     '| `#xw-dock-prefs` | 调参 |',
-    '| `#xw-dock-seal` | 封存 |',
     '| `#xw-dock-vault` | 卷宗 |',
     '',
     '---',

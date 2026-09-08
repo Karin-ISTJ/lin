@@ -746,8 +746,6 @@
                 renderDockBeautifyBtn() +
                 '<button type="button" class="xw-dock__btn" id="xw-dock-prefs" title="现场参数">' +
                 '<span class="xw-dock__glyph">参</span><span class="xw-dock__lbl">调参</span></button>' +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-seal" title="封存本场景">' +
-                '<span class="xw-dock__glyph">封</span><span class="xw-dock__lbl">封存</span></button>' +
                 '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="往日场景">' +
                 '<span class="xw-dock__glyph">档</span><span class="xw-dock__lbl">卷宗</span></button>';
         } else {
@@ -803,8 +801,8 @@
         }
         if (ui.view === 'story' && !ui.viewingArchive) {
             toolHtml +=
-                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-seal" title="封存" aria-label="封存">' +
-                ICON_SEAL + '</button>';
+                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
+                ICON_SET + '</button>';
         }
         toolHtml +=
             '<button type="button" class="xw-journal-bar__ico" id="xw-dock-beautify" title="样式" aria-label="样式">' +
@@ -1944,8 +1942,6 @@ function renderWriter() {
             ICON_UNDO + '</button>' +
             '<div class="xw-journal-writer__input">' +
             '<textarea class="xw-journal-writer__field" id="xw-writer-input" rows="1" placeholder="输入消息..."></textarea></div>' +
-            '<button type="button" class="xw-journal-writer__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
-            ICON_SET + '</button>' +
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
             ICON_SEND + '</button></footer>'
         );
@@ -3202,15 +3198,6 @@ function renderWriter() {
         if (dockExpand) {
             dockExpand.addEventListener('click', function () {
                 setDockCollapsed(false);
-            });
-        }
-
-        var sealBtn = $('xw-dock-seal');
-        if (sealBtn) {
-            sealBtn.addEventListener('click', function () {
-                if (ui.view !== 'story' || ui.viewingArchive) return;
-                if (!sealActiveSession()) return;
-                leaveStoryToPick();
             });
         }
 

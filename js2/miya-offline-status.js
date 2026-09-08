@@ -1259,13 +1259,12 @@
     }
 
     function syncFab(visible) {
-        ensureFab();
-        if (!fabEl) return;
-        applyFabAppearance();
-        var show = !!visible && isEnabled();
-        fabEl.hidden = !show;
-        fabEl.setAttribute('aria-hidden', show ? 'false' : 'true');
-        fabEl.classList.toggle('is-show', show);
+        // 线下状态悬浮圆钮已移除；状态栏本身仍可按原逻辑工作。
+        if (fabEl) {
+            fabEl.hidden = true;
+            fabEl.setAttribute('aria-hidden', 'true');
+            fabEl.classList.remove('is-show');
+        }
     }
 
     function hideAll() {
