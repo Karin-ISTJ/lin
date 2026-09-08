@@ -3415,15 +3415,27 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
-        ui.view = 'pick';
+
+        /* 线下入口不再经过「选择角色」页：优先沿用当前线上聊天对应的角色。
+         * 如果当前没有打开聊天，则取最近可用角色；随后直接进入线下正文页，
+         * 并自动续接该角色尚未封存的线下场次。 */
+        var pendingChatId = '';
+        try {
+            if (global.miyaChatRoom && typeof global.miyaChatRoom.getOpenChatId === 'function') {
+                pendingChatId = String(global.miyaChatRoom.getOpenChatId() || '').trim();
+            }
+        } catch (e) {}
+
+        ui.view = 'story';
         ui.chatId = '';
+        ui.contactId = '';
         ui.sessionId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.pickSelected = [];
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
-        render();
+
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
@@ -3444,11 +3456,29 @@ function renderWriter() {
                 return global.MiyaOfflineBeautify.whenPresetsReady();
             });
         }
-        /* 封存记录以本地落盘为准；勿每次进入都从线上镜像自动重建。
-         * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
         hydrate
             .then(function () {
-                render();
+                var chat = null;
+                if (pendingChatId && global.miyaChatStore) {
+                    chat = global.miyaChatStore.findChat(pendingChatId);
+                }
+                if (!chat && global.miyaChatStore && typeof global.miyaChatStore.getContacts === 'function') {
+                    var contacts = global.miyaChatStore.getContacts('all') || [];
+                    if (contacts.length) {
+                        chat = ensureChatForContact(contacts[0].id);
+                    }
+                }
+                if (chat && chat.id && chat.contactId) {
+                    openWithChat(String(chat.id), String(chat.contactId));
+                } else {
+                    /* 没有可用角色时才保留提示，不再渲染角色选择页面。 */
+                    ui.view = 'story';
+                    ui.chatId = '';
+                    ui.contactId = '';
+                    ui.sessionId = '';
+                    render();
+                    toast('暂无可用角色');
+                }
                 applyOfflineBeautify();
             })
             .catch(function () {});
