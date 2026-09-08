@@ -709,7 +709,6 @@
     function syncDockCollapsedUi() {
         var app = document.getElementById('miya-offline-app');
         var collapsed = !!ui.dockCollapsed;
-        if (app) app.classList.toggle('xw-dock-collapsed', collapsed);
         var dock = document.querySelector('#xw-root .xw-dock');
         var expand = $('xw-dock-expand');
         if (dock) {
@@ -758,7 +757,7 @@
             return '';
         }
         return (
-            '<nav class="xw-dock xw-dock--top" aria-label="' +
+            '<nav class="xw-dock xw-dock--bottom" aria-label="' +
             aria +
             '">' +
             navInner +
@@ -1874,6 +1873,9 @@
             '</div>';
 
         bindEvents();
+        document.querySelectorAll('#miya-offline-app .xw-writer__field, #miya-offline-app .xw-journal-writer__field').forEach(function (input) {
+            input.setAttribute('placeholder', '');
+        });
         syncDockCollapsedUi();
         hydrateOfflineAvatars(root);
         if (ui.view === 'story' && ui.chatId && ui.sessionId) {
@@ -1937,7 +1939,7 @@ function renderWriter() {
             '<button type="button" class="xw-journal-writer__plus" id="xw-writer-undo" title="重回" aria-label="重回">' +
             ICON_UNDO + '</button>' +
             '<div class="xw-journal-writer__input">' +
-            '<textarea class="xw-journal-writer__field" id="xw-writer-input" rows="1" placeholder="输入消息..."></textarea></div>' +
+            '<textarea class="xw-journal-writer__field" id="xw-writer-input" rows="1" placeholder=""></textarea></div>' +
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
             ICON_SEND + '</button></footer>'
         );
