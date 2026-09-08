@@ -723,7 +723,6 @@
     }
 
     function renderDock() {
-        // 51版：故事页的三个功能全部收进底部四角星，顶部旧工具栏彻底不渲染。
         if (isJournalTheme()) return '';
         if (ui.view === 'story' && !ui.viewingArchive) return '';
         var navInner = '';
@@ -1854,16 +1853,16 @@
         };
     }
 
+    var OFFLINE_AI_STAR_SVG =
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="12,4 14.5,9.5 20,12 14.5,14.5 12,20 9.5,14.5 4,12 9.5,9.5"/>' +
+        '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="18,5 18.7,6.5 20,7 18.7,7.5 18,9 17.3,7.5 16,7 17.3,6.5"/>' +
+        '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="6.5,16.5 7.1,17.6 8,18 7.1,18.4 6.5,19.5 5.9,18.4 5,18 5.9,17.6"/>' +
+        '</svg>';
+
 function renderWriter() {
         return (
             '<footer class="xw-writer">' +
-            '<div class="xw-writer__tools">' +
-            '<button type="button" class="xw-writer__tools-toggle" id="xw-writer-tools-toggle" title="更多功能" aria-label="更多功能" aria-expanded="false">' + AI_STAR_SVG + '</button>' +
-            '<div class="xw-writer__tools-menu" id="xw-writer-tools-menu" hidden aria-hidden="true">' +
-            '<button type="button" class="xw-writer__tool" data-writer-tool="beautify" title="现场样式"><span>式</span><em>样式</em></button>' +
-            '<button type="button" class="xw-writer__tool" data-writer-tool="prefs" title="现场参数"><span>参</span><em>调参</em></button>' +
-            '<button type="button" class="xw-writer__tool" data-writer-tool="vault" title="往日场景"><span>档</span><em>卷宗</em></button>' +
-            '</div></div>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
@@ -3133,51 +3132,6 @@ function renderWriter() {
                 }
                 closeApp();
             };
-        }
-
-        var writerToolsToggle = $('xw-writer-tools-toggle');
-        var writerToolsMenu = $('xw-writer-tools-menu');
-        if (writerToolsToggle && writerToolsMenu) {
-            writerToolsToggle.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var open = !writerToolsMenu.hidden;
-                writerToolsMenu.hidden = open;
-                writerToolsMenu.setAttribute('aria-hidden', open ? 'true' : 'false');
-                writerToolsToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-            });
-            writerToolsMenu.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var btn = e.target.closest('.xw-writer__tool');
-                if (!btn) return;
-                writerToolsMenu.hidden = true;
-                writerToolsMenu.setAttribute('aria-hidden', 'true');
-                writerToolsToggle.setAttribute('aria-expanded', 'false');
-                var action = btn.getAttribute('data-writer-tool');
-                if (action === 'prefs') {
-                    openSettingsSheet();
-                } else if (action === 'beautify') {
-                    if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.openBeautifyDrawer) {
-                        global.MiyaOfflineBeautify.openBeautifyDrawer();
-                    } else {
-                        toast('样式模块未加载');
-                    }
-                } else if (action === 'vault') {
-                    if (ui.view === 'history') {
-                        restoreToLiveStory();
-                    } else {
-                        ui.view = 'history';
-                        ui.viewingArchive = false;
-                        render();
-                    }
-                }
-            });
-            document.addEventListener('click', function (e) {
-                if (!e.target.closest('#xw-writer-tools-menu') && !e.target.closest('#xw-writer-tools-toggle')) {
-                    writerToolsMenu.hidden = true;
-                    writerToolsMenu.setAttribute('aria-hidden', 'true');
-                    writerToolsToggle.setAttribute('aria-expanded', 'false');
-                }
-            });
         }
 
         var dockEl = document.querySelector('#xw-root .xw-dock');
