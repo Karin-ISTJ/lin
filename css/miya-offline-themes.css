@@ -241,7 +241,6 @@
    共享 · 主题内居中宽栏
    ═══════════════════════════════════════════════════════════ */
 
-.miya-offline-app.xw-theme-korean .xw-hub,
 .miya-offline-app.xw-theme-korean .xw-vault {
   max-width: min(100%, 480px);
   margin-left: auto;
@@ -953,68 +952,7 @@
   margin-bottom: 0;
 }
 
-/* ── 选角 / 卷宗 ── */
-.miya-offline-app.xw-theme-korean .xw-hub--journal {
-  padding: 12px 14px 32px;
-}
-
-.miya-offline-app.xw-theme-korean .xw-hub__brand {
-  text-align: center;
-  font-size: 10px;
-  letter-spacing: 0.24em;
-  color: var(--xw-soft);
-}
-
-.miya-offline-app.xw-theme-korean .xw-hub__title {
-  text-align: center;
-  font-family: var(--xw-display);
-  font-size: 28px;
-  font-weight: 400;
-  margin: 0 0 20px;
-}
-
-.miya-offline-app.xw-theme-korean .xw-cast {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-  overflow: visible;
-  padding: 0;
-}
-
-.miya-offline-app.xw-theme-korean .xw-cast-node {
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--xw-paper);
-  border: 1px solid var(--xw-hair);
-  border-radius: 16px;
-  box-shadow: var(--xw-shadow);
-  animation: none;
-  transform: none;
-}
-
-.miya-offline-app.xw-theme-korean .xw-cast-node__ring { display: none; }
-
-.miya-offline-app.xw-theme-korean .xw-cast-node__face {
-  width: 44px;
-  height: 44px;
-  border: 2px solid #fff;
-}
-
-.miya-offline-app.xw-theme-korean .xw-cast-node__name {
-  font-family: var(--xw-display);
-  font-size: 16px;
-}
-
-.miya-offline-app.xw-theme-korean .xw-hub__foot {
-  text-align: center;
-  font-size: 11px;
-  color: var(--xw-soft);
-  margin-top: 18px;
-}
-
+/* ── 卷宗 ── */
 .miya-offline-app.xw-theme-korean .xw-vault__grid {
   grid-template-columns: 1fr;
   gap: 12px;
@@ -1096,28 +1034,6 @@
   border-radius: 10px;
   overflow: hidden;
   margin: 8px 0;
-}
-
-/* 多人选角高亮（手帐） */
-.miya-offline-app.xw-theme-korean .xw-cast-node.is-on {
-  outline: 2px solid #1c1c1e;
-  outline-offset: 2px;
-}
-.miya-offline-app.xw-theme-korean .xw-hub__start {
-  background: #262626;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-family: var(--xw-sans);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0;
-  padding: 14px 28px;
-  box-shadow: none;
-}
-.miya-offline-app.xw-theme-korean .xw-hub__start:active {
-  opacity: 0.78;
-  transform: scale(0.98);
 }
 
 /* ════════════════════════════════════════

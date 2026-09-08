@@ -2,7 +2,7 @@
     'use strict';
 
     var ui = {
-        view: 'pick',
+        view: 'history',
         chatId: '',
         contactId: '',
         sessionId: '',
@@ -301,15 +301,13 @@
         var st = chatStore();
         if (!st) return;
 
-        root.querySelectorAll('[data-ap-toggle], [data-ap-contact]').forEach(function (node) {
+        root.querySelectorAll('[data-ap-contact]').forEach(function (node) {
             var cid =
-                node.getAttribute('data-ap-toggle') ||
                 node.getAttribute('data-ap-contact') ||
                 '';
             var contact = cid && st.findContact ? st.findContact(cid) : null;
             var img =
-                node.querySelector('.xw-cast-node__face') ||
-                (node.tagName === 'IMG' ? node : null);
+                node.tagName === 'IMG' ? node : null;
             hydrateOfflineContactAvatar(contact, img);
         });
 
@@ -3352,9 +3350,6 @@ function renderWriter() {
         ui.status = 'idle';
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
 
-        /* 线下入口不再经过“今天和谁见面”角色选择页。
-         * 从线上聊天进入时，直接沿用当前打开的聊天/角色；
-         * 从功能总菜单进入时，没有当前聊天则直接进入卷宗。 */
         var currentChatId = '';
         if (global.miyaChatRoom && typeof global.miyaChatRoom.getOpenChatId === 'function') {
             currentChatId = String(global.miyaChatRoom.getOpenChatId() || '').trim();
