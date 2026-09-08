@@ -138,6 +138,7 @@
   };
   var mainListScrollPos = 0;
   var panelClosing = false;
+  var returnToContactSettings = false;
   var apiConfigCache = null;
   var apiConfigHydrated = false;
   var apiPresetsCache = null;
@@ -2214,6 +2215,11 @@
     });
 
     onClick('miya-st-panel-header-back', function () {
+      if (returnToContactSettings) {
+        returnToContactSettings = false;
+        closeSettingsApp();
+        return;
+      }
       showMainList();
     });
 
@@ -2527,10 +2533,11 @@
     }
   }
 
-  function openSettingsApp(panelId) {
+  function openSettingsApp(panelId, returnTarget) {
     var app = $('miya-settings-app');
     if (!app) return;
     panelClosing = false;
+    returnToContactSettings = returnTarget === 'contact-settings';
     app.classList.remove('is-panel-returning');
     app.classList.add('is-open');
     app.setAttribute('aria-hidden', 'false');
@@ -2574,6 +2581,7 @@
     var app = $('miya-settings-app');
     if (!app) return;
     panelClosing = false;
+    returnToContactSettings = false;
     if (storageSummaryTimer) {
       clearTimeout(storageSummaryTimer);
       storageSummaryTimer = null;
