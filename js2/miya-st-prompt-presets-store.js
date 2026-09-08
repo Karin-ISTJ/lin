@@ -32,11 +32,11 @@
   }
 
   function normalizePosition(v) {
-    /* ST/本项目统一只暴露「前置 / 后置」两档；兼容常见 ST 数值 injection_position。 */
-    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'back' || String(v || '').toLowerCase() === '后置') {
-      return 'back';
+    /* SillyTavern 原生语义：0 = Relative，1 = In-chat。不要再把它误转成 front/back。 */
+    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'in_chat' || String(v || '').toLowerCase() === 'in-chat' || String(v || '').toLowerCase() === 'in chat' || String(v || '').toLowerCase() === '后置') {
+      return 'in_chat';
     }
-    return 'front';
+    return 'relative';
   }
 
   function normalizeEntry(raw, order) {
@@ -50,7 +50,7 @@
       role: role,
       position: normalizePosition(
         e.position !== undefined ? e.position :
-        (e.injection_position !== undefined ? e.injection_position : 'front')
+        (e.injection_position !== undefined ? e.injection_position : 'relative')
       ),
       enabled: e.enabled === undefined ? true : !!e.enabled,
       identifier: e.identifier != null ? String(e.identifier) : '',
@@ -59,7 +59,7 @@
       forbid_overrides: !!e.forbid_overrides,
       marker: !!e.marker,
       order: typeof order === 'number' ? order : (typeof e.order === 'number' ? e.order : 0),
-      injection_position: e.injection_position === 1 || e.position === 'back' ? 1 : 0,
+      injection_position: e.injection_position === 1 || e.position === 'back' || e.position === 'in_chat' ? 1 : 0,
       injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 4,
       injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100
     };
@@ -335,7 +335,7 @@
             forbid_overrides: !!p.forbid_overrides,
             marker: !!p.marker,
             enabled: !!en,
-            injection_position: p.injection_position === 1 || p.position === 'back' ? 1 : 0,
+            injection_position: p.injection_position === 1 || p.position === 'back' || p.position === 'in_chat' ? 1 : 0,
             injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 4,
             injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100
           },

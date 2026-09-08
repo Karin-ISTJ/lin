@@ -123,6 +123,8 @@
     };
     Object.keys(map).forEach(function (id) { if ($(id)) $(id).value = String(map[id]); });
     if ($('stp-gen-stream')) $('stp-gen-stream').checked = g.stream !== false;
+    var summary = $('stp-gen-summary');
+    if (summary) summary.textContent = '温度 ' + g.temperature + ' · Top P ' + g.topP + (g.stream !== false ? ' · 流式' : ' · 非流式');
   }
 
   function openEditor(id) {
@@ -141,7 +143,7 @@
     $('stp-edit-name').value = e ? e.name : '';
     $('stp-edit-content').value = e ? e.content : '';
     $('stp-edit-role').value = e ? e.role : 'system';
-    $('stp-edit-position').value = e ? (Number(e.injection_position) === 1 ? 'in_chat' : 'relative') : 'relative';
+    $('stp-edit-position').value = e ? (Number(e.injection_position) === 1 || e.position === 'in_chat' ? 'in_chat' : 'relative') : 'relative';
     $('stp-edit-trigger').value = e && Array.isArray(e.injection_trigger) && e.injection_trigger.length ? e.injection_trigger[0] : 'normal';
     var depthEl = $('stp-edit-depth');
     var orderEl = $('stp-edit-injection-order');
@@ -356,6 +358,13 @@
 
     var genSave = $('stp-gen-save');
     if (genSave) genSave.addEventListener('click', saveGenerationFromUi);
+    var genToggle = $('stp-gen-toggle');
+    if (genToggle) genToggle.addEventListener('click', function () {
+      var panel = $('stp-gen-panel');
+      if (!panel) return;
+      var collapsed = panel.classList.toggle('is-collapsed');
+      genToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
     var copyOfflineBtn = $('stp-copy-offline-prompt');
     if (copyOfflineBtn) copyOfflineBtn.addEventListener('click', copyLastOfflinePrompt);
 

@@ -3522,8 +3522,11 @@
 
     var cfg = engine.getApiConfig();
     if (!cfg.baseUrl || !cfg.apiKey || !cfg.model) {
-      toast('请先在设置中配置对话 API');
-      return;
+      toast('API 未配置：请检查地址、Key、模型');
+      state.sending = false;
+      setComposeDisabled(false);
+      stopTypingWait();
+      return Promise.reject(new Error('api_not_configured'));
     }
 
     cancelStaggerReveal();
@@ -5102,9 +5105,19 @@
     bindToolbarEvents();
     var sendBtn = $('qq-room-send');
     if (sendBtn) {
-      sendBtn.addEventListener('click', function (e) {
+      /* 移动端优先用 pointerup，避免某些 WebView 在 textarea 聚焦后丢失 click。 */
+      sendBtn.addEventListener('pointerup', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
-        handleSend();
+        e.stopPropagation();
+        sendBtn._miyaPointerSent = Date.now();
+        handleSend().catch(function () {});
+      });
+      sendBtn.addEventListener('click', function (e) {
+        if (sendBtn._miyaPointerSent && Date.now() - sendBtn._miyaPointerSent < 700) return;
+        e.preventDefault();
+        e.stopPropagation();
+        handleSend().catch(function () {});
       });
     }
     roomEl.addEventListener('pointerup', function (e) {
