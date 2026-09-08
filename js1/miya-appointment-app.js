@@ -2,7 +2,7 @@
     'use strict';
 
     var ui = {
-        view: 'history',
+        view: 'pick',
         chatId: '',
         contactId: '',
         sessionId: '',
@@ -730,9 +730,7 @@
     function renderDock() {
         var navInner = '';
         var aria = '现场工具';
-        if (ui.view === 'pick') {
-            navInner = renderDockBeautifyBtn();
-        } else if (ui.view === 'history') {
+        if (ui.view === 'history') {
             aria = '卷宗工具';
             navInner =
                 renderDockBeautifyBtn() +
@@ -3345,14 +3343,34 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
-        ui.view = 'history';
         ui.chatId = '';
         ui.sessionId = '';
+        ui.contactId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
+        ui.status = 'idle';
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
-        render();
+
+        /* 线下入口不再经过“今天和谁见面”角色选择页。
+         * 从线上聊天进入时，直接沿用当前打开的聊天/角色；
+         * 从功能总菜单进入时，没有当前聊天则直接进入卷宗。 */
+        var currentChatId = '';
+        if (global.miyaChatRoom && typeof global.miyaChatRoom.getOpenChatId === 'function') {
+            currentChatId = String(global.miyaChatRoom.getOpenChatId() || '').trim();
+        }
+        if (currentChatId && st && typeof st.findChat === 'function') {
+            var currentChat = st.findChat(currentChatId);
+            if (currentChat && currentChat.contactId) {
+                openWithChat(currentChat.id, currentChat.contactId);
+            } else {
+                ui.view = 'history';
+                render();
+            }
+        } else {
+            ui.view = 'history';
+            render();
+        }
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
