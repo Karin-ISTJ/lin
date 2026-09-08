@@ -34,7 +34,7 @@
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=19">
-  <link rel="stylesheet" href="css/miya-worldbook.css?v=4">
+  <link rel="stylesheet" href="css/miya-worldbook.css?v=5">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=3">
   <link rel="stylesheet" href="css/miya-music.css?v=17">
@@ -1262,120 +1262,138 @@
           <svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>返回</span>
         </button>
-        <h1 class="st-navtitle" id="miya-wb-editor-title">新建片段</h1>
+        <h1 class="st-navtitle" id="miya-wb-editor-title">编辑条目</h1>
         <span class="st-navspacer" aria-hidden="true"></span>
       </header>
       <div class="ins-wb-editor-scroll st-scroll">
-        <div class="st-container">
-        <p class="ins-field-label">范围</p>
-        <div class="ins-wb-scope-pick" role="group" aria-label="全局或局部">
-          <button type="button" class="ins-wb-scope-opt is-active" data-wb-scope="global">
-            <strong>全局</strong>
-            <span>对所有联系人生效；按范围与关键词匹配</span>
-          </button>
-          <button type="button" class="ins-wb-scope-opt" data-wb-scope="local">
-            <strong>局部</strong>
-            <span>绑定角色；按下方生效范围注入，无关键词时始终纳入</span>
-          </button>
-        </div>
-        <div id="miya-wb-global-reach-wrap" class="ins-wb-global-reach-wrap">
-          <p class="ins-field-label" id="miya-wb-reach-label">生效范围</p>
-          <div class="ins-wb-reach-pick" role="group" aria-label="生效范围">
-            <button type="button" class="ins-wb-reach-opt" data-wb-global-reach="all">
-              <strong>全部软件</strong>
-              <span>绑定角色后，所有 API 场景均可注入（位置由下方深度决定）</span>
-            </button>
-            <button type="button" class="ins-wb-reach-opt" data-wb-global-reach="online">
-              <strong>仅线上聊天</strong>
-              <span>线上场景可匹配；须关键词命中（无关键词则始终参与）</span>
-            </button>
-            <button type="button" class="ins-wb-reach-opt" data-wb-global-reach="offline">
-              <strong>仅线下聊天</strong>
-              <span>线下场景可匹配；须关键词命中（无关键词则始终参与）</span>
-            </button>
-            <button type="button" class="ins-wb-reach-opt is-active" data-wb-global-reach="online_offline">
-              <strong>线上和线下</strong>
-              <span>线上与线下均可匹配；须关键词命中（无关键词则始终参与）</span>
-            </button>
+        <div class="st-container miya-wb-st-editor">
+          <!-- 顶栏：状态 / 位置 / 深度 / 顺序 / 触发 -->
+          <div class="miya-wb-row5">
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-status">状态</label>
+              <select class="ins-select" id="miya-wb-field-status">
+                <option value="constant">常驻</option>
+                <option value="normal">关键词触发</option>
+                <option value="disabled">禁用</option>
+              </select>
+            </div>
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-position">位置</label>
+              <select class="ins-select" id="miya-wb-field-position">
+                <option value="0">前 · 角色定义前</option>
+                <option value="1">中 · 角色定义后</option>
+                <option value="4">后 · @深度（聊天内）</option>
+              </select>
+            </div>
+            <div class="miya-wb-field" id="miya-wb-depth-field">
+              <label class="ins-field-label" for="miya-wb-field-inj-depth">深度</label>
+              <input type="number" class="ins-text-input" id="miya-wb-field-inj-depth" min="0" max="100" value="4" title="@depth 时有效">
+            </div>
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-order">顺序</label>
+              <input type="number" class="ins-text-input" id="miya-wb-field-order" min="0" max="10000" value="100">
+            </div>
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-prob">触发 %</label>
+              <input type="number" class="ins-text-input" id="miya-wb-field-prob" min="0" max="100" value="100">
+            </div>
           </div>
-        </div>
-        <div id="miya-wb-depth-wrap" class="ins-wb-depth-wrap">
-          <p class="ins-field-label">注入深度</p>
-          <div class="ins-wb-depth-pick" role="group" aria-label="注入深度">
-            <button type="button" class="ins-wb-depth-opt" data-wb-depth="front">
-              <strong>前</strong>
-              <span>靠近系统提示开头，适合世界观与硬设定</span>
-            </button>
-            <button type="button" class="ins-wb-depth-opt is-active" data-wb-depth="middle">
-              <strong>中</strong>
-              <span>默认位置：感知之后、格式规则之前</span>
-            </button>
-            <button type="button" class="ins-wb-depth-opt" data-wb-depth="back">
-              <strong>后</strong>
-              <span>历史之后、档案与运转规则之前，生成前强调</span>
-            </button>
+
+          <div class="miya-wb-row2">
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-keys">主要关键字</label>
+              <input type="text" class="ins-text-input" id="miya-wb-field-keys" placeholder="逗号分隔；支持 /正则/i；常驻可留空">
+            </div>
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-keys-sec">可选过滤器（次关键字）</label>
+              <input type="text" class="ins-text-input" id="miya-wb-field-keys-sec" placeholder="逗号分隔；为空则忽略">
+            </div>
           </div>
-        </div>
-        <label class="ins-field-label" for="miya-wb-field-group">所属分组</label>
-        <select class="ins-select" id="miya-wb-field-group"></select>
-        <label class="ins-field-label" for="miya-wb-field-name">标题</label>
-        <input type="text" class="ins-text-input" id="miya-wb-field-name" maxlength="64" placeholder="例如：城市气候备忘">
-        <label class="ins-field-label" id="miya-wb-field-keys-label" for="miya-wb-field-keys">主关键词（key）</label>
-        <input type="text" class="ins-text-input" id="miya-wb-field-keys" placeholder="逗号分隔；支持 /正则/i">
-        <label class="ins-field-label" for="miya-wb-field-keys-sec">次关键词（keysecondary）</label>
-        <input type="text" class="ins-text-input" id="miya-wb-field-keys-sec" placeholder="selective 时与主词组合判断">
-        <div class="ins-wb-st-flags" style="display:grid;gap:8px;margin:10px 0">
-          <label class="ins-field-label" style="display:flex;align-items:center;gap:8px;font-weight:500">
-            <input type="checkbox" id="miya-wb-field-constant"> 常驻 constant（不扫描关键词也注入）
-          </label>
-          <label class="ins-field-label" style="display:flex;align-items:center;gap:8px;font-weight:500">
-            <input type="checkbox" id="miya-wb-field-selective"> selective（启用次关键词逻辑）
-          </label>
-          <label class="ins-field-label" for="miya-wb-field-selective-logic">selectiveLogic</label>
-          <select class="ins-select" id="miya-wb-field-selective-logic">
-            <option value="0">AND any（至少一个次词）</option>
-            <option value="1">NOT all（不能全部次词命中）</option>
-            <option value="2">NOT any（不能有任一次词）</option>
-            <option value="3">AND all（全部次词）</option>
-          </select>
-          <label class="ins-field-label" for="miya-wb-field-order">order（插入优先级，越大越优先保留预算）</label>
-          <input type="number" class="ins-text-input" id="miya-wb-field-order" min="0" max="10000" step="1" value="100">
-          <label class="ins-field-label" for="miya-wb-field-position">ST position（0前/1中/4=@depth 后）</label>
-          <input type="number" class="ins-text-input" id="miya-wb-field-position" min="0" max="4" step="1" value="1">
-          <label class="ins-field-label" for="miya-wb-field-inj-depth">@depth injection_depth</label>
-          <input type="number" class="ins-text-input" id="miya-wb-field-inj-depth" min="0" max="100" step="1" value="4">
-          <label class="ins-field-label" for="miya-wb-field-scan-depth">scanDepth（空=全局）</label>
-          <input type="number" class="ins-text-input" id="miya-wb-field-scan-depth" min="0" max="500" step="1" placeholder="默认">
-          <label class="ins-field-label" for="miya-wb-field-prob">probability %</label>
-          <input type="number" class="ins-text-input" id="miya-wb-field-prob" min="0" max="100" step="1" value="100">
-          <label class="ins-field-label" style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="miya-wb-field-use-prob"> useProbability
-          </label>
-          <label class="ins-field-label" style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="miya-wb-field-ignore-budget"> ignoreBudget
-          </label>
-<label class="ins-field-label" for="miya-wb-field-group">ST group（同组互斥名）</label>
-          <input type="text" class="ins-text-input" id="miya-wb-field-st-group" placeholder="留空=不参与分组互斥">
-          <label class="ins-field-label" for="miya-wb-field-group-weight">groupWeight</label>
-          <input type="number" class="ins-text-input" id="miya-wb-field-group-weight" min="1" max="10000" value="100">
-          <label class="ins-field-label" style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="miya-wb-field-group-override"> groupOverride（同组可并列）
-          </label>
-        </div>
-        <div id="miya-wb-roles-wrap" hidden>
-          <p class="ins-field-label">绑定联系人</p>
-          <div id="miya-wb-roles-host"></div>
-        </div>
-        <div class="ins-wb-body-head">
-          <label class="ins-field-label" for="miya-wb-field-body">正文</label>
-          <button type="button" class="ins-chip ins-chip--dim" id="miya-wb-doc-import">从文件填入</button>
-        </div>
-        <textarea class="ins-textarea" id="miya-wb-field-body" rows="10" spellcheck="false" placeholder="写入会被注入模型的设定文本…"></textarea>
+
+          <div class="miya-wb-row2">
+            <div class="miya-wb-field">
+              <label class="ins-field-label" for="miya-wb-field-selective-logic">逻辑</label>
+              <select class="ins-select" id="miya-wb-field-selective-logic">
+                <option value="0">AND ANY（至少一个次词）</option>
+                <option value="3">AND ALL（全部次词）</option>
+                <option value="2">NOT ANY（不能有任一次词）</option>
+                <option value="1">NOT ALL（不能全部次词）</option>
+              </select>
+            </div>
+            <div class="miya-wb-field miya-wb-checks">
+              <label class="ins-field-label">&nbsp;</label>
+              <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-selective"> 选择性（启用次关键字）</label>
+              <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-use-prob"> 使用触发概率</label>
+              <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-ignore-budget"> 忽略预算</label>
+            </div>
+          </div>
+
+          <details class="miya-wb-advanced">
+            <summary>Miya 范围与分组（软件内生效范围）</summary>
+            <p class="ins-field-label">范围</p>
+            <div class="ins-wb-scope-pick" role="group" aria-label="全局或局部">
+              <button type="button" class="ins-wb-scope-opt is-active" data-wb-scope="global">
+                <strong>全局</strong>
+                <span>对所有联系人；按关键词/常驻匹配</span>
+              </button>
+              <button type="button" class="ins-wb-scope-opt" data-wb-scope="local">
+                <strong>局部</strong>
+                <span>绑定角色后生效</span>
+              </button>
+            </div>
+            <div id="miya-wb-global-reach-wrap" class="ins-wb-global-reach-wrap">
+              <p class="ins-field-label" id="miya-wb-reach-label">生效场景</p>
+              <div class="ins-wb-reach-pick" role="group" aria-label="生效范围">
+                <button type="button" class="ins-wb-reach-opt is-active" data-wb-global-reach="all">
+                  <strong>全部场景</strong>
+                  <span>线上线下均可</span>
+                </button>
+                <button type="button" class="ins-wb-reach-opt" data-wb-global-reach="online">
+                  <strong>仅线上</strong>
+                </button>
+                <button type="button" class="ins-wb-reach-opt" data-wb-global-reach="offline">
+                  <strong>仅线下</strong>
+                </button>
+                <button type="button" class="ins-wb-reach-opt" data-wb-global-reach="online_offline">
+                  <strong>线上和线下</strong>
+                  <span>需关键词命中（无词则始终可参与）</span>
+                </button>
+              </div>
+            </div>
+            <div id="miya-wb-roles-wrap" hidden>
+              <p class="ins-field-label">绑定联系人</p>
+              <div id="miya-wb-roles-host"></div>
+            </div>
+            <label class="ins-field-label" for="miya-wb-field-group">所属分卷</label>
+            <select class="ins-select" id="miya-wb-field-group"></select>
+            <div class="miya-wb-row2" style="margin-top:10px">
+              <div class="miya-wb-field">
+                <label class="ins-field-label" for="miya-wb-field-st-group">ST group（同组互斥）</label>
+                <input type="text" class="ins-text-input" id="miya-wb-field-st-group" placeholder="留空=不互斥">
+              </div>
+              <div class="miya-wb-field">
+                <label class="ins-field-label" for="miya-wb-field-group-weight">groupWeight</label>
+                <input type="number" class="ins-text-input" id="miya-wb-field-group-weight" min="1" max="10000" value="100">
+              </div>
+            </div>
+            <label class="miya-wb-check" style="margin-top:8px"><input type="checkbox" id="miya-wb-field-group-override"> groupOverride（同组可并列）</label>
+            <label class="ins-field-label" for="miya-wb-field-scan-depth" style="margin-top:10px;display:block">scanDepth（空=全局）</label>
+            <input type="number" class="ins-text-input" id="miya-wb-field-scan-depth" min="0" max="500" placeholder="默认">
+          </details>
+
+          <label class="ins-field-label" for="miya-wb-field-name">标题</label>
+          <input type="text" class="ins-text-input" id="miya-wb-field-name" maxlength="64" placeholder="条目标题">
+
+          <div class="ins-wb-body-head">
+            <label class="ins-field-label" for="miya-wb-field-body">内容</label>
+            <button type="button" class="ins-chip ins-chip--dim" id="miya-wb-doc-import">从文件填入</button>
+          </div>
+          <textarea class="ins-textarea" id="miya-wb-field-body" rows="12" spellcheck="false" placeholder="写入会被注入模型的设定文本…"></textarea>
         </div>
       </div>
       <footer class="ins-wb-editor-foot">
         <button type="button" class="ins-chip ins-chip--rose" id="miya-wb-delete">删除</button>
-        <button type="button" class="ins-chip ins-chip--gold" id="miya-wb-save">保存</button>
+        <button type="button" class="ins-chip ins-chip--gold" id="miya-wb-save">保存条目</button>
       </footer>
     </div>
 
@@ -5795,7 +5813,7 @@
   <script defer src="js2/miya-worldbook-store.js?v=10"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=5"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=14"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=16"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=17"></script>
   <script defer src="js2/miya-music-engine.js?v=18"></script>
   <script defer src="js2/miya-music-beautify-source-ref.js?v=2"></script>
   <script defer src="js2/miya-music-beautify.js?v=11"></script>

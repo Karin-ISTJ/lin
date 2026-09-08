@@ -326,11 +326,23 @@
     if (secEl) secEl.value = (data.keysecondary || []).join('，');
     function setChk(id, v) { var el = $(id); if (el) el.checked = !!v; }
     function setNum(id, v, d) { var el = $(id); if (el) el.value = v != null && v !== '' ? v : d; }
-    setChk('miya-wb-field-constant', data.constant);
+    var statusEl = $('miya-wb-field-status');
+    if (statusEl) {
+      if (data.enabled === false) statusEl.value = 'disabled';
+      else if (data.constant) statusEl.value = 'constant';
+      else statusEl.value = 'normal';
+    }
     setChk('miya-wb-field-selective', data.selective);
     setNum('miya-wb-field-selective-logic', data.selectiveLogic, 0);
     setNum('miya-wb-field-order', data.order, 100);
-    setNum('miya-wb-field-position', data.position, 1);
+    var pos = Number(data.position);
+    if (!Number.isFinite(pos)) {
+      if (data.depth === 'front') pos = 0;
+      else if (data.depth === 'back') pos = 4;
+      else pos = 1;
+    }
+    if (pos !== 0 && pos !== 4) pos = 1;
+    setNum('miya-wb-field-position', pos, 1);
     setNum('miya-wb-field-inj-depth', data.injection_depth, 4);
     setNum('miya-wb-field-scan-depth', data.scanDepth, '');
     setNum('miya-wb-field-prob', data.probability, 100);
@@ -349,10 +361,10 @@
       btn.classList.toggle('is-active', btn.getAttribute('data-wb-scope') === scope);
     });
     syncGlobalReachUi(scope);
-    setActiveGlobalReach(data.globalReach || 'online_offline');
-    setActiveDepth(data.depth || 'middle');
+    setActiveGlobalReach(data.globalReach || (scope === 'local' ? 'all' : 'online_offline'));
     var rolesWrap = $('miya-wb-roles-wrap');
     if (rolesWrap) rolesWrap.hidden = scope !== 'local';
+    syncDepthFieldVisibility();
     var app = $('miya-worldbook-app');
     if (app) {
       app.classList.add('has-editor');
@@ -362,6 +374,13 @@
     ensureContactsReady().then(function () {
       if (rolesHost) rolesHost.innerHTML = renderRolePicker(data.boundRoleIds || []);
     });
+  }
+
+  function syncDepthFieldVisibility() {
+    var posEl = $('miya-wb-field-position');
+    var wrap = $('miya-wb-depth-field');
+    if (!wrap || !posEl) return;
+    wrap.style.opacity = String(posEl.value) === '4' ? '1' : '0.45';
   }
 
   function readEditorPayload() {
@@ -389,6 +408,13 @@
     }
     var scanEl = $('miya-wb-field-scan-depth');
     var scanDepth = scanEl && scanEl.value !== '' ? Number(scanEl.value) : null;
+    var status = ($('miya-wb-field-status') && $('miya-wb-field-status').value) || 'normal';
+    var position = numVal('miya-wb-field-position', 1);
+    var depth = position === 0 ? 'front' : position === 4 ? 'back' : 'middle';
+    var stApi = global.miyaWorldbookST;
+    if (stApi && typeof stApi.positionToDepth === 'function') {
+      depth = stApi.positionToDepth(position);
+    }
     return {
       id: editingId || undefined,
       name: ($('miya-wb-field-name').value || '').trim(),
@@ -398,15 +424,15 @@
       content: $('miya-wb-field-body').value || '',
       scope: scope,
       globalReach: collectGlobalReach(),
-      depth: collectDepth(),
+      depth: depth,
       groupId: ($('miya-wb-field-group') && $('miya-wb-field-group').value) || DEFAULT_GROUP_ID,
       boundRoleIds: scope === 'local' ? roles : [],
-      enabled: true,
-      constant: chk('miya-wb-field-constant'),
+      enabled: status !== 'disabled',
+      constant: status === 'constant',
       selective: chk('miya-wb-field-selective') || keysecondary.length > 0,
       selectiveLogic: numVal('miya-wb-field-selective-logic', 0),
       order: numVal('miya-wb-field-order', 100),
-      position: numVal('miya-wb-field-position', 1),
+      position: position,
       injection_depth: numVal('miya-wb-field-inj-depth', 4),
       scanDepth: Number.isFinite(scanDepth) ? scanDepth : null,
       probability: numVal('miya-wb-field-prob', 100),
@@ -584,6 +610,9 @@
     $('miya-wb-doc-import').addEventListener('click', function () {
       $('miya-wb-doc-file').click();
     });
+    var posSel = $('miya-wb-field-position');
+    if (posSel) posSel.addEventListener('change', syncDepthFieldVisibility);
+
 
     var stImportBtn = $('miya-wb-st-import');
     var stImportFile = $('miya-wb-st-import-file');

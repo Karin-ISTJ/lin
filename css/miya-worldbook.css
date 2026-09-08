@@ -990,3 +990,61 @@
 .miya-worldbook-app.is-open {
   z-index: 520;
 }
+
+/* ── 世界书编辑器 · ST 风格顶栏 ── */
+.miya-wb-st-editor .miya-wb-row5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.miya-wb-st-editor .miya-wb-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.miya-wb-st-editor .miya-wb-field {
+  min-width: 0;
+}
+.miya-wb-st-editor .miya-wb-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
+  padding-bottom: 4px;
+}
+.miya-wb-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #555;
+}
+.miya-wb-advanced {
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.miya-wb-advanced > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  list-style: none;
+}
+.miya-wb-advanced > summary::-webkit-details-marker { display: none; }
+.miya-wb-advanced[open] > summary {
+  margin-bottom: 10px;
+  color: #333;
+}
+@media (max-width: 720px) {
+  .miya-wb-st-editor .miya-wb-row5 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .miya-wb-st-editor .miya-wb-row2 {
+    grid-template-columns: 1fr;
+  }
+}
