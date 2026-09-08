@@ -4490,7 +4490,6 @@
       if (!document.body.contains(target)) return;
       e.preventDefault();
       e.stopPropagation();
-      e.stopImmediatePropagation();
       requestAiReply();
     }, true);
   }
