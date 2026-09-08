@@ -34,7 +34,7 @@
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=19">
-  <link rel="stylesheet" href="css/miya-worldbook.css?v=6">
+  <link rel="stylesheet" href="css/miya-worldbook.css?v=7">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=3">
   <link rel="stylesheet" href="css/miya-music.css?v=17">
@@ -1210,16 +1210,12 @@
             <p class="st-header-sub">管理注入模型的设定片段与关键词</p>
           </header>
 
-          <div class="st-section-label">分卷</div>
-          <div class="st-wb-group-bar">
-            <div class="ins-wb-group-rail" id="miya-wb-group-rail"></div>
-          </div>
-
           <div class="st-section-label">检索</div>
           <div class="st-card st-wb-search-card">
             <input type="search" class="ins-wb-search" id="miya-wb-search" placeholder="检索标题、关键词或正文…" autocomplete="off" spellcheck="false">
           </div>
           <div class="st-wb-io-bar" style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px">
+            <button type="button" class="ins-chip" id="miya-wb-group-add-btn" data-wb-group-add>+ 新建世界书</button>
             <button type="button" class="ins-chip" id="miya-wb-st-import">导入 ST 世界书 JSON</button>
             <button type="button" class="ins-chip ins-chip--dim" id="miya-wb-st-export">导出 ST JSON</button>
             <button type="button" class="ins-chip ins-chip--dim" id="miya-wb-st-debug">调试扫描</button>
@@ -1244,7 +1240,7 @@
           <div class="ins-wb-list" id="miya-wb-list"></div>
           <div class="ins-wb-empty" id="miya-wb-empty" hidden>
             <strong>尚无片段</strong>
-            点「+」新建条目，或导入 ST 世界书 JSON。每本世界书可展开 / 收起。
+            点右上「+」新建条目，或用「+ 新建世界书」建分卷后导入。点书名即可展开 / 收起。
           </div>
 
           <footer class="st-footer">
@@ -5813,7 +5809,7 @@
   <script defer src="js2/miya-worldbook-store.js?v=11"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=5"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=14"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=18"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=19"></script>
   <script defer src="js2/miya-music-engine.js?v=18"></script>
   <script defer src="js2/miya-music-beautify-source-ref.js?v=2"></script>
   <script defer src="js2/miya-music-beautify.js?v=11"></script>

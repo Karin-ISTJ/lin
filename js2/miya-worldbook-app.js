@@ -115,7 +115,7 @@
     var q = searchQuery.trim().toLowerCase();
     return rows.filter(function (entry) {
       if (filterScope !== 'all' && entry.scope !== filterScope) return false;
-      if (filterGroupId !== 'all' && entry.groupId !== filterGroupId) return false;
+      /* 不再按分卷横向筛选，全部在手风琴中展示 */
       if (!q) return true;
       var g = store.getGroup(entry.groupId);
       var blob = [
@@ -130,18 +130,7 @@
   }
 
   function renderGroupChips() {
-    var rail = $('miya-wb-group-rail');
-    if (!rail) return;
-    var groups = store.listGroups();
-    var html = '<button type="button" class="ins-wb-group-chip' + (filterGroupId === 'all' ? ' is-active' : '') +
-      '" data-wb-group="all">全部书</button>';
-    groups.forEach(function (g) {
-      var cnt = store.listEntries().filter(function (e) { return e.groupId === g.id; }).length;
-      html += '<button type="button" class="ins-wb-group-chip' + (filterGroupId === g.id ? ' is-active' : '') +
-        '" data-wb-group="' + esc(g.id) + '">' + esc(g.name) + '<i>' + cnt + '</i></button>';
-    });
-    html += '<button type="button" class="ins-wb-group-chip ins-wb-group-chip--add" data-wb-group-add aria-label="新建世界书">+</button>';
-    rail.innerHTML = html;
+    /* 已取消顶部横向分卷滑条，改用手风琴列表 + 「+ 新建世界书」按钮，避免左右滑与下方折叠重复 */
   }
 
   function roleMonogram(name) {
@@ -235,7 +224,7 @@
     var count = $('miya-wb-count');
     if (!list) return;
 
-    /* 顶部芯片仅作快捷筛选，列表始终按「世界书」手风琴展示 */
+    /* 列表始终按「世界书」手风琴展示：点标题展开/收起，无需左右滑分卷条 */
     renderGroupChips();
     var rows = filteredEntries();
     if (count) count.textContent = String(rows.length);
@@ -256,7 +245,7 @@
       byGroup[gid].push(entry);
     });
 
-    /* 新导入的书默认折叠（除当前筛选命中的那本） */
+    /* 新导入的书默认折叠 */
     groups.forEach(function (g) {
       if (collapsedGroups[g.id] === undefined && !g.fixed) {
         collapsedGroups[g.id] = true;
@@ -267,8 +256,7 @@
     groups.forEach(function (g) {
       var items = byGroup[g.id] || [];
       if (!items.length) return;
-      if (filterGroupId !== 'all' && g.id !== filterGroupId) return;
-      var collapsed = filterGroupId === g.id ? false : !!collapsedGroups[g.id];
+      var collapsed = !!collapsedGroups[g.id];
       var actions = g.fixed ? '' : (
         '<span class="ins-wb-group-head-ops">' +
         '<button type="button" class="ins-wb-group-op" data-wb-group-edit="' + esc(g.id) + '" aria-label="重命名">改名</button>' +
@@ -499,8 +487,9 @@
       if (!name) return;
       store.upsertGroup({ name: name, sort: Date.now() }).then(function (g) {
         filterGroupId = g.id;
+        collapsedGroups[g.id] = false; /* 新建后自动展开 */
         renderList();
-        toast('分卷已创建');
+        toast('世界书已创建');
       });
     });
   }

@@ -1107,40 +1107,73 @@
   border-bottom: none;
 }
 
-/* ── 编辑器更紧凑 ── */
+/* ── 编辑器更紧凑（再压间距） ── */
 .miya-wb-st-editor .miya-wb-row5 {
-  gap: 6px !important;
-  margin-bottom: 8px !important;
+  gap: 4px !important;
+  margin-bottom: 4px !important;
 }
 .miya-wb-st-editor .miya-wb-row2 {
-  gap: 6px !important;
-  margin-bottom: 8px !important;
+  gap: 4px !important;
+  margin-bottom: 4px !important;
 }
 .miya-wb-st-editor .ins-field-label {
-  margin: 6px 0 4px !important;
-  font-size: 12px !important;
+  margin: 4px 0 2px !important;
+  font-size: 11px !important;
+  letter-spacing: 0.8px !important;
 }
 .miya-wb-st-editor .ins-text-input,
 .miya-wb-st-editor .ins-select {
-  padding: 8px 12px !important;
-  min-height: 40px;
+  padding: 6px 10px !important;
+  min-height: 36px;
+  border-radius: 12px !important;
 }
 .miya-wb-st-editor .ins-textarea {
-  margin-top: 4px;
+  margin-top: 2px;
+  padding: 10px 12px !important;
+  min-height: 120px;
 }
 .miya-wb-st-editor .miya-wb-advanced {
-  margin: 8px 0 10px !important;
-  padding: 8px 10px !important;
+  margin: 6px 0 8px !important;
+  padding: 6px 8px !important;
+}
+.miya-wb-st-editor .miya-wb-checks {
+  gap: 4px !important;
+  padding-bottom: 0 !important;
 }
 .miya-worldbook-app .ins-wb-editor-scroll .st-container {
-  padding-top: 8px !important;
-  padding-bottom: 12px !important;
+  padding-top: 4px !important;
+  padding-bottom: 8px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 .miya-worldbook-app .ins-wb-scope-pick,
-.miya-worldbook-app .ins-wb-reach-pick {
-  gap: 6px !important;
+.miya-worldbook-app .ins-wb-reach-pick,
+.miya-worldbook-app .ins-wb-depth-pick {
+  gap: 4px !important;
+  margin: 4px 0 8px !important;
 }
 .miya-worldbook-app .ins-wb-scope-opt,
-.miya-worldbook-app .ins-wb-reach-opt {
-  padding: 8px 10px !important;
+.miya-worldbook-app .ins-wb-reach-opt,
+.miya-worldbook-app .ins-wb-depth-opt {
+  padding: 6px 8px !important;
+  border-radius: 14px !important;
+}
+.miya-worldbook-app .ins-wb-scope-opt strong,
+.miya-worldbook-app .ins-wb-reach-opt strong,
+.miya-worldbook-app .ins-wb-depth-opt strong {
+  margin-bottom: 2px !important;
+  font-size: 13px !important;
+}
+.miya-worldbook-app .ins-field-label {
+  margin: 8px 0 4px !important;
+}
+.miya-worldbook-app .ins-wb-body-head {
+  margin-top: 4px !important;
+}
+.miya-worldbook-app .ins-wb-editor-foot {
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  gap: 8px !important;
+}
+.miya-worldbook-app .ins-wb-editor-foot .ins-chip {
+  padding: 12px !important;
 }
