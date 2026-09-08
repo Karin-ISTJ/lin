@@ -138,7 +138,8 @@
   };
   var mainListScrollPos = 0;
   var panelClosing = false;
-  var returnToContactSettings = false;
+  // 从聊天页的联系人设置进入对话 API 时，API 页返回应回到联系人设置，而不是设置主页。
+  var returnToChatContactSettings = false;
   var apiConfigCache = null;
   var apiConfigHydrated = false;
   var apiPresetsCache = null;
@@ -2215,8 +2216,9 @@
     });
 
     onClick('miya-st-panel-header-back', function () {
-      if (returnToContactSettings) {
-        returnToContactSettings = false;
+      var active = app.querySelector('.ins-vault-panel.is-active');
+      if (returnToChatContactSettings && active && active.id === 'miya-st-panel-chat') {
+        returnToChatContactSettings = false;
         closeSettingsApp();
         return;
       }
@@ -2533,11 +2535,13 @@
     }
   }
 
-  function openSettingsApp(panelId, returnTarget) {
+  function openSettingsApp(panelId) {
     var app = $('miya-settings-app');
     if (!app) return;
+    // 仅记录“从聊天联系人设置进入对话 API”这一条返回链路，避免影响正常的设置入口。
+    returnToChatContactSettings = !!(panelId === 'miya-st-panel-chat' &&
+      document.querySelector('[data-mq-set-body]') && document.querySelector('[data-mq-set-back]') && document.querySelector('.miya-chat-app.mi-set-open'));
     panelClosing = false;
-    returnToContactSettings = returnTarget === 'contact-settings';
     app.classList.remove('is-panel-returning');
     app.classList.add('is-open');
     app.setAttribute('aria-hidden', 'false');
@@ -2581,7 +2585,6 @@
     var app = $('miya-settings-app');
     if (!app) return;
     panelClosing = false;
-    returnToContactSettings = false;
     if (storageSummaryTimer) {
       clearTimeout(storageSummaryTimer);
       storageSummaryTimer = null;
@@ -2593,6 +2596,7 @@
     }
     app.classList.remove('is-open', 'has-panel', 'is-panel-returning', 'is-priming-chat-panel');
     app.setAttribute('aria-hidden', 'true');
+    returnToChatContactSettings = false;
     var chatPanel = $('miya-st-panel-chat');
     if (chatPanel) delete chatPanel.dataset.primed;
     if (!document.querySelector('.miya-beautify-app.is-open') &&

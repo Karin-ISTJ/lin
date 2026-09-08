@@ -1957,7 +1957,7 @@
       if (apiNav) {
         var apiPanelId = apiNav.getAttribute('data-mq-set-api-nav');
         if (apiPanelId && global.miyaSettingsApp && typeof global.miyaSettingsApp.open === 'function') {
-          global.miyaSettingsApp.open(apiPanelId, 'contact-settings');
+          global.miyaSettingsApp.open(apiPanelId);
         }
         return;
       }
