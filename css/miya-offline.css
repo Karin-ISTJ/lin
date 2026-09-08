@@ -1739,3 +1739,6 @@
 .xw-status__mini:active {
   background: #f2f2f7;
 }
+
+/* v38 floor/chat-record mode */
+.xw-floor{position:relative;margin:0 0 14px}.xw-floor__head{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:3px 6px;opacity:.72;font-size:12px}.xw-floor__tools{display:flex;gap:4px}.xw-floor__tool{width:28px;height:28px;border:0;background:transparent;padding:5px;border-radius:8px;cursor:pointer}.xw-floor__tool svg{width:100%;height:100%}.xw-floor.is-floor-hidden>.xw-block,.xw-floor.is-floor-hidden>.xw-chat{display:none!important}.xw-floor.is-floor-hidden:after{content:'这一层已隐藏 · 点击眼睛显示';display:block;padding:12px 14px;border:1px dashed currentColor;opacity:.42;border-radius:10px;font-size:12px}.xw-vault__head{display:flex;align-items:center;justify-content:space-between;gap:12px}.xw-vault__actions{display:flex;gap:6px;flex-wrap:wrap}.xw-vault-card__actions{display:flex;align-items:center;gap:4px;padding:0 10px 10px}.xw-vault-card__mini{border:0;background:transparent;font-size:11px;padding:4px 6px;cursor:pointer;opacity:.72}

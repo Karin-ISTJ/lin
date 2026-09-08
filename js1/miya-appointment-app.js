@@ -51,6 +51,10 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.35" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.35" fill="currentColor" stroke="none"/></svg>';
     var ICON_STYLE =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.35 4.05L17.5 9l-4.15 1.45L12 14.5l-1.35-4.05L6.5 9l4.15-1.45L12 3.5z" ' + _I + '/><path d="M18.2 14.2l.85 2.55L21.6 17.6l-2.55.85-.85 2.55-.85-2.55-2.55-.85 2.55-.85.85-2.55z" ' + _I + '/></svg>';
+    var ICON_BRANCH =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v6a4 4 0 0 0 4 4h6" ' + _I + '/><path d="M15 12l4 3-4 3" ' + _I + '/><path d="M7 5v14" ' + _I + '/></svg>';
+    var ICON_EYE =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" ' + _I + '/><circle cx="12" cy="12" r="2.5" ' + _I + '/></svg>';
     var ICON_PLUS =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" ' + _I + '/></svg>';
     var ICON_EMOJI =
@@ -945,7 +949,11 @@
             '<div class="xw-vault">' +
             recoverBanner +
             '<header class="xw-vault__head">' +
-            '<h2 class="xw-vault__title">' + esc(who) + ' · 往日卷宗</h2></header>' +
+            '<h2 class="xw-vault__title">' + esc(who) + ' · 聊天记录</h2>' +
+            '<div class="xw-vault__actions">' +
+            '<button type="button" class="xw-ribbon__act" id="xw-new-offline-chat">新建聊天</button>' +
+            '<button type="button" class="xw-ribbon__act" id="xw-import-offline-chat">导入聊天</button>' +
+            '</div></header>' +
             '<div class="xw-vault__grid">' +
             sessions
                 .map(function (s, i) {
@@ -963,10 +971,14 @@
                         (castN > 1 ? castN + ' 人 · ' : '') +
                         n + ' 镜' +
                         (sumN ? ' · ' + sumN + ' 份纪要' : '') +
+                        (s.parentSessionId ? ' · 分支' : '') +
                         (!s.closedAt && n ? ' · 未封存' : '') +
                         '</span></button>' +
+                        '<div class="xw-vault-card__actions">' +
+                        '<button type="button" class="xw-vault-card__mini" data-ap-export-txt="' + esc(s.id) + '">TXT</button>' +
+                        '<button type="button" class="xw-vault-card__mini" data-ap-export-json="' + esc(s.id) + '">JSON</button>' +
                         '<button type="button" class="xw-vault-card__drop" data-ap-del-session="' + esc(s.id) +
-                        '" aria-label="删除此卷">删</button></article>'
+                        '" aria-label="删除此卷">删</button></div></article>'
                     );
                 })
                 .join('') +
@@ -1340,7 +1352,17 @@
                 }
             }
             var block = messageBlockHtml(m, canEdit);
-            if (block) html += block;
+            if (block) {
+                var floorNo = i + 1;
+                var hiddenCls = m.hidden ? ' is-floor-hidden' : '';
+                var floorTools = canEdit
+                    ? '<div class="xw-floor__tools">' +
+                      '<button type="button" class="xw-floor__tool" data-ap-floor-branch="' + esc(m.id) + '" title="从这一层建立分支">' + ICON_BRANCH + '</button>' +
+                      '<button type="button" class="xw-floor__tool" data-ap-floor-hide="' + esc(m.id) + '" title="' + (m.hidden ? '显示这一层' : '隐藏这一层') + '">' + ICON_EYE + '</button>' +
+                      '</div>' : '';
+                html += '<section class="xw-floor' + hiddenCls + '" data-ap-floor="' + esc(m.id) + '">' +
+                    '<header class="xw-floor__head"><span>第 ' + String(floorNo) + ' 层</span>' + floorTools + '</header>' + block + '</section>';
+            }
             var idx = i + 1;
             while (sumPtr < sums.length && (sums[sumPtr].endIndex || 0) === idx) {
                 html += renderSummaryCard(sums[sumPtr]);
@@ -1653,6 +1675,7 @@
     }
 
     function scheduleStreamScroll() {
+        return;
         if (!streamUi.userPinnedBottom) return;
         if (streamUi.scrollRaf) return;
         streamUi.scrollRaf = requestAnimationFrame(function () {
@@ -1772,6 +1795,8 @@
               '<strong class="xw-ribbon__name">' + esc(sceneTitle) + '</strong></div>' +
               '<div class="xw-ribbon__acts">' +
               '<button type="button" class="xw-ribbon__act xw-ribbon__act--ghost" id="xw-ribbon-rename">命名</button>' +
+              '<button type="button" class="xw-ribbon__act" id="xw-export-current-txt">TXT</button>' +
+              '<button type="button" class="xw-ribbon__act" id="xw-export-current-json">JSON</button>' +
               (msgs.length
                   ? '<button type="button" class="xw-ribbon__act" id="xw-ribbon-sum">归档成纪要</button>'
                   : '') +
@@ -1872,7 +1897,6 @@
             }
             patchSummaryBusyUi();
         }
-        scrollStoryToEnd();
         syncStatusFab();
     }
 
@@ -2248,9 +2272,6 @@ function renderWriter() {
             patchStoryBody();
             patchStoryMeta();
         }
-
-        pinScrollToBottom();
-        scrollStoryToEnd(true);
 
         /* 先进入 runStream 显示「书写中」，再启动 completion，避免同步拼 prompt 卡住首帧 */
         var handlers = streamHandlers();
@@ -3067,7 +3088,70 @@ function renderWriter() {
         }
     }
 
+    function safeFileName(name) { return String(name || '聊天记录').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) || '聊天记录'; }
+    function downloadOfflineText(sess) {
+        if (!sess) return;
+        var lines = ['# ' + (sess.title || '未命名场景'), ''];
+        (sess.messages || []).forEach(function (m, i) {
+            if (!m || m.deleted) return;
+            lines.push('【第 ' + String(i + 1) + ' 层】 ' + (m.role === 'assistant' ? '角色' : m.role === 'user' ? '我' : '系统'));
+            if (m.thinking) lines.push('[思考]\n' + m.thinking);
+            lines.push(String(m.content || ''), '');
+        });
+        var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }); var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = 'miya-线下-' + safeFileName(sess.title || sess.id) + '.txt'; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    }
+    function downloadOfflineJson(sess) {
+        if (!sess) return;
+        var payload = { format: 'miya-offline-chat-v2', exportedAt: Date.now(), session: sess, messages: sess.messages || [] };
+        var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }); var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = 'miya-线下-' + safeFileName(sess.title || sess.id) + '.json'; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    }
+    function branchFromFloor(messageId) {
+        if (!ui.chatId || !ui.sessionId) return;
+        var sess = apStore().getSession(ui.chatId, ui.sessionId); if (!sess) return;
+        var idx = (sess.messages || []).findIndex(function (m) { return m && m.id === messageId; }); if (idx < 0) return;
+        dialog({ mode: 'confirm', title: '建立剧情分支', message: '从第 ' + String(idx + 1) + ' 层复制到新聊天记录，并从这里继续剧情？', confirmText: '建立分支', cancelText: '取消' }).then(function (ok) {
+            if (!ok) return;
+            var branch = apStore().createBranch(ui.chatId, ui.sessionId, idx + 1);
+            if (!branch) { toast('分支创建失败'); return; }
+            ui.sessionId = branch.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle'; render(); toast('已建立剧情分支');
+        });
+    }
+    function toggleFloor(messageId) {
+        var sess = apStore().getSession(ui.chatId, ui.sessionId); if (!sess) return;
+        var m = (sess.messages || []).find(function (x) { return x && x.id === messageId; }); if (!m) return;
+        apStore().updateMessage(ui.chatId, ui.sessionId, messageId, { hidden: !m.hidden }); patchStoryBody();
+    }
+    function newOfflineChat() {
+        var st = chatStore(); var chat = st && st.findChat(ui.chatId); if (!chat) { toast('请先选择角色'); return; }
+        var sess = apStore().startNewSession(ui.chatId, chat.contactId, activeSessionCast()); if (!sess) return;
+        ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle'; render();
+    }
+    function importOfflineChat() {
+        var input = document.createElement('input'); input.type = 'file'; input.accept = '.json,.txt';
+        input.addEventListener('change', function () { var file = input.files && input.files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function () {
+            try {
+                var text = String(reader.result || ''), payload;
+                if (/\.json$/i.test(file.name)) payload = JSON.parse(text);
+                else { var lines = text.split(/\r?\n/), msgs = [], role = 'assistant', buf = []; lines.forEach(function (line) { var hit = line.match(/^【第\s*\d+\s*层】\s*(.*)$/); if (hit) { if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); buf = []; role = /我/.test(hit[1]) ? 'user' : /系统/.test(hit[1]) ? 'system' : 'assistant'; return; } if (/^#\s*/.test(line)) return; buf.push(line); }); if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); payload = { session: { title: file.name.replace(/\.[^.]+$/, '') }, messages: msgs }; }
+                var sess = apStore().importSession(ui.chatId, payload); if (!sess) throw new Error('invalid');
+                ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle'; render(); toast('聊天已导入');
+            } catch (e) { console.error(e); toast('导入失败：文件格式不正确'); }
+        }; reader.readAsText(file); }); input.click();
+    }
+
     function bindEvents() {
+        document.querySelectorAll('[data-ap-floor-branch]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); branchFromFloor(btn.getAttribute('data-ap-floor-branch')); }); });
+        document.querySelectorAll('[data-ap-floor-hide]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); toggleFloor(btn.getAttribute('data-ap-floor-hide')); }); });
+        document.querySelectorAll('[data-ap-export-txt]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineText(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-txt'))); }); });
+        document.querySelectorAll('[data-ap-export-json]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineJson(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-json'))); }); });
+        var nc = $('xw-new-offline-chat'); if (nc) nc.addEventListener('click', newOfflineChat);
+        var ic = $('xw-import-offline-chat'); if (ic) ic.addEventListener('click', importOfflineChat);
+        var ct = $('xw-export-current-txt'); if (ct) ct.addEventListener('click', function () { downloadOfflineText(apStore().getSession(ui.chatId, ui.sessionId)); });
+        var cj = $('xw-export-current-json'); if (cj) cj.addEventListener('click', function () { downloadOfflineJson(apStore().getSession(ui.chatId, ui.sessionId)); });
         bindScrollPin();
         var back = $('xw-exit');
         if (back) {

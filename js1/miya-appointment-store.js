@@ -289,6 +289,7 @@
             content: String(row.content || '').trim(),
             createdAt: Number(row.createdAt) || Date.now(),
             deleted: !!row.deleted,
+            hidden: !!row.hidden,
             editedAt: Number(row.editedAt) || 0
         };
         if (row.chatMirrorId) out.chatMirrorId = String(row.chatMirrorId).trim();
@@ -487,7 +488,10 @@
             title: String(raw.title || '').trim(),
             messages: msgs,
             summaryList: sums,
-            statusLog: statusLog
+            statusLog: statusLog,
+            parentSessionId: String(raw.parentSessionId || '').trim(),
+            branchFromMessageId: String(raw.branchFromMessageId || '').trim(),
+            branchFromFloor: clampInt(raw.branchFromFloor, 0, 999999, 0)
         };
     }
 
@@ -1534,6 +1538,48 @@
                 flushSave();
             }
             return best;
+        },
+        createBranch: function (chatId, sessionId, floorIndex) {
+            var source = store.getSession(chatId, sessionId);
+            if (!source) return null;
+            var idx = clampInt(floorIndex, 1, (source.messages || []).length, 0) - 1;
+            if (idx < 0) return null;
+            var snapshot = (source.messages || []).slice(0, idx + 1).map(function (m) {
+                return normalizeMessage(JSON.parse(JSON.stringify(m)));
+            }).filter(Boolean);
+            var b = chatBucket(chatId);
+            if (!b) return null;
+            var base = String(source.title || '').trim() || '未命名场景';
+            var existing = b.sessions.map(function (x) { return String(x && x.title || ''); });
+            var n = 1, title = base + ' · 分支 ' + n;
+            while (existing.indexOf(title) >= 0) { n += 1; title = base + ' · 分支 ' + n; }
+            var branch = normalizeSession({
+                id: uid('sess'), chatId: source.chatId, contactId: source.contactId,
+                cast: source.cast, createdAt: Date.now(), title: title,
+                messages: snapshot, summaryList: [], statusLog: source.statusLog || [],
+                parentSessionId: source.id,
+                branchFromMessageId: snapshot.length ? snapshot[snapshot.length - 1].id : '',
+                branchFromFloor: idx + 1
+            });
+            b.sessions.unshift(branch);
+            b.activeSessionId = branch.id;
+            save({ force: true });
+            return branch;
+        },
+        importSession: function (chatId, payload) {
+            if (!payload || typeof payload !== 'object') return null;
+            var source = payload.session && typeof payload.session === 'object' ? payload.session : payload;
+            var messages = Array.isArray(payload.messages) ? payload.messages : source.messages;
+            if (!Array.isArray(messages)) return null;
+            var sess = normalizeSession(Object.assign({}, source, {
+                id: uid('sess'), chatId: chatId || source.chatId,
+                createdAt: Date.now(), closedAt: 0, messages: messages
+            }));
+            if (!sess || !sess.chatId) return null;
+            var b = chatBucket(sess.chatId);
+            b.sessions.unshift(sess); b.activeSessionId = sess.id;
+            save({ force: true });
+            return sess;
         },
         startNewSession: function (chatId, contactId, castOpt) {
             var b = chatBucket(chatId);
