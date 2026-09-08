@@ -16,12 +16,16 @@
     return { version: 2, activeId: '', packs: [] };
   }
 
-  function normalizePosition(v) {
-    /* ST/本项目统一只暴露「前置 / 后置」两档；兼容常见 ST 数值 injection_position。 */
-    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'back' || String(v || '').toLowerCase() === '后置') {
-      return 'back';
-    }
-    return 'front';
+  function normalizeInjectionPosition(v) {
+    /* SillyTavern PromptManager: 0 = Relative, 1 = In-chat.
+       injection_position is the source of truth; legacy front/back is only compatibility. */
+    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'in-chat' || String(v || '').toLowerCase() === 'in_chat' || String(v || '').toLowerCase() === 'back' || String(v || '') === '后置') return 1;
+    return 0;
+  }
+
+  function normalizeTriggers(v) {
+    if (!Array.isArray(v)) return [];
+    return v.map(function (x) { return String(x || '').trim(); }).filter(Boolean);
   }
 
   function normalizeEntry(raw, order) {
@@ -33,18 +37,22 @@
       name: String(e.name || e.identifier || '未命名').trim() || '未命名',
       content: e.content != null ? String(e.content) : '',
       role: role,
-      position: normalizePosition(
-        e.position !== undefined ? e.position :
-        (e.injection_position !== undefined ? e.injection_position : 'front')
-      ),
+      position: normalizeInjectionPosition(
+        e.injection_position !== undefined ? e.injection_position : e.position
+      ) === 1 ? 'in-chat' : 'relative',
       enabled: e.enabled === undefined ? true : !!e.enabled,
       identifier: e.identifier != null ? String(e.identifier) : '',
       system_prompt: e.system_prompt !== false,
+      forbid_overrides: !!e.forbid_overrides,
+      extension: !!e.extension,
       marker: !!e.marker,
       order: typeof order === 'number' ? order : (typeof e.order === 'number' ? e.order : 0),
-      injection_position: e.injection_position === 1 || e.position === 'back' ? 1 : 0,
-      injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 0,
-      injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100
+      injection_position: normalizeInjectionPosition(
+        e.injection_position !== undefined ? e.injection_position : e.position
+      ),
+      injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 4,
+      injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100,
+      injection_trigger: normalizeTriggers(e.injection_trigger)
     };
   }
 
@@ -296,14 +304,17 @@
             name: p.name || ident || '条目',
             content: p.content || '',
             role: p.role || 'system',
-            position: p.position !== undefined ? p.position : p.injection_position,
+            position: p.injection_position === 1 ? 'in-chat' : 'relative',
             identifier: ident,
             system_prompt: p.system_prompt !== false,
+            forbid_overrides: !!p.forbid_overrides,
+            extension: !!p.extension,
             marker: !!p.marker,
             enabled: !!en,
-            injection_position: p.injection_position === 1 || p.position === 'back' ? 1 : 0,
-            injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 0,
-            injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100
+            injection_position: normalizeInjectionPosition(p.injection_position),
+            injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 4,
+            injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100,
+            injection_trigger: normalizeTriggers(p.injection_trigger)
           },
           order
         )
@@ -360,33 +371,13 @@
     return { pack: pack, added: entries.length, total: entries.length };
   }
 
-  function getEnabledForRequest() {
+  function getEnabledForRequest(generationType) {
+    var type = String(generationType || 'normal');
     return listEntries().filter(function (e) {
-      return e && e.enabled !== false && !e.marker && String(e.content || '').trim();
-    }).map(function (e, idx) {
-      // 旧存档可能没有新加入的 ST 注入字段；读取时补齐，避免“界面有条目、请求层读不到”。
-      var x = Object.assign({}, e);
-      x.role = (x.role === 'user' || x.role === 'assistant') ? x.role : 'system';
-      x.position = normalizePosition(x.position !== undefined ? x.position : x.injection_position);
-      x.injection_position = x.position === 'back' || Number(x.injection_position) === 1 ? 1 : 0;
-      x.injection_depth = Number.isFinite(Number(x.injection_depth)) ? Math.max(0, Number(x.injection_depth)) : 0;
-      x.injection_order = Number.isFinite(Number(x.injection_order)) ? Number(x.injection_order) : 100;
-      x.order = Number.isFinite(Number(x.order)) ? Number(x.order) : idx;
-      x.identifier = String(x.identifier || x.id || '');
-      return x;
+      if (!(e.enabled && !e.marker && String(e.content || '').trim())) return false;
+      var triggers = Array.isArray(e.injection_trigger) ? e.injection_trigger : [];
+      return !triggers.length || triggers.indexOf(type) !== -1;
     });
-  }
-
-  function getRequestSnapshot() {
-    var pack = getActivePack();
-    var entries = getEnabledForRequest();
-    return {
-      packId: pack ? String(pack.id || '') : '',
-      packName: pack ? String(pack.name || '') : '',
-      totalEntries: pack && Array.isArray(pack.entries) ? pack.entries.length : 0,
-      enabledEntries: entries.length,
-      entries: entries
-    };
   }
 
   global.miyaStPromptPresetsStore = {
@@ -407,7 +398,6 @@
     setEnabled: setEnabled,
     clearActiveEntries: clearActiveEntries,
     importFromStJson: importFromStJson,
-    getEnabledForRequest: getEnabledForRequest,
-    getRequestSnapshot: getRequestSnapshot
+    getEnabledForRequest: getEnabledForRequest
   };
 })(typeof window !== 'undefined' ? window : this);

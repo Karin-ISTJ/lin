@@ -6083,7 +6083,7 @@
       <button type="button" class="stp-btn" id="stp-pack-delete">删除套</button>
       <button type="button" class="stp-btn" id="stp-copy-offline-prompt">复制上次线下 Prompt</button>
       <input type="file" id="stp-file" accept="application/json,.json" hidden />
-      <p class="stp-hint">可手动新增、编辑、拖拽排序，并指定相对聊天记录的注入位置。「前置」作为背景设定，「后置」紧挨聊天记录，更适合必须直接执行的人称、格式与本轮行为规则。</p>
+      <p class="stp-hint">编辑器字段按 SillyTavern Prompt Manager 对齐：位置只有「相对」与「In-chat」；Depth / Order 仅在 In-chat 时生效。触发器用于筛选 Normal、Continue 等生成类型。</p>
     </div>
     <div class="stp-body">
       <div id="stp-list"></div>
@@ -6102,15 +6102,17 @@
         <label class="stp-editor__field"><span>名称</span><input id="stp-edit-name" type="text" maxlength="120" autocomplete="off" placeholder="例如：角色行为规则"></label>
         <label class="stp-editor__field"><span>正文</span><textarea id="stp-edit-content" rows="10" placeholder="输入要注入聊天请求的 prompt 内容"></textarea></label>
         <div class="stp-editor__grid">
-          <label class="stp-editor__field"><span>角色</span><select id="stp-edit-role"><option value="system">system</option><option value="user">user</option><option value="assistant">assistant</option></select></label>
-          <label class="stp-editor__field"><span>相对聊天记录位置</span><select id="stp-edit-position"><option value="front">前置 · 聊天记录之前</option><option value="back">后置 · 聊天记录之后</option></select>
-                    <label class="stp-field"><span>In-Chat 深度</span><input id="stp-edit-depth" type="number" min="0" max="100" step="1" value="4"><small>仅后置生效；0=紧贴最新历史，4=距离最新历史 4 条。</small></label>
-                    <label class="stp-field"><span>In-Chat 优先级</span><input id="stp-edit-injection-order" type="number" step="1" value="100"><small>同一深度时按 ST injection_order 排序。</small></label></label>
+          <label class="stp-editor__field"><span>角色</span><select id="stp-edit-role"><option value="system">system</option><option value="user">user</option><option value="assistant">assistant</option></select><small>对应 ST 的 Role。</small></label>
+          <label class="stp-editor__field"><span>触发器</span><select id="stp-edit-trigger" multiple size="3"><option value="normal">Normal</option><option value="continue">Continue</option><option value="impersonate">Impersonate</option><option value="swipe">Swipe</option><option value="regenerate">Regenerate</option><option value="quiet">Quiet</option></select><small>留空 = 所有生成类型；选中后仅对应类型触发。</small></label>
+          <label class="stp-editor__field"><span>位置</span><select id="stp-edit-position"><option value="0">相对 · Relative</option><option value="1">In-chat · 聊天记录内</option></select><small>与 ST 的 injection_position 完全对应：0=Relative，1=In-chat。</small></label>
+          <label class="stp-editor__field" id="stp-edit-depth-block"><span>Depth</span><input id="stp-edit-depth" type="number" min="0" max="9999" step="1" value="4"><small>仅 In-chat 生效；0=最新历史之后，1=最新历史之前。</small></label>
+          <label class="stp-editor__field" id="stp-edit-order-block"><span>Order</span><input id="stp-edit-injection-order" type="number" min="0" max="9999" step="1" value="100"><small>同一 Depth 时按 ST injection_order；默认 100。</small></label>
         </div>
         <label class="stp-editor__field"><span>Identifier（可选）</span><input id="stp-edit-identifier" type="text" maxlength="120" autocomplete="off"></label>
         <div class="stp-editor__checks">
           <label><input id="stp-edit-enabled" type="checkbox" checked> 启用</label>
           <label><input id="stp-edit-system" type="checkbox" checked> system_prompt</label>
+          <label><input id="stp-edit-forbid" type="checkbox"> forbid_overrides</label>
           <label><input id="stp-edit-marker" type="checkbox"> 标记位（不注入正文）</label>
         </div>
       </div>
@@ -6257,7 +6259,7 @@
   <script defer src="js1/miya-chat-wallet.js?v=3"></script>
   <script defer src="js1/miya-chat-calls.js?v=1"></script>
   <script defer src="js1/miya-chat-html.js?v=3"></script>
-  <script defer src="js1/miya-chat-engine.js?v=57"></script>
+  <script defer src="js1/miya-chat-engine.js?v=56"></script>
   <script defer src="js1/miya-chat-group.js?v=11"></script>
   <script defer src="js1/miya-chat-group-redpacket.js?v=9"></script>
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
@@ -6267,7 +6269,7 @@
   <script defer src="js2/miya-offline-beautify.js?v=14"></script>
   <script defer src="js2/miya-offline-text-decor.js?v=1"></script>
   <script defer src="js1/miya-appointment-memory.js?v=5"></script>
-  <script defer src="js1/miya-appointment-engine.js?v=21"></script>
+  <script defer src="js1/miya-appointment-engine.js?v=14"></script>
   <script defer src="js1/miya-appointment-app.js?v=32"></script>
   <script defer src="js1/miya-chat-heartvoice-templates.js?v=15"></script>
   <script defer src="js1/miya-chat-heartvoice.js?v=11"></script>
@@ -6316,8 +6318,8 @@
 
   <script defer src="miya-auth/auth.js?v=5"></script>
   <script defer src="js2/miya-github-plugins.js?v=2"></script>
-  <script defer src="js2/miya-st-prompt-presets-store.js?v=4"></script>
-  <script defer src="js2/miya-st-prompt-presets-app.js?v=5"></script>
+  <script defer src="js2/miya-st-prompt-presets-store.js?v=3"></script>
+  <script defer src="js2/miya-st-prompt-presets-app.js?v=4"></script>
   <script defer src="js1/app.js?v=60"></script>
 </body>
 </html>

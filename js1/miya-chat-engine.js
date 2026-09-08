@@ -1308,58 +1308,6 @@
      * ST COT/思维链条目：用于把预设中明确属于 COT 的规则单独送到
      * 生成前的最近位置。这里只负责识别与原文保留，不伪造模型的隐藏 reasoning。
      */
-    function buildStCotPromptBlock() {
-        /*
-         * 线下“思维链”不能靠猜条目名字是不是 COT。
-         * ST 预设的 enabled 条目本身就是本场规则源：身份、环境、叙事、COT、格式
-         * 等都必须在生成前可见。过去这里用 COT/思维链关键词筛选，导致像
-         * “PARADISE / CULTIVATOR” 这种没有写 COT 字样的关键条目根本不会进入该层。
-         *
-         * 因此这里改为：把所有已启用、非 marker 的 ST 条目原文按原顺序组成
-         * “ST 执行上下文”。这不是伪造 reasoning_content；它的作用是让模型在生成
-         * 前明确读取完整 ST 规则集。真正的 reasoning 仍由模型/API 产生。
-         */
-        var rows = [];
-        try {
-            var stpStore = global.miyaStPromptPresetsStore;
-            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
-                ? (stpStore.getEnabledForRequest() || [])
-                : [];
-            entries.forEach(function (entry) {
-                var body = String(entry && entry.content || '').trim();
-                if (!body) return;
-                var name = String(entry && (entry.name || entry.identifier) || '').trim();
-                var id = String(entry && entry.identifier || '').trim();
-                var position = entry && entry.position === 'back' ? '后置' : '前置';
-                rows.push({
-                    name: name || id || '未命名 ST 条目',
-                    identifier: id,
-                    position: position,
-                    content: body
-                });
-            });
-        } catch (e) {}
-        if (!rows.length) return '';
-
-        var out = [
-            '【ST 预设·线下生成执行上下文】',
-            '以下是本轮实际启用的全部 ST 预设条目。它们是本场最高优先级的可编辑生成规则之一，必须在生成当前回复前完整读取、逐条应用；不得因为条目名称、位置或内容没有出现“COT/思维链”字样而跳过。',
-            '身份、环境、叙事方式、世界观、COT/推理方法、人称、格式、行为约束等均属于 ST 预设的一部分。若模型产生 reasoning/<thinking>，其任务分析必须以这些条目为依据，而不是自行另起一套角色心理规则。',
-            '特别注意：不要把“读取 ST 条目”理解成只在正文里模仿风格；生成前必须实际检查这些规则是否影响本轮决策。',
-            ''
-        ];
-        rows.forEach(function (row, i) {
-            out.push('【ST-' + (i + 1) + '｜' + row.name + '｜' + row.position + '】');
-            if (row.identifier) out.push('identifier: ' + row.identifier);
-            out.push(row.content);
-            out.push('');
-        });
-        out.push('【ST 执行检查】');
-        out.push('生成前：确认以上每一条已启用 ST 规则都已被读取；尤其不要遗漏身份/环境类条目。');
-        out.push('生成中：优先依据 ST 规则进行任务分析与决策，不以角色内心独白替代规则执行。');
-        out.push('生成后：检查正文是否违反任何已启用 ST 条目。');
-        return out.join('\n').trim();
-    }
 
     /**
      * ST-compatible prompt export.
@@ -1373,45 +1321,38 @@
      * Miya's UI keeps the friendly front/back labels, but the request layer now
      * preserves these ST semantics.
      */
-    function buildStPresetMessages(position) {
+    function buildStPresetMessages(position, generationType) {
         var out = [];
-        var wanted = position === 'back' ? 'back' : position === 'front' ? 'front' : '';
+        /* Compatibility: existing callers use front/back. In ST terms these now mean
+           Relative (0) and In-chat (1), respectively. */
+        var wanted = position === 'back' ? 1 : position === 'front' ? 0 : null;
+        var type = String(generationType || 'normal');
         try {
             var stpStore = global.miyaStPromptPresetsStore;
-            var snapshot = stpStore && typeof stpStore.getRequestSnapshot === 'function'
-                ? stpStore.getRequestSnapshot()
-                : null;
-            var entries = snapshot && Array.isArray(snapshot.entries)
-                ? snapshot.entries
-                : (stpStore && typeof stpStore.getEnabledForRequest === 'function'
-                    ? (stpStore.getEnabledForRequest() || [])
-                    : []);
+            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
+                ? (stpStore.getEnabledForRequest(type) || [])
+                : [];
             entries.forEach(function (entry, idx) {
                 var body = String(entry && entry.content || '').trim();
                 if (!body) return;
-                var entryPosition = entry && (entry.position === 'back' || Number(entry.injection_position) === 1) ? 'back' : 'front';
-                if (wanted && entryPosition !== wanted) return;
+                var injectionPosition = Number(entry && entry.injection_position) === 1 ? 1 : 0;
+                if (wanted !== null && injectionPosition !== wanted) return;
                 var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
                 out.push({
                     role: role,
                     content: body,
-                    position: entryPosition,
-                    injection_position: entryPosition === 'back' ? 1 : 0,
-                    injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 0,
+                    position: injectionPosition === 1 ? 'in-chat' : 'relative',
+                    injection_position: injectionPosition,
+                    injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 4,
                     injection_order: Number.isFinite(Number(entry.injection_order)) ? Number(entry.injection_order) : 100,
                     order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : idx,
-                    identifier: String(entry.identifier || entry.id || '')
+                    identifier: String(entry.identifier || entry.id || ''),
+                    injection_trigger: Array.isArray(entry.injection_trigger) ? entry.injection_trigger.slice() : [],
+                    forbid_overrides: !!entry.forbid_overrides,
+                    system_prompt: entry.system_prompt !== false
                 });
             });
         } catch (e) {}
-        if (!out.length && !wanted) {
-            out.push({
-                role: 'system',
-                content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。',
-                position: 'front', injection_position: 0, injection_depth: 0, injection_order: 100, order: 0,
-                identifier: '__fallback__'
-            });
-        }
         return out;
     }
 
@@ -1434,7 +1375,7 @@
 
         var groups = Object.create(null);
         stEntries.forEach(function (m) {
-            var depth = Number.isFinite(Number(m.injection_depth)) ? Math.max(0, Number(m.injection_depth)) : 0;
+            var depth = Number.isFinite(Number(m.injection_depth)) ? Math.max(0, Number(m.injection_depth)) : 4;
             var key = String(depth);
             if (!groups[key]) groups[key] = [];
             groups[key].push(m);
@@ -4712,7 +4653,6 @@
         buildSystemPrompt: buildSystemPrompt,
         buildStPresetMessages: buildStPresetMessages,
         injectStInChatMessages: injectStInChatMessages,
-        buildStCotPromptBlock: buildStCotPromptBlock,
         buildApiMessages: buildApiMessages,
         setPendingOnlineReturnPrompt: function (chatId, text) {
             var key = String(chatId || '').trim();

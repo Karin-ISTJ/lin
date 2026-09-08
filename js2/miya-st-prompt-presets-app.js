@@ -81,7 +81,7 @@
         '<label class="stp-switch" title="启用"><input type="checkbox" data-act="toggle" ' + (e.enabled ? 'checked' : '') + ' /><span></span></label>' +
         '<button type="button" class="stp-row__edit" data-act="edit" title="编辑条目">' +
           '<span class="stp-row__name" title="' + esc(e.identifier || e.name) + '">' + esc(e.name) + '</span>' +
-          '<span class="stp-row__meta">' + esc(e.role || 'system') + ' · ' + (e.position === 'back' ? '后置' : '前置') + '</span>' +
+          '<span class="stp-row__meta">' + esc(e.role || 'system') + ' · ' + (Number(e.injection_position) === 1 ? 'In-chat' : 'Relative') + (Array.isArray(e.injection_trigger) && e.injection_trigger.length ? ' · ' + esc(e.injection_trigger.join('、')) : '') + '</span>' +
         '</button>' +
         '<button type="button" class="stp-row__del" data-act="del" aria-label="删除" title="删除">' +
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8v10m4-10v10m4-10v10M5 6h14M10 6V4h4v2m-8 0 1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
@@ -89,6 +89,15 @@
         '</div>'
       );
     }).join('');
+  }
+
+  function updateInjectionUi() {
+    var pos = $('stp-edit-position');
+    var isInChat = pos && String(pos.value) === '1';
+    var depthBlock = $('stp-edit-depth-block');
+    var orderBlock = $('stp-edit-order-block');
+    if (depthBlock) depthBlock.style.display = isInChat ? '' : 'none';
+    if (orderBlock) orderBlock.style.display = isInChat ? '' : 'none';
   }
 
   function openEditor(id) {
@@ -107,11 +116,16 @@
     $('stp-edit-name').value = e ? e.name : '';
     $('stp-edit-content').value = e ? e.content : '';
     $('stp-edit-role').value = e ? e.role : 'system';
-    $('stp-edit-position').value = e ? (e.position || 'front') : 'front';
+    $('stp-edit-position').value = e ? String(e.injection_position == 1 ? '1' : '0') : '0';
     var depthEl = $('stp-edit-depth');
     var orderEl = $('stp-edit-injection-order');
-    if (depthEl) depthEl.value = e && e.injection_depth != null ? String(e.injection_depth) : '0';
+    var triggerEl = $('stp-edit-trigger');
+    if (depthEl) depthEl.value = e && e.injection_depth != null ? String(e.injection_depth) : '4';
     if (orderEl) orderEl.value = e && e.injection_order != null ? String(e.injection_order) : '100';
+    if (triggerEl) {
+      Array.prototype.forEach.call(triggerEl.options, function (o) { o.selected = !!(e && Array.isArray(e.injection_trigger) && e.injection_trigger.indexOf(o.value) !== -1); });
+    }
+    updateInjectionUi();
     $('stp-edit-identifier').value = e ? e.identifier : '';
     $('stp-edit-enabled').checked = e ? e.enabled !== false : true;
     $('stp-edit-system').checked = e ? e.system_prompt !== false : true;
@@ -146,13 +160,15 @@
       name: name,
       content: content,
       role: $('stp-edit-role').value,
-      position: $('stp-edit-position').value === 'back' ? 'back' : 'front',
-      injection_position: $('stp-edit-position').value === 'back' ? 1 : 0,
-      injection_depth: Math.max(0, Number($('stp-edit-depth') ? $('stp-edit-depth').value : 0) || 0),
-      injection_order: Number($('stp-edit-injection-order') ? $('stp-edit-injection-order').value : 100) || 100,
+      position: $('stp-edit-position').value === '1' ? 'in-chat' : 'relative',
+      injection_position: $('stp-edit-position').value === '1' ? 1 : 0,
+      injection_depth: Math.max(0, Number($('stp-edit-depth') ? $('stp-edit-depth').value : 4) || 4),
+      injection_order: Math.max(0, Number($('stp-edit-injection-order') ? $('stp-edit-injection-order').value : 100) || 100),
+      injection_trigger: $('stp-edit-trigger') ? Array.prototype.map.call($('stp-edit-trigger').selectedOptions, function (o) { return o.value; }) : [],
       identifier: String($('stp-edit-identifier').value || '').trim(),
       enabled: $('stp-edit-enabled').checked,
       system_prompt: $('stp-edit-system').checked,
+      forbid_overrides: $('stp-edit-forbid').checked,
       marker: $('stp-edit-marker').checked
     });
     closeEditor();
@@ -250,43 +266,9 @@
     var eng = global.MiyaAppointmentEngine;
     var dbg = eng && typeof eng.getLastOfflinePromptDebug === 'function' ? eng.getLastOfflinePromptDebug() : global.__MiyaLastOfflinePrompt;
     if (!dbg || !Array.isArray(dbg.messages) || !dbg.messages.length) { toast('请先生成一次线下回复'); return; }
-    var lines = [];
-    lines.push('======== ST 读取诊断 ========');
-    lines.push('启用条目：' + String(dbg.stReadCount != null ? dbg.stReadCount : 0) + ' 条');
-    if (dbg.stSnapshot) {
-      lines.push('预设包：' + String(dbg.stSnapshot.packName || '(无)') + ' ｜ packId=' + String(dbg.stSnapshot.packId || ''));
-      lines.push('包内总条目：' + String(dbg.stSnapshot.totalEntries != null ? dbg.stSnapshot.totalEntries : '?') + ' ｜ 实际启用：' + String(dbg.stSnapshot.enabledEntries != null ? dbg.stSnapshot.enabledEntries : '?'));
-    }
-    lines.push('强制贴近生成层：' + (dbg.stForceNearEnd ? ('是 ｜ messages[' + dbg.stForceNearEndIndex + ']') : '否'));
-    if (Array.isArray(dbg.stHitIndexes) && dbg.stHitIndexes.length) {
-      lines.push('ST 内容落点：');
-      dbg.stHitIndexes.forEach(function (h) {
-        lines.push('  - [' + h.index + '] ' + String(h.kind || '') + (h.identifier ? (' · ' + h.identifier) : '') + ' · role=' + String(h.role || ''));
-      });
-    } else {
-      lines.push('ST 内容落点：未在 messages 中匹配到（若启用数>0 请检查 content 是否被截断）');
-    }
-    if (Array.isArray(dbg.stFront) && dbg.stFront.length) {
-      lines.push('前置条目：' + dbg.stFront.map(function (m) { return String(m.identifier || m.content || '').slice(0, 40); }).join(' | '));
-    }
-    if (Array.isArray(dbg.stBack) && dbg.stBack.length) {
-      lines.push('后置/In-Chat 条目：' + dbg.stBack.map(function (m) {
-        return String(m.identifier || '').slice(0, 24) + '(depth=' + String(m.injection_depth) + ',order=' + String(m.injection_order) + ')';
-      }).join(' | '));
-    }
-    lines.push('消息总数：' + dbg.messages.length);
-    lines.push('最后一条 role：' + String((dbg.messages[dbg.messages.length - 1] || {}).role || ''));
-    lines.push('');
-    lines.push('======== 完整 messages ========');
-    lines.push('');
-    var body = dbg.messages.map(function (m) {
-      var head = '[' + m.index + '] ' + String(m.role || 'system');
-      var c = String(m.content || '');
-      var mark = '';
-      if (dbg.stForceNearEndIndex === m.index) mark = '  << ST 强制贴近生成层';
-      return head + mark + '\n' + c;
+    var text = dbg.messages.map(function (m) {
+      return '[' + m.index + '] ' + String(m.role || 'system') + '\n' + String(m.content || '');
     }).join('\n\n==========\n\n');
-    var text = lines.join('\n') + '\n' + body;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () { toast('已复制上次线下 Prompt'); }).catch(function () { fallbackCopy(text); });
     } else fallbackCopy(text);
@@ -345,6 +327,9 @@
     if (addBtn) addBtn.addEventListener('click', function () { openEditor(''); });
     var editorSave = $('stp-editor-save');
     if (editorSave) editorSave.addEventListener('click', saveEditor);
+    var positionField = $('stp-edit-position');
+    if (positionField) positionField.addEventListener('change', updateInjectionUi);
+
     Array.prototype.forEach.call(document.querySelectorAll('[data-stp-editor-close]'), function (el) {
       el.addEventListener('click', closeEditor);
     });
