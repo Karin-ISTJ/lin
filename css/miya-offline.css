@@ -184,6 +184,21 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   padding: calc(64px + env(safe-area-inset-top, 0)) 14px 16px 14px;
+  transition: padding 0.22s ease;
+}
+
+/* 侧栏收起：正文居中、左右等宽、尽量占满 */
+.miya-offline-app.xw-dock-collapsed .xw-main {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.miya-offline-app.xw-dock-collapsed .xw-script-col,
+.miya-offline-app.xw-dock-collapsed .xw-hub,
+.miya-offline-app.xw-dock-collapsed .xw-vault,
+.miya-offline-app.xw-dock-collapsed .xw-opening,
+.miya-offline-app.xw-dock-collapsed .xw-opening-pick {
+  max-width: min(100%, 52em);
 }
 
 .xw-main--blank {
@@ -1746,6 +1761,16 @@
 
 /* v40: 顶部工具栏最终布局 */
 .xw-dock-expand { display:none !important; }
+.miya-offline-app.xw-dock-collapsed .xw-main { padding-right:14px; }
+@media (max-width:560px){
+  .xw-dock{top:calc(6px + env(safe-area-inset-top,0));left:10px;right:10px;min-height:42px;padding:3px 4px;border-radius:14px;}
+  .xw-dock__btn{width:42px;padding:6px 3px;}
+  .xw-dock__glyph{width:26px;height:26px;}
+  .xw-dock__lbl{font-size:8px;}
+  .xw-main{padding-top:calc(58px + env(safe-area-inset-top,0));}
+}
+
+
 /* v41: bottom-left sparkle tool launcher */
 #miya-offline-app .xw-dock {
   top: auto; right: auto; left: 12px;

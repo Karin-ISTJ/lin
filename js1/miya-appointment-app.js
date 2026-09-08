@@ -1915,7 +1915,7 @@ function renderWriter() {
             '<footer class="xw-writer">' +
             '<button type="button" class="xw-writer__tools" id="xw-dock-expand" title="更多功能" aria-label="更多功能" aria-expanded="false">' + ICON_SPARK + '</button>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
-            '<textarea class="xw-writer__field" id="xw-writer-input" rows="1"></textarea>' +
+            '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
             '</footer>'
         );
