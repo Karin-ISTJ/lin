@@ -3244,8 +3244,6 @@
     }
 
     var CHAT_COMPLETION_MAX_ATTEMPTS = 3;
-    var activeGenerationControllers = Object.create(null);
-    var activeGenerationChatIds = Object.create(null);
 
     function resolveChatApiSlice(cfg, useSecondary) {
         if (useSecondary) {
@@ -3270,15 +3268,13 @@
         return !!(normalizeBaseUrl(sec.baseUrl) && String(sec.apiKey || '').trim() && String(sec.model || '').trim());
     }
 
-    function fetchChatCompletion(url, headers, payload, attempt, signal) {
+    function fetchChatCompletion(url, headers, payload, attempt) {
         var tryNo = Math.max(1, Number(attempt) || 1);
-        var request = {
+        return fetch(url, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload)
-        };
-        if (signal) request.signal = signal;
-        return fetch(url, request)
+        })
             .then(function (r) {
                 if (!r.ok) {
                     return r.text().then(function (t) {
@@ -3290,7 +3286,7 @@
             .then(function (data) {
                 var replyRaw = extractReplyContent(data);
                 if (!replyRaw && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                    return fetchChatCompletion(url, headers, payload, tryNo + 1, signal);
+                    return fetchChatCompletion(url, headers, payload, tryNo + 1);
                 }
                 return { data: data, replyRaw: replyRaw };
             });
@@ -3810,11 +3806,6 @@
             : store.addMessage(chatId, { role: 'user', content: text });
 
         function clearInFlight() {
-            var key = String(chatId || '').trim();
-            if (key) {
-                delete activeGenerationControllers[key];
-                delete activeGenerationChatIds[key];
-            }
             releaseChatApi(chatId);
         }
 
@@ -3902,13 +3893,7 @@
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
                 reqPayload.stream = false;
-                var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-                var activeKey = String(chatId || '').trim();
-                if (controller && activeKey) {
-                    activeGenerationControllers[activeKey] = controller;
-                    activeGenerationChatIds[activeKey] = Date.now();
-                }
-                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, controller ? controller.signal : null).then(function (completion) {
+                return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
                     return completion;
@@ -4725,19 +4710,6 @@
             .finally(clearInFlight);
     }
 
-    function stopGeneration(chatId) {
-        var key = String(chatId || '').trim();
-        if (!key) return false;
-        var controller = activeGenerationControllers[key];
-        if (!controller) return false;
-        try { controller.abort(); } catch (e) {}
-        return true;
-    }
-
-    function isGenerationAbortError(err) {
-        return !!(err && (err.name === 'AbortError' || String(err.message || '').toLowerCase().indexOf('aborted') >= 0));
-    }
-
     global.miyaChatEngine = {
         getApiConfig: getApiConfig,
         getGlobalPrompt: getGlobalPrompt,
@@ -4766,8 +4738,6 @@
         sendChat: sendChat,
         acquireChatApi: acquireChatApi,
         releaseChatApi: releaseChatApi,
-        stopGeneration: stopGeneration,
-        isGenerationAbortError: isGenerationAbortError,
         isChatApiBusy: isChatApiBusy,
         isReplyInFlight: isReplyInFlight,
         estimateTokensFromText: estimateTokensFromText,
