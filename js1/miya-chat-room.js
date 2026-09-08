@@ -3596,31 +3596,30 @@
   }
 
   function handleSend() {
-    if (!state.chatId) return;
+    if (!state.chatId) return Promise.resolve();
     var input = $('qq-room-input');
-    if (!input) return;
+    if (!input) return Promise.resolve();
     var text = input.value.trim();
-    if (!text) return;
+    if (!text) return Promise.resolve();
     input.value = '';
     input.style.height = 'auto';
     hideStickerSuggest();
+    var payload;
     if (state.narrationMode) {
-      sendMessage({
-        role: 'system',
-        type: 'text',
-        content: text,
-        systemKind: 'online-narration',
-        narrationFrom: 'user',
-        excludedFromContext: false
-      }).catch(function () {
-        toast('发送失败');
-        restoreComposeAfterOverlay();
-      });
-      return;
+      payload = {
+        role: 'system', type: 'text', content: text,
+        systemKind: 'online-narration', narrationFrom: 'user', excludedFromContext: false
+      };
+    } else {
+      payload = { role: 'user', content: text, type: 'text' };
     }
-    sendMessage({ role: 'user', content: text, type: 'text' }).catch(function () {
+    return sendMessage(payload).then(function () {
+      /* 普通发送键直接进入 AI 回复流程；AI 星标仍可用于主动触发/补发。 */
+      if (!state.narrationMode) return requestAiReply(false, 0);
+    }).catch(function (err) {
       toast('发送失败');
       restoreComposeAfterOverlay();
+      throw err;
     });
   }
 

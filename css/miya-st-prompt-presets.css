@@ -310,3 +310,41 @@ body.stp-is-dragging { user-select: none; }
   .stp-editor { align-items:center; }
   .stp-editor__panel { border-radius:18px; }
 }
+
+/* v23：编辑器布局对齐 SillyTavern：姓名 / 身份 / 触发器 / 位置在上，正文在下 */
+.stp-entry-top {
+  display: grid;
+  grid-template-columns: 1.45fr .9fr .95fr 1.15fr;
+  gap: 8px;
+  align-items: start;
+}
+.stp-entry-top .stp-editor__field { margin-bottom: 10px; }
+.stp-content-field textarea { min-height: 280px; }
+.stp-inchat-grid { margin-top: 2px; }
+.stp-inchat-grid.is-disabled { opacity: .42; pointer-events: none; }
+.stp-gen-panel {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 7px;
+  padding: 10px;
+  background: #f7f7f7;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 12px;
+}
+.stp-gen-title { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; font-size:12px; font-weight:600; }
+.stp-gen-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; }
+.stp-gen-grid label { display:block; min-width:0; }
+.stp-gen-grid label > span { display:block; margin:0 0 4px; font-size:10px; color:rgba(0,0,0,.52); }
+.stp-gen-grid input[type="number"] { box-sizing:border-box; width:100%; border:1px solid rgba(0,0,0,.12); border-radius:8px; background:#fff; padding:7px 8px; font:inherit; font-size:12px; }
+.stp-gen-check { display:flex !important; flex-direction:column; justify-content:flex-start; }
+.stp-gen-check input { width:20px; height:20px; margin:2px 0 0; }
+.stp-gen-grid small { display:block; margin-top:4px; font-size:9px; color:rgba(0,0,0,.4); line-height:1.3; }
+@media (max-width: 700px) {
+  .stp-entry-top { grid-template-columns: 1fr 1fr; }
+  .stp-gen-grid { grid-template-columns:1fr 1fr; }
+  .stp-content-field textarea { min-height: 300px; }
+}
+@media (max-width: 430px) {
+  .stp-entry-top { grid-template-columns:1fr 1fr; gap:6px; }
+  .stp-gen-grid { grid-template-columns:1fr 1fr; gap:7px; }
+}

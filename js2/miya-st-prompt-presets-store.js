@@ -13,19 +13,30 @@
   }
 
   function emptyState() {
-    return { version: 2, activeId: '', packs: [] };
+    return { version: 3, activeId: '', packs: [] };
   }
 
-  function normalizeInjectionPosition(v) {
-    /* SillyTavern PromptManager: 0 = Relative, 1 = In-chat.
-       injection_position is the source of truth; legacy front/back is only compatibility. */
-    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'in-chat' || String(v || '').toLowerCase() === 'in_chat' || String(v || '').toLowerCase() === 'back' || String(v || '') === '后置') return 1;
-    return 0;
+  function normalizeGeneration(raw) {
+    var g = raw && typeof raw === 'object' ? raw : {};
+    function num(v, fallback) { var n = Number(v); return Number.isFinite(n) ? n : fallback; }
+    return {
+      contextLength: Math.max(0, num(g.contextLength, 2000000)),
+      maxTokens: Math.max(1, num(g.maxTokens != null ? g.maxTokens : g.max_tokens, 50000)),
+      n: Math.max(1, Math.min(8, Math.floor(num(g.n, 1)))),
+      stream: g.stream !== false,
+      temperature: Math.max(0, Math.min(2, num(g.temperature, 1))),
+      frequencyPenalty: Math.max(-2, Math.min(2, num(g.frequencyPenalty != null ? g.frequencyPenalty : g.frequency_penalty, 0))),
+      presencePenalty: Math.max(-2, Math.min(2, num(g.presencePenalty != null ? g.presencePenalty : g.presence_penalty, 0))),
+      topP: Math.max(0, Math.min(1, num(g.topP != null ? g.topP : g.top_p, 0.95)))
+    };
   }
 
-  function normalizeTriggers(v) {
-    if (!Array.isArray(v)) return [];
-    return v.map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+  function normalizePosition(v) {
+    /* ST/本项目统一只暴露「前置 / 后置」两档；兼容常见 ST 数值 injection_position。 */
+    if (v === 1 || v === '1' || String(v || '').toLowerCase() === 'back' || String(v || '').toLowerCase() === '后置') {
+      return 'back';
+    }
+    return 'front';
   }
 
   function normalizeEntry(raw, order) {
@@ -37,22 +48,20 @@
       name: String(e.name || e.identifier || '未命名').trim() || '未命名',
       content: e.content != null ? String(e.content) : '',
       role: role,
-      position: normalizeInjectionPosition(
-        e.injection_position !== undefined ? e.injection_position : e.position
-      ) === 1 ? 'in-chat' : 'relative',
+      position: normalizePosition(
+        e.position !== undefined ? e.position :
+        (e.injection_position !== undefined ? e.injection_position : 'front')
+      ),
       enabled: e.enabled === undefined ? true : !!e.enabled,
       identifier: e.identifier != null ? String(e.identifier) : '',
       system_prompt: e.system_prompt !== false,
+      injection_trigger: Array.isArray(e.injection_trigger) ? e.injection_trigger.slice() : (e.injection_trigger ? [String(e.injection_trigger)] : []),
       forbid_overrides: !!e.forbid_overrides,
-      extension: !!e.extension,
       marker: !!e.marker,
       order: typeof order === 'number' ? order : (typeof e.order === 'number' ? e.order : 0),
-      injection_position: normalizeInjectionPosition(
-        e.injection_position !== undefined ? e.injection_position : e.position
-      ),
+      injection_position: e.injection_position === 1 || e.position === 'back' ? 1 : 0,
       injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 4,
-      injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100,
-      injection_trigger: normalizeTriggers(e.injection_trigger)
+      injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100
     };
   }
 
@@ -68,7 +77,7 @@
         createdAt: Date.now(),
         entries: old.entries.map(function (e, i) { return normalizeEntry(e, i); })
       };
-      return { version: 2, activeId: pack.id, packs: [pack] };
+      return { version: 3, activeId: pack.id, packs: [pack] };
     } catch (err) {
       return null;
     }
@@ -80,7 +89,8 @@
       if (raw) {
         var data = JSON.parse(raw);
         if (data && Array.isArray(data.packs)) {
-          data.version = 2;
+          data.version = 3;
+          data.packs.forEach(function (p) { p.generation = normalizeGeneration(p.generation); });
           if (!data.activeId) data.activeId = data.packs[0] ? data.packs[0].id : '';
           return data;
         }
@@ -98,7 +108,7 @@
   function save(state) {
     var data = state && typeof state === 'object' ? state : emptyState();
     if (!Array.isArray(data.packs)) data.packs = [];
-    data.version = 2;
+    data.version = 3;
     localStorage.setItem(KEY, JSON.stringify(data));
     return data;
   }
@@ -122,6 +132,7 @@
       id: uid('pack'),
       name: String(name || '').trim() || '手动预设',
       createdAt: Date.now(),
+      generation: normalizeGeneration({}),
       entries: []
     };
     state.packs.push(pack);
@@ -179,6 +190,19 @@
       if (entries[i].id === id) return entries[i];
     }
     return null;
+  }
+
+  function updateActivePack(mutator) {
+    var state = load();
+    var pack = null;
+    for (var i = 0; i < state.packs.length; i++) {
+      if (state.packs[i].id === state.activeId) { pack = state.packs[i]; break; }
+    }
+    if (!pack && state.packs.length) { pack = state.packs[0]; state.activeId = pack.id; }
+    if (!pack) return null;
+    mutator(pack);
+    save(state);
+    return pack;
   }
 
   function updateActiveEntries(mutator) {
@@ -304,17 +328,16 @@
             name: p.name || ident || '条目',
             content: p.content || '',
             role: p.role || 'system',
-            position: p.injection_position === 1 ? 'in-chat' : 'relative',
+            position: p.position !== undefined ? p.position : p.injection_position,
             identifier: ident,
             system_prompt: p.system_prompt !== false,
+            injection_trigger: Array.isArray(p.injection_trigger) ? p.injection_trigger.slice() : (p.injection_trigger ? [String(p.injection_trigger)] : []),
             forbid_overrides: !!p.forbid_overrides,
-            extension: !!p.extension,
             marker: !!p.marker,
             enabled: !!en,
-            injection_position: normalizeInjectionPosition(p.injection_position),
+            injection_position: p.injection_position === 1 || p.position === 'back' ? 1 : 0,
             injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 4,
-            injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100,
-            injection_trigger: normalizeTriggers(p.injection_trigger)
+            injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100
           },
           order
         )
@@ -363,6 +386,7 @@
       id: uid('pack'),
       name: String(packName || obj.name || '预设 ' + (state.packs.length + 1)).trim() || '未命名预设',
       createdAt: Date.now(),
+      generation: normalizeGeneration(obj.generation || obj.generation_settings || obj),
       entries: entries
     };
     state.packs.push(pack);
@@ -371,12 +395,9 @@
     return { pack: pack, added: entries.length, total: entries.length };
   }
 
-  function getEnabledForRequest(generationType) {
-    var type = String(generationType || 'normal');
+  function getEnabledForRequest() {
     return listEntries().filter(function (e) {
-      if (!(e.enabled && !e.marker && String(e.content || '').trim())) return false;
-      var triggers = Array.isArray(e.injection_trigger) ? e.injection_trigger : [];
-      return !triggers.length || triggers.indexOf(type) !== -1;
+      return e.enabled && !e.marker && String(e.content || '').trim();
     });
   }
 
@@ -398,6 +419,15 @@
     setEnabled: setEnabled,
     clearActiveEntries: clearActiveEntries,
     importFromStJson: importFromStJson,
-    getEnabledForRequest: getEnabledForRequest
+    getEnabledForRequest: getEnabledForRequest,
+    getActiveGeneration: function () {
+      var p = getActivePack();
+      return normalizeGeneration(p && p.generation);
+    },
+    setActiveGeneration: function (patch) {
+      return updateActivePack(function (pack) {
+        pack.generation = normalizeGeneration(Object.assign({}, pack.generation || {}, patch || {}));
+      });
+    }
   };
 })(typeof window !== 'undefined' ? window : this);

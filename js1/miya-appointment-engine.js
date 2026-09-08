@@ -728,8 +728,8 @@
         var stPresetBackMessages = [];
         if (stEngine && typeof stEngine.buildStPresetMessages === 'function') {
             try {
-                stPresetFrontMessages = stEngine.buildStPresetMessages('front', 'normal') || [];
-                stPresetBackMessages = stEngine.buildStPresetMessages('back', 'normal') || [];
+                stPresetFrontMessages = stEngine.buildStPresetMessages('front') || [];
+                stPresetBackMessages = stEngine.buildStPresetMessages('back') || [];
                 stPresetFrontMessages.forEach(function (m) {
                     if (!m || !String(m.content || '').trim()) return;
                     apiMessages.push({
@@ -1511,6 +1511,7 @@
         splitDisplayLines: splitDisplayLines,
         splitDisplayParagraphs: splitDisplayParagraphs,
         parseThinkingPayload: parseThinkingPayload,
+        getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,

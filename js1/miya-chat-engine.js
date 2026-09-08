@@ -1308,6 +1308,58 @@
      * ST COT/思维链条目：用于把预设中明确属于 COT 的规则单独送到
      * 生成前的最近位置。这里只负责识别与原文保留，不伪造模型的隐藏 reasoning。
      */
+    function buildStCotPromptBlock() {
+        /*
+         * 线下“思维链”不能靠猜条目名字是不是 COT。
+         * ST 预设的 enabled 条目本身就是本场规则源：身份、环境、叙事、COT、格式
+         * 等都必须在生成前可见。过去这里用 COT/思维链关键词筛选，导致像
+         * “PARADISE / CULTIVATOR” 这种没有写 COT 字样的关键条目根本不会进入该层。
+         *
+         * 因此这里改为：把所有已启用、非 marker 的 ST 条目原文按原顺序组成
+         * “ST 执行上下文”。这不是伪造 reasoning_content；它的作用是让模型在生成
+         * 前明确读取完整 ST 规则集。真正的 reasoning 仍由模型/API 产生。
+         */
+        var rows = [];
+        try {
+            var stpStore = global.miyaStPromptPresetsStore;
+            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
+                ? (stpStore.getEnabledForRequest() || [])
+                : [];
+            entries.forEach(function (entry) {
+                var body = String(entry && entry.content || '').trim();
+                if (!body) return;
+                var name = String(entry && (entry.name || entry.identifier) || '').trim();
+                var id = String(entry && entry.identifier || '').trim();
+                var position = entry && entry.position === 'back' ? '后置' : '前置';
+                rows.push({
+                    name: name || id || '未命名 ST 条目',
+                    identifier: id,
+                    position: position,
+                    content: body
+                });
+            });
+        } catch (e) {}
+        if (!rows.length) return '';
+
+        var out = [
+            '【ST 预设·线下生成执行上下文】',
+            '以下是本轮实际启用的全部 ST 预设条目。它们是本场最高优先级的可编辑生成规则之一，必须在生成当前回复前完整读取、逐条应用；不得因为条目名称、位置或内容没有出现“COT/思维链”字样而跳过。',
+            '身份、环境、叙事方式、世界观、COT/推理方法、人称、格式、行为约束等均属于 ST 预设的一部分。若模型产生 reasoning/<thinking>，其任务分析必须以这些条目为依据，而不是自行另起一套角色心理规则。',
+            '特别注意：不要把“读取 ST 条目”理解成只在正文里模仿风格；生成前必须实际检查这些规则是否影响本轮决策。',
+            ''
+        ];
+        rows.forEach(function (row, i) {
+            out.push('【ST-' + (i + 1) + '｜' + row.name + '｜' + row.position + '】');
+            if (row.identifier) out.push('identifier: ' + row.identifier);
+            out.push(row.content);
+            out.push('');
+        });
+        out.push('【ST 执行检查】');
+        out.push('生成前：确认以上每一条已启用 ST 规则都已被读取；尤其不要遗漏身份/环境类条目。');
+        out.push('生成中：优先依据 ST 规则进行任务分析与决策，不以角色内心独白替代规则执行。');
+        out.push('生成后：检查正文是否违反任何已启用 ST 条目。');
+        return out.join('\n').trim();
+    }
 
     /**
      * ST-compatible prompt export.
@@ -1321,38 +1373,40 @@
      * Miya's UI keeps the friendly front/back labels, but the request layer now
      * preserves these ST semantics.
      */
-    function buildStPresetMessages(position, generationType) {
+    function buildStPresetMessages(position) {
         var out = [];
-        /* Compatibility: existing callers use front/back. In ST terms these now mean
-           Relative (0) and In-chat (1), respectively. */
-        var wanted = position === 'back' ? 1 : position === 'front' ? 0 : null;
-        var type = String(generationType || 'normal');
+        var wanted = position === 'back' ? 'back' : position === 'front' ? 'front' : '';
         try {
             var stpStore = global.miyaStPromptPresetsStore;
             var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
-                ? (stpStore.getEnabledForRequest(type) || [])
+                ? (stpStore.getEnabledForRequest() || [])
                 : [];
             entries.forEach(function (entry, idx) {
                 var body = String(entry && entry.content || '').trim();
                 if (!body) return;
-                var injectionPosition = Number(entry && entry.injection_position) === 1 ? 1 : 0;
-                if (wanted !== null && injectionPosition !== wanted) return;
+                var entryPosition = entry && (entry.position === 'back' || Number(entry.injection_position) === 1) ? 'back' : 'front';
+                if (wanted && entryPosition !== wanted) return;
                 var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
                 out.push({
                     role: role,
                     content: body,
-                    position: injectionPosition === 1 ? 'in-chat' : 'relative',
-                    injection_position: injectionPosition,
+                    position: entryPosition,
+                    injection_position: entryPosition === 'back' ? 1 : 0,
                     injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 4,
                     injection_order: Number.isFinite(Number(entry.injection_order)) ? Number(entry.injection_order) : 100,
                     order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : idx,
-                    identifier: String(entry.identifier || entry.id || ''),
-                    injection_trigger: Array.isArray(entry.injection_trigger) ? entry.injection_trigger.slice() : [],
-                    forbid_overrides: !!entry.forbid_overrides,
-                    system_prompt: entry.system_prompt !== false
+                    identifier: String(entry.identifier || entry.id || '')
                 });
             });
         } catch (e) {}
+        if (!out.length && !wanted) {
+            out.push({
+                role: 'system',
+                content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。',
+                position: 'front', injection_position: 0, injection_depth: 4, injection_order: 100, order: 0,
+                identifier: '__fallback__'
+            });
+        }
         return out;
     }
 
@@ -2516,6 +2570,14 @@
         return applyOfflineMeetLabel(body, m);
     }
 
+    function getStGenerationSettings() {
+        try {
+            var st = global.miyaStPromptPresetsStore;
+            if (st && typeof st.getActiveGeneration === 'function') return st.getActiveGeneration() || {};
+        } catch (e) {}
+        return {};
+    }
+
     function buildApiMessages(chatId, userText, opts) {
         opts = opts && typeof opts === 'object' ? opts : {};
         var store = global.miyaChatStore;
@@ -2563,9 +2625,15 @@
         if (opts.chatSettings && typeof opts.chatSettings === 'object') {
             settings = Object.assign({}, settings || {}, opts.chatSettings);
         }
+        var stGeneration = getStGenerationSettings();
         var limit = settings && settings.memoryCount
             ? Math.min(500, Math.max(1, settings.memoryCount))
             : HISTORY_LIMIT;
+        /* ST 预设的上下文长度作为额外的历史预算；按约 4 字符/Token 估算，避免改动系统提示。 */
+        var stContextChars = Number(stGeneration.contextLength) * 4;
+        if (Number.isFinite(stContextChars) && stContextChars > 0) {
+            limit = Math.min(limit, 500);
+        }
         /*
          * 每次触发回复都从 store 现读时间线：按 memoryCount 注入最近完整一段
          *（用户 / 角色 / 可注入系统消息 / 线下镜像，各占 1 条名额），顺序与时刻不改写。
@@ -3202,26 +3270,87 @@
 
     function fetchChatCompletion(url, headers, payload, attempt) {
         var tryNo = Math.max(1, Number(attempt) || 1);
-        return fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(payload)
-        })
-            .then(function (r) {
+        var requestPayload = Object.assign({}, payload || {});
+        var wantStream = requestPayload.stream === true;
+
+        function normalRequest() {
+            return fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestPayload)
+            }).then(function (r) {
                 if (!r.ok) {
                     return r.text().then(function (t) {
                         throw new Error('HTTP ' + r.status + (t ? ': ' + t.slice(0, 200) : ''));
                     });
                 }
                 return r.json();
-            })
-            .then(function (data) {
+            }).then(function (data) {
                 var replyRaw = extractReplyContent(data);
                 if (!replyRaw && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                    return fetchChatCompletion(url, headers, payload, tryNo + 1);
+                    return fetchChatCompletion(url, headers, requestPayload, tryNo + 1);
                 }
                 return { data: data, replyRaw: replyRaw };
             });
+        }
+
+        if (!wantStream) return normalRequest();
+        return fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(requestPayload)
+        }).then(function (res) {
+            if (!res.ok) {
+                return res.text().then(function (t) {
+                    throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 200) : ''));
+                });
+            }
+            if (!res.body || typeof res.body.getReader !== 'function') {
+                var fallbackPayload = Object.assign({}, requestPayload, { stream: false });
+                return fetchChatCompletion(url, headers, fallbackPayload, tryNo);
+            }
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buffer = '';
+            var contentAcc = '';
+            var reasoningAcc = '';
+            function consumeLine(line) {
+                line = String(line || '').trim();
+                if (!line || line.indexOf('data:') !== 0) return false;
+                var dataLine = line.slice(5).trim();
+                if (!dataLine || dataLine === '[DONE]') return true;
+                try {
+                    var obj = JSON.parse(dataLine);
+                    var choices = Array.isArray(obj.choices) ? obj.choices : [];
+                    var delta = choices[0] && choices[0].delta ? choices[0].delta : {};
+                    if (delta.content != null) contentAcc += String(delta.content);
+                    if (delta.reasoning_content != null) reasoningAcc += String(delta.reasoning_content);
+                    else if (delta.reasoning != null) reasoningAcc += String(delta.reasoning);
+                    if (obj.choices && obj.choices[0] && obj.choices[0].text != null) contentAcc += String(obj.choices[0].text);
+                } catch (e) {}
+                return true;
+            }
+            function read() {
+                return reader.read().then(function (part) {
+                    if (part.done) {
+                        buffer += decoder.decode();
+                        buffer.split(/\r?\n/).forEach(consumeLine);
+                        var data = { choices: [{ message: { role: 'assistant', content: contentAcc } }] };
+                        if (reasoningAcc) data.choices[0].message.reasoning_content = reasoningAcc;
+                        if (!contentAcc && !reasoningAcc && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
+                            return fetchChatCompletion(url, headers, Object.assign({}, requestPayload, { stream: false }), tryNo + 1);
+                        }
+                        return { data: data, replyRaw: contentAcc || (reasoningAcc ? '<thinking>' + reasoningAcc + '</thinking>' : '') };
+                    }
+                    buffer += decoder.decode(part.value, { stream: true });
+                    var lines = buffer.split(/\r?\n/);
+                    buffer = lines.pop() || '';
+                    lines.forEach(consumeLine);
+                    return read();
+                });
+            }
+            return read();
+        });
     }
 
     function extractBodyForBubbles(rawText) {
@@ -3813,11 +3942,18 @@
                     'Content-Type': 'application/json',
                     Authorization: 'Bearer ' + slice.apiKey
                 };
+                var stGen = getStGenerationSettings();
                 var reqPayload = {
                     model: slice.model,
                     messages: built.messages,
-                    temperature: slice.temperature
+                    temperature: stGen.temperature != null ? Number(stGen.temperature) : slice.temperature
                 };
+                if (stGen.maxTokens != null && Number(stGen.maxTokens) > 0) reqPayload.max_tokens = Math.floor(Number(stGen.maxTokens));
+                if (stGen.n != null && Number(stGen.n) > 1) reqPayload.n = Math.floor(Number(stGen.n));
+                if (stGen.topP != null) reqPayload.top_p = Number(stGen.topP);
+                if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
+                if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
+                reqPayload.stream = stGen.stream !== false;
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
@@ -4653,6 +4789,7 @@
         buildSystemPrompt: buildSystemPrompt,
         buildStPresetMessages: buildStPresetMessages,
         injectStInChatMessages: injectStInChatMessages,
+        buildStCotPromptBlock: buildStCotPromptBlock,
         buildApiMessages: buildApiMessages,
         setPendingOnlineReturnPrompt: function (chatId, text) {
             var key = String(chatId || '').trim();
