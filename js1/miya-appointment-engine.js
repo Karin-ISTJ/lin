@@ -213,7 +213,7 @@
         var userName = String((profile && profile.name) || '用户');
         return (
             '【叙事引擎·线下】\n' +
-            '你正在进行一段与用户共同推进的线下互动，不是即时线上聊天。\n' +
+            '你正在进行一段与用户共同推进的线下剧情叙事，不是即时线上聊天，也不是要接线上气泡。\n' +
             '须完整消化联系人档案与世界书后再回应。\n' +
             '角色（' + roleName + '）与用户（' + userName + '）的人设、口吻与心理必须分开，禁止混写。\n' +
             '世界书分两类：绑定该联系人的设定，以及调参里额外挂载的规则/番外；先归类后再回应。'
@@ -270,9 +270,11 @@
                 ? '1、本场出演 ' + names.join('、') + '，须消化各自人设与世界书。\n'
                 : '1、你是' + roleName + '，须消化人设与世界书。\n') +
             '2、你清楚' + userName + '是谁，关系与情绪须与上下文一致。\n' +
-            '3、禁止输出 ⧗、› 或 API 时间戳；禁止使用线上专属消息标记。\n' +
-            '4、回顾近期跨场景记忆，勿机械复读相同开场与句式。\n' +
-            '5、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。';
+            '3、本场是线下剧情叙事，不是线上即时聊天。禁止输出「〔…·线上〕」「〔…·线下〕」时间标签，禁止「角色名：台词」气泡连发，禁止语音-/表情包-/引用- 等线上格式。\n' +
+            '4、正文应为场景描写 + 动作 + 对话的连贯叙事（小说/剧本体），承接的是本场线下楼层与用户本轮输入，不是线上聊天记录。\n' +
+            '5、跨场景记忆仅作背景知晓，禁止把记忆原文复述成新的线上气泡。\n' +
+            '6、回顾近期跨场景记忆，勿机械复读相同开场与句式。\n' +
+            '7、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。';
         var statusApi = global.MiyaOfflineStatus;
         if (statusApi && typeof statusApi.isEnabled === 'function' && statusApi.isEnabled()) {
             base +=
@@ -509,20 +511,13 @@
             var body = String(m.content || '').trim();
             if (!body) return;
             if (m.role === 'user') {
-                var stamped =
-                    aw && typeof aw.stampMessageForApi === 'function'
-                        ? aw.stampMessageForApi(body, m, chatSettings, Date.now())
-                        : body;
-                buf.push(stamped);
+                /* 线下楼层保持纯正文，不加线上时间戳前缀 */
+                buf.push(body);
                 return;
             }
             flushUser();
             if (m.role === 'assistant') {
-                var abody =
-                    aw && typeof aw.stampMessageForApi === 'function'
-                        ? aw.stampMessageForApi(body, m, chatSettings, Date.now())
-                        : body;
-                apiMessages.push({ role: 'assistant', content: abody });
+                apiMessages.push({ role: 'assistant', content: body });
             }
         });
         flushUser();
@@ -1173,11 +1168,13 @@
             var body = Object.assign({}, payload);
             body.stream = false;
             function doFetch(bodyToSend) {
-                return fetch(url, {
+                var fo = {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(bodyToSend)
-                });
+                };
+                if (handlers.signal) fo.signal = handlers.signal;
+                return fetch(url, fo);
             }
             return doFetch(body).then(function (res) {
                 if (!res.ok && body.thinking && [400, 404, 422].indexOf(res.status) >= 0) {
@@ -1216,11 +1213,13 @@
         var req = Object.assign({}, payload);
         req.stream = true;
         function doStreamFetch(bodyToSend) {
-            return fetch(url, {
+            var fo = {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(bodyToSend)
-            });
+            };
+            if (handlers.signal) fo.signal = handlers.signal;
+            return fetch(url, fo);
         }
         return doStreamFetch(req).then(function (res) {
             if (!res.ok && req.thinking && [400, 404, 422].indexOf(res.status) >= 0) {
@@ -1419,7 +1418,8 @@
                 payload,
                 {
                     onLine: handlers.onLine,
-                    onDelta: handlers.onDelta
+                    onDelta: handlers.onDelta,
+                    signal: handlers.signal
                 },
                 useStream
             ).then(function (completion) {
@@ -1444,7 +1444,33 @@
                     msgFields.htmlRaw = finalized.htmlRaw || content;
                 }
                 if (thinking) msgFields.thinking = thinking;
-                var msg = aps.addMessage(chatId, sessionId, msgFields);
+                /* 线下 Swipe：若 handlers.replaceLastAssistant，则把上一层助手回复并入候选 */
+                var msg = null;
+                if (handlers.replaceLastAssistant && typeof aps.updateMessage === 'function') {
+                    var sessMsgs = (aps.getMessages && aps.getMessages(chatId, sessionId)) || [];
+                    var lastAsst = null;
+                    for (var li = sessMsgs.length - 1; li >= 0; li--) {
+                        if (sessMsgs[li] && !sessMsgs[li].deleted && sessMsgs[li].role === 'assistant') {
+                            lastAsst = sessMsgs[li];
+                            break;
+                        }
+                    }
+                    if (lastAsst) {
+                        var prevSwipes = Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
+                        if (!prevSwipes.length && lastAsst.content) prevSwipes.push(String(lastAsst.content));
+                        prevSwipes.push(content);
+                        var swipeId = prevSwipes.length - 1;
+                        msg = aps.updateMessage(chatId, sessionId, lastAsst.id, {
+                            content: content,
+                            thinking: thinking || lastAsst.thinking || '',
+                            renderAsHtml: !!finalized.renderAsHtml,
+                            htmlRaw: finalized.renderAsHtml ? (finalized.htmlRaw || content) : '',
+                            swipes: prevSwipes,
+                            swipeId: swipeId
+                        }) || lastAsst;
+                    }
+                }
+                if (!msg) msg = aps.addMessage(chatId, sessionId, msgFields);
                 var chatRow = st.findChat(chatId);
                 var preset = aps.resolvePresetForContact(chatRow && chatRow.contactId);
                 var sessAfter = aps.getSession(chatId, sessionId);
@@ -1479,7 +1505,21 @@
         if (!userMsg) return Promise.reject(new Error('session_not_found'));
 
         replyInFlight[key] = true;
-        return runAppointmentCompletion(chatId, sessionId, handlers).finally(function () {
+        var genLife = global.MiyaGenerationLifecycle;
+        var genCtl = genLife && genLife.begin ? genLife.begin('offline:' + key, { kind: 'offline' }) : null;
+        if (genCtl && genCtl.signal) handlers.signal = genCtl.signal;
+        if (handlers.onStatus) handlers.onStatus('generating');
+        return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
+            if (genLife && genLife.finish) genLife.finish('offline:' + key, v);
+            return v;
+        }, function (err) {
+            if (genLife && genLife.isAbortError && genLife.isAbortError(err)) {
+                if (genLife.stop) genLife.stop('offline:' + key, { silent: true, reason: 'abort' });
+            } else if (genLife && genLife.fail) {
+                genLife.fail('offline:' + key, err);
+            }
+            throw err;
+        }).finally(function () {
             delete replyInFlight[key];
             if (handlers.onStatus) handlers.onStatus('idle');
         });
@@ -1490,10 +1530,33 @@
         var key = String(chatId) + '::' + String(sessionId);
         if (replyInFlight[key]) return Promise.reject(new Error('busy'));
         replyInFlight[key] = true;
-        return runAppointmentCompletion(chatId, sessionId, handlers).finally(function () {
+        var genLife = global.MiyaGenerationLifecycle;
+        var genCtl = genLife && genLife.begin ? genLife.begin('offline:' + key, { kind: 'offline', regenerate: true }) : null;
+        if (genCtl && genCtl.signal) handlers.signal = genCtl.signal;
+        handlers.replaceLastAssistant = true;
+        if (handlers.onStatus) handlers.onStatus('generating');
+        return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
+            if (genLife && genLife.finish) genLife.finish('offline:' + key, v);
+            return v;
+        }, function (err) {
+            if (genLife && genLife.isAbortError && genLife.isAbortError(err)) {
+                if (genLife.stop) genLife.stop('offline:' + key, { silent: true, reason: 'abort' });
+            } else if (genLife && genLife.fail) {
+                genLife.fail('offline:' + key, err);
+            }
+            throw err;
+        }).finally(function () {
             delete replyInFlight[key];
             if (handlers.onStatus) handlers.onStatus('idle');
         });
+    }
+
+    function stopAppointment(chatId, sessionId) {
+        var key = String(chatId) + '::' + String(sessionId);
+        var genLife = global.MiyaGenerationLifecycle;
+        if (genLife && genLife.stop) genLife.stop('offline:' + key, { reason: 'user' });
+        delete replyInFlight[key];
+        return true;
     }
 
     function isBusy(chatId, sessionId) {
@@ -1515,6 +1578,7 @@
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,
+        stopAppointment: stopAppointment,
         resolveProfileForContact: resolveProfileForContact,
         resolveProfileForChat: resolveProfileForChat
     };
