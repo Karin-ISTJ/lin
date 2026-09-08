@@ -796,6 +796,9 @@
             '<div class="qq-room__head-name" id="qq-room-title"></div>' +
             '<div class="qq-room__head-status" id="qq-room-head-status"></div>' +
           '</div>' +
+          '<button type="button" class="qq-room__offline-btn" id="qq-room-offline" aria-label="线下" title="线下">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.8V21h13V9.8"/><path d="M9.5 21v-6h5v6"/></svg>' +
+          '</button>' +
           '<button type="button" class="qq-room__menu" id="qq-room-more" aria-label="更多">' +
             '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>' +
           '</button>' +
@@ -5111,6 +5114,18 @@
       }
       close();
     });
+    var offlineBtn = $('qq-room-offline');
+    if (offlineBtn) {
+      offlineBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (global.miyaOfflineApp && typeof global.miyaOfflineApp.open === 'function') {
+          global.miyaOfflineApp.open();
+        } else {
+          toast('线下功能未加载');
+        }
+      });
+    }
     var moreBtn = $('qq-room-more');
     if (moreBtn) {
       moreBtn.addEventListener('click', function () {

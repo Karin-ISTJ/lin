@@ -6340,6 +6340,16 @@ html.is-ios .qq-room__input {
 }
 .qq-room__offline-btn {
   margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 .qq-room__offline-btn svg {
   width: 20px;
