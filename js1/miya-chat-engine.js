@@ -3892,7 +3892,7 @@
                 if (stGen.topP != null) reqPayload.top_p = Number(stGen.topP);
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
-                reqPayload.stream = stGen.stream !== false;
+                reqPayload.stream = false;
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;

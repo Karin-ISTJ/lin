@@ -4567,7 +4567,10 @@
                 if (Object.keys(patch).length) return store.updateChat(chatId, patch);
             });
             return chain.then(function () {
-                return removed;
+                /* 删除消息后必须把新的 messagesByChat 落盘；否则刷新页面会从 IDB 恢复已删除消息。 */
+                return scheduleSaveMeta().then(function () {
+                    return removed;
+                });
             });
         },
 
