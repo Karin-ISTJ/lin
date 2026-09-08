@@ -796,9 +796,6 @@
             '<div class="qq-room__head-name" id="qq-room-title"></div>' +
             '<div class="qq-room__head-status" id="qq-room-head-status"></div>' +
           '</div>' +
-          '<button type="button" class="qq-room__menu qq-room__offline-btn" id="qq-room-offline" aria-label="线下" title="线下">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' +
-          '</button>' +
           '<button type="button" class="qq-room__menu" id="qq-room-more" aria-label="更多">' +
             '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>' +
           '</button>' +
@@ -836,14 +833,14 @@
         '<div class="qq-room__toolbar" id="qq-room-toolbar" hidden aria-hidden="true">' + buildToolbarHtml() + '</div>' +
         '<div class="qq-room__sticker-suggest" id="qq-room-sticker-suggest" hidden aria-hidden="true"></div>' +
         '<div class="qq-room__input-box">' +
-          '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--ai" id="qq-room-ai" aria-label="发送当前聊天记录给 AI" title="发送当前一条或多条消息给 AI">' +
+          '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--ai" id="qq-room-ai" aria-label="触发回复">' +
             AI_STAR_SVG +
           '</button>' +
           '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--plus" id="qq-room-tools-toggle" aria-label="更多工具" aria-expanded="false">' +
             COMPOSE_PLUS_SVG +
           '</button>' +
           '<textarea class="qq-room__input" id="qq-room-input" rows="1" placeholder="Write something…"></textarea>' +
-          '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="消息上屏" title="只把消息放到聊天记录，不立即请求 AI">' +
+          '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="发送">' +
             '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
           '</button>' +
         '</div>' +
@@ -3522,11 +3519,8 @@
 
     var cfg = engine.getApiConfig();
     if (!cfg.baseUrl || !cfg.apiKey || !cfg.model) {
-      toast('API 未配置：请检查地址、Key、模型');
-      state.sending = false;
-      setComposeDisabled(false);
-      stopTypingWait();
-      return Promise.reject(new Error('api_not_configured'));
+      toast('请先在设置中配置对话 API');
+      return;
     }
 
     cancelStaggerReveal();
@@ -3599,35 +3593,31 @@
   }
 
   function handleSend() {
-    /*
-     * 纸飞机是“上屏/暂存消息”，不是“提交给 AI”。
-     * SillyTavern/Miya 的聊天工作流允许连续输入一条或多条消息，
-     * 最左侧 AI 星标才负责把当前聊天记录一次性提交给模型。
-     */
-    if (!state.chatId) {
-      toast('当前没有打开聊天会话');
-      return Promise.reject(new Error('chat_not_open'));
-    }
+    if (!state.chatId) return;
     var input = $('qq-room-input');
-    if (!input) return Promise.resolve();
+    if (!input) return;
     var text = input.value.trim();
-    if (!text) return Promise.resolve();
+    if (!text) return;
     input.value = '';
     input.style.height = 'auto';
     hideStickerSuggest();
-    var payload;
     if (state.narrationMode) {
-      payload = {
-        role: 'system', type: 'text', content: text,
-        systemKind: 'online-narration', narrationFrom: 'user', excludedFromContext: false
-      };
-    } else {
-      payload = { role: 'user', content: text, type: 'text' };
+      sendMessage({
+        role: 'system',
+        type: 'text',
+        content: text,
+        systemKind: 'online-narration',
+        narrationFrom: 'user',
+        excludedFromContext: false
+      }).catch(function () {
+        toast('发送失败');
+        restoreComposeAfterOverlay();
+      });
+      return;
     }
-    return sendMessage(payload).catch(function (err) {
-      toast('消息上屏失败');
+    sendMessage({ role: 'user', content: text, type: 'text' }).catch(function () {
+      toast('发送失败');
       restoreComposeAfterOverlay();
-      throw err;
     });
   }
 
@@ -4751,54 +4741,34 @@
     if (!msg || !msg.redPacket || msg.redPacket.status !== 'pending') return;
     var ctx = getChatContext(state.chatId);
     var walletApi = global.MiyaChatWallet;
-    var profileId = ctx && ctx.profile && ctx.profile.id ? ctx.profile.id : '';
-    if (!profileId && store.getActiveProfile) {
-      var ap = store.getActiveProfile();
-      if (ap && ap.id) profileId = ap.id;
-    }
-    var contactId = ctx && ctx.contact ? ctx.contact.id : '';
-    var settleChain = Promise.resolve({ ok: true });
-    if (walletApi && typeof walletApi.settleRoleOutgoingTransfer === 'function') {
+    var settleChain = Promise.resolve();
+    if (
+      walletApi &&
+      typeof walletApi.settleRoleOutgoingTransfer === 'function' &&
+      ctx &&
+      ctx.contact &&
+      ctx.profile
+    ) {
       settleChain = walletApi.settleRoleOutgoingTransfer({
-        contactId: contactId,
-        profileId: profileId,
+        contactId: ctx.contact.id,
+        profileId: ctx.profile.id,
         amount: msg.redPacket.amount,
         action: action === 'accept' ? 'accept' : 'refund',
         redPacket: msg.redPacket
       });
     }
-    settleChain.then(function (result) {
-      var ok = result === true || (result && result.ok !== false && result.error == null);
-      /* settle 返回 {ok:false} 时不要标已结算 */
-      if (result && typeof result === 'object' && result.ok === false) {
-        toast(action === 'accept' ? '入账失败，请重试' : '退回失败');
-        return null;
-      }
+    settleChain.then(function () {
       return store.updateMessage(state.chatId, msgId, {
         redPacket: Object.assign({}, msg.redPacket, {
           status: action === 'accept' ? 'accepted' : 'refunded',
           dir: 'in',
           resolvedAt: Date.now(),
-          walletSettled: true
+          walletSettled: !!(msg.redPacket && msg.redPacket.walletHeld)
         })
-      }).then(function () {
-        return result;
       });
-    }).then(function (result) {
-      if (result == null) return;
+    }).then(function () {
       renderMessages(state.chatId);
-      if (action === 'accept') {
-        var amt = msg.redPacket && msg.redPacket.amount != null ? msg.redPacket.amount : '';
-        var balHint = '';
-        if (result && result.balance != null && walletApi && walletApi.formatDisplay) {
-          balHint = ' · 余额 ' + walletApi.formatDisplay(result.balance);
-        } else if (profileId && store.getWallet && walletApi && walletApi.formatDisplay) {
-          balHint = ' · 余额 ' + walletApi.formatDisplay(store.getWallet(profileId).balance);
-        }
-        toast('已收款' + (amt !== '' ? ' ¥' + amt : '') + balHint);
-      } else {
-        toast('已退回');
-      }
+      toast(action === 'accept' ? '已收款' : '已退回');
     }).catch(function () {
       toast('操作失败');
     });
@@ -5082,13 +5052,6 @@
       }
       close();
     });
-    var offlineBtn = $('qq-room-offline');
-    if (offlineBtn) {
-      offlineBtn.addEventListener('click', function () {
-        if (global.miyaLaunchApp) global.miyaLaunchApp('store');
-        else if (global.miyaOfflineApp && global.miyaOfflineApp.open) global.miyaOfflineApp.open();
-      });
-    }
     var moreBtn = $('qq-room-more');
     if (moreBtn) {
       moreBtn.addEventListener('click', function () {
@@ -5112,10 +5075,7 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        e.stopPropagation();
-        handleSend().catch(function (err) {
-          console.warn('[MiyaChatRoom] message display error', err);
-        });
+        handleSend();
       });
     }
     roomEl.addEventListener('pointerup', function (e) {
@@ -5446,11 +5406,6 @@
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
     state.chatId = chatId;
-    /* 切换/重新进入房间时恢复普通发送控件；真正请求中的状态仍由 requestAiReply 控制。 */
-    if (!engine || typeof engine.isChatApiBusy !== 'function' || !engine.isChatApiBusy(chatId)) {
-      state.sending = false;
-      setComposeDisabled(false);
-    }
     if (store.updateChat) {
       store.updateChat(chatId, { unread: 0 }).catch(function () {});
     }

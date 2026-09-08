@@ -3270,87 +3270,26 @@
 
     function fetchChatCompletion(url, headers, payload, attempt) {
         var tryNo = Math.max(1, Number(attempt) || 1);
-        var requestPayload = Object.assign({}, payload || {});
-        var wantStream = requestPayload.stream === true;
-
-        function normalRequest() {
-            return fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(requestPayload)
-            }).then(function (r) {
+        return fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload)
+        })
+            .then(function (r) {
                 if (!r.ok) {
                     return r.text().then(function (t) {
                         throw new Error('HTTP ' + r.status + (t ? ': ' + t.slice(0, 200) : ''));
                     });
                 }
                 return r.json();
-            }).then(function (data) {
+            })
+            .then(function (data) {
                 var replyRaw = extractReplyContent(data);
                 if (!replyRaw && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                    return fetchChatCompletion(url, headers, requestPayload, tryNo + 1);
+                    return fetchChatCompletion(url, headers, payload, tryNo + 1);
                 }
                 return { data: data, replyRaw: replyRaw };
             });
-        }
-
-        if (!wantStream) return normalRequest();
-        return fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(requestPayload)
-        }).then(function (res) {
-            if (!res.ok) {
-                return res.text().then(function (t) {
-                    throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 200) : ''));
-                });
-            }
-            if (!res.body || typeof res.body.getReader !== 'function') {
-                var fallbackPayload = Object.assign({}, requestPayload, { stream: false });
-                return fetchChatCompletion(url, headers, fallbackPayload, tryNo);
-            }
-            var reader = res.body.getReader();
-            var decoder = new TextDecoder('utf-8');
-            var buffer = '';
-            var contentAcc = '';
-            var reasoningAcc = '';
-            function consumeLine(line) {
-                line = String(line || '').trim();
-                if (!line || line.indexOf('data:') !== 0) return false;
-                var dataLine = line.slice(5).trim();
-                if (!dataLine || dataLine === '[DONE]') return true;
-                try {
-                    var obj = JSON.parse(dataLine);
-                    var choices = Array.isArray(obj.choices) ? obj.choices : [];
-                    var delta = choices[0] && choices[0].delta ? choices[0].delta : {};
-                    if (delta.content != null) contentAcc += String(delta.content);
-                    if (delta.reasoning_content != null) reasoningAcc += String(delta.reasoning_content);
-                    else if (delta.reasoning != null) reasoningAcc += String(delta.reasoning);
-                    if (obj.choices && obj.choices[0] && obj.choices[0].text != null) contentAcc += String(obj.choices[0].text);
-                } catch (e) {}
-                return true;
-            }
-            function read() {
-                return reader.read().then(function (part) {
-                    if (part.done) {
-                        buffer += decoder.decode();
-                        buffer.split(/\r?\n/).forEach(consumeLine);
-                        var data = { choices: [{ message: { role: 'assistant', content: contentAcc } }] };
-                        if (reasoningAcc) data.choices[0].message.reasoning_content = reasoningAcc;
-                        if (!contentAcc && !reasoningAcc && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                            return fetchChatCompletion(url, headers, Object.assign({}, requestPayload, { stream: false }), tryNo + 1);
-                        }
-                        return { data: data, replyRaw: contentAcc || (reasoningAcc ? '<thinking>' + reasoningAcc + '</thinking>' : '') };
-                    }
-                    buffer += decoder.decode(part.value, { stream: true });
-                    var lines = buffer.split(/\r?\n/);
-                    buffer = lines.pop() || '';
-                    lines.forEach(consumeLine);
-                    return read();
-                });
-            }
-            return read();
-        });
     }
 
     function extractBodyForBubbles(rawText) {
