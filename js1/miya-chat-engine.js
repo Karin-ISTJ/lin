@@ -3268,13 +3268,12 @@
         return !!(normalizeBaseUrl(sec.baseUrl) && String(sec.apiKey || '').trim() && String(sec.model || '').trim());
     }
 
-    function fetchChatCompletion(url, headers, payload, attempt, signal) {
+    function fetchChatCompletion(url, headers, payload, attempt) {
         var tryNo = Math.max(1, Number(attempt) || 1);
         return fetch(url, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify(payload),
-            signal: signal || undefined
+            body: JSON.stringify(payload)
         })
             .then(function (r) {
                 if (!r.ok) {
@@ -3287,7 +3286,7 @@
             .then(function (data) {
                 var replyRaw = extractReplyContent(data);
                 if (!replyRaw && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                    return fetchChatCompletion(url, headers, payload, tryNo + 1, signal);
+                    return fetchChatCompletion(url, headers, payload, tryNo + 1);
                 }
                 return { data: data, replyRaw: replyRaw };
             });
@@ -3894,7 +3893,7 @@
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
                 reqPayload.stream = false;
-                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, options.signal).then(function (completion) {
+                return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
                     return completion;

@@ -844,8 +844,7 @@
           '</button>' +
           '<textarea class="qq-room__input" id="qq-room-input" rows="1" placeholder="Write something…"></textarea>' +
           '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="发送">' +
-            '<svg class="qq-send-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
-            '<svg class="qq-stop-icon" viewBox="0 0 24 24" hidden><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>' +
+            '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
           '</button>' +
         '</div>' +
       '</footer>' +
@@ -3382,30 +3381,6 @@
     removeTyping();
   }
 
-  function syncSendButton() {
-    var btn = $('qq-room-send');
-    if (!btn) return;
-    var stop = !!state.sending;
-    btn.setAttribute('aria-label', stop ? '停止生成' : '发送');
-    btn.classList.toggle('is-stop', stop);
-    var sendIcon = btn.querySelector('.qq-send-icon');
-    var stopIcon = btn.querySelector('.qq-stop-icon');
-    if (sendIcon) sendIcon.hidden = stop;
-    if (stopIcon) stopIcon.hidden = !stop;
-  }
-
-  function stopGeneration() {
-    if (!state.sending) return;
-    if (state.generationAbortController) {
-      try { state.generationAbortController.abort(); } catch (e) {}
-    }
-    state.sending = false;
-    stopTypingWait();
-    setComposeDisabled(false);
-    syncSendButton();
-    toast('已停止生成');
-  }
-
   function setComposeDisabled(disabled) {
     var input = $('qq-room-input');
     var ai = $('qq-room-ai');
@@ -3415,7 +3390,6 @@
     if (ai) ai.disabled = !!disabled;
     if (toolsToggle) toolsToggle.disabled = !!disabled;
     if (send) send.disabled = !!disabled;
-    syncSendButton();
   }
 
   function focusComposeInput(preventScroll) {
@@ -3571,15 +3545,12 @@
 
     cancelStaggerReveal();
     state.sending = true;
-    state.generationAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     setComposeDisabled(true);
-    syncSendButton();
     startTypingWait();
 
     function scheduleEmptyReplyRetry() {
       if (emptyTry >= 2 || state.chatId !== cid) return false;
       state.sending = false;
-    state.generationAbortController = null;
       setTimeout(function () {
         if (state.chatId === cid) requestAiReply(true, emptyTry + 1);
       }, 800);
@@ -3616,8 +3587,6 @@
       })
       .finally(function () {
         state.sending = false;
-        state.generationAbortController = null;
-        syncSendButton();
         if (state.chatId === cid) {
           setComposeDisabled(false);
           restoreComposeAfterOverlay();
@@ -3870,9 +3839,7 @@
 
     cancelStaggerReveal();
     state.sending = true;
-    state.generationAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     setComposeDisabled(true);
-    syncSendButton();
     startTypingWait();
     engine
       .withdrawLastAssistantRound(cid)
@@ -5182,7 +5149,6 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        if (state.sending) { stopGeneration(); return; }
         handleSend();
       });
     }
