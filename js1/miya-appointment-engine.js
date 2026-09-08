@@ -1158,9 +1158,8 @@
     }
 
     var replyInFlight = Object.create(null);
-    var replyAbortControllers = Object.create(null);
 
-    function fetchAppointmentCompletion(url, headers, payload, handlers, useStream, signal) {
+    function fetchAppointmentCompletion(url, headers, payload, handlers, useStream) {
         handlers = handlers && typeof handlers === 'object' ? handlers : {};
         var streamOn = useStream !== false;
 
@@ -1177,8 +1176,7 @@
                 return fetch(url, {
                     method: 'POST',
                     headers: headers,
-                    body: JSON.stringify(bodyToSend),
-                    signal: signal || undefined
+                    body: JSON.stringify(bodyToSend)
                 });
             }
             return doFetch(body).then(function (res) {
@@ -1221,8 +1219,7 @@
             return fetch(url, {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify(bodyToSend),
-                signal: signal || undefined
+                body: JSON.stringify(bodyToSend)
             });
         }
         return doStreamFetch(req).then(function (res) {
@@ -1424,8 +1421,7 @@
                     onLine: handlers.onLine,
                     onDelta: handlers.onDelta
                 },
-                useStream,
-                activeController ? activeController.signal : null
+                useStream
             ).then(function (completion) {
                 var fullRaw =
                     completion && completion.raw != null
@@ -1483,11 +1479,8 @@
         if (!userMsg) return Promise.reject(new Error('session_not_found'));
 
         replyInFlight[key] = true;
-        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        if (controller) replyAbortControllers[key] = controller;
         return runAppointmentCompletion(chatId, sessionId, handlers).finally(function () {
             delete replyInFlight[key];
-            if (replyAbortControllers[key] === controller) delete replyAbortControllers[key];
             if (handlers.onStatus) handlers.onStatus('idle');
         });
     }
@@ -1497,21 +1490,10 @@
         var key = String(chatId) + '::' + String(sessionId);
         if (replyInFlight[key]) return Promise.reject(new Error('busy'));
         replyInFlight[key] = true;
-        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        if (controller) replyAbortControllers[key] = controller;
         return runAppointmentCompletion(chatId, sessionId, handlers).finally(function () {
             delete replyInFlight[key];
-            if (replyAbortControllers[key] === controller) delete replyAbortControllers[key];
             if (handlers.onStatus) handlers.onStatus('idle');
         });
-    }
-
-    function abortAppointment(chatId, sessionId) {
-        var key = String(chatId) + '::' + String(sessionId);
-        var controller = replyAbortControllers[key];
-        if (!controller) return false;
-        try { controller.abort(); } catch (e) {}
-        return true;
     }
 
     function isBusy(chatId, sessionId) {
@@ -1524,7 +1506,6 @@
         runAppointmentCompletion: runAppointmentCompletion,
         sendAppointment: sendAppointment,
         regenerateAppointment: regenerateAppointment,
-        abortAppointment: abortAppointment,
         appointmentSummary: appointmentSummary,
         maybeAutoSummary: maybeAutoSummary,
         splitDisplayLines: splitDisplayLines,

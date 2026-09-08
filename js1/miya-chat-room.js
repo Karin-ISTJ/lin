@@ -844,7 +844,8 @@
           '</button>' +
           '<textarea class="qq-room__input" id="qq-room-input" rows="1" placeholder="Write something…"></textarea>' +
           '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="发送">' +
-            '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+            '<svg class="qq-send-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+            '<svg class="qq-stop-icon" viewBox="0 0 24 24" hidden><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>' +
           '</button>' +
         '</div>' +
       '</footer>' +
@@ -3381,46 +3382,40 @@
     removeTyping();
   }
 
+  function syncSendButton() {
+    var btn = $('qq-room-send');
+    if (!btn) return;
+    var stop = !!state.sending;
+    btn.setAttribute('aria-label', stop ? '停止生成' : '发送');
+    btn.classList.toggle('is-stop', stop);
+    var sendIcon = btn.querySelector('.qq-send-icon');
+    var stopIcon = btn.querySelector('.qq-stop-icon');
+    if (sendIcon) sendIcon.hidden = stop;
+    if (stopIcon) stopIcon.hidden = !stop;
+  }
+
+  function stopGeneration() {
+    if (!state.sending) return;
+    if (state.generationAbortController) {
+      try { state.generationAbortController.abort(); } catch (e) {}
+    }
+    state.sending = false;
+    stopTypingWait();
+    setComposeDisabled(false);
+    syncSendButton();
+    toast('已停止生成');
+  }
+
   function setComposeDisabled(disabled) {
     var input = $('qq-room-input');
     var ai = $('qq-room-ai');
     var toolsToggle = $('qq-room-tools-toggle');
     var send = $('qq-room-send');
     if (input) input.disabled = !!disabled;
-    if (ai) ai.disabled = false;
+    if (ai) ai.disabled = !!disabled;
     if (toolsToggle) toolsToggle.disabled = !!disabled;
     if (send) send.disabled = !!disabled;
-  }
-
-  function syncReplyButton() {
-    var ai = $('qq-room-ai');
-    if (!ai) return;
-    ai.classList.toggle('is-stop', !!state.sending);
-    ai.setAttribute('aria-label', state.sending ? '停止生成' : '触发回复');
-    ai.setAttribute('title', state.sending ? '停止生成' : '触发回复');
-    ai.innerHTML = state.sending
-      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"></rect></svg>'
-      : '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,3 20,12 12,21 12,15 4,15 4,9 12,9"></polygon></svg>';
-  }
-
-  function stopCharacterReply() {
-    var cid = state.chatId;
-    if (!cid || !state.sending) return false;
-    // 不依赖 open() 时缓存的局部 engine；生成期间页面可能重渲染/切换过引用。
-    var eng = engine || global.miyaChatEngine || null;
-    if (eng && typeof eng.abortChat === 'function') {
-      var stopped = eng.abortChat(cid);
-      if (stopped) {
-        toast('已停止生成');
-        state.sending = false;
-        stopTypingWait();
-        syncReplyButton();
-        setComposeDisabled(false);
-        return true;
-      }
-    }
-    toast('当前生成无法中断，请稍候');
-    return false;
+    syncSendButton();
   }
 
   function focusComposeInput(preventScroll) {
@@ -3576,13 +3571,15 @@
 
     cancelStaggerReveal();
     state.sending = true;
+    state.generationAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     setComposeDisabled(true);
-    syncReplyButton();
+    syncSendButton();
     startTypingWait();
 
     function scheduleEmptyReplyRetry() {
       if (emptyTry >= 2 || state.chatId !== cid) return false;
       state.sending = false;
+    state.generationAbortController = null;
       setTimeout(function () {
         if (state.chatId === cid) requestAiReply(true, emptyTry + 1);
       }, 800);
@@ -3619,7 +3616,8 @@
       })
       .finally(function () {
         state.sending = false;
-        syncReplyButton();
+        state.generationAbortController = null;
+        syncSendButton();
         if (state.chatId === cid) {
           setComposeDisabled(false);
           restoreComposeAfterOverlay();
@@ -3635,7 +3633,7 @@
       if (e) { e.preventDefault(); e.stopPropagation(); }
       var cid = state.chatId;
       if (!cid) { toast('当前没有打开聊天'); return false; }
-      if (state.sending) { stopCharacterReply(); return false; }
+      if (state.sending) { toast('正在等待回复…'); return false; }
       toast('正在准备角色回复…');
       var p = requestAiReply(false, 0, { directButton: true });
       if (p && typeof p.catch === 'function') { p.catch(function (err) {
@@ -3872,8 +3870,9 @@
 
     cancelStaggerReveal();
     state.sending = true;
+    state.generationAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     setComposeDisabled(true);
-    syncReplyButton();
+    syncSendButton();
     startTypingWait();
     engine
       .withdrawLastAssistantRound(cid)
@@ -5183,6 +5182,7 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        if (state.sending) { stopGeneration(); return; }
         handleSend();
       });
     }
