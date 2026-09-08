@@ -724,7 +724,6 @@
 
     function renderDock() {
         if (isJournalTheme()) return '';
-        if (ui.view === 'story' && !ui.viewingArchive) return '';
         var navInner = '';
         var aria = '现场工具';
         if (ui.view === 'history') {
@@ -1853,16 +1852,18 @@
         };
     }
 
-    var OFFLINE_AI_STAR_SVG =
-        '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-        '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="12,4 14.5,9.5 20,12 14.5,14.5 12,20 9.5,14.5 4,12 9.5,9.5"/>' +
-        '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="18,5 18.7,6.5 20,7 18.7,7.5 18,9 17.3,7.5 16,7 17.3,6.5"/>' +
-        '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="6.5,16.5 7.1,17.6 8,18 7.1,18.4 6.5,19.5 5.9,18.4 5,18 5.9,17.6"/>' +
-        '</svg>';
-
 function renderWriter() {
         return (
             '<footer class="xw-writer">' +
+            '<div class="xw-writer__tools">' +
+            '<button type="button" class="xw-writer__tools-toggle" id="xw-writer-tools-toggle" aria-label="更多功能" title="更多功能">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="12,4 14.5,9.5 20,12 14.5,14.5 12,20 9.5,14.5 4,12 9.5,9.5"/><polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="18,5 18.7,6.5 20,7 18.7,7.5 18,9 17.3,7.5 16,7 17.3,6.5"/><polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="6.5,16.5 7.1,17.6 8,18 7.1,18.4 6.5,19.5 5.9,18.4 5,18 5.9,17.6"/></svg>' +
+            '</button>' +
+            '<div class="xw-writer__tools-menu" id="xw-writer-tools-menu" hidden>' +
+            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-beautify">样式</button>' +
+            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-prefs">调参</button>' +
+            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-vault">卷宗</button>' +
+            '</div></div>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
@@ -3184,6 +3185,25 @@ function renderWriter() {
                     toast('样式模块未加载');
                 }
             });
+        }
+
+        var toolsToggle = $('xw-writer-tools-toggle');
+        var toolsMenu = $('xw-writer-tools-menu');
+        if (toolsToggle && toolsMenu) {
+            toolsToggle.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toolsMenu.hidden = !toolsMenu.hidden;
+            });
+            var toolBeautify = $('xw-writer-tool-beautify');
+            if (toolBeautify) toolBeautify.addEventListener('click', function () {
+                toolsMenu.hidden = true;
+                if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.openBeautifyDrawer) global.MiyaOfflineBeautify.openBeautifyDrawer();
+                else toast('样式模块未加载');
+            });
+            var toolPrefs = $('xw-writer-tool-prefs');
+            if (toolPrefs) toolPrefs.addEventListener('click', function () { toolsMenu.hidden = true; openSettingsSheet(); });
+            var toolVault = $('xw-writer-tool-vault');
+            if (toolVault) toolVault.addEventListener('click', function () { toolsMenu.hidden = true; ui.view = 'history'; ui.viewingArchive = false; render(); });
         }
 
         var archSumBtn = $('xw-ribbon-sum');
