@@ -2044,7 +2044,15 @@ function renderWriter() {
 
     function leaveStoryToPick() {
         syncSessionOnLeave();
-        closeApp();
+        ui.view = 'pick';
+        ui.chatId = '';
+        ui.sessionId = '';
+        ui.contactId = '';
+        ui.pickSelected = [];
+        if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
+            global.MiyaOfflineStatus.hideAll();
+        }
+        render();
     }
 
     function openWithChat(chatId, contactId, castOpt) {
@@ -3435,17 +3443,15 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
-
-        ui.view = 'story';
+        ui.view = 'pick';
         ui.chatId = '';
         ui.sessionId = '';
-        ui.contactId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.pickSelected = [];
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
-
+        render();
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
@@ -3466,46 +3472,14 @@ function renderWriter() {
                 return global.MiyaOfflineBeautify.whenPresetsReady();
             });
         }
-        /* 线下入口不再显示“选择角色”页。
-         * 优先沿用最近使用的聊天角色；没有聊天时使用联系人列表中的第一位角色，
-         * 进入后直接落在线下场景页。 */
+        /* 封存记录以本地落盘为准；勿每次进入都从线上镜像自动重建。
+         * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
         hydrate
             .then(function () {
-                var chatStore0 = chatStore();
-                var chats = chatStore0 && typeof chatStore0.getChats === 'function'
-                    ? chatStore0.getChats('all')
-                    : [];
-                var targetChat = Array.isArray(chats) && chats.length ? chats[0] : null;
-                var targetContactId = targetChat && targetChat.contactId
-                    ? String(targetChat.contactId)
-                    : '';
-                if (!targetContactId && chatStore0 && typeof chatStore0.getContacts === 'function') {
-                    var contacts = chatStore0.getContacts('all');
-                    if (contacts && contacts.length) targetContactId = String(contacts[0].id || '');
-                }
-                if (!targetContactId) {
-                    ui.view = 'story';
-                    render();
-                    applyOfflineBeautify();
-                    return;
-                }
-                var targetChatObj = targetChat && String(targetChat.contactId || '') === targetContactId
-                    ? targetChat
-                    : ensureChatForContact(targetContactId);
-                if (!targetChatObj || !targetChatObj.id) {
-                    ui.view = 'story';
-                    render();
-                    applyOfflineBeautify();
-                    return;
-                }
-                openWithChat(targetChatObj.id, targetContactId);
-                applyOfflineBeautify();
-            })
-            .catch(function () {
-                ui.view = 'story';
                 render();
                 applyOfflineBeautify();
-            });
+            })
+            .catch(function () {});
     }
 
     function closeApp() {
