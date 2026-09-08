@@ -1820,3 +1820,9 @@
   width:34px !important; height:34px !important; min-width:34px !important;
   border-radius:50% !important; background:#111 !important; margin:0 !important;
 }
+
+
+/* 51版：线下进行中的故事页不再显示顶部三个工具；全部入口仅从输入栏四角星进入。 */
+#miya-offline-app:not(.is-journal) .xw-shell > .xw-dock { display:none !important; }
+#miya-offline-app .xw-writer { overflow:visible !important; }
+#miya-offline-app .xw-writer__tools-menu { bottom:42px !important; }

@@ -723,6 +723,7 @@
     }
 
     function renderDock() {
+        // 51版：故事页的三个功能全部收进底部四角星，顶部旧工具栏彻底不渲染。
         if (isJournalTheme()) return '';
         if (ui.view === 'story' && !ui.viewingArchive) return '';
         var navInner = '';
@@ -1859,9 +1860,9 @@ function renderWriter() {
             '<div class="xw-writer__tools">' +
             '<button type="button" class="xw-writer__tools-toggle" id="xw-writer-tools-toggle" title="更多功能" aria-label="更多功能" aria-expanded="false">' + AI_STAR_SVG + '</button>' +
             '<div class="xw-writer__tools-menu" id="xw-writer-tools-menu" hidden aria-hidden="true">' +
-            '<button type="button" class="xw-writer__tool" id="xw-dock-beautify" title="现场样式"><span>式</span><em>样式</em></button>' +
-            '<button type="button" class="xw-writer__tool" id="xw-dock-prefs" title="现场参数"><span>参</span><em>调参</em></button>' +
-            '<button type="button" class="xw-writer__tool" id="xw-dock-vault" title="往日场景"><span>档</span><em>卷宗</em></button>' +
+            '<button type="button" class="xw-writer__tool" data-writer-tool="beautify" title="现场样式"><span>式</span><em>样式</em></button>' +
+            '<button type="button" class="xw-writer__tool" data-writer-tool="prefs" title="现场参数"><span>参</span><em>调参</em></button>' +
+            '<button type="button" class="xw-writer__tool" data-writer-tool="vault" title="往日场景"><span>档</span><em>卷宗</em></button>' +
             '</div></div>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
@@ -3151,6 +3152,24 @@ function renderWriter() {
                 writerToolsMenu.hidden = true;
                 writerToolsMenu.setAttribute('aria-hidden', 'true');
                 writerToolsToggle.setAttribute('aria-expanded', 'false');
+                var action = btn.getAttribute('data-writer-tool');
+                if (action === 'prefs') {
+                    openSettingsSheet();
+                } else if (action === 'beautify') {
+                    if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.openBeautifyDrawer) {
+                        global.MiyaOfflineBeautify.openBeautifyDrawer();
+                    } else {
+                        toast('样式模块未加载');
+                    }
+                } else if (action === 'vault') {
+                    if (ui.view === 'history') {
+                        restoreToLiveStory();
+                    } else {
+                        ui.view = 'history';
+                        ui.viewingArchive = false;
+                        render();
+                    }
+                }
             });
             document.addEventListener('click', function (e) {
                 if (!e.target.closest('#xw-writer-tools-menu') && !e.target.closest('#xw-writer-tools-toggle')) {
