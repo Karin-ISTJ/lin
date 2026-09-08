@@ -1769,3 +1769,54 @@
   .xw-dock__lbl{font-size:8px;}
   .xw-main{padding-top:calc(58px + env(safe-area-inset-top,0));}
 }
+
+
+/* 49版后续：三个线下功能收进输入栏最左侧的线上同款四角星 */
+#miya-offline-app .xw-writer {
+  grid-template-columns: 34px 34px minmax(0, 1fr) 34px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 14px !important;
+  background: #FAFAFA !important;
+  border-top: 1px solid #ECECEC !important;
+}
+#miya-offline-app .xw-writer__tools {
+  position: relative;
+  width: 34px; height: 34px;
+}
+#miya-offline-app .xw-writer__tools-toggle {
+  width: 34px !important; height: 34px !important; min-width: 34px !important;
+  padding: 0 !important; border: 1px solid #E0E0E5 !important;
+  border-radius: 50% !important; background: #F0F0F2 !important;
+  color: #4A4A4A !important; display:flex !important; align-items:center !important; justify-content:center !important;
+}
+#miya-offline-app .xw-writer__tools-toggle svg { width: 17px !important; height: 17px !important; stroke: currentColor !important; }
+#miya-offline-app .xw-writer__tools-toggle:active { background:#E4E4E8 !important; }
+#miya-offline-app .xw-writer__tools-menu {
+  position: absolute; left: 0; bottom: 42px; z-index: 700;
+  display:flex; flex-direction:column; gap:5px; padding:6px;
+  min-width:88px; border:1px solid #E3E3E8; border-radius:12px;
+  background:rgba(255,255,255,.98); box-shadow:0 5px 18px rgba(0,0,0,.10);
+}
+#miya-offline-app .xw-writer__tools-menu[hidden] { display:none !important; }
+#miya-offline-app .xw-writer__tool {
+  width:76px; height:34px; padding:0 8px; border:0; border-radius:8px;
+  background:#F7F7F8; color:#333; display:flex; align-items:center; gap:7px;
+  font-size:11px; text-align:left;
+}
+#miya-offline-app .xw-writer__tool span { font-size:12px; font-weight:600; width:18px; text-align:center; }
+#miya-offline-app .xw-writer__tool em { font-style:normal; }
+#miya-offline-app .xw-writer__undo {
+  width:34px !important; height:34px !important; min-width:34px !important;
+  border-radius:50% !important; background:#F0F0F2 !important; border:1px solid #E0E0E5 !important;
+  padding:0 !important; font-size:18px !important; margin:0 !important;
+}
+#miya-offline-app .xw-writer__field {
+  height:36px !important; min-height:36px !important; line-height:36px !important;
+  padding:0 16px !important; border-radius:18px !important; background:#FFF !important;
+  border:1px solid #E3E3E8 !important; font-size:13.5px !important;
+}
+#miya-offline-app .xw-writer__go {
+  width:34px !important; height:34px !important; min-width:34px !important;
+  border-radius:50% !important; background:#111 !important; margin:0 !important;
+}
