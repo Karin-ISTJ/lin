@@ -751,24 +751,6 @@
     if (tabId === 'object' && isCustomLayoutMode()) buildCustomWidgetGallery();
   }
 
-  function syncSplashUi(theme) {
-    var on = !theme || theme.splashEnabled !== false;
-    var splash = $('miya-bf-splash-switch');
-    if (splash) {
-      splash.classList.toggle('is-on', on);
-      splash.setAttribute('aria-checked', on ? 'true' : 'false');
-    }
-    var status = $('miya-bf-splash-status');
-    if (status) {
-      status.textContent = on ? '已开启 · 进入时自动播放' : '已关闭 · 进入时不再播放';
-    }
-    var preview = $('miya-bf-splash-preview');
-    if (preview) {
-      preview.disabled = !on;
-      preview.classList.toggle('is-disabled', !on);
-    }
-  }
-
   function syncIconFrameUi(theme) {
     var on = !!(theme && theme.iconFrameless);
     var sw = $('miya-bf-icon-frame-switch');
@@ -806,7 +788,6 @@
   function syncUiFromTheme() {
     syncLayoutModeUi();
     var theme = getActiveSurfaceTheme();
-    syncSplashUi(global.miyaGetTheme ? global.miyaGetTheme() : {});
     syncIconFrameUi(theme);
     syncAltIconStyleUi(theme);
     refreshWallPreview();
@@ -1272,17 +1253,6 @@
       }
     });
 
-    var splashSw = $('miya-bf-splash-switch');
-    if (splashSw) {
-      splashSw.addEventListener('click', function () {
-        var on = !splashSw.classList.contains('is-on');
-        global.miyaSetTheme({ splashEnabled: on });
-        syncSplashUi(global.miyaGetTheme());
-        document.documentElement.classList.toggle('miya-splash-pending', on);
-        toast(on ? '开屏动画已开启' : '开屏动画已关闭');
-      });
-    }
-
     var iconFrameSw = $('miya-bf-icon-frame-switch');
     if (iconFrameSw) {
       iconFrameSw.addEventListener('click', function () {
@@ -1316,25 +1286,6 @@
         refreshDefaultIconGlyphs();
         refreshIconPreviews();
         toast(on ? '已切换为实心初始图标' : '已恢复线稿初始图标');
-      });
-    }
-
-    var splashPreview = $('miya-bf-splash-preview');
-    if (splashPreview) {
-      splashPreview.addEventListener('click', function () {
-        var theme = global.miyaGetTheme ? global.miyaGetTheme() : {};
-        if (theme.splashEnabled === false) {
-          toast('请先开启开屏动画');
-          return;
-        }
-        if (!global.miyaSplash || !global.miyaSplash.play) {
-          toast('开屏模块未加载');
-          return;
-        }
-        closeBeautifyApp();
-        setTimeout(function () {
-          global.miyaSplash.play();
-        }, 320);
       });
     }
 

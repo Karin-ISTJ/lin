@@ -175,7 +175,6 @@
     textColorMode: 'black',
     fontId: null,
     fontName: null,
-    splashEnabled: true,
     iconFrameless: false,
     altIconStyle: false,
     fontPreviewText: '',
@@ -854,7 +853,6 @@
           var merged = Object.assign({}, defaultTheme, p);
           merged.copy = Object.assign({}, defaultCopy, p.copy || {});
           merged.copy = migrateProfileCopy(merged.copy);
-          merged.splashEnabled = p.splashEnabled !== false;
           merged.iconFrameless = p.iconFrameless === true;
           merged.altIconStyle = p.altIconStyle === true;
           merged.fontPreviewText = String(p.fontPreviewText || '');
@@ -894,7 +892,6 @@
       textColorMode: theme.textColorMode === 'white' ? 'white' : 'black',
       fontId: theme.fontId,
       fontName: theme.fontName,
-      splashEnabled: theme.splashEnabled !== false,
       iconFrameless: theme.iconFrameless === true,
       altIconStyle: theme.altIconStyle === true,
       fontPreviewText: String(theme.fontPreviewText || ''),

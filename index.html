@@ -56,7 +56,6 @@
   <link rel="stylesheet" href="css/miya-chat-notify.css?v=6">
   <link rel="stylesheet" href="css/miya-thermal.css?v=11">
   <link rel="stylesheet" href="css/miya-ios-no-blue.css?v=2">
-  <link rel="stylesheet" href="css/miya-splash.css?v=7">
   <link rel="stylesheet" href="css/miya-lockscreen.css?v=9">
   <!-- 登录包：仅部署版上传 miya-auth/ 时生效；开源版无此文件夹则跳过登录 -->
   <script src="miya-auth/config.js?v=3"></script>
@@ -250,86 +249,10 @@
       setTimeout(setHNow, 300);
     });
 
-    try {
-      var themeRaw = localStorage.getItem('miya-theme-meta');
-      var splashOn = true;
-      if (themeRaw) {
-        var themeMeta = JSON.parse(themeRaw);
-        splashOn = !themeMeta || themeMeta.splashEnabled !== false;
-      }
-      if (splashOn) document.documentElement.classList.add('miya-splash-pending');
-    } catch (e) {}
   })();
   </script>
 </head>
 <body class="miya-mode-phone">
-  <!-- 开屏 · 圆环层叠 × 弹跳装饰 -->
-  <div class="miya-splash" id="miya-splash" hidden aria-hidden="true">
-    <div class="miya-splash__bg" aria-hidden="true"></div>
-    <div class="miya-splash__mesh" aria-hidden="true"></div>
-    <div class="miya-splash__grain" aria-hidden="true"></div>
-
-    <div class="miya-splash__rings" aria-hidden="true">
-      <span class="miya-splash__orbit miya-splash__orbit--a"></span>
-      <span class="miya-splash__orbit miya-splash__orbit--b"></span>
-      <span class="miya-splash__orbit miya-splash__orbit--c"></span>
-      <span class="miya-splash__orbit miya-splash__orbit--d"></span>
-      <span class="miya-splash__pulse miya-splash__pulse--1"></span>
-      <span class="miya-splash__pulse miya-splash__pulse--2"></span>
-    </div>
-
-    <div class="miya-splash__bubbles" aria-hidden="true">
-      <span class="miya-splash__bubble" style="--b-x: 10%; --b-size: 9px; --b-delay: 0s; --b-dur: 5.2s;"></span>
-      <span class="miya-splash__bubble" style="--b-x: 28%; --b-size: 13px; --b-delay: 0.4s; --b-dur: 5.8s;"></span>
-      <span class="miya-splash__bubble" style="--b-x: 52%; --b-size: 8px; --b-delay: 0.7s; --b-dur: 4.8s;"></span>
-      <span class="miya-splash__bubble" style="--b-x: 72%; --b-size: 14px; --b-delay: 0.2s; --b-dur: 5.6s;"></span>
-      <span class="miya-splash__bubble" style="--b-x: 88%; --b-size: 10px; --b-delay: 0.9s; --b-dur: 5s;"></span>
-    </div>
-
-    <div class="miya-splash__deco" aria-hidden="true">
-      <span class="miya-splash__mote" style="top: 12%; left: 14%; width: 8px; height: 8px; --mt-delay: 0.18s; --mt-op: 0.8; --mt-x: 4px; --mt-y: -7px; --mt-dur: 3s; background: radial-gradient(circle, #fff, var(--sp-accent));"></span>
-      <span class="miya-splash__mote" style="top: 20%; right: 16%; width: 11px; height: 11px; --mt-delay: 0.28s; --mt-op: 0.7; --mt-x: -5px; --mt-y: -9px; --mt-dur: 3.4s; background: radial-gradient(circle, #fff, var(--sp-violet));"></span>
-      <span class="miya-splash__mote" style="top: 36%; left: 8%; width: 6px; height: 6px; --mt-delay: 0.38s; --mt-x: 6px; --mt-y: -6px; --mt-dur: 2.6s; background: radial-gradient(circle, #fff, #8cdcff);"></span>
-      <span class="miya-splash__mote" style="bottom: 26%; right: 12%; width: 12px; height: 12px; --mt-delay: 0.22s; --mt-op: 0.65; --mt-x: -4px; --mt-y: -10px; --mt-dur: 3.6s; background: radial-gradient(circle, #fff, var(--sp-accent-deep));"></span>
-      <span class="miya-splash__mote" style="bottom: 16%; left: 18%; width: 9px; height: 9px; --mt-delay: 0.45s; --mt-x: 5px; --mt-y: -7px; --mt-dur: 2.8s; background: radial-gradient(circle, #fff, #bff5e4);"></span>
-      <span class="miya-splash__mote" style="bottom: 34%; right: 26%; width: 7px; height: 7px; --mt-delay: 0.52s; --mt-x: -3px; --mt-y: -6px; --mt-dur: 2.4s; background: radial-gradient(circle, #fff, var(--sp-violet));"></span>
-      <span class="miya-splash__trail-line" style="top: 26%; left: 10%; width: 44%; --tl-delay: 0.3s; transform: rotate(-6deg);"></span>
-      <span class="miya-splash__trail-line" style="bottom: 30%; left: 20%; width: 48%; --tl-delay: 0.45s; transform: rotate(4deg);"></span>
-    </div>
-
-    <div class="miya-splash__stage">
-      <div class="miya-splash__hero">
-        <div class="miya-splash__sigil" aria-hidden="true">
-          <span class="miya-splash__sigil-ring miya-splash__sigil-ring--b"></span>
-          <span class="miya-splash__sigil-ring"></span>
-          <span class="miya-splash__sigil-core"></span>
-        </div>
-
-        <h1 class="miya-splash__wordmark" aria-label="MIYA">
-          <span class="miya-splash__char" style="--d: 0">M</span>
-          <span class="miya-splash__char" style="--d: 1">I</span>
-          <span class="miya-splash__char" style="--d: 2">Y</span>
-          <span class="miya-splash__char" style="--d: 3">A</span>
-        </h1>
-
-        <div class="miya-splash__wave-bar" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-
-        <p class="miya-splash__tagline" id="miya-splash-tagline">把日常过成慢镜头</p>
-
-        <div class="miya-splash__dots" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </div>
-      </div>
-    </div>
-
-    <button type="button" class="miya-splash__skip" id="miya-splash-skip" aria-label="跳过开屏动画">
-      <span class="miya-splash__skip-dot" aria-hidden="true"></span>
-      跳过
-    </button>
-  </div>
-
   <!-- 锁屏 -->
   <div class="miya-lockscreen" id="miya-lockscreen" hidden aria-hidden="true" aria-label="锁屏">
     <div class="miya-lockscreen__bg" id="miya-lock-bg" aria-hidden="true"></div>
@@ -970,23 +893,6 @@
             <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-layout-hint">外观方案预设仅作用于固定布局</p>
           </article>
 
-          <article class="ins-atelier-splash-card">
-            <div class="ins-atelier-splash-card__head">
-              <p class="ins-atelier-panel-kicker">01 · 开屏</p>
-              <h2 class="ins-atelier-panel-title">启动动画</h2>
-              <p class="ins-atelier-panel-desc">圆环层叠 × 弹跳装饰 · 每次打开时播放，可在此开关</p>
-            </div>
-            <div class="ins-atelier-splash-pill ins-atelier-splash-pill--card">
-              <div>
-                <strong>开屏动画</strong>
-                <span id="miya-bf-splash-status">已开启 · 进入时自动播放</span>
-              </div>
-              <button type="button" class="ins-toggle is-on" id="miya-bf-splash-switch" role="switch" aria-checked="true" aria-label="开屏动画开关"></button>
-            </div>
-            <div class="ins-atelier-splash-actions">
-              <button type="button" class="ins-chip ins-chip--gold" id="miya-bf-splash-preview">预览开屏</button>
-            </div>
-          </article>
 
           <article class="ins-atelier-lock-card">
             <p class="ins-atelier-panel-kicker">01 · 锁屏</p>
@@ -6236,7 +6142,6 @@
   <script defer src="js2/miya-theme.js?v=30"></script>
   <script defer src="js2/miya-desk-custom-widget-templates.js?v=5"></script>
   <script defer src="js2/miya-desk-custom.js?v=53"></script>
-  <script defer src="js2/miya-splash.js?v=13"></script>
   <script defer src="js2/miya-lockscreen.js?v=10"></script>
   <script defer src="js1/miya-beautify-app.js?v=26"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>

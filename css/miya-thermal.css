@@ -32,7 +32,6 @@ html.miya-tab-hidden :is(
   .wg-4x2-glass__orb,
   .wg-4x2-glass__spark,
   .splash-logo,
-  .miya-splash__mark,
   .miya-auth__loader span
 ) {
   animation-play-state: paused !important;

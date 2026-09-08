@@ -501,26 +501,13 @@
   function runPhoneBoot() {
     if (typeof window.miyaHydrateTheme === 'function') {
       window.miyaHydrateTheme().then(function () {
-        var theme = window.miyaGetTheme && window.miyaGetTheme();
-        var afterEntry = function () {
-          document.documentElement.classList.remove('miya-splash-pending');
-          if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
-            window.miyaLockscreen.showIfNeeded();
-          }
-          if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
-            window.miyaUpdateNotice.onEntryStep('splash');
-          }
-        };
         if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
           window.miyaLockscreen.showIfNeeded();
         }
-        if (theme && theme.splashEnabled !== false && window.miyaSplash && window.miyaSplash.play) {
-          window.miyaSplash.play().then(afterEntry);
-        } else {
-          afterEntry();
+        if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
+          window.miyaUpdateNotice.onEntryStep('splash');
         }
       }).catch(function () {
-        document.documentElement.classList.remove('miya-splash-pending');
         if (typeof window.miyaInitHomeCopyEdit === 'function') window.miyaInitHomeCopyEdit();
         if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
           window.miyaLockscreen.showIfNeeded();

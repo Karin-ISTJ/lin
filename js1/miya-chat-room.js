@@ -3373,25 +3373,12 @@
     state.showTypingIndicator = true;
     state.awaitingAssistantReply = true;
     appendTyping();
-    syncGenerationSendButton();
   }
 
   function stopTypingWait() {
     state.showTypingIndicator = false;
     state.awaitingAssistantReply = false;
     removeTyping();
-    syncGenerationSendButton();
-  }
-
-  function syncGenerationSendButton() {
-    var send = $('qq-room-send');
-    if (!send) return;
-    var busy = !!(state.chatId && global.miyaChatEngine && typeof global.miyaChatEngine.isChatApiBusy === 'function' && global.miyaChatEngine.isChatApiBusy(state.chatId));
-    send.classList.toggle('is-stop', busy);
-    send.setAttribute('aria-label', busy ? '停止生成' : '发送');
-    send.innerHTML = busy
-      ? '<span class="qq-room__stop-icon" aria-hidden="true"></span>'
-      : '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
   }
 
   function setComposeDisabled(disabled) {
@@ -3402,8 +3389,7 @@
     if (input) input.disabled = !!disabled;
     if (ai) ai.disabled = !!disabled;
     if (toolsToggle) toolsToggle.disabled = !!disabled;
-    if (send) send.disabled = !!disabled && !(state.chatId && global.miyaChatEngine && typeof global.miyaChatEngine.isChatApiBusy === 'function' && global.miyaChatEngine.isChatApiBusy(state.chatId));
-    syncGenerationSendButton();
+    if (send) send.disabled = !!disabled;
   }
 
   function focusComposeInput(preventScroll) {
@@ -5163,12 +5149,6 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        var engine = global.miyaChatEngine;
-        if (state.chatId && engine && typeof engine.isChatApiBusy === 'function' && engine.isChatApiBusy(state.chatId)) {
-          if (typeof engine.stopChatGeneration === 'function') engine.stopChatGeneration(state.chatId);
-          syncGenerationSendButton();
-          return;
-        }
         handleSend();
       });
     }
