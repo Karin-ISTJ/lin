@@ -3500,8 +3500,25 @@
   }
 
   function requestAiReply(isRetry, emptyReplyAttempt, sendOpts) {
+    /* 32版：角色回复入口必须自己恢复聊天引擎引用。
+       不再假设 open() 一定已经把局部 engine 变量填好，避免点击按钮时
+       因 engine === null 直接抛同步异常，表现成“角色回复启动失败”。 */
+    engine = engine || global.miyaChatEngine || null;
     var cid = state.chatId;
-    if (!cid) return;
+    if (!cid) {
+      toast('当前没有打开聊天');
+      return Promise.reject(new Error('chat_not_open'));
+    }
+    if (!engine) {
+      console.error('[MiyaChat] character reply: miyaChatEngine is not loaded');
+      toast('聊天引擎未加载，请刷新页面后重试');
+      return Promise.reject(new Error('chat_engine_not_loaded'));
+    }
+    if (typeof engine.getApiConfig !== 'function' || typeof engine.sendChat !== 'function') {
+      console.error('[MiyaChat] character reply: invalid engine', engine);
+      toast('聊天引擎版本异常，请刷新页面后重试');
+      return Promise.reject(new Error('chat_engine_invalid'));
+    }
     var emptyTry = Math.max(0, Number(emptyReplyAttempt) || 0);
     var extraSendOpts = sendOpts && typeof sendOpts === 'object' ? sendOpts : {};
     if (state.sending && !isRetry) {
@@ -3590,7 +3607,10 @@
       }); }
     } catch (err) {
       console.error('[MiyaChat] direct reply click error', err);
-      toast('角色回复启动失败');
+      var detail = err && err.message ? String(err.message) : String(err || 'unknown');
+      if (detail === 'chat_engine_not_loaded') toast('聊天引擎未加载，请刷新页面后重试');
+      else if (detail === 'chat_engine_invalid') toast('聊天引擎版本异常，请刷新页面后重试');
+      else toast('角色回复启动失败：' + detail.slice(0, 80));
     }
     return false;
   };
