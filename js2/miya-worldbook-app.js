@@ -134,13 +134,13 @@
     if (!rail) return;
     var groups = store.listGroups();
     var html = '<button type="button" class="ins-wb-group-chip' + (filterGroupId === 'all' ? ' is-active' : '') +
-      '" data-wb-group="all">全部</button>';
+      '" data-wb-group="all">全部书</button>';
     groups.forEach(function (g) {
       var cnt = store.listEntries().filter(function (e) { return e.groupId === g.id; }).length;
       html += '<button type="button" class="ins-wb-group-chip' + (filterGroupId === g.id ? ' is-active' : '') +
         '" data-wb-group="' + esc(g.id) + '">' + esc(g.name) + '<i>' + cnt + '</i></button>';
     });
-    html += '<button type="button" class="ins-wb-group-chip ins-wb-group-chip--add" data-wb-group-add aria-label="新建分卷">+</button>';
+    html += '<button type="button" class="ins-wb-group-chip ins-wb-group-chip--add" data-wb-group-add aria-label="新建世界书">+</button>';
     rail.innerHTML = html;
   }
 
@@ -235,6 +235,7 @@
     var count = $('miya-wb-count');
     if (!list) return;
 
+    /* 顶部芯片仅作快捷筛选，列表始终按「世界书」手风琴展示 */
     renderGroupChips();
     var rows = filteredEntries();
     if (count) count.textContent = String(rows.length);
@@ -246,11 +247,6 @@
     }
     if (empty) empty.hidden = true;
 
-    if (filterGroupId !== 'all') {
-      list.innerHTML = rows.map(function (e, i) { return renderEntryCard(e, i); }).join('');
-      return;
-    }
-
     var groups = store.listGroups();
     var byGroup = {};
     groups.forEach(function (g) { byGroup[g.id] = []; });
@@ -260,26 +256,34 @@
       byGroup[gid].push(entry);
     });
 
+    /* 新导入的书默认折叠（除当前筛选命中的那本） */
+    groups.forEach(function (g) {
+      if (collapsedGroups[g.id] === undefined && !g.fixed) {
+        collapsedGroups[g.id] = true;
+      }
+    });
+
     var html = '';
     groups.forEach(function (g) {
       var items = byGroup[g.id] || [];
       if (!items.length) return;
-      var collapsed = !!collapsedGroups[g.id];
+      if (filterGroupId !== 'all' && g.id !== filterGroupId) return;
+      var collapsed = filterGroupId === g.id ? false : !!collapsedGroups[g.id];
       var actions = g.fixed ? '' : (
         '<span class="ins-wb-group-head-ops">' +
-        '<button type="button" class="ins-wb-group-op" data-wb-group-edit="' + esc(g.id) + '" aria-label="重命名">改</button>' +
-        '<button type="button" class="ins-wb-group-op ins-wb-group-op--del" data-wb-group-del="' + esc(g.id) + '" aria-label="删除">删</button>' +
+        '<button type="button" class="ins-wb-group-op" data-wb-group-edit="' + esc(g.id) + '" aria-label="重命名">改名</button>' +
+        '<button type="button" class="ins-wb-group-op ins-wb-group-op--del" data-wb-group-del="' + esc(g.id) + '" aria-label="删除世界书">删</button>' +
         '</span>'
       );
-      html += '<section class="ins-wb-group-block">' +
-        '<div class="ins-wb-group-head">' +
-        '<button type="button" class="ins-wb-group-head-toggle" data-wb-collapse="' + esc(g.id) + '" aria-expanded="' + !collapsed + '">' +
-        '<span class="ins-wb-group-head-title">' + esc(g.name) + '</span>' +
-        '<span class="ins-wb-group-head-meta">' + items.length + '</span>' +
-        '<span class="ins-wb-group-head-arrow">' + (collapsed ? '▸' : '▾') + '</span>' +
+      html += '<section class="ins-wb-book' + (collapsed ? ' is-collapsed' : ' is-open') + '" data-wb-book="' + esc(g.id) + '">' +
+        '<div class="ins-wb-book-head">' +
+        '<button type="button" class="ins-wb-book-toggle" data-wb-collapse="' + esc(g.id) + '" aria-expanded="' + !collapsed + '">' +
+        '<span class="ins-wb-book-arrow">' + (collapsed ? '▸' : '▾') + '</span>' +
+        '<span class="ins-wb-book-title">' + esc(g.name) + '</span>' +
+        '<span class="ins-wb-book-count">' + items.length + ' 条</span>' +
         '</button>' + actions + '</div>';
       if (!collapsed) {
-        html += '<div class="ins-wb-group-body">' + items.map(function (e, i) { return renderEntryCard(e, i); }).join('') + '</div>';
+        html += '<div class="ins-wb-book-body">' + items.map(function (e, i) { return renderEntryCard(e, i); }).join('') + '</div>';
       }
       html += '</section>';
     });
@@ -486,9 +490,9 @@
   function promptNewGroup() {
     dialog({
       mode: 'prompt',
-      title: '新建分卷',
-      message: '输入分卷名称',
-      placeholder: '例如：角色 A',
+      title: '新建世界书',
+      message: '输入世界书名称',
+      placeholder: '例如：凡人修仙传',
       defaultValue: ''
     }).then(function (name) {
       name = String(name || '').trim();
@@ -634,7 +638,13 @@
               return;
             }
             store.importStJson(data, { replace: doReplace }).then(function (res) {
-              alert('已导入 ' + (res && res.count != null ? res.count : 0) + ' 条世界书');
+              var n = res && res.count != null ? res.count : 0;
+              var book = (res && res.groupName) ? res.groupName : '导入世界书';
+              if (res && res.groupId) {
+                collapsedGroups[res.groupId] = false;
+                filterGroupId = 'all';
+              }
+              alert('已导入世界书「' + book + '」共 ' + n + ' 条\n可在列表中展开 / 收起切换');
               if (typeof renderList === 'function') renderList();
               else if (typeof refresh === 'function') refresh();
             }).catch(function (err) {

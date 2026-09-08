@@ -1048,3 +1048,99 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── 世界书手风琴 ── */
+.miya-worldbook-app .ins-wb-book {
+  margin: 0 0 10px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(0,0,0,.05);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(40,30,20,.04);
+}
+.miya-worldbook-app .ins-wb-book-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 4px;
+  background: rgba(250,248,244,.9);
+}
+.miya-worldbook-app .ins-wb-book-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.miya-worldbook-app .ins-wb-book-arrow {
+  width: 18px;
+  color: #888;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.miya-worldbook-app .ins-wb-book-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.miya-worldbook-app .ins-wb-book-count {
+  font-size: 12px;
+  color: #999;
+  flex-shrink: 0;
+}
+.miya-worldbook-app .ins-wb-book-body {
+  padding: 6px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.miya-worldbook-app .ins-wb-book.is-collapsed .ins-wb-book-head {
+  border-bottom: none;
+}
+
+/* ── 编辑器更紧凑 ── */
+.miya-wb-st-editor .miya-wb-row5 {
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+.miya-wb-st-editor .miya-wb-row2 {
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+.miya-wb-st-editor .ins-field-label {
+  margin: 6px 0 4px !important;
+  font-size: 12px !important;
+}
+.miya-wb-st-editor .ins-text-input,
+.miya-wb-st-editor .ins-select {
+  padding: 8px 12px !important;
+  min-height: 40px;
+}
+.miya-wb-st-editor .ins-textarea {
+  margin-top: 4px;
+}
+.miya-wb-st-editor .miya-wb-advanced {
+  margin: 8px 0 10px !important;
+  padding: 8px 10px !important;
+}
+.miya-worldbook-app .ins-wb-editor-scroll .st-container {
+  padding-top: 8px !important;
+  padding-bottom: 12px !important;
+}
+.miya-worldbook-app .ins-wb-scope-pick,
+.miya-worldbook-app .ins-wb-reach-pick {
+  gap: 6px !important;
+}
+.miya-worldbook-app .ins-wb-scope-opt,
+.miya-worldbook-app .ins-wb-reach-opt {
+  padding: 8px 10px !important;
+}

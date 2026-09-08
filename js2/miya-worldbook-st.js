@@ -514,11 +514,23 @@
       throw new Error('无法识别的世界书格式（需要 entries 对象或数组）');
     }
 
-    return rawEntries.map(function (raw, index) {
+    function bookNameFrom(data) {
+      if (!data || typeof data !== 'object') return '';
+      var n =
+        data.name ||
+        data.worldInfoName ||
+        data.world_info_name ||
+        (data.originalData && data.originalData.name) ||
+        (data.data && data.data.name) ||
+        '';
+      return String(n || '').trim();
+    }
+
+    var entries = rawEntries.map(function (raw, index) {
       var st = normalizeStFields(raw, {});
       var id =
         raw.uid != null
-          ? 'st_' + String(raw.uid)
+          ? 'st_' + String(raw.uid) + '_' + Date.now().toString(36).slice(-4)
           : raw.id != null
             ? String(raw.id)
             : 'st_import_' + index + '_' + Date.now().toString(36);
@@ -533,6 +545,8 @@
         updatedAt: Date.now()
       });
     });
+    entries._bookName = bookNameFrom(data);
+    return entries;
   }
 
   function exportStWorldInfoJson(entries, meta) {
@@ -581,6 +595,11 @@
     var store = global.miyaWorldbookStore;
     if (!store) return Promise.reject(new Error('worldbook store missing'));
     var parsed = parseStWorldInfoJson(data);
+    var bookName =
+      options.groupName ||
+      options.bookName ||
+      parsed._bookName ||
+      '导入世界书 ' + new Date().toLocaleString();
     var chain = Promise.resolve();
     if (options.replace) {
       chain = chain.then(function () {
@@ -592,15 +611,36 @@
         }, Promise.resolve());
       });
     }
-    return chain.then(function () {
-      return parsed.reduce(function (p, entry) {
-        return p.then(function () {
-          return store.upsertEntry(entry);
+    var groupId = null;
+    return chain
+      .then(function () {
+        if (options.groupId) {
+          groupId = options.groupId;
+          return null;
+        }
+        return store.upsertGroup({
+          name: bookName,
+          sort: Date.now()
         });
-      }, Promise.resolve());
-    }).then(function () {
-      return { count: parsed.length, entries: parsed };
-    });
+      })
+      .then(function (g) {
+        if (g && g.id) groupId = g.id;
+        if (!groupId) groupId = 'grp_default';
+        return parsed.reduce(function (p, entry) {
+          return p.then(function () {
+            entry.groupId = groupId;
+            return store.upsertEntry(entry);
+          });
+        }, Promise.resolve());
+      })
+      .then(function () {
+        return {
+          count: parsed.length,
+          entries: parsed,
+          groupId: groupId,
+          groupName: bookName
+        };
+      });
   }
 
   global.miyaWorldbookST = {
