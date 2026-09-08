@@ -1186,42 +1186,6 @@
         );
     }
 
-
-    function offlineSwipeBarHtml(m) {
-        if (!m || m.role !== 'assistant') return '';
-        var swipes = Array.isArray(m.swipes) ? m.swipes : [];
-        if (swipes.length < 2) return '';
-        var sid = Number(m.swipeId);
-        if (!Number.isFinite(sid)) sid = swipes.length - 1;
-        sid = Math.max(0, Math.min(swipes.length - 1, Math.floor(sid)));
-        return (
-            '<div class="xw-swipe" data-ap-swipe="' + esc(m.id) + '">' +
-            '<button type="button" class="xw-swipe__btn" data-ap-swipe-prev="' + esc(m.id) + '" aria-label="上一个候选">‹</button>' +
-            '<span class="xw-swipe__idx">' + (sid + 1) + ' / ' + swipes.length + '</span>' +
-            '<button type="button" class="xw-swipe__btn" data-ap-swipe-next="' + esc(m.id) + '" aria-label="下一个候选">›</button>' +
-            '</div>'
-        );
-    }
-
-    function applyOfflineSwipe(msgId, delta) {
-        var aps = global.MiyaAppointmentStore;
-        if (!aps || !ui.chatId || !ui.sessionId) return;
-        var sess = aps.getSession(ui.chatId, ui.sessionId);
-        if (!sess) return;
-        var m = (sess.messages || []).find(function (x) { return x && x.id === msgId; });
-        if (!m || !Array.isArray(m.swipes) || m.swipes.length < 2) return;
-        var sid = Number(m.swipeId);
-        if (!Number.isFinite(sid)) sid = m.swipes.length - 1;
-        sid = Math.max(0, Math.min(m.swipes.length - 1, sid + delta));
-        var content = String(m.swipes[sid] || '');
-        aps.updateMessage(ui.chatId, ui.sessionId, msgId, {
-            content: content,
-            swipeId: sid,
-            swipes: m.swipes
-        });
-        renderStory();
-    }
-
     function messageBlockHtml(m, canEdit) {
         if (m.role === 'system' && m.type === 'opening') {
             return openingBlockHtml(m, canEdit);
@@ -1242,13 +1206,11 @@
                 .join('');
         }
         if (!lines) return '';
-        var swipeBar = offlineSwipeBarHtml(m);
         if (!canEdit) {
             return (
                 '<div class="xw-block xw-block--locked">' +
                 thinkingHtml +
                 lines +
-                swipeBar +
                 '</div>'
             );
         }
@@ -1262,7 +1224,6 @@
             '<div class="xw-block__lines">' +
             lines +
             '</div>' +
-            swipeBar +
             '<div class="xw-block__tools">' +
             '<button type="button" class="xw-block__tool" data-ap-msg-edit="' +
             esc(m.id) +
@@ -3141,12 +3102,6 @@ function renderWriter() {
     function bindEvents() {
         document.querySelectorAll('[data-ap-floor-branch]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); branchFromFloor(btn.getAttribute('data-ap-floor-branch')); }); });
         document.querySelectorAll('[data-ap-floor-hide]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); toggleFloor(btn.getAttribute('data-ap-floor-hide')); }); });
-        document.querySelectorAll('[data-ap-swipe-prev]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) { e.stopPropagation(); applyOfflineSwipe(btn.getAttribute('data-ap-swipe-prev'), -1); });
-        });
-        document.querySelectorAll('[data-ap-swipe-next]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) { e.stopPropagation(); applyOfflineSwipe(btn.getAttribute('data-ap-swipe-next'), 1); });
-        });
         document.querySelectorAll('[data-ap-export-txt]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineText(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-txt'))); }); });
         document.querySelectorAll('[data-ap-export-json]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineJson(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-json'))); }); });
         var nc = $('xw-new-offline-chat'); if (nc) nc.addEventListener('click', newOfflineChat);

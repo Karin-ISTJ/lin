@@ -3268,15 +3268,13 @@
         return !!(normalizeBaseUrl(sec.baseUrl) && String(sec.apiKey || '').trim() && String(sec.model || '').trim());
     }
 
-    function fetchChatCompletion(url, headers, payload, attempt, signal) {
+    function fetchChatCompletion(url, headers, payload, attempt) {
         var tryNo = Math.max(1, Number(attempt) || 1);
-        var opts = {
+        return fetch(url, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload)
-        };
-        if (signal) opts.signal = signal;
-        return fetch(url, opts)
+        })
             .then(function (r) {
                 if (!r.ok) {
                     return r.text().then(function (t) {
@@ -3288,12 +3286,7 @@
             .then(function (data) {
                 var replyRaw = extractReplyContent(data);
                 if (!replyRaw && tryNo < CHAT_COMPLETION_MAX_ATTEMPTS) {
-                    if (signal && signal.aborted) {
-                        var abortErr = new Error('aborted');
-                        abortErr.name = 'AbortError';
-                        throw abortErr;
-                    }
-                    return fetchChatCompletion(url, headers, payload, tryNo + 1, signal);
+                    return fetchChatCompletion(url, headers, payload, tryNo + 1);
                 }
                 return { data: data, replyRaw: replyRaw };
             });
@@ -3769,16 +3762,6 @@
         return isChatApiBusy(chatId);
     }
 
-    function stopChatGeneration(chatId) {
-        var id = String(chatId || '');
-        var genLife = global.MiyaGenerationLifecycle;
-        if (genLife && typeof genLife.stop === 'function') {
-            genLife.stop(id ? 'chat:' + id : 'chat:', { reason: 'user' });
-        }
-        if (id) releaseChatApi(id);
-        return true;
-    }
-
     function buildLocalTokenUsage(built, replyRaw) {
         var pm = (built && built.promptMeta) || {};
         var promptChars = countMessagesChars(built && built.messages);
@@ -3808,11 +3791,6 @@
         if (isChatApiBusy(chatId)) return Promise.reject(new Error('chat_api_busy'));
 
         acquireChatApi(chatId);
-        var genLife = global.MiyaGenerationLifecycle;
-        var genCtl = genLife && typeof genLife.begin === 'function'
-            ? genLife.begin('chat:' + String(chatId), { kind: 'chat' })
-            : null;
-        var genSignal = genCtl && genCtl.signal ? genCtl.signal : null;
 
         var cfg = getApiConfig();
         var baseUrl = normalizeBaseUrl(cfg.baseUrl);
@@ -3820,7 +3798,6 @@
         var model = String(cfg.model || '').trim();
         if (!baseUrl || !apiKey || !model) {
             releaseChatApi(chatId);
-            if (genLife && typeof genLife.fail === 'function') genLife.fail('chat:' + String(chatId), new Error('api_not_configured'));
             return Promise.reject(new Error('api_not_configured'));
         }
 
@@ -3828,18 +3805,8 @@
             ? Promise.resolve()
             : store.addMessage(chatId, { role: 'user', content: text });
 
-        function clearInFlight(status, err) {
+        function clearInFlight() {
             releaseChatApi(chatId);
-            var genLife = global.MiyaGenerationLifecycle;
-            if (!genLife) return;
-            if (status === 'abort' || (err && genLife.isAbortError && genLife.isAbortError(err))) {
-                /* stop() 已由用户触发时状态为 aborted；此处兜底 */
-                if (typeof genLife.stop === 'function') genLife.stop('chat:' + String(chatId), { silent: true, reason: 'clear' });
-            } else if (status === 'error' && typeof genLife.fail === 'function') {
-                genLife.fail('chat:' + String(chatId), err);
-            } else if (typeof genLife.finish === 'function') {
-                genLife.finish('chat:' + String(chatId));
-            }
         }
 
         function maybeRefreshWeatherBeforeChat() {
@@ -3926,7 +3893,7 @@
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
                 reqPayload.stream = false;
-                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, genSignal).then(function (completion) {
+                return fetchChatCompletion(url, reqHeaders, reqPayload, 1).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
                     return completion;
@@ -4737,18 +4704,10 @@
                     });
             });
         })
-            .then(function (value) {
-                clearInFlight('done');
-                return value;
-            }, function (err) {
-                var genLife = global.MiyaGenerationLifecycle;
-                if (genLife && genLife.isAbortError && genLife.isAbortError(err)) {
-                    clearInFlight('abort', err);
-                } else {
-                    clearInFlight('error', err);
-                }
+            .catch(function (err) {
                 throw err;
-            });
+            })
+            .finally(clearInFlight);
     }
 
     global.miyaChatEngine = {
@@ -4777,7 +4736,6 @@
             pendingOnlineReturnPromptByChat[key] = String(text || '').trim();
         },
         sendChat: sendChat,
-        stopChatGeneration: stopChatGeneration,
         acquireChatApi: acquireChatApi,
         releaseChatApi: releaseChatApi,
         isChatApiBusy: isChatApiBusy,

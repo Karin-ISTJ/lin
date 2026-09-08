@@ -1173,13 +1173,11 @@
             var body = Object.assign({}, payload);
             body.stream = false;
             function doFetch(bodyToSend) {
-                var fo = {
+                return fetch(url, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(bodyToSend)
-                };
-                if (handlers.signal) fo.signal = handlers.signal;
-                return fetch(url, fo);
+                });
             }
             return doFetch(body).then(function (res) {
                 if (!res.ok && body.thinking && [400, 404, 422].indexOf(res.status) >= 0) {
@@ -1218,13 +1216,11 @@
         var req = Object.assign({}, payload);
         req.stream = true;
         function doStreamFetch(bodyToSend) {
-            var fo = {
+            return fetch(url, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(bodyToSend)
-            };
-            if (handlers.signal) fo.signal = handlers.signal;
-            return fetch(url, fo);
+            });
         }
         return doStreamFetch(req).then(function (res) {
             if (!res.ok && req.thinking && [400, 404, 422].indexOf(res.status) >= 0) {
@@ -1423,8 +1419,7 @@
                 payload,
                 {
                     onLine: handlers.onLine,
-                    onDelta: handlers.onDelta,
-                    signal: handlers.signal
+                    onDelta: handlers.onDelta
                 },
                 useStream
             ).then(function (completion) {
@@ -1449,33 +1444,7 @@
                     msgFields.htmlRaw = finalized.htmlRaw || content;
                 }
                 if (thinking) msgFields.thinking = thinking;
-                /* 线下 Swipe：若 handlers.replaceLastAssistant，则把上一层助手回复并入候选 */
-                var msg = null;
-                if (handlers.replaceLastAssistant && typeof aps.updateMessage === 'function') {
-                    var sessMsgs = (aps.getMessages && aps.getMessages(chatId, sessionId)) || [];
-                    var lastAsst = null;
-                    for (var li = sessMsgs.length - 1; li >= 0; li--) {
-                        if (sessMsgs[li] && !sessMsgs[li].deleted && sessMsgs[li].role === 'assistant') {
-                            lastAsst = sessMsgs[li];
-                            break;
-                        }
-                    }
-                    if (lastAsst) {
-                        var prevSwipes = Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
-                        if (!prevSwipes.length && lastAsst.content) prevSwipes.push(String(lastAsst.content));
-                        prevSwipes.push(content);
-                        var swipeId = prevSwipes.length - 1;
-                        msg = aps.updateMessage(chatId, sessionId, lastAsst.id, {
-                            content: content,
-                            thinking: thinking || lastAsst.thinking || '',
-                            renderAsHtml: !!finalized.renderAsHtml,
-                            htmlRaw: finalized.renderAsHtml ? (finalized.htmlRaw || content) : '',
-                            swipes: prevSwipes,
-                            swipeId: swipeId
-                        }) || lastAsst;
-                    }
-                }
-                if (!msg) msg = aps.addMessage(chatId, sessionId, msgFields);
+                var msg = aps.addMessage(chatId, sessionId, msgFields);
                 var chatRow = st.findChat(chatId);
                 var preset = aps.resolvePresetForContact(chatRow && chatRow.contactId);
                 var sessAfter = aps.getSession(chatId, sessionId);
@@ -1510,21 +1479,7 @@
         if (!userMsg) return Promise.reject(new Error('session_not_found'));
 
         replyInFlight[key] = true;
-        var genLife = global.MiyaGenerationLifecycle;
-        var genCtl = genLife && genLife.begin ? genLife.begin('offline:' + key, { kind: 'offline' }) : null;
-        if (genCtl && genCtl.signal) handlers.signal = genCtl.signal;
-        if (handlers.onStatus) handlers.onStatus('generating');
-        return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
-            if (genLife && genLife.finish) genLife.finish('offline:' + key, v);
-            return v;
-        }, function (err) {
-            if (genLife && genLife.isAbortError && genLife.isAbortError(err)) {
-                if (genLife.stop) genLife.stop('offline:' + key, { silent: true, reason: 'abort' });
-            } else if (genLife && genLife.fail) {
-                genLife.fail('offline:' + key, err);
-            }
-            throw err;
-        }).finally(function () {
+        return runAppointmentCompletion(chatId, sessionId, handlers).finally(function () {
             delete replyInFlight[key];
             if (handlers.onStatus) handlers.onStatus('idle');
         });
@@ -1535,33 +1490,10 @@
         var key = String(chatId) + '::' + String(sessionId);
         if (replyInFlight[key]) return Promise.reject(new Error('busy'));
         replyInFlight[key] = true;
-        var genLife = global.MiyaGenerationLifecycle;
-        var genCtl = genLife && genLife.begin ? genLife.begin('offline:' + key, { kind: 'offline', regenerate: true }) : null;
-        if (genCtl && genCtl.signal) handlers.signal = genCtl.signal;
-        handlers.replaceLastAssistant = true;
-        if (handlers.onStatus) handlers.onStatus('generating');
-        return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
-            if (genLife && genLife.finish) genLife.finish('offline:' + key, v);
-            return v;
-        }, function (err) {
-            if (genLife && genLife.isAbortError && genLife.isAbortError(err)) {
-                if (genLife.stop) genLife.stop('offline:' + key, { silent: true, reason: 'abort' });
-            } else if (genLife && genLife.fail) {
-                genLife.fail('offline:' + key, err);
-            }
-            throw err;
-        }).finally(function () {
+        return runAppointmentCompletion(chatId, sessionId, handlers).finally(function () {
             delete replyInFlight[key];
             if (handlers.onStatus) handlers.onStatus('idle');
         });
-    }
-
-    function stopAppointment(chatId, sessionId) {
-        var key = String(chatId) + '::' + String(sessionId);
-        var genLife = global.MiyaGenerationLifecycle;
-        if (genLife && genLife.stop) genLife.stop('offline:' + key, { reason: 'user' });
-        delete replyInFlight[key];
-        return true;
     }
 
     function isBusy(chatId, sessionId) {
@@ -1583,7 +1515,6 @@
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,
-        stopAppointment: stopAppointment,
         resolveProfileForContact: resolveProfileForContact,
         resolveProfileForChat: resolveProfileForChat
     };

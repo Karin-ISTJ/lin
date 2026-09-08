@@ -6355,13 +6355,3 @@ html.is-ios .qq-room__input {
   width: 20px;
   height: 20px;
 }
-
-/* 生成中：发送钮变为停止 */
-.qq-room__send.is-stop {
-  color: #c45c5c !important;
-}
-.qq-room__send.is-stop:hover { color: #a84444 !important; }
-.qq-room__send.is-stop svg {
-  width: 16px;
-  height: 16px;
-}

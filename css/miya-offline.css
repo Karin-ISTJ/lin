@@ -1848,31 +1848,3 @@
   font-size: 13.5px !important;
   color: #1A1A1A !important;
 }
-
-/* 线下楼层 Swipe 候选切换 */
-.xw-swipe {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
-  padding: 4px 0;
-  opacity: 0.78;
-}
-.xw-swipe__btn {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.05);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-}
-.xw-swipe__btn:active { transform: scale(0.94); }
-.xw-swipe__idx {
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  min-width: 3.5em;
-  text-align: center;
-}
