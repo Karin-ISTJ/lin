@@ -3960,6 +3960,14 @@
                 var data = completion.data;
                 var replyRawOriginal = String(completion.replyRaw || '');
                 var replyRaw = replyRawOriginal;
+                /* 记忆表格：解析 tableEdit 并剥离标签 */
+                try {
+                    var mtEng = global.MiyaMemoryTableEngine;
+                    if (mtEng && typeof mtEng.processAssistantReply === 'function') {
+                        var mtRes = mtEng.processAssistantReply(chatId, replyRaw);
+                        if (mtRes && mtRes.text != null) replyRaw = mtRes.text;
+                    }
+                } catch (eMt) {}
                 var lifeLikeNextPushPatch = null;
                 var llMod = global.MiyaChatLifeLike;
                 var chatRowEarly = built.chat || (store.findChat ? store.findChat(chatId) : null);

@@ -312,7 +312,7 @@
     closeMsgMenu();
   }
 
-  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem', 'backup'];
+  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem', 'memory', 'backup'];
   var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
@@ -377,7 +377,9 @@
       '<circle cx="12" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
       '</svg>',
     backup:
-      '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+      '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    memory:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 4v16"/></svg>'
   };
   var TOOL_LABELS = {
     mic: '语音',
@@ -395,6 +397,7 @@
     thinking: '思维链',
     lovePoem: '情诗',
     groupRedPacket: '红包',
+    memory: '记忆表',
     backup: '备份'
   };
 
@@ -4529,7 +4532,10 @@
     else if (key === 'clock') toggleTimestamps();
     else if (key === 'narration') toggleNarrationMode();
     else if (key === 'lovePoem') openLovePoemPicker();
-    else if (key === 'backup') {
+    else if (key === 'memory') {
+      if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) global.MiyaMemoryTableApp.open(state.chatId);
+      else toast('记忆表模块未加载');
+    } else if (key === 'backup') {
       if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {
         if (global.MiyaChatBackups.exportChatToFile(state.chatId)) toast('已导出聊天备份');
         else toast('备份失败');
@@ -5281,6 +5287,12 @@
       if (t.closest('[data-plus="narration"]')) { e.preventDefault(); toggleNarrationMode(); return; }
       if (t.closest('[data-plus="thinking"]')) { e.preventDefault(); openThinkingPop(); return; }
       if (t.closest('[data-plus="lovePoem"]')) { e.preventDefault(); openLovePoemPicker(); return; }
+      if (t.closest('[data-plus="memory"]')) {
+        e.preventDefault();
+        if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) global.MiyaMemoryTableApp.open(state.chatId);
+        else toast('记忆表模块未加载');
+        return;
+      }
       if (t.closest('[data-plus="backup"]')) {
         e.preventDefault();
         if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {

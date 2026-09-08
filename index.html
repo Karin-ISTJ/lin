@@ -35,6 +35,7 @@
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=19">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=4">
+  <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=3">
   <link rel="stylesheet" href="css/miya-music.css?v=17">
   <link rel="stylesheet" href="css/miya-music-beautify.css?v=4">
@@ -1169,6 +1170,27 @@
     </div>
 
     <input type="file" class="ins-file" id="miya-st-backup-file" accept=".zip,.json,application/zip,application/json" multiple>
+  </div>
+
+  
+  <!-- 记忆增强表格 -->
+  <div id="miya-memory-table-app" aria-hidden="true">
+    <div class="miya-mt-head">
+      <button type="button" id="miya-mt-back" aria-label="返回">返回</button>
+      <h1 id="miya-mt-title">记忆表格</h1>
+    </div>
+    <div class="miya-mt-body">
+      <div class="miya-mt-settings" id="miya-mt-settings"></div>
+      <div class="miya-mt-tabs" id="miya-mt-tabs"></div>
+      <div id="miya-mt-table-wrap"></div>
+      <div class="miya-mt-actions">
+        <button type="button" id="miya-mt-add-row">加一行</button>
+        <button type="button" id="miya-mt-save" class="is-primary">保存</button>
+        <button type="button" id="miya-mt-export">导出</button>
+        <button type="button" id="miya-mt-reset">重置空表</button>
+      </div>
+      <p class="miya-mt-note" style="margin-top:14px">生成时会自动注入表格；AI 可在回复末尾用 &lt;tableEdit&gt; 更新。可在聊天工具栏打开本页。</p>
+    </div>
   </div>
 
   <!-- 世界书 · 典籍 -->
@@ -5761,7 +5783,7 @@
   <script defer src="js1/miya-beautify-app.js?v=26"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=4"></script>
-  <script defer src="js2/miya-settings-app.js?v=56"></script>
+  <script defer src="js2/miya-settings-app.js?v=57"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
@@ -5797,8 +5819,11 @@
   <script defer src="js1/miya-chat-calls.js?v=1"></script>
   <script defer src="js1/miya-chat-html.js?v=3"></script>
   <script defer src="js2/miya-generation-lifecycle.js?v=1"></script>
+  <script defer src="js2/miya-memory-table-store.js?v=1"></script>
+  <script defer src="js2/miya-memory-table-engine.js?v=1"></script>
+  <script defer src="js2/miya-memory-table-app.js?v=1"></script>
   <script defer src="js2/miya-plugin-host.js?v=1"></script>
-  <script defer src="js1/miya-chat-engine.js?v=40"></script>
+  <script defer src="js1/miya-chat-engine.js?v=41"></script>
   <script defer src="js1/miya-chat-group.js?v=11"></script>
   <script defer src="js1/miya-chat-group-redpacket.js?v=9"></script>
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
@@ -5808,7 +5833,7 @@
   <script defer src="js2/miya-offline-beautify.js?v=14"></script>
   <script defer src="js2/miya-offline-text-decor.js?v=1"></script>
   <script defer src="js1/miya-appointment-memory.js?v=6"></script>
-  <script defer src="js1/miya-appointment-engine.js?v=40"></script>
+  <script defer src="js1/miya-appointment-engine.js?v=41"></script>
   <script defer src="js1/miya-appointment-app.js?v=41"></script>
   <script defer src="js1/miya-chat-heartvoice-templates.js?v=15"></script>
   <script defer src="js1/miya-chat-heartvoice.js?v=11"></script>
@@ -5827,7 +5852,7 @@
   <script defer src="js1/miya-chat-order-ui.js?v=3"></script>
   <script defer src="js1/miya-chat-love-poem.js?v=1"></script>
   <script defer src="js1/miya-chat-backups.js?v=1"></script>
-  <script defer src="js1/miya-chat-room.js?v=39"></script>
+  <script defer src="js1/miya-chat-room.js?v=40"></script>
   <script defer src="js1/miya-chat-settings-panel.js?v=13"></script>
   <script defer src="js1/miya-chat-ui-theme.js?v=4"></script>
   <script defer src="js1/miya-chat-app.js?v=40"></script>

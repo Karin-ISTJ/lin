@@ -1,0 +1,134 @@
+#miya-memory-table-app {
+  position: fixed;
+  inset: 0;
+  z-index: 720;
+  display: none;
+  flex-direction: column;
+  background: #f7f5f1;
+  color: #1a1a1a;
+  font-family: "Jost", "Noto Sans SC", sans-serif;
+}
+#miya-memory-table-app.is-open { display: flex; }
+.miya-mt-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  background: rgba(255,255,255,.92);
+}
+.miya-mt-head h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  flex: 1;
+}
+.miya-mt-head button {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.miya-mt-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.miya-mt-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.miya-mt-check {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.miya-mt-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.miya-mt-tab {
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.miya-mt-tab.is-active {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+.miya-mt-tab i {
+  margin-left: 6px;
+  opacity: .7;
+  font-style: normal;
+  font-size: 11px;
+}
+.miya-mt-note {
+  font-size: 12px;
+  color: #888;
+  margin: 0 0 10px;
+}
+.miya-mt-scroll {
+  overflow: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(60,45,30,.06);
+}
+.miya-mt-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 13px;
+}
+.miya-mt-table th,
+.miya-mt-table td {
+  border: 1px solid rgba(0,0,0,.06);
+  padding: 8px 10px;
+  min-width: 88px;
+  vertical-align: top;
+}
+.miya-mt-table th {
+  background: #faf8f4;
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+}
+.miya-mt-ri { width: 36px; min-width: 36px; color: #999; text-align: center; }
+.miya-mt-del {
+  border: none;
+  background: transparent;
+  color: #c45;
+  cursor: pointer;
+}
+.miya-mt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.miya-mt-actions button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,.05);
+}
+.miya-mt-actions .is-primary {
+  background: #1a1a1a;
+  color: #fff;
+}

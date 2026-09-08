@@ -1444,6 +1444,13 @@
                     completion && completion.raw != null
                         ? String(completion.raw)
                         : String(completion || '');
+                try {
+                    var mtEng = global.MiyaMemoryTableEngine;
+                    if (mtEng && typeof mtEng.processAssistantReply === 'function') {
+                        var mtRes = mtEng.processAssistantReply(chatId, fullRaw);
+                        if (mtRes && mtRes.text != null) fullRaw = mtRes.text;
+                    }
+                } catch (eMtOff) {}
                 var apiData = completion && completion.data != null ? completion.data : null;
                 var parsed = parseAppointmentResponse(fullRaw, apiData);
                 var thinking = String(parsed.thinking || '').trim();

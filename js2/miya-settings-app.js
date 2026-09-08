@@ -2225,6 +2225,16 @@
     var app = $('miya-settings-app');
     if (!app || app.dataset.bound) return;
     app.dataset.bound = '1';
+    var memBtn = $('miya-st-open-memory-table');
+    if (memBtn) {
+      memBtn.addEventListener('click', function () {
+        if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) {
+          global.MiyaMemoryTableApp.open();
+        } else {
+          toast('记忆表模块未加载');
+        }
+      });
+    }
 
     onClick('miya-st-back', function () {
       if (app.classList.contains('has-panel')) showMainList();
