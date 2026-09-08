@@ -312,7 +312,7 @@
     closeMsgMenu();
   }
 
-  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'lovePoem', 'memory', 'backup'];
+  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'memory', 'backup'];
   var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
@@ -332,14 +332,6 @@
   var THINK_CLOUD_SVG =
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
     '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>' +
-    '</svg>';
-  var LOVE_POEM_SVG =
-    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-    '<path d="M18.8 3.4c-1.6 2.4-3.4 5.2-5.2 8.4-1.4 2.5-2.7 4.6-3.9 6.1-1 1.1-1.8 1.8-2.4 2.2"/>' +
-    '<path d="M17.2 5.1 9.1 16.4"/>' +
-    '<path d="M15.5 7.2 12.1 8.8 M13.8 9.3 10.3 10.9 M12.4 11.4 8.9 12.9 M11 13.5 7.7 14.8 M9.7 15.6 6.8 16.7 M8.6 17.1 6.4 18.1"/>' +
-    '<path d="M16.2 6.1 18.5 4.2 M14.8 8.1 17 6.8 M13.4 10.2 15.6 8.8 M12.2 12 14 10.8"/>' +
-    '<path d="M9.1 16.4 5.3 19.7 M5.3 19.7 3.9 21.1 M5.3 19.7 6.6 20.8"/>' +
     '</svg>';
   var TOOL_SVG = {
     mic: '<svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
@@ -369,7 +361,6 @@
       '<line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/>' +
       '</svg>',
     thinking: THINK_CLOUD_SVG,
-    lovePoem: LOVE_POEM_SVG,
     groupRedPacket:
       '<svg viewBox="0 0 24 24" aria-hidden="true">' +
       '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
@@ -395,7 +386,6 @@
     clock: '时间',
     narration: '旁白模式',
     thinking: '思维链',
-    lovePoem: '情诗',
     groupRedPacket: '红包',
     memory: '记忆表',
     backup: '备份'
@@ -3752,30 +3742,6 @@
     });
   }
 
-  function openLovePoemPicker() {
-    if (isGroupRoom()) {
-      toast('情诗仅支持单聊');
-      return;
-    }
-    var poemUi = global.MiyaChatLovePoem;
-    if (!poemUi || typeof poemUi.buildStylePickerHtml !== 'function') {
-      toast('情诗模块未加载');
-      return;
-    }
-    closeToolbarPanel();
-    openOverlay(poemUi.buildStylePickerHtml());
-    if (typeof poemUi.bindStylePicker === 'function') {
-      poemUi.bindStylePicker(function (style) {
-        closeOverlay();
-        if (!style || !state.chatId) return;
-        if (state.sending) {
-          toast('正在等待回复…');
-          return;
-        }
-        requestAiReply(false, 0, { lovePoemMode: true, lovePoemStyle: style });
-      });
-    }
-  }
 
   function toolVoiceManual() {
     dialog({ mode: 'prompt', title: '语音', message: '输入语音转写内容', placeholder: '想说的话…' }).then(function (txt) {
@@ -4531,7 +4497,6 @@
     }
     else if (key === 'clock') toggleTimestamps();
     else if (key === 'narration') toggleNarrationMode();
-    else if (key === 'lovePoem') openLovePoemPicker();
     else if (key === 'memory') {
       if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) global.MiyaMemoryTableApp.open(state.chatId);
       else toast('记忆表模块未加载');
@@ -5286,7 +5251,6 @@
       if (t.closest('[data-plus="clock"]')) { e.preventDefault(); toggleTimestamps(); return; }
       if (t.closest('[data-plus="narration"]')) { e.preventDefault(); toggleNarrationMode(); return; }
       if (t.closest('[data-plus="thinking"]')) { e.preventDefault(); openThinkingPop(); return; }
-      if (t.closest('[data-plus="lovePoem"]')) { e.preventDefault(); openLovePoemPicker(); return; }
       if (t.closest('[data-plus="memory"]')) {
         e.preventDefault();
         if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) global.MiyaMemoryTableApp.open(state.chatId);
