@@ -104,19 +104,44 @@
     var scope = String(entry.scope || 'global');
     var promptContext = String(cfg.promptContext || '').trim();
     var reach = getEntryGlobalReach(entry);
+    var st = global.miyaWorldbookST;
+
+    function stKeywordMatch() {
+      if (!st || typeof st.activateEntries !== 'function') {
+        if (entry.constant) return true;
+        return includesKeyword(contextText, entry.key || entry.keywords || []);
+      }
+      var res = st.activateEntries([entry], {
+        contextText: contextText,
+        messages: cfg.messages,
+        scanDepth: cfg.scanDepth,
+        disableRecursion: true
+      });
+      return (res.activated || []).length > 0;
+    }
+
     if (scope === 'local') {
       if (!roleMatches(entry, cfg)) return false;
       // 局部·全软件：绑定角色后任意场景注入（不依赖关键词 / promptContext）
       if (reach === 'all') return true;
       if (promptContext && reach && !globalReachApplies(reach, promptContext)) return false;
       var bound = Array.isArray(entry.boundRoleIds) ? entry.boundRoleIds : [];
-      var localKeywords = Array.isArray(entry.keywords) ? entry.keywords.filter(Boolean) : [];
+      var localKeywords = Array.isArray(entry.key) && entry.key.length
+        ? entry.key
+        : (Array.isArray(entry.keywords) ? entry.keywords.filter(Boolean) : []);
+      if (entry.constant) return true;
       if (bound.length && !localKeywords.length) return true;
-      return includesKeyword(contextText, entry.keywords || []);
+      return stKeywordMatch();
     }
-    if (reach === 'all') return false;
+    /* 全局·全软件：等同 ST constant / 无关键词限制的全局层 */
+    if (reach === 'all') {
+      return entry.constant || !(entry.key && entry.key.length) && !(entry.keywords && entry.keywords.length)
+        ? true
+        : stKeywordMatch();
+    }
     if (promptContext && reach && !globalReachApplies(reach, promptContext)) return false;
-    return includesKeyword(contextText, entry.keywords || []);
+    if (entry.constant) return true;
+    return stKeywordMatch();
   }
 
   function matchEntries(input) {

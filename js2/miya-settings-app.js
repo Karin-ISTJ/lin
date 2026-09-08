@@ -2120,11 +2120,31 @@
       return;
     }
     var list = api.list();
+    var live = (global.MiyaPlugins && typeof global.MiyaPlugins.list === 'function')
+      ? global.MiyaPlugins.list()
+      : [];
+    var html = '';
+    if (live.length) {
+      html += '<p class="st-form-hint" style="padding:4px 16px 8px">已注册扩展（运行中）</p>';
+      html += live.map(function (row) {
+        return (
+          '<div class="st-card-row" style="pointer-events:none">' +
+            '<div class="st-card-row-left" style="flex:1;min-width:0">' +
+              '<div><div class="st-card-label">' + String(row.name || row.id || '').replace(/</g, '&lt;') +
+              (row.version ? ' · ' + String(row.version).replace(/</g, '&lt;') : '') + '</div>' +
+              '<div class="st-card-desc">' + String(row.description || row.id || '').replace(/</g, '&lt;') + '</div></div>' +
+            '</div>' +
+            '<span class="st-form-hint">运行中</span>' +
+          '</div>'
+        );
+      }).join('');
+    }
     if (!list.length) {
-      box.innerHTML = '<p class="st-form-hint" style="padding:8px 16px">暂无已安装插件</p>';
+      html += '<p class="st-form-hint" style="padding:8px 16px">' + (live.length ? '无 GitHub 安装记录' : '暂无已安装插件') + '</p>';
+      box.innerHTML = html;
       return;
     }
-    box.innerHTML = list.map(function (row) {
+    html += list.map(function (row) {
       return (
         '<div class="st-card-row" style="pointer-events:auto" data-gh-plugin-id="' + String(row.id || '').replace(/"/g, '') + '">' +
           '<div class="st-card-row-left" style="flex:1;min-width:0">' +
@@ -2137,6 +2157,7 @@
         '</div>'
       );
     }).join('');
+    box.innerHTML = html;
   }
 
   function bindGithubPluginsUi() {

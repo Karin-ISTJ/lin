@@ -1,0 +1,6 @@
+{
+  "name": "示例·生成日志",
+  "version": "1.0.0",
+  "main": "miya-plugin-example.js",
+  "description": "演示 MiyaPlugins.register 与 beforeGenerate / afterGenerate 钩子"
+}

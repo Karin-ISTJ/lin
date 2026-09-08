@@ -308,6 +308,38 @@
       merged.push(entry);
     });
 
+    /* ST 对齐：分组互斥 + sticky/cooldown + token 预算 */
+    var st = global.miyaWorldbookST;
+    var budgetMeta = null;
+    if (st && typeof st.runPipeline === 'function' && cfg.useStPipeline !== false) {
+      var budget = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
+      var pipe = st.runPipeline(merged, {
+        contextText: contextText,
+        messages: cfg.messages,
+        scanDepth: cfg.scanDepth,
+        tokenBudget: budget,
+        chatId: cfg.chatId,
+        dryRun: !!cfg.dryRun
+      });
+      /* 与原匹配结果取交集优先：pipeline 在已匹配集上再过滤 */
+      var idset = {};
+      merged.forEach(function (e) { if (e && e.id) idset[String(e.id)] = e; });
+      merged = (pipe.selected || []).map(function (e) {
+        return idset[String(e.id)] || e;
+      }).filter(Boolean);
+      budgetMeta = {
+        usedTokens: pipe.usedTokens,
+        budgetTokens: pipe.budgetTokens,
+        dropped: pipe.dropped,
+        debug: pipe.debug
+      };
+    } else if (st && typeof st.applyTokenBudget === 'function') {
+      var budget2 = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
+      var bud = st.applyTokenBudget(merged, budget2);
+      merged = bud.entries;
+      budgetMeta = { usedTokens: bud.usedTokens, budgetTokens: bud.budgetTokens, dropped: bud.dropped };
+    }
+
     var entryOrder = Array.isArray(cfg.entryOrder)
       ? cfg.entryOrder.map(function (x) { return String(x || '').trim(); }).filter(Boolean)
       : [];
@@ -360,7 +392,8 @@
       universalCount: universalRows.length,
       frontCount: buckets.front.length,
       middleCount: buckets.middle.length,
-      backCount: buckets.back.length
+      backCount: buckets.back.length,
+      budget: budgetMeta
     };
   }
 

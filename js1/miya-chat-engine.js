@@ -466,12 +466,16 @@
             roleIds: roleIds,
             roleName: contact && contact.name,
             contextText: contextText || '',
+            messages: opts.messages,
             skipChronicleProfile: true,
             extraBindings: bindings,
             scopeMode: String(opts.scopeMode || '').trim(),
             promptContext: promptContext,
             excludeEntryIds: excludeEntryIds,
-            entryOrder: entryOrder
+            entryOrder: entryOrder,
+            chatId: opts.chatId || '',
+            tokenBudget: opts.tokenBudget,
+            dryRun: !!opts.dryRun
         });
         var sec = result && result.sections ? result.sections : {};
         var frontLayers = normalizeLayerList([sec.front]);
@@ -3905,6 +3909,21 @@
             var built = buildApiMessages(chatId, '', options);
             if (built.error) return Promise.reject(new Error(built.error));
 
+            var pluginCtx = {
+                scope: 'chat',
+                chatId: chatId,
+                messages: built.messages,
+                userText: text,
+                options: options,
+                signal: genSignal
+            };
+            var pluginReady = global.MiyaPlugins && typeof global.MiyaPlugins.beforeGenerate === 'function'
+                ? global.MiyaPlugins.beforeGenerate(pluginCtx)
+                : Promise.resolve(pluginCtx);
+
+            return pluginReady.then(function (ctxOut) {
+            if (ctxOut && Array.isArray(ctxOut.messages)) built.messages = ctxOut.messages;
+
             function callWithSlice(slice, usedSecondary) {
                 if (!slice.baseUrl || !slice.apiKey || !slice.model) {
                     return Promise.reject(new Error(usedSecondary ? 'secondary_api_not_configured' : 'api_not_configured'));
@@ -4736,9 +4755,20 @@
                         });
                     });
             });
+            }); /* pluginReady.then */
         })
             .then(function (value) {
                 clearInFlight('done');
+                if (global.MiyaPlugins && typeof global.MiyaPlugins.afterGenerate === 'function') {
+                    try {
+                        global.MiyaPlugins.afterGenerate({
+                            scope: 'chat',
+                            chatId: chatId,
+                            result: value,
+                            options: options
+                        });
+                    } catch (ePlug) {}
+                }
                 return value;
             }, function (err) {
                 var genLife = global.MiyaGenerationLifecycle;
@@ -4746,6 +4776,16 @@
                     clearInFlight('abort', err);
                 } else {
                     clearInFlight('error', err);
+                }
+                if (global.MiyaPlugins && typeof global.MiyaPlugins.onGenerateError === 'function') {
+                    try {
+                        global.MiyaPlugins.onGenerateError({
+                            scope: 'chat',
+                            chatId: chatId,
+                            error: err,
+                            options: options
+                        });
+                    } catch (ePlug2) {}
                 }
                 throw err;
             });

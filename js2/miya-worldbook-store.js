@@ -85,29 +85,90 @@
   }
 
   function normalizeEntry(raw, groupsById) {
+    raw = raw || {};
     var keywords = [];
-    if (Array.isArray(raw && raw.keywords)) keywords = raw.keywords;
-    else if (raw && raw.keywords != null && typeof raw.keywords !== 'object') {
+    if (Array.isArray(raw.keywords)) keywords = raw.keywords;
+    else if (Array.isArray(raw.key)) keywords = raw.key;
+    else if (Array.isArray(raw.keys)) keywords = raw.keys;
+    else if (raw.keywords != null && typeof raw.keywords !== 'object') {
       keywords = splitKeywords(String(raw.keywords));
     }
-    var ts = Number(raw && raw.updatedAt) || Date.now();
-    var groupId = String((raw && raw.groupId) || DEFAULT_GROUP_ID);
+    var ts = Number(raw.updatedAt) || Date.now();
+    var groupId = String(raw.groupId || DEFAULT_GROUP_ID);
     if (!groupsById[groupId]) groupId = DEFAULT_GROUP_ID;
-    var scope = normalizeScope(raw && raw.scope);
-    return {
-      id: String(raw && raw.id ? raw.id : nowId('wb')),
-      name: String((raw && raw.name) || '').trim() || '未命名片段',
+    var scope = normalizeScope(raw.scope);
+    var base = {
+      id: String(raw.id ? raw.id : nowId('wb')),
+      name: String(raw.name || raw.comment || '').trim() || '未命名片段',
       keywords: keywords.map(function (k) { return String(k || '').trim(); }).filter(Boolean),
-      content: String((raw && raw.content) || ''),
+      content: String(raw.content || ''),
       scope: scope,
-      globalReach: normalizeGlobalReach(raw && raw.globalReach, scope),
-      depth: normalizeDepth(raw && raw.depth),
+      globalReach: normalizeGlobalReach(raw.globalReach, scope),
+      depth: normalizeDepth(raw.depth),
       groupId: groupId,
-      boundRoleIds: normalizeRoleIds(raw && (raw.boundRoleIds || raw.boundRoles)),
-      enabled: !(raw && raw.enabled === false),
-      createdAt: Number(raw && raw.createdAt) || ts,
+      boundRoleIds: normalizeRoleIds(raw.boundRoleIds || raw.boundRoles),
+      enabled: !(raw.enabled === false || raw.disable === true),
+      createdAt: Number(raw.createdAt) || ts,
       updatedAt: ts
     };
+    /* ST 字段对齐 */
+    var stApi = global.miyaWorldbookST;
+    if (stApi && typeof stApi.normalizeStFields === 'function') {
+      var st = stApi.normalizeStFields(raw, base);
+      base.key = st.key;
+      base.keysecondary = st.keysecondary;
+      base.keywords = st.key.length ? st.key : base.keywords;
+      base.constant = st.constant;
+      base.selective = st.selective;
+      base.selectiveLogic = st.selectiveLogic;
+      base.order = st.order;
+      base.position = st.position;
+      base.injection_depth = st.injection_depth;
+      base.scanDepth = st.scanDepth;
+      base.probability = st.probability;
+      base.useProbability = st.useProbability;
+      base.ignoreBudget = st.ignoreBudget;
+      base.excludeRecursion = st.excludeRecursion;
+      base.preventRecursion = st.preventRecursion;
+      base.caseSensitive = st.caseSensitive;
+      base.matchWholeWords = st.matchWholeWords;
+      base.sticky = st.sticky;
+      base.cooldown = st.cooldown;
+      base.delay = st.delay;
+      base.group = st.group;
+      base.groupWeight = st.groupWeight;
+      base.groupOverride = st.groupOverride;
+      base.useGroupScoring = st.useGroupScoring;
+      base.uid = st.uid;
+      base.comment = st.comment;
+      if (st.depth) base.depth = normalizeDepth(st.depth);
+      base.enabled = st.enabled;
+      if (st.name) base.name = st.name;
+      if (st.content != null) base.content = st.content;
+    } else {
+      base.key = base.keywords.slice();
+      base.keysecondary = [];
+      base.constant = !!raw.constant;
+      base.selective = !!raw.selective;
+      base.selectiveLogic = 0;
+      base.order = Number(raw.order) || 100;
+      base.position = Number.isFinite(Number(raw.position)) ? Number(raw.position) : 1;
+      base.injection_depth = 4;
+      base.scanDepth = null;
+      base.probability = 100;
+      base.useProbability = false;
+      base.ignoreBudget = !!raw.ignoreBudget;
+      base.excludeRecursion = false;
+      base.preventRecursion = false;
+      base.caseSensitive = false;
+      base.matchWholeWords = false;
+      base.sticky = 0;
+      base.cooldown = 0;
+      base.delay = 0;
+      base.uid = raw.uid;
+      base.comment = base.name;
+    }
+    return base;
   }
 
   function normalizeState(state) {
@@ -292,7 +353,19 @@
     removeEntry: removeEntry,
     toggleEntryEnabled: toggleEntryEnabled,
     resolveAvailableRoles: resolveAvailableRoles,
-    invalidateCache: function () { _cache = null; _ready = null; }
+    invalidateCache: function () { _cache = null; _ready = null; },
+    importStJson: function (data, opts) {
+      var st = global.miyaWorldbookST;
+      if (!st || typeof st.importIntoStore !== 'function') {
+        return Promise.reject(new Error('ST 对齐模块未加载'));
+      }
+      return st.importIntoStore(data, opts);
+    },
+    exportStJson: function (meta) {
+      var st = global.miyaWorldbookST;
+      if (!st || typeof st.exportStWorldInfoJson !== 'function') return null;
+      return st.exportStWorldInfoJson(listEntries(), meta);
+    }
   };
 
   if (global.miyaRegisterKvStore) global.miyaRegisterKvStore(global.miyaWorldbookStore);

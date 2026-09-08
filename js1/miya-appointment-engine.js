@@ -1412,6 +1412,23 @@
                 temperature: cfg.temperature != null ? Number(cfg.temperature) : 1,
             };
             var useStream = appointmentStreamEnabled(cfg);
+            var pluginCtx = {
+                scope: 'offline',
+                chatId: chatId,
+                sessionId: sessionId,
+                messages: built.messages,
+                userText: '',
+                options: handlers,
+                signal: handlers.signal
+            };
+            var pluginReady = global.MiyaPlugins && typeof global.MiyaPlugins.beforeGenerate === 'function'
+                ? global.MiyaPlugins.beforeGenerate(pluginCtx)
+                : Promise.resolve(pluginCtx);
+            return pluginReady.then(function (ctxOut) {
+            if (ctxOut && Array.isArray(ctxOut.messages)) {
+                built.messages = ctxOut.messages;
+                payload.messages = ctxOut.messages;
+            }
             return fetchAppointmentCompletion(
                 url,
                 headers,
@@ -1488,8 +1505,20 @@
                     statusApi.appendStatusLog(sessAfter, pack);
                 }
                 maybeAutoSummary(chatId, sessionId, preset);
-                return { message: msg, lines: lines, raw: fullRaw };
+                var result = { message: msg, lines: lines, raw: fullRaw };
+                if (global.MiyaPlugins && typeof global.MiyaPlugins.afterGenerate === 'function') {
+                    try {
+                        global.MiyaPlugins.afterGenerate({
+                            scope: 'offline',
+                            chatId: chatId,
+                            sessionId: sessionId,
+                            result: result
+                        });
+                    } catch (ePlug) {}
+                }
+                return result;
             });
+            }); /* pluginReady offline */
         });
     }
 

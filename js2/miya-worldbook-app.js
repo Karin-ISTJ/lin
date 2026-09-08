@@ -320,7 +320,26 @@
     editingId = isNew ? null : data.id;
     $('miya-wb-editor-title').textContent = isNew ? '新建片段' : '编辑片段';
     $('miya-wb-field-name').value = data.name || '';
-    $('miya-wb-field-keys').value = (data.keywords || []).join('，');
+    var primary = (data.key && data.key.length) ? data.key : (data.keywords || []);
+    $('miya-wb-field-keys').value = primary.join('，');
+    var secEl = $('miya-wb-field-keys-sec');
+    if (secEl) secEl.value = (data.keysecondary || []).join('，');
+    function setChk(id, v) { var el = $(id); if (el) el.checked = !!v; }
+    function setNum(id, v, d) { var el = $(id); if (el) el.value = v != null && v !== '' ? v : d; }
+    setChk('miya-wb-field-constant', data.constant);
+    setChk('miya-wb-field-selective', data.selective);
+    setNum('miya-wb-field-selective-logic', data.selectiveLogic, 0);
+    setNum('miya-wb-field-order', data.order, 100);
+    setNum('miya-wb-field-position', data.position, 1);
+    setNum('miya-wb-field-inj-depth', data.injection_depth, 4);
+    setNum('miya-wb-field-scan-depth', data.scanDepth, '');
+    setNum('miya-wb-field-prob', data.probability, 100);
+    setChk('miya-wb-field-use-prob', data.useProbability);
+    setChk('miya-wb-field-ignore-budget', data.ignoreBudget);
+    var gEl = $('miya-wb-field-st-group');
+    if (gEl) gEl.value = data.group || '';
+    setNum('miya-wb-field-group-weight', data.groupWeight, 100);
+    setChk('miya-wb-field-group-override', data.groupOverride);
     $('miya-wb-field-body').value = data.content || '';
     var rolesHost = $('miya-wb-roles-host');
     if (rolesHost) rolesHost.innerHTML = '<p class="ins-wb-role-empty">正在读取联系人档案…</p>';
@@ -354,17 +373,48 @@
     var keywords = matcher && typeof matcher.splitKeywordString === 'function'
       ? matcher.splitKeywordString(keysRaw)
       : keysRaw.split(/[,，、;；]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var secRaw = ($('miya-wb-field-keys-sec') && $('miya-wb-field-keys-sec').value) || '';
+    var keysecondary = matcher && typeof matcher.splitKeywordString === 'function'
+      ? matcher.splitKeywordString(secRaw)
+      : secRaw.split(/[,，、;；]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    function numVal(id, d) {
+      var el = $(id);
+      if (!el || el.value === '' || el.value == null) return d;
+      var n = Number(el.value);
+      return Number.isFinite(n) ? n : d;
+    }
+    function chk(id) {
+      var el = $(id);
+      return !!(el && el.checked);
+    }
+    var scanEl = $('miya-wb-field-scan-depth');
+    var scanDepth = scanEl && scanEl.value !== '' ? Number(scanEl.value) : null;
     return {
       id: editingId || undefined,
       name: ($('miya-wb-field-name').value || '').trim(),
       keywords: keywords,
+      key: keywords,
+      keysecondary: keysecondary,
       content: $('miya-wb-field-body').value || '',
       scope: scope,
       globalReach: collectGlobalReach(),
       depth: collectDepth(),
       groupId: ($('miya-wb-field-group') && $('miya-wb-field-group').value) || DEFAULT_GROUP_ID,
       boundRoleIds: scope === 'local' ? roles : [],
-      enabled: true
+      enabled: true,
+      constant: chk('miya-wb-field-constant'),
+      selective: chk('miya-wb-field-selective') || keysecondary.length > 0,
+      selectiveLogic: numVal('miya-wb-field-selective-logic', 0),
+      order: numVal('miya-wb-field-order', 100),
+      position: numVal('miya-wb-field-position', 1),
+      injection_depth: numVal('miya-wb-field-inj-depth', 4),
+      scanDepth: Number.isFinite(scanDepth) ? scanDepth : null,
+      probability: numVal('miya-wb-field-prob', 100),
+      useProbability: chk('miya-wb-field-use-prob'),
+      ignoreBudget: chk('miya-wb-field-ignore-budget'),
+      group: ($('miya-wb-field-st-group') && $('miya-wb-field-st-group').value) || '',
+      groupWeight: numVal('miya-wb-field-group-weight', 100),
+      groupOverride: chk('miya-wb-field-group-override')
     };
   }
 
@@ -534,6 +584,102 @@
     $('miya-wb-doc-import').addEventListener('click', function () {
       $('miya-wb-doc-file').click();
     });
+
+    var stImportBtn = $('miya-wb-st-import');
+    var stImportFile = $('miya-wb-st-import-file');
+    var stExportBtn = $('miya-wb-st-export');
+    if (stImportBtn && stImportFile) {
+      stImportBtn.addEventListener('click', function () { stImportFile.click(); });
+      stImportFile.addEventListener('change', function () {
+        var f = stImportFile.files && stImportFile.files[0];
+        stImportFile.value = '';
+        if (!f) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var data = JSON.parse(String(reader.result || ''));
+            var doReplace = confirm('导入 ST 世界书 JSON\n\n确定 = 清空现有词条后导入（替换）\n取消 = 与现有词条合并');
+            var store = global.miyaWorldbookStore;
+            if (!store || typeof store.importStJson !== 'function') {
+              alert('ST 导入模块未就绪');
+              return;
+            }
+            store.importStJson(data, { replace: doReplace }).then(function (res) {
+              alert('已导入 ' + (res && res.count != null ? res.count : 0) + ' 条世界书');
+              if (typeof renderList === 'function') renderList();
+              else if (typeof refresh === 'function') refresh();
+            }).catch(function (err) {
+              alert((err && err.message) || '导入失败');
+            });
+          } catch (e) {
+            alert('JSON 无效：' + (e && e.message ? e.message : e));
+          }
+        };
+        reader.readAsText(f);
+      });
+    }
+    if (stExportBtn) {
+      stExportBtn.addEventListener('click', function () {
+        var store = global.miyaWorldbookStore;
+        if (!store || typeof store.exportStJson !== 'function') {
+          alert('ST 导出模块未就绪');
+          return;
+        }
+        var data = store.exportStJson({ name: 'Miya Worldbook' });
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'miya-worldbook-st.json';
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      });
+    }
+    var dbgBtn = $('miya-wb-st-debug');
+    var dbgPanel = $('miya-wb-st-debug-panel');
+    var dbgRun = $('miya-wb-st-debug-run');
+    if (dbgBtn && dbgPanel) {
+      dbgBtn.addEventListener('click', function () {
+        dbgPanel.hidden = !dbgPanel.hidden;
+      });
+    }
+    if (dbgRun) {
+      dbgRun.addEventListener('click', function () {
+        var st = global.miyaWorldbookST;
+        var store = global.miyaWorldbookStore;
+        var out = $('miya-wb-st-debug-out');
+        if (!st || !store) {
+          if (out) out.textContent = '模块未就绪';
+          return;
+        }
+        var text = ($('miya-wb-st-debug-text') && $('miya-wb-st-debug-text').value) || '';
+        var budget = Number(($('miya-wb-st-debug-budget') && $('miya-wb-st-debug-budget').value) || 2048);
+        var pipe = st.runPipeline(store.listEntries(), {
+          contextText: text,
+          tokenBudget: budget,
+          dryRun: true,
+          chatId: '__debug__'
+        });
+        var lines = [];
+        lines.push('scanLen=' + (pipe.scanText || '').length + ' usedTokens=' + pipe.usedTokens + ' budget=' + pipe.budgetTokens);
+        lines.push('selected=' + (pipe.selected || []).length + ' dropped=' + (pipe.dropped || []).length);
+        lines.push('--- selected ---');
+        (pipe.selected || []).forEach(function (e) {
+          lines.push(
+            '• [' + (e.constant ? 'C' : 'K') + '] order=' + e.order +
+            ' pos=' + e.position +
+            (e.group ? ' group=' + e.group + '(' + e.groupWeight + ')' : '') +
+            ' ' + (e.name || e.id)
+          );
+        });
+        if (pipe.dropped && pipe.dropped.length) {
+          lines.push('--- dropped (budget) ---');
+          pipe.dropped.forEach(function (d) {
+            lines.push('• ' + (d.name || d.id) + ' tokens≈' + d.tokens);
+          });
+        }
+        if (out) out.textContent = lines.join('\n');
+      });
+    }
 
     $('miya-wb-doc-file').addEventListener('change', function () {
       var f = $('miya-wb-doc-file').files && $('miya-wb-doc-file').files[0];
