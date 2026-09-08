@@ -184,6 +184,21 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   padding: calc(64px + env(safe-area-inset-top, 0)) 14px 16px 14px;
+  transition: padding 0.22s ease;
+}
+
+/* 侧栏收起：正文居中、左右等宽、尽量占满 */
+.miya-offline-app.xw-dock-collapsed .xw-main {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.miya-offline-app.xw-dock-collapsed .xw-script-col,
+.miya-offline-app.xw-dock-collapsed .xw-hub,
+.miya-offline-app.xw-dock-collapsed .xw-vault,
+.miya-offline-app.xw-dock-collapsed .xw-opening,
+.miya-offline-app.xw-dock-collapsed .xw-opening-pick {
+  max-width: min(100%, 52em);
 }
 
 .xw-main--blank {
@@ -1746,90 +1761,11 @@
 
 /* v40: 顶部工具栏最终布局 */
 .xw-dock-expand { display:none !important; }
-/* v41: bottom-left sparkle tool launcher */
-#miya-offline-app .xw-dock {
-  top: auto; right: auto; left: 12px;
-  bottom: calc(66px + env(safe-area-inset-bottom, 0));
-  width: auto; max-width: calc(100% - 24px); min-height: 42px;
-  justify-content: flex-start; z-index: 45;
-  transform-origin: left bottom;
-}
-#miya-offline-app .xw-dock.is-collapsed { display: none !important; }
-#miya-offline-app .xw-writer { grid-template-columns: auto auto 1fr auto; }
-#miya-offline-app .xw-writer__tools {
-  width: 40px; height: 40px; padding: 0; margin-bottom: 2px;
-  border: none; background: transparent; color: var(--xw-ink);
-  display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
-}
-#miya-offline-app .xw-writer__tools svg { width: 22px; height: 22px; }
-#miya-offline-app .xw-writer__tools.is-active { opacity: .65; }
-#miya-offline-app .xw-writer__go.is-stop { background: transparent; color: var(--xw-ink); border: 1px solid var(--xw-hair); }
-#miya-offline-app .xw-writer__go.is-stop svg { width: 20px; height: 20px; }
-#miya-offline-app .xw-journal-writer { grid-template-columns: auto auto minmax(0,1fr) auto; }
-#miya-offline-app .xw-journal-writer .xw-writer__tools { margin: 0; }
-
-#miya-offline-app #xw-dock-expand { display:flex !important; position:static; transform:none; box-shadow:none; border-radius:10px; }
-#miya-offline-app .xw-main { padding-top:14px; }
-@media (max-width:560px){ #miya-offline-app .xw-main { padding-top:14px; } }
-#miya-offline-app .xw-journal-writer { display:flex; }
-#miya-offline-app .xw-journal-writer__input { flex:1 1 auto; min-width:0; }
-#miya-offline-app .xw-journal-writer__send.is-stop { background:transparent; color:inherit; border:0; }
-
-#miya-offline-app #xw-dock-expand.xw-dock-expand--float {
-  position:absolute; left:14px; right:auto; bottom:calc(14px + env(safe-area-inset-bottom,0)); top:auto;
-  width:42px; height:42px; z-index:46; background:rgba(255,255,255,.92); border:1px solid var(--xw-hair);
-  border-radius:12px; box-shadow:0 4px 18px rgba(0,0,0,.06);
-}
-#miya-offline-app #xw-dock-expand.xw-dock-expand--float svg { width:22px; height:22px; }
-
-/* v42: fixed bottom tool tray; opening must never affect main content geometry */
-#miya-offline-app .xw-dock {
-  position: fixed !important;
-  top: auto !important;
-  right: auto !important;
-  left: 12px !important;
-  bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
-  width: max-content !important;
-  max-width: calc(100vw - 24px) !important;
-  min-height: 42px;
-  box-sizing: border-box;
-  justify-content: flex-start;
-  z-index: 45;
-  margin: 0 !important;
-  transform: translateZ(0);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-#miya-offline-app .xw-dock::-webkit-scrollbar { display: none; }
-#miya-offline-app .xw-dock.is-collapsed {
-  display: none !important;
-}
-#miya-offline-app .xw-dock__btn { flex: 0 0 44px; }
-#miya-offline-app .xw-main { padding-top: 14px; }
-#miya-offline-app .xw-writer__field::placeholder,
-#miya-offline-app .xw-journal-writer__field::placeholder {
-  color: transparent !important;
-  opacity: 0 !important;
-}
-
-/* v43-fix: sparkle menu must be a pure overlay; opening it must not participate in page geometry */
-#miya-offline-app, #miya-offline-app .xw-root, #miya-offline-app .xw-shell { overflow: visible !important; }
-#miya-offline-app .xw-main { scrollbar-gutter: stable; }
-#miya-offline-app .xw-dock {
-  position: fixed !important;
-  contain: layout paint;
-  isolation: isolate;
-  pointer-events: auto;
-}
-#miya-offline-app .xw-dock.is-collapsed {
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  display: flex !important;
-}
-#miya-offline-app #xw-dock-expand {
-  position: fixed !important;
-  z-index: 100 !important;
-  contain: layout paint;
+.miya-offline-app.xw-dock-collapsed .xw-main { padding-right:14px; }
+@media (max-width:560px){
+  .xw-dock{top:calc(6px + env(safe-area-inset-top,0));left:10px;right:10px;min-height:42px;padding:3px 4px;border-radius:14px;}
+  .xw-dock__btn{width:42px;padding:6px 3px;}
+  .xw-dock__glyph{width:26px;height:26px;}
+  .xw-dock__lbl{font-size:8px;}
+  .xw-main{padding-top:calc(58px + env(safe-area-inset-top,0));}
 }
