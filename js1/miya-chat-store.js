@@ -4504,7 +4504,9 @@
                 return String(m.id) !== key;
             });
             return refreshChatPreviewFromVisible(chatId, { bumpNow: false }).then(function () {
-                return true;
+                return flushSaveMeta({ withBackup: true, forceEmergency: true }).then(function () {
+                    return true;
+                });
             });
         },
 
@@ -4567,8 +4569,8 @@
                 if (Object.keys(patch).length) return store.updateChat(chatId, patch);
             });
             return chain.then(function () {
-                /* 删除消息后必须把新的 messagesByChat 落盘；否则刷新页面会从 IDB 恢复已删除消息。 */
-                return scheduleSaveMeta().then(function () {
+                /* 删除属于不可丢失的持久化操作：这里直接 flush，避免刷新发生在 debounce 写盘之前。 */
+                return flushSaveMeta({ withBackup: true, forceEmergency: true }).then(function () {
                     return removed;
                 });
             });

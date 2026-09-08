@@ -833,7 +833,7 @@
         '<div class="qq-room__toolbar" id="qq-room-toolbar" hidden aria-hidden="true">' + buildToolbarHtml() + '</div>' +
         '<div class="qq-room__sticker-suggest" id="qq-room-sticker-suggest" hidden aria-hidden="true"></div>' +
         '<div class="qq-room__input-box">' +
-          '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--ai" id="qq-room-ai" aria-label="触发回复">' +
+          '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--ai" id="qq-room-ai" aria-label="触发回复" onclick="return window.__miyaReplyNow ? window.__miyaReplyNow(event) : false;">' +
             AI_STAR_SVG +
           '</button>' +
           '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--plus" id="qq-room-tools-toggle" aria-label="更多工具" aria-expanded="false">' +
@@ -3576,6 +3576,25 @@
       });
   }
 
+  // 31版：四角星使用独立的直接入口。避免旧版事件绑定/重渲染导致点击丢失。
+  global.__miyaReplyNow = function (e) {
+    try {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      var cid = state.chatId;
+      if (!cid) { toast('当前没有打开聊天'); return false; }
+      if (state.sending) { toast('正在等待回复…'); return false; }
+      toast('正在准备角色回复…');
+      var p = requestAiReply(false, 0, { directButton: true });
+      if (p && typeof p.catch === 'function') { p.catch(function (err) {
+        console.error('[MiyaChat] direct reply failed', err);
+      }); }
+    } catch (err) {
+      console.error('[MiyaChat] direct reply click error', err);
+      toast('角色回复启动失败');
+    }
+    return false;
+  };
+
   function sendMessage(payload) {
     if (!state.chatId || !store) return Promise.reject();
     var savedQuote = state.quoteRef;
@@ -4490,7 +4509,7 @@
       if (!document.body.contains(target)) return;
       e.preventDefault();
       e.stopPropagation();
-      requestAiReply();
+      global.__miyaReplyNow(e);
     }, true);
   }
 
