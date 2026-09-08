@@ -3415,15 +3415,11 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
-        ui.view = 'pick';
-        ui.chatId = '';
-        ui.sessionId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.pickSelected = [];
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
-        render();
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
@@ -3445,13 +3441,80 @@ function renderWriter() {
             });
         }
         /* 封存记录以本地落盘为准；勿每次进入都从线上镜像自动重建。
-         * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
+         * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。
+         * 已取消「选择角色」页：点击线下图标直接进入线下页面。
+         * 优先续上最近未封存场次；若无则用第一个联系人开场/续场。 */
         hydrate
             .then(function () {
-                render();
+                var opened = false;
+                try {
+                    var cs = chatStore();
+                    var store = apStore();
+                    if (cs && store) {
+                        var chats = typeof cs.getChats === 'function' ? cs.getChats() : [];
+                        var best = null;
+                        var bestScore = -1;
+                        (chats || []).forEach(function (chat) {
+                            if (!chat || !chat.id) return;
+                            var active = store.getActiveSession(chat.id);
+                            if (active && !active.closedAt) {
+                                var live = (active.messages || []).filter(function (m) {
+                                    return m && !m.deleted;
+                                }).length;
+                                var score = live * 1e9 + 1e6 + (Number(active.createdAt) || 0);
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    best = active;
+                                }
+                            }
+                            var sessions = store.getSessions(chat.id) || [];
+                            sessions.forEach(function (sess) {
+                                if (!sess || sess.closedAt) return;
+                                var live2 = (sess.messages || []).filter(function (m) {
+                                    return m && !m.deleted;
+                                }).length;
+                                var score2 = live2 * 1e9 + (Number(sess.createdAt) || 0);
+                                if (score2 > bestScore) {
+                                    bestScore = score2;
+                                    best = sess;
+                                }
+                            });
+                        });
+                        if (best) {
+                            var hostChatId = String(best.chatId || '').trim();
+                            var contactId = String(best.contactId || '').trim();
+                            var cast = Array.isArray(best.cast) && best.cast.length
+                                ? best.cast
+                                : [{ contactId: contactId, chatId: hostChatId }];
+                            openWithChat(hostChatId, contactId, cast);
+                            opened = true;
+                        }
+                        if (!opened) {
+                            var contacts = typeof cs.getContacts === 'function' ? cs.getContacts('all') : [];
+                            if (contacts && contacts.length) {
+                                var first = contacts[0];
+                                var chat = ensureChatForContact(first.id);
+                                if (chat) {
+                                    openWithChat(String(chat.id), String(first.id));
+                                    opened = true;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+                if (!opened) {
+                    ui.view = 'pick';
+                    ui.chatId = '';
+                    ui.sessionId = '';
+                    render();
+                }
                 applyOfflineBeautify();
             })
-            .catch(function () {});
+            .catch(function () {
+                ui.view = 'pick';
+                render();
+                applyOfflineBeautify();
+            });
     }
 
     function closeApp() {
