@@ -321,6 +321,10 @@
     '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="18,5 18.7,6.5 20,7 18.7,7.5 18,9 17.3,7.5 16,7 17.3,6.5"/>' +
     '<polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="6.5,16.5 7.1,17.6 8,18 7.1,18.4 6.5,19.5 5.9,18.4 5,18 5.9,17.6"/>' +
     '</svg>';
+  var COMPOSE_STOP_SVG =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor" stroke="none"/></svg>';
+  var COMPOSE_SEND_SVG =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
   var COMPOSE_PLUS_SVG =
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>' +
@@ -844,7 +848,7 @@
           '</button>' +
           '<textarea class="qq-room__input" id="qq-room-input" rows="1" placeholder="Write something…"></textarea>' +
           '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="发送">' +
-            '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+            COMPOSE_SEND_SVG +
           '</button>' +
         '</div>' +
       '</footer>' +
@@ -3381,6 +3385,17 @@
     removeTyping();
   }
 
+  function syncSendStopButton() {
+    var send = $('qq-room-send');
+    if (!send) return;
+    var stopping = !!state.sending;
+    send.innerHTML = stopping ? COMPOSE_STOP_SVG : COMPOSE_SEND_SVG;
+    send.setAttribute('aria-label', stopping ? '停止生成' : '发送');
+    send.setAttribute('title', stopping ? '停止生成' : '发送');
+    send.classList.toggle('is-stop', stopping);
+    send.disabled = false;
+  }
+
   function setComposeDisabled(disabled) {
     var input = $('qq-room-input');
     var ai = $('qq-room-ai');
@@ -3389,7 +3404,8 @@
     if (input) input.disabled = !!disabled;
     if (ai) ai.disabled = !!disabled;
     if (toolsToggle) toolsToggle.disabled = !!disabled;
-    if (send) send.disabled = !!disabled;
+    if (send) send.disabled = false;
+    syncSendStopButton();
   }
 
   function focusComposeInput(preventScroll) {
@@ -3575,7 +3591,8 @@
         if (state.chatId === cid) {
           stopTypingWait();
           var code = err && err.message ? err.message : String(err);
-          if (code === 'api_not_configured') toast('请先在设置中配置对话 API');
+          if ((err && err.name === 'AbortError') || code === 'generation_stopped') toast('已停止生成');
+          else if (code === 'api_not_configured') toast('请先在设置中配置对话 API');
           else if (code === 'chat_api_busy') toast('该会话正在请求 API');
           else if (code === 'empty_reply' || code === 'empty') {
             if (scheduleEmptyReplyRetry()) return;
@@ -5149,6 +5166,15 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        if (state.sending) {
+          engine = engine || global.miyaChatEngine || null;
+          cancelStaggerReveal();
+          if (engine && typeof engine.stopChatGeneration === 'function' && engine.stopChatGeneration(state.chatId)) {
+            stopTypingWait();
+            toast('正在停止生成…');
+          }
+          return;
+        }
         handleSend();
       });
     }

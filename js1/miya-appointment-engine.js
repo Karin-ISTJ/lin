@@ -1158,8 +1158,21 @@
     }
 
     var replyInFlight = Object.create(null);
+    var generationControllers = Object.create(null);
 
-    function fetchAppointmentCompletion(url, headers, payload, handlers, useStream) {
+    function generationKey(chatId, sessionId) {
+        return String(chatId) + '::' + String(sessionId);
+    }
+
+    function stopGeneration(chatId, sessionId) {
+        var key = generationKey(chatId, sessionId);
+        var controller = generationControllers[key];
+        if (!controller) return false;
+        try { controller.abort(); } catch (e) {}
+        return true;
+    }
+
+    function fetchAppointmentCompletion(url, headers, payload, handlers, useStream, signal) {
         handlers = handlers && typeof handlers === 'object' ? handlers : {};
         var streamOn = useStream !== false;
 
@@ -1176,7 +1189,8 @@
                 return fetch(url, {
                     method: 'POST',
                     headers: headers,
-                    body: JSON.stringify(bodyToSend)
+                    body: JSON.stringify(bodyToSend),
+                    signal: signal
                 });
             }
             return doFetch(body).then(function (res) {
@@ -1219,7 +1233,8 @@
             return fetch(url, {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify(bodyToSend)
+                body: JSON.stringify(bodyToSend),
+                signal: signal
             });
         }
         return doStreamFetch(req).then(function (res) {
@@ -1397,6 +1412,9 @@
         if (!baseUrl || !apiKey || !model) {
             return Promise.reject(new Error('api_not_configured'));
         }
+        var key = generationKey(chatId, sessionId);
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        if (controller) generationControllers[key] = controller;
         if (handlers.onStatus) handlers.onStatus('coming');
         /* 先让「书写中」上屏，再拼 prompt，避免按发送瞬间卡死 */
         return yieldToPaint().then(function () {
@@ -1421,7 +1439,8 @@
                     onLine: handlers.onLine,
                     onDelta: handlers.onDelta
                 },
-                useStream
+                useStream,
+                controller ? controller.signal : undefined
             ).then(function (completion) {
                 var fullRaw =
                     completion && completion.raw != null
@@ -1464,6 +1483,8 @@
                 maybeAutoSummary(chatId, sessionId, preset);
                 return { message: msg, lines: lines, raw: fullRaw };
             });
+        }).finally(function () {
+            if (controller && generationControllers[key] === controller) delete generationControllers[key];
         });
     }
 
@@ -1497,7 +1518,8 @@
     }
 
     function isBusy(chatId, sessionId) {
-        return !!replyInFlight[String(chatId) + '::' + String(sessionId)];
+        var key = generationKey(chatId, sessionId);
+        return !!replyInFlight[key] || !!generationControllers[key];
     }
 
     global.MiyaAppointmentEngine = {
@@ -1515,6 +1537,7 @@
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,
+        stopGeneration: stopGeneration,
         resolveProfileForContact: resolveProfileForContact,
         resolveProfileForChat: resolveProfileForChat
     };
