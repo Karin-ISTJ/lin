@@ -1847,3 +1847,21 @@
   width:26px; height:26px; border:0; border-radius:8px;
   display:flex; align-items:center; justify-content:center; font-size:17px;
 }
+
+
+/* v44：保留原来的重回按钮；工具入口作为旁边的附加按钮，不替换原图标 */
+.xw-writer { grid-template-columns: auto auto 1fr auto !important; }
+.xw-journal-writer { grid-template-columns: auto auto 1fr auto !important; }
+.xw-writer__undo, .xw-journal-writer__undo {
+  width:40px; height:40px; border:2px solid var(--xw-ink); background:#fff;
+  border-radius:10px; padding:0; font-size:20px; line-height:1; color:var(--xw-ink);
+  cursor:pointer; margin-bottom:2px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+}
+.xw-writer__undo:active, .xw-journal-writer__undo:active { background:var(--xw-ink); color:#fff; }
+.xw-writer__tools, .xw-journal-writer__tools {
+  width:34px; height:40px; flex:0 0 34px; border:0; border-radius:10px;
+  background:transparent; color:var(--xw-ink); padding:0; display:flex; align-items:center; justify-content:center;
+  font-size:24px; line-height:1; font-family:Arial,sans-serif; font-weight:300; cursor:pointer;
+}
+.xw-writer__tools:active, .xw-journal-writer__tools:active { background:rgba(0,0,0,.055); transform:scale(.96); }
+.xw-writer__tools svg, .xw-journal-writer__tools svg { display:none !important; }
