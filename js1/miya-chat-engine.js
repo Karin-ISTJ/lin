@@ -3274,7 +3274,7 @@
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload),
-            signal: signal
+            signal: signal || undefined
         })
             .then(function (r) {
                 if (!r.ok) {
@@ -3740,15 +3740,6 @@
     }
 
     var replyInFlight = Object.create(null);
-    var chatAbortControllers = Object.create(null);
-
-    function stopChatGeneration(chatId) {
-        var id = String(chatId || '');
-        var controller = id && chatAbortControllers[id];
-        if (!controller) return false;
-        try { controller.abort(); } catch (e) {}
-        return true;
-    }
 
     function acquireChatApi(chatId) {
         var id = String(chatId || '');
@@ -3801,8 +3792,6 @@
         if (isChatApiBusy(chatId)) return Promise.reject(new Error('chat_api_busy'));
 
         acquireChatApi(chatId);
-        var abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        if (abortController) chatAbortControllers[String(chatId)] = abortController;
 
         var cfg = getApiConfig();
         var baseUrl = normalizeBaseUrl(cfg.baseUrl);
@@ -3818,8 +3807,6 @@
             : store.addMessage(chatId, { role: 'user', content: text });
 
         function clearInFlight() {
-            var id = String(chatId || '');
-            if (abortController && chatAbortControllers[id] === abortController) delete chatAbortControllers[id];
             releaseChatApi(chatId);
         }
 
@@ -3907,7 +3894,7 @@
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
                 reqPayload.stream = false;
-                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, abortController ? abortController.signal : undefined).then(function (completion) {
+                return fetchChatCompletion(url, reqHeaders, reqPayload, 1, options.signal).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
                     return completion;
@@ -3916,7 +3903,6 @@
 
             var primarySlice = resolveChatApiSlice(cfg, false);
             return callWithSlice(primarySlice, false).catch(function (err) {
-                if (err && err.name === 'AbortError') throw err;
                 if (!cfg.fallbackToSecondary || !hasSecondaryApiConfigured(cfg)) throw err;
                 return callWithSlice(resolveChatApiSlice(cfg, true), true);
             }).then(function (completion) {
@@ -4755,7 +4741,6 @@
         releaseChatApi: releaseChatApi,
         isChatApiBusy: isChatApiBusy,
         isReplyInFlight: isReplyInFlight,
-        stopChatGeneration: stopChatGeneration,
         estimateTokensFromText: estimateTokensFromText,
         estimateTokensFromCharCount: estimateTokensFromCharCount,
         estimateMessagesTokens: estimateMessagesTokens,
