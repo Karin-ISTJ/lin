@@ -82,27 +82,32 @@
   cursor: pointer;
 }
 
-/* 右侧竖 dock — 非顶栏图标 */
+/* 顶部工具栏：原右侧工具改为顶部横向排列 */
 .xw-dock {
   position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 25;
+  top: calc(8px + env(safe-area-inset-top, 0));
+  right: 12px;
+  left: 12px;
+  z-index: 30;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 6px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.88);
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-height: 46px;
+  padding: 4px 6px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--xw-hair);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
-  cursor: pointer;
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.045);
+  backdrop-filter: blur(12px);
+}
+.xw-dock--top .xw-dock__btn {
+  flex: 0 0 auto;
 }
 
 .xw-dock.is-collapsed {
-  display: none;
+  display: flex;
 }
 
 .xw-dock-expand {
@@ -178,7 +183,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: calc(52px + env(safe-area-inset-top, 0)) 56px 16px 14px;
+  padding: calc(64px + env(safe-area-inset-top, 0)) 14px 16px 14px;
   transition: padding 0.22s ease;
 }
 
@@ -1753,3 +1758,14 @@
 .xw-vault__head{position:sticky;top:0;z-index:3;padding:8px 0 12px;background:var(--xw-paper,#fff)}
 .xw-vault__actions{justify-content:flex-end}
 @media (max-width:560px){.xw-journal-bar__ico{width:34px;height:34px}.xw-vault__head{gap:8px}.xw-vault__actions{gap:4px}}
+
+/* v40: 顶部工具栏最终布局 */
+.xw-dock-expand { display:none !important; }
+.miya-offline-app.xw-dock-collapsed .xw-main { padding-right:14px; }
+@media (max-width:560px){
+  .xw-dock{top:calc(6px + env(safe-area-inset-top,0));left:10px;right:10px;min-height:42px;padding:3px 4px;border-radius:14px;}
+  .xw-dock__btn{width:42px;padding:6px 3px;}
+  .xw-dock__glyph{width:26px;height:26px;}
+  .xw-dock__lbl{font-size:8px;}
+  .xw-main{padding-top:calc(58px + env(safe-area-inset-top,0));}
+}

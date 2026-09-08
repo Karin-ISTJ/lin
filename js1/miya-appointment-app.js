@@ -752,10 +752,9 @@
             return '';
         }
         return (
-            renderDockExpandBtn() +
-            '<nav class="xw-dock" aria-label="' +
+            '<nav class="xw-dock xw-dock--top" aria-label="' +
             aria +
-            '" title="点击空白处收起">' +
+            '">' +
             navInner +
             '</nav>'
         );
