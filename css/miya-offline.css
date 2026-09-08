@@ -1864,4 +1864,4 @@
   font-size:24px; line-height:1; font-family:Arial,sans-serif; font-weight:300; cursor:pointer;
 }
 .xw-writer__tools:active, .xw-journal-writer__tools:active { background:rgba(0,0,0,.055); transform:scale(.96); }
-.xw-writer__tools svg, .xw-journal-writer__tools svg { display:none !important; }
+.xw-writer__tools svg, .xw-journal-writer__tools svg { width:23px; height:23px; display:block; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }

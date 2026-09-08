@@ -1871,7 +1871,7 @@ function renderWriter() {
             '<footer class="xw-writer">' +
             '<div class="xw-writer-tool-stubs" hidden><button type="button" id="xw-dock-prefs"></button><button type="button" id="xw-dock-beautify"></button><button type="button" id="xw-dock-vault"></button></div>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回上一条" aria-label="重回上一条">↶</button>' +
-            '<button type="button" class="xw-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">☷</button>' +
+            '<button type="button" class="xw-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">' + ICON_PLUS + '</button>' +
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
             '</footer>'
@@ -1892,7 +1892,7 @@ function renderWriter() {
             '<footer class="xw-journal-writer">' +
             '<div class="xw-writer-tool-stubs" hidden><button type="button" id="xw-dock-prefs"></button><button type="button" id="xw-dock-beautify"></button><button type="button" id="xw-dock-vault"></button></div>' +
             '<button type="button" class="xw-journal-writer__undo" id="xw-writer-undo" title="重回上一条" aria-label="重回上一条">↶</button>' +
-            '<button type="button" class="xw-journal-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">☷</button>' +
+            '<button type="button" class="xw-journal-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">' + ICON_PLUS + '</button>' +
             '<div class="xw-journal-writer__input">' +
             '<textarea class="xw-journal-writer__field" id="xw-writer-input" rows="1" placeholder="输入消息..."></textarea></div>' +
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
