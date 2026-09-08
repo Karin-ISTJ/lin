@@ -2,7 +2,7 @@
     'use strict';
 
     var ui = {
-        view: 'history',
+        view: 'pick',
         chatId: '',
         contactId: '',
         sessionId: '',
@@ -15,6 +15,7 @@
         catalogNo: '',
         stableStoryKey: '',
         dockCollapsed: true,
+        pickSelected: []
     };
 
     var streamUi = {
@@ -301,13 +302,15 @@
         var st = chatStore();
         if (!st) return;
 
-        root.querySelectorAll('[data-ap-contact]').forEach(function (node) {
+        root.querySelectorAll('[data-ap-toggle], [data-ap-contact]').forEach(function (node) {
             var cid =
+                node.getAttribute('data-ap-toggle') ||
                 node.getAttribute('data-ap-contact') ||
                 '';
             var contact = cid && st.findContact ? st.findContact(cid) : null;
             var img =
-                node.tagName === 'IMG' ? node : null;
+                node.querySelector('.xw-cast-node__face') ||
+                (node.tagName === 'IMG' ? node : null);
             hydrateOfflineContactAvatar(contact, img);
         });
 
@@ -728,7 +731,9 @@
     function renderDock() {
         var navInner = '';
         var aria = '现场工具';
-        if (ui.view === 'history') {
+        if (ui.view === 'pick') {
+            navInner = renderDockBeautifyBtn();
+        } else if (ui.view === 'history') {
             aria = '卷宗工具';
             navInner =
                 renderDockBeautifyBtn() +
@@ -800,6 +805,66 @@
             ICON_BACK + '</button>' +
             whoHtml +
             '<div class="xw-journal-bar__tools">' + toolHtml + '</div></header>'
+        );
+    }
+
+    function renderPick() {
+        var st = chatStore();
+        if (!st) return '<p class="xw-empty">聊天数据未就绪，请先打开聊天应用。</p>';
+        var contacts = st.getContacts('all');
+        if (!contacts.length) {
+            return '<p class="xw-empty">还没有可登场的人。<br>请先在聊天里添加联系人。</p>';
+        }
+        var selected = Array.isArray(ui.pickSelected) ? ui.pickSelected : [];
+        var cast = contacts
+            .map(function (c, i) {
+                var chat = ensureChatForContact(c.id);
+                if (!chat) return '';
+                var on = selected.indexOf(String(c.id)) >= 0;
+                return (
+                    '<button type="button" class="xw-cast-node' +
+                    (on ? ' is-on' : '') +
+                    '" data-ap-toggle="' +
+                    esc(c.id) +
+                    '" data-ap-contact="' +
+                    esc(c.id) +
+                    '" data-ap-chat="' +
+                    esc(chat.id) +
+                    '" style="--xw-i:' +
+                    String(i) +
+                    '">' +
+                    '<span class="xw-cast-node__ring" aria-hidden="true"></span>' +
+                    '<img class="xw-cast-node__face" src="' +
+                    esc(contactAvatar(c)) +
+                    '" alt="">' +
+                    '<span class="xw-cast-node__name">' +
+                    esc(characterRealName(c)) +
+                    '</span></button>'
+                );
+            })
+            .join('');
+        var n = selected.length;
+        return (
+            '<div class="xw-hub' +
+            (isJournalTheme() ? ' xw-hub--journal' : '') +
+            '">' +
+            (isJournalTheme()
+                ? ''
+                : '<p class="xw-hub__brand">miya · 现场</p>' +
+                  '<h1 class="xw-hub__title">今天和谁见面</h1>') +
+            '<div class="xw-cast" role="list">' +
+            cast +
+            '</div>' +
+            '<div class="xw-hub__actions">' +
+            '<button type="button" class="xw-hub__start" id="xw-pick-start"' +
+            (n ? '' : ' disabled') +
+            '>' +
+            (n > 1 ? '开始线下 · ' + String(n) + ' 人' : n === 1 ? '开始线下' : '请选择角色') +
+            '</button>' +
+            '<p class="xw-hub__tip">可多选 · 点选后点开始</p></div>' +
+            '<p class="xw-hub__foot">' +
+            (isJournalTheme() ? '选中即开新对话 · 与线上记忆同步' : '开场后与线上记忆同步') +
+            '</p></div>'
         );
     }
 
@@ -1778,7 +1843,8 @@
         var root = $('xw-root');
         if (!root) return;
         var body = '';
-        if (ui.view === 'history') body = renderHistory();
+        if (ui.view === 'pick') body = renderPick();
+        else if (ui.view === 'history') body = renderHistory();
         else if (ui.view === 'story') {
             if (!ui.viewingArchive && !storyHasContent()) body = renderOpeningPicker();
             else body = renderStory();
@@ -1978,14 +2044,7 @@ function renderWriter() {
 
     function leaveStoryToPick() {
         syncSessionOnLeave();
-        ui.view = 'history';
-        ui.chatId = '';
-        ui.sessionId = '';
-        ui.contactId = '';
-        if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
-            global.MiyaOfflineStatus.hideAll();
-        }
-        render();
+        closeApp();
     }
 
     function openWithChat(chatId, contactId, castOpt) {
@@ -2031,6 +2090,25 @@ function renderWriter() {
         ui.status = 'idle';
         ui.view = 'story';
         render();
+    }
+
+    function startPickedCast() {
+        var selected = Array.isArray(ui.pickSelected) ? ui.pickSelected.slice() : [];
+        if (!selected.length) {
+            toast('请先选择角色');
+            return;
+        }
+        var cast = [];
+        selected.forEach(function (cid) {
+            var chat = ensureChatForContact(cid);
+            if (!chat) return;
+            cast.push({ contactId: String(cid), chatId: String(chat.id) });
+        });
+        if (!cast.length) {
+            toast('无法创建会话，请稍后重试');
+            return;
+        }
+        openWithChat(cast[0].chatId, cast[0].contactId, cast);
     }
 
     function openArchiveSession(sessionId) {
@@ -3107,6 +3185,22 @@ function renderWriter() {
             };
         }
 
+        document.querySelectorAll('[data-ap-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var cid = String(btn.getAttribute('data-ap-toggle') || '').trim();
+                if (!cid) return;
+                var list = Array.isArray(ui.pickSelected) ? ui.pickSelected.slice() : [];
+                var idx = list.indexOf(cid);
+                if (idx >= 0) list.splice(idx, 1);
+                else list.push(cid);
+                ui.pickSelected = list;
+                render();
+            });
+        });
+        var pickStart = $('xw-pick-start');
+        if (pickStart) {
+            pickStart.addEventListener('click', startPickedCast);
+        }
 
         var dockEl = document.querySelector('#xw-root .xw-dock');
         if (dockEl) {
@@ -3341,31 +3435,17 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
+
+        ui.view = 'story';
         ui.chatId = '';
         ui.sessionId = '';
         ui.contactId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
-        ui.status = 'idle';
+        ui.pickSelected = [];
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
 
-        var currentChatId = '';
-        if (global.miyaChatRoom && typeof global.miyaChatRoom.getOpenChatId === 'function') {
-            currentChatId = String(global.miyaChatRoom.getOpenChatId() || '').trim();
-        }
-        if (currentChatId && st && typeof st.findChat === 'function') {
-            var currentChat = st.findChat(currentChatId);
-            if (currentChat && currentChat.contactId) {
-                openWithChat(currentChat.id, currentChat.contactId);
-            } else {
-                ui.view = 'history';
-                render();
-            }
-        } else {
-            ui.view = 'history';
-            render();
-        }
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
@@ -3386,14 +3466,46 @@ function renderWriter() {
                 return global.MiyaOfflineBeautify.whenPresetsReady();
             });
         }
-        /* 封存记录以本地落盘为准；勿每次进入都从线上镜像自动重建。
-         * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
+        /* 线下入口不再显示“选择角色”页。
+         * 优先沿用最近使用的聊天角色；没有聊天时使用联系人列表中的第一位角色，
+         * 进入后直接落在线下场景页。 */
         hydrate
             .then(function () {
-                render();
+                var chatStore0 = chatStore();
+                var chats = chatStore0 && typeof chatStore0.getChats === 'function'
+                    ? chatStore0.getChats('all')
+                    : [];
+                var targetChat = Array.isArray(chats) && chats.length ? chats[0] : null;
+                var targetContactId = targetChat && targetChat.contactId
+                    ? String(targetChat.contactId)
+                    : '';
+                if (!targetContactId && chatStore0 && typeof chatStore0.getContacts === 'function') {
+                    var contacts = chatStore0.getContacts('all');
+                    if (contacts && contacts.length) targetContactId = String(contacts[0].id || '');
+                }
+                if (!targetContactId) {
+                    ui.view = 'story';
+                    render();
+                    applyOfflineBeautify();
+                    return;
+                }
+                var targetChatObj = targetChat && String(targetChat.contactId || '') === targetContactId
+                    ? targetChat
+                    : ensureChatForContact(targetContactId);
+                if (!targetChatObj || !targetChatObj.id) {
+                    ui.view = 'story';
+                    render();
+                    applyOfflineBeautify();
+                    return;
+                }
+                openWithChat(targetChatObj.id, targetContactId);
                 applyOfflineBeautify();
             })
-            .catch(function () {});
+            .catch(function () {
+                ui.view = 'story';
+                render();
+                applyOfflineBeautify();
+            });
     }
 
     function closeApp() {
