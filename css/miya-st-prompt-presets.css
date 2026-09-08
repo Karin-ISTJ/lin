@@ -340,6 +340,7 @@ body.stp-is-dragging { user-select: none; }
 .stp-gen-save { flex:0 0 auto; }
 .stp-gen-panel .stp-gen-grid { max-height:600px; overflow:hidden; opacity:1; margin-top:8px; transition:max-height .22s ease, opacity .18s ease, margin-top .22s ease; }
 .stp-gen-panel.is-collapsed .stp-gen-grid { max-height:0; opacity:0; margin-top:0; pointer-events:none; }
+.stp-gen-grid[hidden] { display:none !important; }
 .stp-gen-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; }
 .stp-gen-grid label { display:block; min-width:0; }
 .stp-gen-grid label > span { display:block; margin:0 0 4px; font-size:10px; color:rgba(0,0,0,.52); }

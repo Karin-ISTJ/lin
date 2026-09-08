@@ -836,14 +836,14 @@
         '<div class="qq-room__toolbar" id="qq-room-toolbar" hidden aria-hidden="true">' + buildToolbarHtml() + '</div>' +
         '<div class="qq-room__sticker-suggest" id="qq-room-sticker-suggest" hidden aria-hidden="true"></div>' +
         '<div class="qq-room__input-box">' +
-          '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--ai" id="qq-room-ai" aria-label="触发回复">' +
+          '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--ai" id="qq-room-ai" aria-label="发送当前聊天记录给 AI" title="发送当前一条或多条消息给 AI">' +
             AI_STAR_SVG +
           '</button>' +
           '<button type="button" class="qq-room__compose-btn qq-room__compose-btn--plus" id="qq-room-tools-toggle" aria-label="更多工具" aria-expanded="false">' +
             COMPOSE_PLUS_SVG +
           '</button>' +
           '<textarea class="qq-room__input" id="qq-room-input" rows="1" placeholder="Write something…"></textarea>' +
-          '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="发送">' +
+          '<button type="button" class="qq-room__send" id="qq-room-send" aria-label="消息上屏" title="只把消息放到聊天记录，不立即请求 AI">' +
             '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
           '</button>' +
         '</div>' +
@@ -3599,6 +3599,11 @@
   }
 
   function handleSend() {
+    /*
+     * 纸飞机是“上屏/暂存消息”，不是“提交给 AI”。
+     * SillyTavern/Miya 的聊天工作流允许连续输入一条或多条消息，
+     * 最左侧 AI 星标才负责把当前聊天记录一次性提交给模型。
+     */
     if (!state.chatId) {
       toast('当前没有打开聊天会话');
       return Promise.reject(new Error('chat_not_open'));
@@ -3619,11 +3624,8 @@
     } else {
       payload = { role: 'user', content: text, type: 'text' };
     }
-    return sendMessage(payload).then(function () {
-      /* 普通发送键直接进入 AI 回复流程；AI 星标仍可用于主动触发/补发。 */
-      if (!state.narrationMode) return requestAiReply(false, 0);
-    }).catch(function (err) {
-      toast('发送失败');
+    return sendMessage(payload).catch(function (err) {
+      toast('消息上屏失败');
       restoreComposeAfterOverlay();
       throw err;
     });
@@ -5108,25 +5110,13 @@
     bindToolbarEvents();
     var sendBtn = $('qq-room-send');
     if (sendBtn) {
-      function runSendFromButton(e) {
-        if (e && e.type === 'pointerup' && e.pointerType === 'mouse' && e.button !== 0) return;
-        if (sendBtn._miyaSendLock && Date.now() - sendBtn._miyaSendLock < 700) return;
-        sendBtn._miyaSendLock = Date.now();
-        if (e) { e.preventDefault(); e.stopPropagation(); }
+      sendBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
         handleSend().catch(function (err) {
-          console.warn('[MiyaChatRoom] send button error', err);
+          console.warn('[MiyaChatRoom] message display error', err);
         });
-      }
-      /* 三层兼容：pointerup、touchend、click。锁避免一次触摸重复发送。 */
-      sendBtn.addEventListener('pointerup', runSendFromButton);
-      sendBtn.addEventListener('touchend', runSendFromButton, { passive: false });
-      sendBtn.addEventListener('click', runSendFromButton);
-      /* capture 兜底：即使外层手势处理阻止冒泡，发送按钮仍能触发。 */
-      document.addEventListener('click', function (e) {
-        var t = e.target && e.target.closest ? e.target.closest('#qq-room-send') : null;
-        if (!t || t !== sendBtn) return;
-        runSendFromButton(e);
-      }, true);
+      });
     }
     roomEl.addEventListener('pointerup', function (e) {
       if (msgMenuBlockPointerId === e.pointerId) {
