@@ -1781,34 +1781,3 @@
   border-radius:12px; box-shadow:0 4px 18px rgba(0,0,0,.06);
 }
 #miya-offline-app #xw-dock-expand.xw-dock-expand--float svg { width:22px; height:22px; }
-
-/* v42: fixed bottom tool tray; opening must never affect main content geometry */
-#miya-offline-app .xw-dock {
-  position: fixed !important;
-  top: auto !important;
-  right: auto !important;
-  left: 12px !important;
-  bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
-  width: max-content !important;
-  max-width: calc(100vw - 24px) !important;
-  min-height: 42px;
-  box-sizing: border-box;
-  justify-content: flex-start;
-  z-index: 45;
-  margin: 0 !important;
-  transform: translateZ(0);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-#miya-offline-app .xw-dock::-webkit-scrollbar { display: none; }
-#miya-offline-app .xw-dock.is-collapsed {
-  display: none !important;
-}
-#miya-offline-app .xw-dock__btn { flex: 0 0 44px; }
-#miya-offline-app .xw-main { padding-top: 14px; }
-#miya-offline-app .xw-writer__field::placeholder,
-#miya-offline-app .xw-journal-writer__field::placeholder {
-  color: transparent !important;
-  opacity: 0 !important;
-}
