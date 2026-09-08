@@ -1825,3 +1825,25 @@
   font-size: 13px;
 }
 .xw-writer-tool-stubs { display:none !important; }
+
+
+/* v43：线下工具只保留底部最左入口，不再显示顶部工具栏 */
+.xw-dock, .xw-dock-expand { display:none !important; }
+.xw-main { padding-top: calc(14px + env(safe-area-inset-top,0)) !important; }
+.xw-writer__tools, .xw-journal-writer__tools {
+  width: 40px; height: 40px; flex: 0 0 40px;
+  border: 0; border-radius: 12px; background: transparent;
+  color: currentColor; padding: 0; display:flex; align-items:center; justify-content:center;
+}
+.xw-writer__tools svg, .xw-journal-writer__tools svg {
+  width: 23px; height: 23px; display:block; fill:none; stroke:currentColor;
+  stroke-width:1.55; stroke-linecap:round; stroke-linejoin:round;
+}
+.xw-writer__tools:active, .xw-journal-writer__tools:active {
+  background: rgba(0,0,0,.055); transform:scale(.96);
+}
+.xw-writer-tools-menu button b { font-weight:500; }
+.xw-writer-tools-menu button .xw-wtool-ico {
+  width:26px; height:26px; border:0; border-radius:8px;
+  display:flex; align-items:center; justify-content:center; font-size:17px;
+}

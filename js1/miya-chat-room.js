@@ -3405,13 +3405,21 @@
 
   function stopCharacterReply() {
     var cid = state.chatId;
-    if (!cid) return false;
-    if (!state.sending) return false;
-    if (engine && typeof engine.abortChat === 'function') {
-      engine.abortChat(cid);
-      toast('已停止生成');
-      return true;
+    if (!cid || !state.sending) return false;
+    // 不依赖 open() 时缓存的局部 engine；生成期间页面可能重渲染/切换过引用。
+    var eng = engine || global.miyaChatEngine || null;
+    if (eng && typeof eng.abortChat === 'function') {
+      var stopped = eng.abortChat(cid);
+      if (stopped) {
+        toast('已停止生成');
+        state.sending = false;
+        stopTypingWait();
+        syncReplyButton();
+        setComposeDisabled(false);
+        return true;
+      }
     }
+    toast('当前生成无法中断，请稍候');
     return false;
   }
 

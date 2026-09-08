@@ -724,37 +724,7 @@
         syncDockCollapsedUi();
     }
 
-    function renderDock() {
-        if (isJournalTheme()) return '';
-        var navInner = '';
-        var aria = '现场工具';
-        if (ui.view === 'pick') {
-            navInner = renderDockBeautifyBtn();
-        } else if (ui.view === 'history') {
-            aria = '卷宗工具';
-            navInner =
-                renderDockBeautifyBtn() +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回场景">' +
-                '<span class="xw-dock__glyph">场</span><span class="xw-dock__lbl">回去</span></button>';
-        } else if (ui.view === 'story' && ui.viewingArchive) {
-            aria = '卷宗工具';
-            navInner =
-                renderDockBeautifyBtn() +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回卷宗列表">' +
-                '<span class="xw-dock__glyph">卷</span><span class="xw-dock__lbl">回去</span></button>';
-        } else if (ui.view === 'story') {
-            return '';
-        } else {
-            return '';
-        }
-        return (
-            '<nav class="xw-dock xw-dock--top" aria-label="' +
-            aria +
-            '">' +
-            navInner +
-            '</nav>'
-        );
-    }
+    function renderDock() { return ''; }
 
     function renderJournalChrome() {
         var castContacts = resolveCastContacts(activeSessionCast());
@@ -1900,9 +1870,8 @@ function renderWriter() {
         return (
             '<footer class="xw-writer">' +
             '<div class="xw-writer-tool-stubs" hidden><button type="button" id="xw-dock-prefs"></button><button type="button" id="xw-dock-beautify"></button><button type="button" id="xw-dock-vault"></button></div>' +
-            '<button type="button" class="xw-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">⋯</button>' +
-            '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
-            '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
+            '<button type="button" class="xw-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="10" cy="17" r="1.6"/></svg></button>' +
+                        '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
             '</footer>'
         );
@@ -1921,10 +1890,8 @@ function renderWriter() {
         return (
             '<footer class="xw-journal-writer">' +
             '<div class="xw-writer-tool-stubs" hidden><button type="button" id="xw-dock-prefs"></button><button type="button" id="xw-dock-beautify"></button><button type="button" id="xw-dock-vault"></button></div>' +
-            '<button type="button" class="xw-journal-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具">⋯</button>' +
-            '<button type="button" class="xw-journal-writer__plus" id="xw-writer-undo" title="重回" aria-label="重回">' +
-            ICON_UNDO + '</button>' +
-            '<div class="xw-journal-writer__input">' +
+            '<button type="button" class="xw-journal-writer__tools" id="xw-writer-tools" title="工具" aria-label="工具"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="10" cy="17" r="1.6"/></svg></button>' +
+                        '<div class="xw-journal-writer__input">' +
             '<textarea class="xw-journal-writer__field" id="xw-writer-input" rows="1" placeholder="输入消息..."></textarea></div>' +
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
             ICON_SEND + '</button></footer>'
@@ -1938,9 +1905,10 @@ function renderWriter() {
         menu.id = 'xw-writer-tools-menu';
         menu.className = 'xw-writer-tools-menu';
         menu.innerHTML =
-            '<button type="button" data-wtool="prefs"><span>参</span>调参</button>' +
-            '<button type="button" data-wtool="beautify"><span>式</span>样式</button>' +
-            '<button type="button" data-wtool="vault"><span>档</span>卷宗</button>';
+            '<button type="button" data-wtool="prefs"><span class="xw-wtool-ico">⚙</span><b>调参</b></button>' +
+            '<button type="button" data-wtool="beautify"><span class="xw-wtool-ico">✦</span><b>样式</b></button>' +
+            '<button type="button" data-wtool="vault"><span class="xw-wtool-ico">▤</span><b>卷宗</b></button>' +
+            '<button type="button" data-wtool="redo"><span class="xw-wtool-ico">↶</span><b>重回</b></button>';
         document.body.appendChild(menu);
         var anchor = document.getElementById('xw-writer-tools');
         if (anchor) {
@@ -1952,8 +1920,9 @@ function renderWriter() {
             var btn = e.target.closest('[data-wtool]');
             if (!btn) return;
             var key = btn.getAttribute('data-wtool');
-            var target = key === 'prefs' ? $('xw-dock-prefs') : key === 'beautify' ? $('xw-dock-beautify') : $('xw-dock-vault');
+            var target = key === 'prefs' ? $('xw-dock-prefs') : key === 'beautify' ? $('xw-dock-beautify') : key === 'vault' ? $('xw-dock-vault') : null;
             if (target) target.click();
+            else if (key === 'redo') quickRedoLastAssistant();
             menu.remove();
         });
         setTimeout(function () {
