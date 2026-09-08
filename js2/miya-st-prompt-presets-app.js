@@ -110,7 +110,7 @@
     $('stp-edit-position').value = e ? (e.position || 'front') : 'front';
     var depthEl = $('stp-edit-depth');
     var orderEl = $('stp-edit-injection-order');
-    if (depthEl) depthEl.value = e && e.injection_depth != null ? String(e.injection_depth) : '4';
+    if (depthEl) depthEl.value = e && e.injection_depth != null ? String(e.injection_depth) : '0';
     if (orderEl) orderEl.value = e && e.injection_order != null ? String(e.injection_order) : '100';
     $('stp-edit-identifier').value = e ? e.identifier : '';
     $('stp-edit-enabled').checked = e ? e.enabled !== false : true;
@@ -148,7 +148,7 @@
       role: $('stp-edit-role').value,
       position: $('stp-edit-position').value === 'back' ? 'back' : 'front',
       injection_position: $('stp-edit-position').value === 'back' ? 1 : 0,
-      injection_depth: Math.max(0, Number($('stp-edit-depth') ? $('stp-edit-depth').value : 4) || 4),
+      injection_depth: Math.max(0, Number($('stp-edit-depth') ? $('stp-edit-depth').value : 0) || 0),
       injection_order: Number($('stp-edit-injection-order') ? $('stp-edit-injection-order').value : 100) || 100,
       identifier: String($('stp-edit-identifier').value || '').trim(),
       enabled: $('stp-edit-enabled').checked,
@@ -250,11 +250,43 @@
     var eng = global.MiyaAppointmentEngine;
     var dbg = eng && typeof eng.getLastOfflinePromptDebug === 'function' ? eng.getLastOfflinePromptDebug() : global.__MiyaLastOfflinePrompt;
     if (!dbg || !Array.isArray(dbg.messages) || !dbg.messages.length) { toast('请先生成一次线下回复'); return; }
-    var head = 'ST读取检查：' + String(dbg.stReadCount != null ? dbg.stReadCount : 0) + ' 条';
-    if (dbg.stSnapshot && dbg.stSnapshot.packName) head += '｜预设包：' + dbg.stSnapshot.packName;
-    var text = head + '\n\n' + dbg.messages.map(function (m) {
-      return '[' + m.index + '] ' + String(m.role || 'system') + '\n' + String(m.content || '');
+    var lines = [];
+    lines.push('======== ST 读取诊断 ========');
+    lines.push('启用条目：' + String(dbg.stReadCount != null ? dbg.stReadCount : 0) + ' 条');
+    if (dbg.stSnapshot) {
+      lines.push('预设包：' + String(dbg.stSnapshot.packName || '(无)') + ' ｜ packId=' + String(dbg.stSnapshot.packId || ''));
+      lines.push('包内总条目：' + String(dbg.stSnapshot.totalEntries != null ? dbg.stSnapshot.totalEntries : '?') + ' ｜ 实际启用：' + String(dbg.stSnapshot.enabledEntries != null ? dbg.stSnapshot.enabledEntries : '?'));
+    }
+    lines.push('强制贴近生成层：' + (dbg.stForceNearEnd ? ('是 ｜ messages[' + dbg.stForceNearEndIndex + ']') : '否'));
+    if (Array.isArray(dbg.stHitIndexes) && dbg.stHitIndexes.length) {
+      lines.push('ST 内容落点：');
+      dbg.stHitIndexes.forEach(function (h) {
+        lines.push('  - [' + h.index + '] ' + String(h.kind || '') + (h.identifier ? (' · ' + h.identifier) : '') + ' · role=' + String(h.role || ''));
+      });
+    } else {
+      lines.push('ST 内容落点：未在 messages 中匹配到（若启用数>0 请检查 content 是否被截断）');
+    }
+    if (Array.isArray(dbg.stFront) && dbg.stFront.length) {
+      lines.push('前置条目：' + dbg.stFront.map(function (m) { return String(m.identifier || m.content || '').slice(0, 40); }).join(' | '));
+    }
+    if (Array.isArray(dbg.stBack) && dbg.stBack.length) {
+      lines.push('后置/In-Chat 条目：' + dbg.stBack.map(function (m) {
+        return String(m.identifier || '').slice(0, 24) + '(depth=' + String(m.injection_depth) + ',order=' + String(m.injection_order) + ')';
+      }).join(' | '));
+    }
+    lines.push('消息总数：' + dbg.messages.length);
+    lines.push('最后一条 role：' + String((dbg.messages[dbg.messages.length - 1] || {}).role || ''));
+    lines.push('');
+    lines.push('======== 完整 messages ========');
+    lines.push('');
+    var body = dbg.messages.map(function (m) {
+      var head = '[' + m.index + '] ' + String(m.role || 'system');
+      var c = String(m.content || '');
+      var mark = '';
+      if (dbg.stForceNearEndIndex === m.index) mark = '  << ST 强制贴近生成层';
+      return head + mark + '\n' + c;
     }).join('\n\n==========\n\n');
+    var text = lines.join('\n') + '\n' + body;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () { toast('已复制上次线下 Prompt'); }).catch(function () { fallbackCopy(text); });
     } else fallbackCopy(text);

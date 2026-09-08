@@ -810,8 +810,42 @@
         }
 
         /*
-         * ST 最终执行层：必须是所有 system 规则里的最后一层，紧贴本轮 user。
-         * 这样即使世界书存在后置注入，也不能把 ST COT/身份/环境规则隔开。
+         * ST 强制贴近生成层（22）：
+         * 无论条目标成前置还是后置，线下请求在最后一条 user 之前再放一整层
+         * 「全部已启用 ST 原文」。解决两个实际问题：
+         * 1) 前置被长 system/世界书淹没，模型当背景而不是指令；
+         * 2) Gemini 等看不到思维链时，只能靠 messages 位置判断是否生效。
+         * 这里只放原文，不写「必须如何思考 / 禁止元话语」类诱导文案。
+         */
+        var stAllForForce = [];
+        (stPresetFrontMessages || []).forEach(function (m) {
+            if (m && String(m.content || '').trim()) stAllForForce.push(m);
+        });
+        (stPresetBackMessages || []).forEach(function (m) {
+            if (m && String(m.content || '').trim()) stAllForForce.push(m);
+        });
+        var stForceNearEndContent = '';
+        var stForceNearEndIndex = -1;
+        if (stAllForForce.length) {
+            var forceParts = [
+                '【ST 预设·本轮生效】',
+                '以下为本轮实际启用的 ST 预设条目原文，按启用顺序排列。生成时直接遵循，不要改写成对规则的解释。',
+                ''
+            ];
+            stAllForForce.forEach(function (m, i) {
+                var label = String(m.identifier || '').trim() || ('条目' + (i + 1));
+                var pos = m.position === 'back' || Number(m.injection_position) === 1 ? '后置' : '前置';
+                forceParts.push('—— ST/' + label + '（' + pos + '）——');
+                forceParts.push(String(m.content || '').trim());
+                forceParts.push('');
+            });
+            stForceNearEndContent = forceParts.join('\n').trim();
+            stForceNearEndIndex = apiMessages.length;
+            apiMessages.push({ role: 'system', content: stForceNearEndContent });
+        }
+
+        /*
+         * HTML / 用户元指令仍可在 ST 贴近层之后；当前 user 永远最后。
          */
         if (htmlMode && hpApiEarly) {
             apiMessages.push({
@@ -824,7 +858,6 @@
         }
         appendOfflineUserMetaTail(apiMessages, turnUserText);
 
-
         /* 当前轮 user 永远是最后一条消息：ST/HTML/元指令全部位于 user 之前。 */
         if (extra) {
             var last = apiMessages[apiMessages.length - 1];
@@ -835,6 +868,27 @@
             }
         }
 
+        var stHitIndexes = [];
+        apiMessages.forEach(function (m, i) {
+            var c = String(m && m.content || '');
+            if (!c) return;
+            if (stForceNearEndContent && c === stForceNearEndContent) {
+                stHitIndexes.push({ index: i, kind: 'force-near-end', role: m.role });
+                return;
+            }
+            stAllForForce.forEach(function (sm) {
+                var body = String(sm.content || '').trim();
+                if (body && c.indexOf(body) >= 0) {
+                    stHitIndexes.push({
+                        index: i,
+                        kind: sm.position === 'back' || Number(sm.injection_position) === 1 ? 'in-chat/back' : 'front',
+                        role: m.role,
+                        identifier: String(sm.identifier || '')
+                    });
+                }
+            });
+        });
+
         var debugResult = {
             messages: apiMessages.map(function (m, i) {
                 return { index: i, role: m.role, content: String(m.content || '') };
@@ -843,6 +897,9 @@
             stBack: stPresetBackMessages.map(function (m) { return Object.assign({}, m); }),
             stSnapshot: stSnapshot,
             stReadCount: stPresetFrontMessages.length + stPresetBackMessages.length,
+            stForceNearEnd: !!stForceNearEndContent,
+            stForceNearEndIndex: stForceNearEndIndex,
+            stHitIndexes: stHitIndexes,
             chatId: chatId,
             sessionId: sessionId
         };

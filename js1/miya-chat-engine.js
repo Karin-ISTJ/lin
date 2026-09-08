@@ -1397,7 +1397,7 @@
                     content: body,
                     position: entryPosition,
                     injection_position: entryPosition === 'back' ? 1 : 0,
-                    injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 4,
+                    injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 0,
                     injection_order: Number.isFinite(Number(entry.injection_order)) ? Number(entry.injection_order) : 100,
                     order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : idx,
                     identifier: String(entry.identifier || entry.id || '')
@@ -1408,7 +1408,7 @@
             out.push({
                 role: 'system',
                 content: '【基础回复规则】遵循角色设定、世界书与当前聊天格式，自然回应最新消息；不得编造上下文中没有依据的事实。',
-                position: 'front', injection_position: 0, injection_depth: 4, injection_order: 100, order: 0,
+                position: 'front', injection_position: 0, injection_depth: 0, injection_order: 100, order: 0,
                 identifier: '__fallback__'
             });
         }
@@ -1434,7 +1434,7 @@
 
         var groups = Object.create(null);
         stEntries.forEach(function (m) {
-            var depth = Number.isFinite(Number(m.injection_depth)) ? Math.max(0, Number(m.injection_depth)) : 4;
+            var depth = Number.isFinite(Number(m.injection_depth)) ? Math.max(0, Number(m.injection_depth)) : 0;
             var key = String(depth);
             if (!groups[key]) groups[key] = [];
             groups[key].push(m);

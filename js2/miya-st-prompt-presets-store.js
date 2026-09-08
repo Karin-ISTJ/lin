@@ -43,7 +43,7 @@
       marker: !!e.marker,
       order: typeof order === 'number' ? order : (typeof e.order === 'number' ? e.order : 0),
       injection_position: e.injection_position === 1 || e.position === 'back' ? 1 : 0,
-      injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 4,
+      injection_depth: Number.isFinite(Number(e.injection_depth)) ? Math.max(0, Number(e.injection_depth)) : 0,
       injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100
     };
   }
@@ -302,7 +302,7 @@
             marker: !!p.marker,
             enabled: !!en,
             injection_position: p.injection_position === 1 || p.position === 'back' ? 1 : 0,
-            injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 4,
+            injection_depth: Number.isFinite(Number(p.injection_depth)) ? Math.max(0, Number(p.injection_depth)) : 0,
             injection_order: Number.isFinite(Number(p.injection_order)) ? Number(p.injection_order) : 100
           },
           order
@@ -369,7 +369,7 @@
       x.role = (x.role === 'user' || x.role === 'assistant') ? x.role : 'system';
       x.position = normalizePosition(x.position !== undefined ? x.position : x.injection_position);
       x.injection_position = x.position === 'back' || Number(x.injection_position) === 1 ? 1 : 0;
-      x.injection_depth = Number.isFinite(Number(x.injection_depth)) ? Math.max(0, Number(x.injection_depth)) : 4;
+      x.injection_depth = Number.isFinite(Number(x.injection_depth)) ? Math.max(0, Number(x.injection_depth)) : 0;
       x.injection_order = Number.isFinite(Number(x.injection_order)) ? Number(x.injection_order) : 100;
       x.order = Number.isFinite(Number(x.order)) ? Number(x.order) : idx;
       x.identifier = String(x.identifier || x.id || '');
