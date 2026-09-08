@@ -4762,7 +4762,6 @@
         extractReplyContent: extractReplyContent,
         extractThinkingBlock: extractThinkingBlock,
         extractThinkingFromResponse: extractThinkingFromResponse,
-        getThinkingRulesFormatTailItems: getThinkingRulesFormatTailItems,
         buildOperationRules: buildOperationRules,
         buildOperationRulesHead: buildOperationRulesHead,
         buildOperationRulesFormatTail: buildOperationRulesFormatTail,
