@@ -2,7 +2,7 @@
     'use strict';
 
     var ui = {
-        view: 'pick',
+        view: 'history',
         chatId: '',
         contactId: '',
         sessionId: '',
@@ -15,7 +15,6 @@
         catalogNo: '',
         stableStoryKey: '',
         dockCollapsed: true,
-        pickSelected: []
     };
 
     var streamUi = {
@@ -805,66 +804,6 @@
             ICON_BACK + '</button>' +
             whoHtml +
             '<div class="xw-journal-bar__tools">' + toolHtml + '</div></header>'
-        );
-    }
-
-    function renderPick() {
-        var st = chatStore();
-        if (!st) return '<p class="xw-empty">聊天数据未就绪，请先打开聊天应用。</p>';
-        var contacts = st.getContacts('all');
-        if (!contacts.length) {
-            return '<p class="xw-empty">还没有可登场的人。<br>请先在聊天里添加联系人。</p>';
-        }
-        var selected = Array.isArray(ui.pickSelected) ? ui.pickSelected : [];
-        var cast = contacts
-            .map(function (c, i) {
-                var chat = ensureChatForContact(c.id);
-                if (!chat) return '';
-                var on = selected.indexOf(String(c.id)) >= 0;
-                return (
-                    '<button type="button" class="xw-cast-node' +
-                    (on ? ' is-on' : '') +
-                    '" data-ap-toggle="' +
-                    esc(c.id) +
-                    '" data-ap-contact="' +
-                    esc(c.id) +
-                    '" data-ap-chat="' +
-                    esc(chat.id) +
-                    '" style="--xw-i:' +
-                    String(i) +
-                    '">' +
-                    '<span class="xw-cast-node__ring" aria-hidden="true"></span>' +
-                    '<img class="xw-cast-node__face" src="' +
-                    esc(contactAvatar(c)) +
-                    '" alt="">' +
-                    '<span class="xw-cast-node__name">' +
-                    esc(characterRealName(c)) +
-                    '</span></button>'
-                );
-            })
-            .join('');
-        var n = selected.length;
-        return (
-            '<div class="xw-hub' +
-            (isJournalTheme() ? ' xw-hub--journal' : '') +
-            '">' +
-            (isJournalTheme()
-                ? ''
-                : '<p class="xw-hub__brand">miya · 现场</p>' +
-                  '<h1 class="xw-hub__title">今天和谁见面</h1>') +
-            '<div class="xw-cast" role="list">' +
-            cast +
-            '</div>' +
-            '<div class="xw-hub__actions">' +
-            '<button type="button" class="xw-hub__start" id="xw-pick-start"' +
-            (n ? '' : ' disabled') +
-            '>' +
-            (n > 1 ? '开始线下 · ' + String(n) + ' 人' : n === 1 ? '开始线下' : '请选择角色') +
-            '</button>' +
-            '<p class="xw-hub__tip">可多选 · 点选后点开始</p></div>' +
-            '<p class="xw-hub__foot">' +
-            (isJournalTheme() ? '选中即开新对话 · 与线上记忆同步' : '开场后与线上记忆同步') +
-            '</p></div>'
         );
     }
 
@@ -1843,8 +1782,7 @@
         var root = $('xw-root');
         if (!root) return;
         var body = '';
-        if (ui.view === 'pick') body = renderPick();
-        else if (ui.view === 'history') body = renderHistory();
+        if (ui.view === 'history') body = renderHistory();
         else if (ui.view === 'story') {
             if (!ui.viewingArchive && !storyHasContent()) body = renderOpeningPicker();
             else body = renderStory();
@@ -2044,11 +1982,10 @@ function renderWriter() {
 
     function leaveStoryToPick() {
         syncSessionOnLeave();
-        ui.view = 'pick';
+        ui.view = 'history';
         ui.chatId = '';
         ui.sessionId = '';
         ui.contactId = '';
-        ui.pickSelected = [];
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }
@@ -2098,25 +2035,6 @@ function renderWriter() {
         ui.status = 'idle';
         ui.view = 'story';
         render();
-    }
-
-    function startPickedCast() {
-        var selected = Array.isArray(ui.pickSelected) ? ui.pickSelected.slice() : [];
-        if (!selected.length) {
-            toast('请先选择角色');
-            return;
-        }
-        var cast = [];
-        selected.forEach(function (cid) {
-            var chat = ensureChatForContact(cid);
-            if (!chat) return;
-            cast.push({ contactId: String(cid), chatId: String(chat.id) });
-        });
-        if (!cast.length) {
-            toast('无法创建会话，请稍后重试');
-            return;
-        }
-        openWithChat(cast[0].chatId, cast[0].contactId, cast);
     }
 
     function openArchiveSession(sessionId) {
@@ -3193,22 +3111,6 @@ function renderWriter() {
             };
         }
 
-        document.querySelectorAll('[data-ap-toggle]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var cid = String(btn.getAttribute('data-ap-toggle') || '').trim();
-                if (!cid) return;
-                var list = Array.isArray(ui.pickSelected) ? ui.pickSelected.slice() : [];
-                var idx = list.indexOf(cid);
-                if (idx >= 0) list.splice(idx, 1);
-                else list.push(cid);
-                ui.pickSelected = list;
-                render();
-            });
-        });
-        var pickStart = $('xw-pick-start');
-        if (pickStart) {
-            pickStart.addEventListener('click', startPickedCast);
-        }
 
         var dockEl = document.querySelector('#xw-root .xw-dock');
         if (dockEl) {
@@ -3443,13 +3345,12 @@ function renderWriter() {
         var st = apStore();
         if (st) st.load();
         applyOfflineBeautify();
-        ui.view = 'pick';
+        ui.view = 'history';
         ui.chatId = '';
         ui.sessionId = '';
         ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
-        ui.pickSelected = [];
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
         render();
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
