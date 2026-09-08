@@ -28,6 +28,16 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
+  /* 修复：miya-apps.css 中本类与 .miya-chat-app 同为 z-index:500，
+     而 .miya-chat-app 在 DOM 中位于本元素之后，层级相同时后者会盖在上面。
+     从「联系人聊天设置」页内跳转打开本设置面板（API 设置等）时，
+     聊天设置页仍保持打开以便返回（见 miya-settings-app.js 的
+     returnToChatContactSettings），若不提高层级会被聊天页盖住，
+     表现为"API 设置界面在底下、和当前界面叠在一起"。
+     只调到刚好盖过 .miya-chat-app(500)，仍低于 520+ 的子层浮层
+     （如 API 预设选择器 miya-st-presets-app:520），避免影响那些
+     需要盖在设置页之上的弹层。 */
+  z-index: 505;
 }
 
 /* ─── Ambient ─── */
