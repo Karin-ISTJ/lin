@@ -1770,19 +1770,81 @@
   .xw-main{padding-top:calc(58px + env(safe-area-inset-top,0));}
 }
 
-
-/* 53版：仅隐藏故事页顶部工具栏，保留原有功能绑定；三个入口改由输入栏四角星打开 */
+/* 54版：故事页顶部三个工具不显示；三个工具收纳到输入栏最左侧四角星 */
 #miya-offline-app .xw-writer {
-  padding: 8px 14px !important; gap: 8px !important; background:#FAFAFA !important;
-  border-top:1px solid #ECECEC !important; align-items:center !important; overflow:visible !important;
-  grid-template-columns:34px 34px minmax(0,1fr) 34px !important;
+  padding: 8px 14px !important;
+  gap: 8px !important;
+  background: #FAFAFA !important;
+  border-top: 1px solid #ECECEC !important;
+  align-items: center !important;
+  overflow: visible !important;
+  display: flex !important;
 }
-#miya-offline-app .xw-writer__tools { position:relative; width:34px; height:34px; }
-#miya-offline-app .xw-writer__tools-toggle { width:34px !important; height:34px !important; min-width:34px !important; padding:0 !important; border:1px solid #E0E0E5 !important; border-radius:50% !important; background:#F0F0F2 !important; color:#4A4A4A !important; display:flex !important; align-items:center !important; justify-content:center !important; }
-#miya-offline-app .xw-writer__tools-toggle svg { width:17px !important; height:17px !important; }
-#miya-offline-app .xw-writer__tools-menu { position:absolute; left:0; bottom:42px; z-index:700; display:flex; flex-direction:column; gap:5px; padding:6px; min-width:88px; border:1px solid #E3E3E8; border-radius:12px; background:#FFF; box-shadow:0 5px 18px rgba(0,0,0,.10); }
-#miya-offline-app .xw-writer__tools-menu[hidden] { display:none !important; }
-#miya-offline-app .xw-writer__tool { width:76px; height:34px; padding:0 8px; border:0; border-radius:8px; background:#F7F7F8; color:#333; font-size:11px; text-align:left; }
-#miya-offline-app .xw-writer__undo, #miya-offline-app .xw-writer__go { width:34px !important; height:34px !important; min-width:34px !important; border-radius:50% !important; }
-#miya-offline-app .xw-writer__field { height:36px !important; min-height:36px !important; line-height:36px !important; padding:0 16px !important; border-radius:18px !important; }
-#miya-offline-app .xw-shell > .xw-dock { display:none !important; }
+#miya-offline-app .xw-writer__tools {
+  position: relative !important;
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  height: 34px !important;
+}
+#miya-offline-app .xw-writer__tools-toggle {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  border: 1px solid #E0E0E5 !important;
+  background: #F0F0F2 !important;
+  color: #4A4A4A !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+#miya-offline-app .xw-writer__tools-toggle svg { width: 17px !important; height: 17px !important; }
+#miya-offline-app .xw-writer__tools-menu {
+  position: absolute !important;
+  left: 0 !important;
+  bottom: 42px !important;
+  z-index: 999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  padding: 6px !important;
+  min-width: 88px !important;
+  border: 1px solid #E3E3E8 !important;
+  border-radius: 12px !important;
+  background: #FFF !important;
+  box-shadow: 0 5px 18px rgba(0,0,0,.10) !important;
+}
+#miya-offline-app .xw-writer__tools-menu[hidden] { display: none !important; }
+#miya-offline-app .xw-writer__tool {
+  width: 76px !important;
+  height: 34px !important;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: #F7F7F8 !important;
+  color: #333 !important;
+  font-size: 11px !important;
+  text-align: left !important;
+}
+#miya-offline-app .xw-writer__undo,
+#miya-offline-app .xw-writer__go {
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  border-radius: 50% !important;
+}
+#miya-offline-app .xw-writer__field {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 16px !important;
+  border-radius: 18px !important;
+  background: #FFFFFF !important;
+  border: 1px solid #E3E3E8 !important;
+  font-size: 13.5px !important;
+  color: #1A1A1A !important;
+}

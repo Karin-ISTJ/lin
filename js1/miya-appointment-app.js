@@ -739,13 +739,8 @@
                 '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回卷宗列表">' +
                 '<span class="xw-dock__glyph">卷</span><span class="xw-dock__lbl">回去</span></button>';
         } else if (ui.view === 'story') {
-            aria = '场景工具';
-            navInner =
-                renderDockBeautifyBtn() +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-prefs" title="现场参数">' +
-                '<span class="xw-dock__glyph">参</span><span class="xw-dock__lbl">调参</span></button>' +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="往日场景">' +
-                '<span class="xw-dock__glyph">档</span><span class="xw-dock__lbl">卷宗</span></button>';
+            // 故事页的三个工具已移到输入栏四角星菜单；这里不再渲染顶部工具栏。
+            return '';
         } else {
             return '';
         }
@@ -1857,7 +1852,7 @@ function renderWriter() {
             '<footer class="xw-writer">' +
             '<div class="xw-writer__tools">' +
             '<button type="button" class="xw-writer__tools-toggle" id="xw-writer-tools-toggle" aria-label="更多功能" title="更多功能">' +
-            '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="12,4 14.5,9.5 20,12 14.5,14.5 12,20 9.5,14.5 4,12 9.5,9.5"/><polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="18,5 18.7,6.5 20,7 18.7,7.5 18,9 17.3,7.5 16,7 17.3,6.5"/><polygon fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" points="6.5,16.5 7.1,17.6 8,18 7.1,18.4 6.5,19.5 5.9,18.4 5,18 5.9,17.6"/></svg>' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8l2.25 5.95L20.2 12l-5.95 2.25L12 20.2l-2.25-5.95L3.8 12l5.95-2.25L12 3.8z" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/><path d="M18 4.5l.65 1.35L20 6.5l-1.35.65L18 8.5l-.65-1.35L16 6.5l1.35-.65L18 4.5z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>' +
             '</button>' +
             '<div class="xw-writer__tools-menu" id="xw-writer-tools-menu" hidden>' +
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-beautify">样式</button>' +
@@ -1865,7 +1860,7 @@ function renderWriter() {
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-vault">卷宗</button>' +
             '</div></div>' +
             '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
-            '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="说台词，或写你会怎么做…"></textarea>' +
+            '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder=""></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
             '</footer>'
         );
@@ -3113,6 +3108,34 @@ function renderWriter() {
         var ic = $('xw-import-offline-chat'); if (ic) ic.addEventListener('click', importOfflineChat);
         var ct = $('xw-export-current-txt'); if (ct) ct.addEventListener('click', function () { downloadOfflineText(apStore().getSession(ui.chatId, ui.sessionId)); });
         var cj = $('xw-export-current-json'); if (cj) cj.addEventListener('click', function () { downloadOfflineJson(apStore().getSession(ui.chatId, ui.sessionId)); });
+        var toolsToggle = $('xw-writer-tools-toggle');
+        var toolsMenu = $('xw-writer-tools-menu');
+        if (toolsToggle && toolsMenu) {
+            toolsToggle.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toolsMenu.hidden = !toolsMenu.hidden;
+            });
+            var toolBeautify = $('xw-writer-tool-beautify');
+            if (toolBeautify) toolBeautify.addEventListener('click', function () {
+                toolsMenu.hidden = true;
+                var api = global.MiyaOfflineBeautify;
+                if (api && typeof api.openBeautifyDrawer === 'function') api.openBeautifyDrawer();
+                else toast('样式模块未加载');
+            });
+            var toolPrefs = $('xw-writer-tool-prefs');
+            if (toolPrefs) toolPrefs.addEventListener('click', function () {
+                toolsMenu.hidden = true;
+                openSettingsSheet();
+            });
+            var toolVault = $('xw-writer-tool-vault');
+            if (toolVault) toolVault.addEventListener('click', function () {
+                toolsMenu.hidden = true;
+                ui.view = 'history';
+                ui.viewingArchive = false;
+                render();
+            });
+        }
+
         bindScrollPin();
         var back = $('xw-exit');
         if (back) {
@@ -3185,25 +3208,6 @@ function renderWriter() {
                     toast('样式模块未加载');
                 }
             });
-        }
-
-        var toolsToggle = $('xw-writer-tools-toggle');
-        var toolsMenu = $('xw-writer-tools-menu');
-        if (toolsToggle && toolsMenu) {
-            toolsToggle.addEventListener('click', function (e) {
-                e.stopPropagation();
-                toolsMenu.hidden = !toolsMenu.hidden;
-            });
-            var toolBeautify = $('xw-writer-tool-beautify');
-            if (toolBeautify) toolBeautify.addEventListener('click', function () {
-                toolsMenu.hidden = true;
-                if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.openBeautifyDrawer) global.MiyaOfflineBeautify.openBeautifyDrawer();
-                else toast('样式模块未加载');
-            });
-            var toolPrefs = $('xw-writer-tool-prefs');
-            if (toolPrefs) toolPrefs.addEventListener('click', function () { toolsMenu.hidden = true; openSettingsSheet(); });
-            var toolVault = $('xw-writer-tool-vault');
-            if (toolVault) toolVault.addEventListener('click', function () { toolsMenu.hidden = true; ui.view = 'history'; ui.viewingArchive = false; render(); });
         }
 
         var archSumBtn = $('xw-ribbon-sum');
