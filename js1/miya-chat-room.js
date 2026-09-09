@@ -1293,7 +1293,6 @@
   }
 
   function senderNameForBubble(ctx, m, fallback) {
-    if (m && m.anonymousIdentity) return '匿名用户';
     var gg = global.MiyaChatGroup;
     var sc = resolveSenderContact(ctx, m);
     if (sc && gg && typeof gg.memberDisplayName === 'function') {
@@ -2844,7 +2843,6 @@
 
   function resolveBubbleAvatarUrl(m, ctx) {
     if (!m || m.role === 'system') return '';
-    if (m.anonymousIdentity) return avatarFallback('匿名用户');
     var isMe = m.role === 'user';
     if (isMe) {
       return state.avatars[profileAvatarKey(ctx.profile)] || avatarFallback((ctx.profile && ctx.profile.name) || '我');
@@ -2855,6 +2853,7 @@
         return state.avatars[sc.id] || resolveAvatarUrlSync(sc) || avatarFallback(senderNameForBubble(ctx, m, sc.name));
       }
     }
+    if (m.anonymousDisguise) return avatarFallback('匿名');
     var cid = (ctx.contact && ctx.contact.id) || '';
     return state.avatars[cid] || resolveAvatarUrlSync(ctx.contact) || avatarFallback(resolveDisplayName(ctx));
   }
@@ -2960,6 +2959,9 @@
     var titleRow = titleAboveBubble
       ? '<div class="qq-room__bubble-title-row' + (isMe ? ' qq-room__bubble-title-row--me' : '') + '">' + titleAboveBubble + '</div>'
       : '';
+    if (!isMe && !ctx.isGroup && m.anonymousDisguise) {
+      titleRow = '<div class="qq-room__anonymous-label">匿名用户</div>';
+    }
     var stackInner = titleRow + quoteHtml + bubbleWrap + transAttach + timeHtml;
     var stack = '<div class="qq-room__bubble-stack">' + stackInner + '</div>';
     if (isMe) {

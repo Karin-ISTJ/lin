@@ -3994,7 +3994,8 @@
                         if (npExtract && npExtract.ok) {
                             lifeLikeNextPushPatch = {
                                 backgroundMessage: {
-                                    lifeLikeNextPushAt: npExtract.atMs || 0
+                                    lifeLikeNextPushAt: npExtract.atMs || 0,
+                                    lifeLikeNextPushAnonymous: !!npExtract.anonymous
                                 }
                             };
                         } else if (npExtract && npExtract.foundTag) {
@@ -4009,14 +4010,6 @@
                     }
                 }
 
-                var anonymousIdentity = false;
-                if (options.isAutoPush || options.isOffline || options.isLifeLike) {
-                    var anonTag = String(replyRaw || '').match(/<miyanonymous>\s*(?:true|yes|1)\s*<\/miyanonymous>/i);
-                    if (anonTag) {
-                        anonymousIdentity = true;
-                        replyRaw = String(replyRaw || '').replace(/\s*<miyanonymous>\s*(?:true|yes|1)\s*<\/miyanonymous>\s*/ig, '\n');
-                    }
-                }
                 var thinking = extractThinkingFromResponse(data, replyRaw);
                 var parsed = parseThinking(replyRaw);
                 var bodyForBubbles = extractBodyForBubbles(replyRaw);
@@ -4342,8 +4335,8 @@
                                     Object.assign({ role: 'assistant' }, fields || {})
                                 );
                                 if (replyBatchId) payload.replyBatchId = replyBatchId;
-                                if (anonymousIdentity) payload.anonymousIdentity = true;
                                 payload.createdAt = nextReplyCreatedAt();
+                                if (options.anonymous && payload.role === 'assistant') payload.anonymousDisguise = true;
                                 if (options.callId) payload.callId = String(options.callId);
                                 if (options.callKind) payload.callKind = options.callKind === 'video' ? 'video' : 'voice';
                                 if (

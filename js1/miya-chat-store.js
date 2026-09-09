@@ -727,10 +727,10 @@
                 proactiveBaselineAt: 0,
                 activeEnabledAt: 0,
                 lifeLikeEnabled: false,
+                anonymousDisguiseEnabled: false,
                 lifeLikeNextPushAt: 0,
                 lifeLikeNextPushAnchorTs: 0,
-                lifeLikeEnabledAt: 0,
-                anonymousDisguiseEnabled: false
+                lifeLikeEnabledAt: 0
             },
             videoCallEnabled: true,
             callBackground: { mode: 'none', url: '', blobId: '' },
@@ -1235,7 +1235,6 @@
         if (!Number.isFinite(Number(bm.lastPushFailAt))) bm.lastPushFailAt = 0;
         if (!Number.isFinite(Number(bm.proactiveBaselineAt))) bm.proactiveBaselineAt = 0;
         if (!Number.isFinite(Number(bm.activeEnabledAt))) bm.activeEnabledAt = 0;
-        bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
         bm.activeIntervalMin = Math.min(1440, Math.max(1, parseInt(bm.activeIntervalMin, 10) || 30));
         bm.offlineIntervalMin = Math.min(10080, Math.max(5, parseInt(bm.offlineIntervalMin, 10) || 60));
         bm.offlineIntervalMax = Math.min(
@@ -1249,6 +1248,7 @@
             bm = global.MiyaChatLifeLike.normalizeLifeLikeFields(bm);
         } else {
             bm.lifeLikeEnabled = !!bm.lifeLikeEnabled;
+        bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
             if (!Number.isFinite(Number(bm.lifeLikeNextPushAt))) {
                 bm.lifeLikeNextPushAt = Number(bm.lifeLikeNextCheckAt) || 0;
             }

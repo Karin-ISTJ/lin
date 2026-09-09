@@ -103,8 +103,13 @@
         roleTz = roleTz || resolveRoleTz(null);
         var s = normalizeNextPushInner(raw);
         if (!s) return { ok: false };
+        var anonymous = false;
+        if (/\|\s*(anonymous|anon|匿名|伪装)\s*$/i.test(s)) {
+            anonymous = true;
+            s = s.replace(/\|\s*(anonymous|anon|匿名|伪装)\s*$/i, '').trim();
+        }
         if (/^(off|none|null|无|不主动|暂不|never)$/i.test(s)) {
-            return { ok: true, atMs: 0 };
+            return { ok: true, atMs: 0, anonymous: false };
         }
 
         var iso = s.match(
@@ -117,7 +122,7 @@
             var h = iso[4] != null ? parseInt(iso[4], 10) : 12;
             var mi = iso[5] != null ? parseInt(iso[5], 10) : 0;
             var ts = parseWallClock(roleTz, y, mo, d, h, mi);
-            if (ts) return { ok: true, atMs: ts };
+            if (ts) return { ok: true, atMs: ts, anonymous: anonymous };
             if (iso[4] == null) {
                 return { ok: false, reason: 'missing_time' };
             }
@@ -127,13 +132,13 @@
         var tm = s.match(/^(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*[:：]\s*(\d{2}))?$/);
         if (tm) {
             var tsOnly = parseTimeOnlyInRoleTz(parseInt(tm[1], 10), parseInt(tm[2], 10), roleTz, now);
-            if (tsOnly) return { ok: true, atMs: tsOnly };
+            if (tsOnly) return { ok: true, atMs: tsOnly, anonymous: anonymous };
         }
 
         if (/^\d{13,}$/.test(s)) {
             var msNum = parseInt(s, 10);
             var msTs = finalizeScheduleTs(msNum);
-            if (msTs) return { ok: true, atMs: msTs };
+            if (msTs) return { ok: true, atMs: msTs, anonymous: anonymous };
         }
 
         return { ok: false, reason: 'unrecognized' };
@@ -168,6 +173,7 @@
         return {
             ok: !!parsed.ok,
             atMs: parsed.ok ? parsed.atMs : 0,
+            anonymous: !!parsed.anonymous,
             raw: inner,
             stripped: stripped,
             foundTag: true,
@@ -207,7 +213,9 @@
             '【让TA自己决定何时找你 · 强制末段】',
             '本单聊已开启「让TA自己决定何时找你」。你必须在完整输出 <thinking> → 正文气泡 → <miyavoice> 全部结束之后，',
             '另起一行输出且仅输出一行用户绝对不可见的调度块，格式严格如下：',
-            TAG_OPEN + 'YYYY-MM-DD HH:mm' + TAG_CLOSE,
+            TAG_OPEN + 'YYYY-MM-DD HH:mm[|anonymous]' + TAG_CLOSE,
+            '- 方括号中的 |anonymous 为可选标记：仅当你决定这一次要伪装身份、让用户看到匿名消息时才加；否则不要加。',
+            '- 如果当前已开启「允许TA伪装身份发匿名消息」，你可以根据剧情、人设、情绪与当下情景，自主决定本次是否匿名；匿名不是固定行为，也不是预设消息池。',
             '- 时间为' +
                 roleName +
                 '根据当前对话情景、人设、真实时间、行程与情绪，自行决定的下一次主动找用户发微信的时刻（角色本地时间，24 小时制）。',
@@ -295,9 +303,6 @@
             );
             if (tailDig) lines.push(tailDig);
         }
-        if (settings && settings.backgroundMessage && settings.backgroundMessage.anonymousDisguiseEnabled) {
-            lines.push('【匿名身份能力】本轮你可以自行决定是否伪装身份发送消息。只有当剧情、情绪、人物动机自然需要时才使用；若使用，必须在回复正文之外追加单独一行 <miyanonymous>true</miyanonymous>。不使用则不要输出该标签。匿名身份下仍由你自己决定具体说什么，不要从预设消息池取内容。');
-        }
         if (speakState === 'user_spoke_last') {
             var pendingBlock =
                 global.MiyaChatBackground &&
@@ -313,7 +318,7 @@
                 'YYYY-MM-DD HH:mm' +
                 TAG_CLOSE +
                 '（绝对时刻，禁止相对时间）决定下次何时再找用户。',
-            '格式示例：' + buildFormatExample(roleTz, nowTs) + '（须比当前时刻更晚）'
+            '格式示例：' + buildFormatExample(roleTz, nowTs) + ' 或 ' + TAG_OPEN + 'YYYY-MM-DD HH:mm|anonymous' + TAG_CLOSE + '（须比当前时刻更晚）'
         );
         var lastMsgTs = 0;
         var userLastTs = 0;

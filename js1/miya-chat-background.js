@@ -480,9 +480,6 @@
             '到了主动联系时刻：须自然衔接上文历史中末尾几条消息，并兼顾每条消息的真实发送时刻与间隔，像真人发微信。',
             buildProactiveContinueLeadHint(speakState)
         ];
-        if (!isGroup && settings && settings.backgroundMessage && settings.backgroundMessage.anonymousDisguiseEnabled) {
-            lines.push('【匿名身份能力】本轮你可以自行决定是否伪装身份发送消息。只有当剧情、情绪、人物动机自然需要时才使用；若使用，必须在回复正文之外追加单独一行 <miyanonymous>true</miyanonymous>。不使用则不要输出该标签。匿名身份下仍由你自己决定具体说什么，不要从预设消息池取内容。');
-        }
         var tailDigest = buildRecentChatTailDigest(store, chatId, settings, 8);
         if (tailDigest) lines.push(tailDigest);
         if (speakState === 'user_spoke_last') {
@@ -599,15 +596,18 @@
         var bg = settings.backgroundMessage || {};
         if (options.isLifeLike) {
             if (!bg.lifeLikeEnabled) return Promise.resolve();
+            if (bg.anonymousDisguiseEnabled === false) scheduledAnonymous = false;
         } else {
             if (options.isAutoPush && !bg.activeEnabled) return Promise.resolve();
             if (options.isOffline && !bg.offlineEnabled) return Promise.resolve();
         }
         if (isBackgroundSuppressed(bg, Date.now())) return Promise.resolve();
         var scheduledAt = 0;
+        var scheduledAnonymous = false;
         var lead;
         if (options.isLifeLike) {
             scheduledAt = pickTs(bg.lifeLikeNextPushAt);
+            scheduledAnonymous = !!bg.lifeLikeNextPushAnonymous;
             var ll = global.MiyaChatLifeLike;
             lead =
                 ll && typeof ll.buildLifeLikeProactivePrompt === 'function'
@@ -635,6 +635,7 @@
             isAutoPush: !!options.isAutoPush,
             isOffline: !!options.isOffline,
             isLifeLike: !!options.isLifeLike,
+            anonymous: !!scheduledAnonymous,
             systemLead: lead
         };
         return engine
@@ -645,6 +646,7 @@
                     var curBg = (store.getChatSettings(chatId).backgroundMessage) || {};
                     if (pickTs(curBg.lifeLikeNextPushAt) === scheduledAt) {
                         extra.lifeLikeNextPushAt = 0;
+                        extra.lifeLikeNextPushAnonymous = false;
                     }
                 }
                 return saveProactiveAttempt(chatId, settings, options, extra).then(function () {

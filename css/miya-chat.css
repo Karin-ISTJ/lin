@@ -6365,3 +6365,6 @@ html.is-ios .qq-room__input {
   width: 16px;
   height: 16px;
 }
+
+/* 匿名伪装消息 */
+.qq-room__anonymous-label { font-size: 11px; line-height: 16px; opacity: .58; margin: 0 0 3px 2px; letter-spacing: .02em; }

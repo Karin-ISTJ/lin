@@ -2635,6 +2635,10 @@
       chatApiPrepareIdle = null;
     }
     app.classList.remove('is-open', 'has-panel', 'is-panel-returning', 'is-priming-chat-panel');
+    // 关闭设置时彻底清掉二级面板状态，避免下次从桌面打开设置时旧的 API 页面残留在主页下面。
+    app.querySelectorAll('.ins-vault-panel').forEach(function (p) {
+      p.classList.remove('is-active', 'is-leaving');
+    });
     app.setAttribute('aria-hidden', 'true');
     returnToChatContactSettings = false;
     var chatPanel = $('miya-st-panel-chat');
