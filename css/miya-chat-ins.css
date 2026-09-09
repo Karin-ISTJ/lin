@@ -175,11 +175,6 @@
   padding-top: calc(var(--soft-safe-t) + var(--soft-topbar-h) + 40px);
 }
 
-/* ── 联系人页：与消息 / 动态统一顶栏位置与内容起始间距 ── */
-.theme-soft .qq-page--contacts .qq-page__scroll {
-  padding-top: calc(var(--soft-safe-t) + var(--soft-topbar-h) + 40px);
-}
-
 /* ── 顶栏（透明融入背景） ── */
 .soft-topbar {
   position: absolute;
@@ -1403,6 +1398,7 @@
 .miya-chat-app.theme-soft .qq-page--feed .qq-page__scroll--feed,
 .miya-chat-app.theme-soft .qq-page--contacts .qq-page__scroll,
 .miya-chat-app.theme-soft .qq-page--mine .qq-page__scroll {
+  padding-top: calc(var(--soft-safe-t) + var(--soft-topbar-h) + 40px) !important;
   padding-bottom: calc(var(--soft-safe-b) + var(--soft-tabbar-h) + var(--soft-float-gap) + 24px) !important;
 }
 
