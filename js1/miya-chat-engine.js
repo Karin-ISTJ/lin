@@ -2821,7 +2821,7 @@
             typeof apMem.buildMemoryInteropPreambleBlock === 'function' &&
             (offSumText || hasOfflineMirror || offlineCrossSlots.length || returnPrompt)
         ) {
-            apiMessages.push({ role: 'system', content: apMem.buildMemoryInteropPreambleBlock() });
+            apiMessages.push({ role: 'system', content: apMem.buildMemoryInteropPreambleBlock('online') });
         }
         if (returnPrompt) {
             apiMessages.push({ role: 'system', content: returnPrompt });

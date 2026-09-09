@@ -402,13 +402,17 @@
             .join('\n\n');
     }
 
-    function buildMemoryInteropPreambleBlock() {
+    function buildMemoryInteropPreambleBlock(mode) {
+        var isOnline = String(mode || 'offline') === 'online';
+        var tailLine = isOnline
+            ? '重要：当前任务仍是「线上即时聊天」。记忆片段只供知晓背景，正文仍须严格按【线上格式规则】逐行输出气泡，禁止把本轮回复写成线下剧情叙事段落，禁止大段无分行的旁白/叙事正文。'
+            : '重要：当前任务是「线下剧情叙事」。记忆片段只供知晓背景，禁止用「〔时间·线上〕角色名：」格式继续写线上聊天，禁止把本场写成即时通讯对话流。';
         return (
             '【线上线下记忆互通·必读】\n' +
             '以下内容为同一角色与用户之间已真实发生的剧情（含线上聊天与往期/其它场线下场景），按本地时间线整理。\n' +
             '你必须完全知晓并自然衔接，禁止表示不知情、没发生过、失忆、或「我们只在线上聊过/只在线下见过」等割裂说法。\n' +
             '若下文含「记忆总结」与「线上/线下」片段，须一并消化，不得只读其中一部分。\n' +
-            '重要：当前任务是「线下剧情叙事」。记忆片段只供知晓背景，禁止用「〔时间·线上〕角色名：」格式继续写线上聊天，禁止把本场写成即时通讯对话流。'
+            tailLine
         );
     }
 
@@ -440,7 +444,7 @@
         var sumText = String(cross.summaryText || '').trim();
         var items = cross.slotItems || [];
         if (!sumText && !items.length) return;
-        apiMessages.push({ role: 'system', content: buildMemoryInteropPreambleBlock() });
+        apiMessages.push({ role: 'system', content: buildMemoryInteropPreambleBlock('offline') });
         if (sumText) {
             apiMessages.push({
                 role: 'system',
