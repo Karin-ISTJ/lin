@@ -754,17 +754,15 @@
     }
 
     function renderJournalChrome() {
-        /* 卷宗页使用与聊天设置一致的简洁返回栏：不再在返回键旁堆叠顶部工具。
-         * 样式/调参/卷宗入口继续保留在线下故事页底部的四角星功能菜单中。 */
-        if (ui.view === 'history') {
+        // 卷宗页（列表 / 旧卷只读）只保留简洁返回栏；角色信息与顶部工具不再占据空间。
+        if (ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive)) {
             return (
                 '<header class="xw-journal-bar xw-journal-bar--vault">' +
-                '<button type="button" class="xw-journal-bar__back xw-journal-bar__back--settings" id="xw-exit" aria-label="返回">' +
+                '<button type="button" class="xw-journal-bar__simple-back" id="xw-exit" aria-label="返回">' +
                 '<svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-                '<span>返回</span>' +
-                '</button>' +
-                '<h1 class="xw-journal-bar__vault-title">卷宗</h1>' +
-                '<span class="xw-journal-bar__vault-spacer" aria-hidden="true"></span>' +
+                '<span>返回</span></button>' +
+                '<h1 class="xw-journal-bar__simple-title">卷宗</h1>' +
+                '<span class="xw-journal-bar__simple-spacer" aria-hidden="true"></span>' +
                 '</header>'
             );
         }
@@ -774,11 +772,13 @@
             var one = activeContact();
             if (one) castContacts = [one];
         }
-        var showWho = castContacts.length && ui.view === 'story';
+        var showWho = castContacts.length && (ui.view === 'story' || ui.view === 'history');
         var statusLine = '在线';
         if (ui.view === 'story' && ui.viewingArchive) {
             var archSess = apStore().getSession(ui.chatId, ui.sessionId);
             statusLine = String((archSess && archSess.title) || '').trim() || '未命名场景';
+        } else if (ui.view === 'history') {
+            statusLine = '往日卷宗';
         } else if (castContacts.length > 1) {
             statusLine = String(castContacts.length) + ' 人同场';
         }
@@ -799,14 +799,19 @@
             : '<div class="xw-journal-bar__brand">手帐</div>';
 
         var toolHtml = '';
-        toolHtml +=
-            '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
-            ICON_ARCHIVE + '</button>';
+        if (ui.view === 'story' || ui.view === 'history') {
+            toolHtml +=
+                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
+                ICON_ARCHIVE + '</button>';
+        }
         if (ui.view === 'story' && !ui.viewingArchive) {
             toolHtml +=
                 '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
                 ICON_SET + '</button>';
         }
+        toolHtml +=
+            '<button type="button" class="xw-journal-bar__ico" id="xw-dock-beautify" title="样式" aria-label="样式">' +
+            ICON_STYLE + '</button>';
 
         return (
             '<header class="xw-journal-bar">' +

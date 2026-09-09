@@ -1878,53 +1878,45 @@
 }
 
 
-/* v41：卷宗页返回栏与聊天设置保持一致；顶部不再放置样式/调参/卷宗按钮。
-   样式入口只保留在线下故事页底部四角星菜单。 */
+/* 卷宗页简洁返回栏：与聊天设置的「← 返回」保持同类样式，不再显示角色信息/样式/调参/卷宗工具。 */
 #miya-offline-app .xw-journal-bar--vault {
-  display: flex;
-  align-items: center;
+  justify-content: flex-start;
   gap: 12px;
-  width: 100%;
+  min-height: 58px;
   box-sizing: border-box;
   padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
-  min-height: 58px;
   background: linear-gradient(180deg, rgba(245, 243, 239, 0.96) 0%, rgba(245, 243, 239, 0) 100%);
+  border-bottom: 0;
 }
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings {
+#miya-offline-app .xw-journal-bar__simple-back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 0 0 auto;
   padding: 8px 12px 8px 8px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(60, 55, 50, 0.14);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255,255,255,0.72);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  color: #262626;
+  color: #292724;
   font-family: 'Inter', sans-serif;
   font-size: 13px;
-  line-height: 18px;
+  line-height: 1;
   cursor: pointer;
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 3px 14px rgba(0,0,0,0.05);
 }
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings:active { transform: scale(0.97); }
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__vault-title {
-  flex: 1;
+#miya-offline-app .xw-journal-bar__simple-back:active { transform: scale(0.97); }
+#miya-offline-app .xw-journal-bar__simple-back svg {
+  width: 10px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+#miya-offline-app .xw-journal-bar__simple-title {
   margin: 0;
   font-family: 'Noto Serif SC', serif;
   font-size: 16px;
+  line-height: 1.2;
   font-weight: 500;
-  line-height: 22px;
-  text-align: center;
-  letter-spacing: 0.3px;
+  color: #292724;
 }
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__vault-spacer {
-  flex: 0 0 62px;
-}
-@media (max-width:560px) {
-  #miya-offline-app .xw-journal-bar--vault {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-}
+#miya-offline-app .xw-journal-bar__simple-spacer { flex: 1 1 auto; min-width: 0; }
