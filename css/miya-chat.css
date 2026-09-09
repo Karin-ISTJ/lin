@@ -345,13 +345,13 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: calc(12px + var(--mc-safe-t)) 0 16px;
+  padding: calc(8px + var(--mc-safe-t)) 0 10px;
   position: relative;
 }
 
 .qq-room__head-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -383,7 +383,7 @@
 
 .qq-room__head-name {
   font-family: var(--mc-display);
-  font-size: 1.15rem;
+  font-size: 17px;
   font-weight: 500;
   color: #1a1a1a;
   letter-spacing: 0.01em;
@@ -394,7 +394,7 @@
 }
 
 .qq-room__head-status {
-  font-size: 0.7rem;
+  font-size: 10px;
   color: #bbbbbb;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -405,7 +405,7 @@
 .qq-room__head-divider {
   position: absolute;
   bottom: 0;
-  left: 80px;
+  left: 74px;
   right: 0;
   height: 1px;
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.1), transparent 80%);
