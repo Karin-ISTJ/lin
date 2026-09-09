@@ -1768,7 +1768,6 @@
 .xw-journal-bar__ico:active{background:rgba(0,0,0,.055);transform:scale(.96)}
 .xw-journal-bar__ico svg{width:100%;height:100%}
 .xw-status-fab{display:none!important}
-.xw-vault__head{position:sticky;top:0;z-index:3;padding:8px 0 12px;background:var(--xw-paper,#fff)}
 .xw-vault__actions{justify-content:flex-end}
 @media (max-width:560px){.xw-journal-bar__ico{width:34px;height:34px}.xw-vault__head{gap:8px}.xw-vault__actions{gap:4px}}
 
