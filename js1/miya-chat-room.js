@@ -1293,6 +1293,7 @@
   }
 
   function senderNameForBubble(ctx, m, fallback) {
+    if (m && m.anonymousIdentity) return '匿名用户';
     var gg = global.MiyaChatGroup;
     var sc = resolveSenderContact(ctx, m);
     if (sc && gg && typeof gg.memberDisplayName === 'function') {
@@ -2843,6 +2844,7 @@
 
   function resolveBubbleAvatarUrl(m, ctx) {
     if (!m || m.role === 'system') return '';
+    if (m.anonymousIdentity) return avatarFallback('匿名用户');
     var isMe = m.role === 'user';
     if (isMe) {
       return state.avatars[profileAvatarKey(ctx.profile)] || avatarFallback((ctx.profile && ctx.profile.name) || '我');

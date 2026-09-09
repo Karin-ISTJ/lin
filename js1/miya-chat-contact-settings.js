@@ -317,7 +317,8 @@
   function renderLifeLikeSection(settings) {
     var bg = (settings && settings.backgroundMessage) || {};
     return formCard(
-      toggleRow('mq-set-lifelike', '让TA自己决定何时找你', '替代定时主动消息，由角色自行判断何时联系你', !!bg.lifeLikeEnabled)
+      toggleRow('mq-set-lifelike', '让TA自己决定何时找你', '替代定时主动消息，由角色自行判断何时联系你', !!bg.lifeLikeEnabled) +
+      toggleRow('mq-set-anon-disguise', '允许TA伪装身份发送匿名消息', '主动联系时，TA可以自行决定是否隐藏真实身份；消息内容仍由角色根据剧情自由生成', !!bg.anonymousDisguiseEnabled)
     );
   }
 
@@ -340,7 +341,7 @@
   function readLifeLikeBackground(prevBg, root) {
     prevBg = prevBg || {};
     var lifeLikeOn = isToggleOn(root, '#mq-set-lifelike');
-    var bg = Object.assign({}, prevBg, { lifeLikeEnabled: lifeLikeOn });
+    var bg = Object.assign({}, prevBg, { lifeLikeEnabled: lifeLikeOn, anonymousDisguiseEnabled: isToggleOn(root, '#mq-set-anon-disguise') });
     if (lifeLikeOn) {
       bg.activeEnabled = false;
       bg.offlineEnabled = false;
@@ -1609,6 +1610,7 @@
 
     setToggle('#mq-set-mute-notify', p.muteNotifications);
     setToggle('#mq-set-lifelike', p.backgroundMessage && p.backgroundMessage.lifeLikeEnabled);
+    setToggle('#mq-set-anon-disguise', p.backgroundMessage && p.backgroundMessage.anonymousDisguiseEnabled);
     setVal('[data-mq-set-render-limit]', p.messageRenderLimit);
     setVal('[data-mq-set-bubble-min]', p.roleReplyBubbleMin);
     setVal('[data-mq-set-bubble-max]', p.roleReplyBubbleMax);
