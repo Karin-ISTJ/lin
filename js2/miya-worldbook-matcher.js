@@ -61,6 +61,15 @@
     return String(entry.scope) === 'local' ? 'all' : 'online_offline';
   }
 
+  function isGroupEnabled(entry) {
+    if (!entry || !entry.groupId) return true;
+    var wb = global.miyaWorldbookStore;
+    if (!wb || typeof wb.getGroup !== 'function') return true;
+    var group = wb.getGroup(entry.groupId);
+    if (!group || group.fixed) return true;
+    return group.enabled !== false;
+  }
+
   function globalReachApplies(reach, promptContext) {
     var ctx = String(promptContext || '').trim();
     if (!reach || reach === 'all' || !ctx) return false;
@@ -99,7 +108,7 @@
   }
 
   function matchEntry(entry, cfg) {
-    if (!entry || entry.enabled === false) return false;
+    if (!entry || entry.enabled === false || !isGroupEnabled(entry)) return false;
     var contextText = String(cfg.contextText || '');
     var scope = String(entry.scope || 'global');
     var promptContext = String(cfg.promptContext || '').trim();
@@ -163,7 +172,7 @@
 
   function collectUniversalGlobalEntries(entries) {
     return (entries || []).filter(function (entry) {
-      return entry && entry.enabled !== false && String(entry.scope) !== 'local' &&
+      return entry && entry.enabled !== false && isGroupEnabled(entry) && String(entry.scope) !== 'local' &&
         getEntryGlobalReach(entry) === 'all';
     });
   }
@@ -172,7 +181,7 @@
     var ctx = String(promptContext || '').trim();
     if (!ctx) return [];
     return (entries || []).filter(function (entry) {
-      if (!entry || entry.enabled === false || String(entry.scope) === 'local') return false;
+      if (!entry || entry.enabled === false || !isGroupEnabled(entry) || String(entry.scope) === 'local') return false;
       return globalReachApplies(getEntryGlobalReach(entry), ctx);
     });
   }
@@ -184,6 +193,7 @@
     matchEntries: matchEntries,
     matchEntry: matchEntry,
     roleMatches: roleMatches,
+    isGroupEnabled: isGroupEnabled,
     getEntryGlobalReach: getEntryGlobalReach,
     globalReachApplies: globalReachApplies,
     forceReachAllows: forceReachAllows,

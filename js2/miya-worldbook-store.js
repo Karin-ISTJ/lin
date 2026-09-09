@@ -73,14 +73,16 @@
         id: DEFAULT_GROUP_ID,
         name: '未分组',
         sort: 0,
-        fixed: true
+        fixed: true,
+        enabled: true
       };
     }
     return {
       id: id,
       name: String((raw && raw.name) || '').trim() || '未命名分组',
       sort: typeof raw.sort === 'number' ? raw.sort : (index + 1) * 10,
-      fixed: false
+      fixed: false,
+      enabled: raw && raw.enabled === false ? false : true
     };
   }
 
@@ -302,6 +304,14 @@
     return persist(st).then(function () { return target; });
   }
 
+  function toggleGroupEnabled(groupId, enabled) {
+    var st = readState();
+    var target = st.groups.filter(function (g) { return g.id === String(groupId || ''); })[0];
+    if (!target || target.fixed) return Promise.resolve(target || null);
+    target.enabled = !!enabled;
+    return persist(st).then(function () { return target; });
+  }
+
   function resolveAvailableRoles() {
     var map = {};
     var cs = global.miyaContactsStore;
@@ -352,6 +362,7 @@
     upsertEntry: upsertEntry,
     removeEntry: removeEntry,
     toggleEntryEnabled: toggleEntryEnabled,
+    toggleGroupEnabled: toggleGroupEnabled,
     resolveAvailableRoles: resolveAvailableRoles,
     invalidateCache: function () { _cache = null; _ready = null; },
     importStJson: function (data, opts) {
