@@ -2665,6 +2665,12 @@
                 .join('\n') +
             '\n' +
             userText;
+        var timeEventsApi = global.MiyaChatTimeEvents;
+        var timeEventsContext =
+            !opts.callMode && !opts.appointmentMode && timeEventsApi && typeof timeEventsApi.buildPromptContext === 'function'
+                ? timeEventsApi.buildPromptContext(store, chatId, Date.now())
+                : '';
+        if (timeEventsContext) contextText += '\n\n' + timeEventsContext;
         /*
          * ST 预设分成相对聊天记录的「前置 / 后置」两层。
          * 前置保留背景设定语义；后置在历史注入后再追加，给人称/格式/行为等强执行规则更高的就近性。
@@ -2709,6 +2715,18 @@
                 });
             wbBundle.meta.injectedChars = sumLayerChars(systemLayers) + sumLayerChars(wbBundle.backLayers);
             wbBundle.meta.chars = wbBundle.meta.injectedChars;
+        }
+
+        if (timeEventsContext) {
+            systemContent += '\n\n' +
+                '【现实时间事件规则】\n' +
+                '事件的现实时间继续流逝，即使用户没有打开聊天。到期前不要提前完成；固定日期/时刻事件到了当天后，结合当前剧情时间自然推进，不要突然跳跃。\n' +
+                '如果用户隔了几天回来，已经到期的纯结算事件可以在正文上方由系统卡片呈现；角色剧情事件则自然承接，不要假装时间没有过去。\n' +
+                '只有当事情本身客观需要等待、并且剧情已经明确建立了这个现实依据时，才创建时间事件。必须在这一轮剧情真正发生“预约/购买/存款/委托/办理/种下/报名”等行为后创建；不要因为角色随口说“几天后”“我给你准备个东西”就创建。不要把时间事件当作奖励生成器。\n' +
+                '事件一旦创建，就是持久化世界状态：不要在后续回复中假装它不存在，也不要因为聊天上下文没有再提及就重新创造或删除。只有真实完成、领取、确认、取消或明确错过时才改变状态。\n' +
+                '允许的典型类型：银行利息/定期、投资结算、退款、快递到货、预约、演出/电影/比赛、旅行出发、考试、维修/委托制作、申请审核、工资/结算、租期/会员到期、预售/发售、种植/发酵等确实有现实等待过程的事情。\n' +
+                '明确禁止：为了制造惊喜而临时安排的礼物、赠品、告白、浪漫奖励或“几天后给你一个东西”。角色可以在正文里说这些话，但没有真实的现实等待依据时不要创建 <miyaevent>。\n' +
+                '创建格式：<miyaevent>{\"title\":\"事件名\",\"kind\":\"类型\",\"description\":\"已发生的现实依据\",\"result\":\"到期结果\",\"dueAt\":时间戳毫秒,\"autoResolve\":true,\"naturalTrigger\":true}</miyaevent>。不要在正文展示标签。';
         }
 
         var htmlApi = global.MiyaChatHtml;
@@ -3960,6 +3978,18 @@
                 var data = completion.data;
                 var replyRawOriginal = String(completion.replyRaw || '');
                 var replyRaw = replyRawOriginal;
+                var timeEventsExtract = null;
+                var timeEventsMod = global.MiyaChatTimeEvents;
+                var chatRowEarlyForEvents = built.chat || (store.findChat ? store.findChat(chatId) : null);
+                if (
+                    timeEventsMod &&
+                    typeof timeEventsMod.extractAndStore === 'function' &&
+                    chatRowEarlyForEvents &&
+                    chatRowEarlyForEvents.type !== 'group'
+                ) {
+                    timeEventsExtract = timeEventsMod.extractAndStore(store, chatId, replyRaw);
+                    if (timeEventsExtract && timeEventsExtract.text != null) replyRaw = timeEventsExtract.text;
+                }
                 /* 记忆表格：解析 tableEdit 并剥离标签 */
                 try {
                     var mtEng = global.MiyaMemoryTableEngine;

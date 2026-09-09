@@ -3230,7 +3230,11 @@
       return;
     }
     var hvIndex = resolveHeartVoiceHighlightIndex(chatId, ctx);
-    var html = mountHintHtml(pack);
+    var timeEvents = global.MiyaChatTimeEvents;
+    var html = timeEvents && typeof timeEvents.renderCards === 'function'
+      ? timeEvents.renderCards(store, chatId, Date.now())
+      : '';
+    html += mountHintHtml(pack);
     html += msgs.map(function (m, i) {
       return bubbleHtml(m, ctx, computeRoundPos(roles, i), i, hvIndex);
     }).join('');

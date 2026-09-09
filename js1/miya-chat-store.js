@@ -728,6 +728,7 @@
                 activeEnabledAt: 0,
                 lifeLikeEnabled: false,
                 anonymousDisguiseEnabled: false,
+                timeEvents: [],
                 lifeLikeNextPushAt: 0,
                 lifeLikeNextPushAnchorTs: 0,
                 lifeLikeEnabledAt: 0
@@ -1249,6 +1250,7 @@
         } else {
             bm.lifeLikeEnabled = !!bm.lifeLikeEnabled;
         bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
+        bm.timeEvents = Array.isArray(bm.timeEvents) ? bm.timeEvents.slice(-80) : [];
             if (!Number.isFinite(Number(bm.lifeLikeNextPushAt))) {
                 bm.lifeLikeNextPushAt = Number(bm.lifeLikeNextCheckAt) || 0;
             }
