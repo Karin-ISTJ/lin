@@ -1408,7 +1408,7 @@
       { title: '我的相册', action: 'album', icon: 'album' },
       { title: '壁纸管理', action: 'wallpapers', icon: 'wallpapers' },
       { title: '我的钱包', action: 'wallet', icon: 'wallet' },
-      { title: '表情管理', action: 'dress', icon: 'emoji', grid: true },
+      { title: '美化管理', action: 'dress', icon: 'emoji', grid: true },
       { title: '设置', action: 'settings', icon: 'settings', mine: true }
     ];
     return items.map(function (item) {
