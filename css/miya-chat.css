@@ -6369,12 +6369,16 @@ html.is-ios .qq-room__input {
 /* 匿名伪装消息 */
 .qq-room__anonymous-label { font-size: 11px; line-height: 16px; opacity: .58; margin: 0 0 3px 2px; letter-spacing: .02em; }
 
-/* 现实时间事件：到期/错过后固定显示在剧情正文上方，不打断正常气泡流 */
+/* 现实时钟事件：到期/错过时固定显示在剧情正文上方，不打断气泡流 */
 .qq-room__time-events{display:flex;flex-direction:column;gap:8px;margin:10px 12px 14px}
-.qq-room__time-event{border:1px solid rgba(120,120,120,.18);border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);box-shadow:0 3px 12px rgba(0,0,0,.04)}
-.qq-room__time-event--missed{opacity:.82}
+.qq-room__time-event{border:1px solid rgba(120,120,120,.18);border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.78);backdrop-filter:blur(8px);box-shadow:0 3px 12px rgba(0,0,0,.04)}
+.qq-room__time-event--due{border-color:rgba(46,125,50,.22);background:rgba(232,245,233,.75)}
+.qq-room__time-event--missed{opacity:.78;border-color:rgba(120,120,120,.14)}
 .qq-room__time-event-head{display:flex;justify-content:space-between;gap:12px;font-size:11px;opacity:.62;margin-bottom:4px}
 .qq-room__time-event-title{font-size:14px;font-weight:600;line-height:1.45}
 .qq-room__time-event-desc{font-size:12px;line-height:1.5;opacity:.72;margin-top:3px}
 .qq-room__time-event-result{font-size:12px;line-height:1.5;margin-top:6px;padding-top:6px;border-top:1px dashed rgba(120,120,120,.18)}
 .qq-room__time-event-age{font-size:10px;opacity:.52;margin-top:4px}
+.qq-room__time-event-actions{margin-top:8px;display:flex;gap:8px}
+.qq-room__time-event-btn{appearance:none;border:1px solid rgba(120,120,120,.22);background:rgba(255,255,255,.9);border-radius:999px;padding:5px 12px;font-size:12px;line-height:1.2;cursor:pointer}
+.qq-room__time-event-btn--claim{border-color:rgba(46,125,50,.35);background:rgba(46,125,50,.1);color:#1b5e20;font-weight:600}

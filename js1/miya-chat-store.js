@@ -1249,13 +1249,14 @@
             bm = global.MiyaChatLifeLike.normalizeLifeLikeFields(bm);
         } else {
             bm.lifeLikeEnabled = !!bm.lifeLikeEnabled;
-        bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
-        bm.timeEvents = Array.isArray(bm.timeEvents) ? bm.timeEvents.slice(-80) : [];
             if (!Number.isFinite(Number(bm.lifeLikeNextPushAt))) {
                 bm.lifeLikeNextPushAt = Number(bm.lifeLikeNextCheckAt) || 0;
             }
             if (!Number.isFinite(Number(bm.lifeLikeEnabledAt))) bm.lifeLikeEnabledAt = 0;
         }
+        // 时间事件与 LifeLike 无关，始终归一化
+        bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
+        bm.timeEvents = Array.isArray(bm.timeEvents) ? bm.timeEvents.slice(-120) : [];
         if (bm.lifeLikeEnabled) {
             bm.activeEnabled = false;
             bm.offlineEnabled = false;

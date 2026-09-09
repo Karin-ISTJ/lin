@@ -5191,6 +5191,33 @@
     roomEl.addEventListener('click', function (e) {
       var t = e.target;
       dismissMsgMenuIfOutside(t);
+      // 现实时钟事件卡片：领取 / 知道了
+      var teClaim = t.closest && t.closest('[data-te-claim]');
+      if (teClaim) {
+        e.preventDefault();
+        e.stopPropagation();
+        var teApi = global.MiyaChatTimeEvents;
+        var teId = teClaim.getAttribute('data-te-claim');
+        if (teApi && state.chatId && teId && typeof teApi.claim === 'function') {
+          teApi.claim(store, state.chatId, teId, 'user');
+          if (typeof renderMessages === 'function') renderMessages(state.chatId, { preserveScroll: true });
+          else if (typeof paintRoom === 'function') paintRoom(state.chatId);
+        }
+        return;
+      }
+      var teDismiss = t.closest && t.closest('[data-te-dismiss]');
+      if (teDismiss) {
+        e.preventDefault();
+        e.stopPropagation();
+        var teApi2 = global.MiyaChatTimeEvents;
+        var teId2 = teDismiss.getAttribute('data-te-dismiss');
+        if (teApi2 && state.chatId && teId2 && typeof teApi2.dismiss === 'function') {
+          teApi2.dismiss(store, state.chatId, teId2, 'user');
+          if (typeof renderMessages === 'function') renderMessages(state.chatId, { preserveScroll: true });
+          else if (typeof paintRoom === 'function') paintRoom(state.chatId);
+        }
+        return;
+      }
       if (t.closest('#qq-emo-close') || t.closest('[data-qq-emo-close]')) {
         e.preventDefault();
         e.stopPropagation();
