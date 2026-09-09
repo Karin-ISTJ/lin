@@ -1878,54 +1878,12 @@
 }
 
 
-/* v42: 卷宗页统一使用与聊天设置一致的简洁返回栏 */
-#miya-offline-app .xw-journal-bar--vault {
-  min-height: 54px !important;
-  height: 54px !important;
-  padding: 0 14px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  box-sizing: border-box !important;
-}
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 5px !important;
-  width: auto !important;
-  min-width: 62px !important;
-  height: 36px !important;
-  padding: 0 8px 0 2px !important;
-  border: 0 !important;
-  background: transparent !important;
-  border-radius: 9px !important;
-  color: inherit !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-}
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings svg {
-  width: 18px !important;
-  height: 18px !important;
-  flex: 0 0 18px !important;
-}
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings:active {
-  background: rgba(0,0,0,.055) !important;
-  transform: scale(.98);
-}
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__vault-title {
-  display: block !important;
-  margin: 0 0 0 8px !important;
-  font-size: 16px !important;
-  line-height: 1 !important;
-  font-weight: 600 !important;
-  letter-spacing: .01em !important;
-}
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__vault-spacer {
-  display: block !important;
-  flex: 1 1 auto !important;
-}
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__who,
-#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__tools {
-  display: none !important;
-}
+/* v41: 卷宗页顶部统一为聊天设置式简洁返回栏 */
+.xw-journal-bar--vault{height:54px;min-height:54px;display:flex;align-items:center;padding:0 14px;box-sizing:border-box;border-bottom:1px solid rgba(0,0,0,.07);position:relative;z-index:10;}
+.xw-journal-bar--vault .xw-journal-bar__back--settings{display:inline-flex;align-items:center;justify-content:flex-start;gap:5px;width:auto;height:36px;margin:0;padding:0 6px 0 0;border:0;background:transparent;border-radius:10px;font-size:13px;color:inherit;cursor:pointer;}
+.xw-journal-bar--vault .xw-journal-bar__back--settings svg{width:18px;height:18px;flex:0 0 18px;}
+.xw-journal-bar--vault .xw-journal-bar__back--settings span{display:inline-block;line-height:1;}
+.xw-journal-bar--vault .xw-journal-bar__vault-title{position:absolute;left:50%;transform:translateX(-50%);margin:0;font-size:16px;font-weight:600;line-height:1;white-space:nowrap;}
+.xw-journal-bar--vault .xw-journal-bar__vault-spacer{margin-left:auto;width:58px;height:1px;}
+.xw-journal-bar--vault + .xw-dock{display:none!important;}
+@media (max-width:560px){.xw-journal-bar--vault{padding-left:12px;padding-right:12px;height:52px;min-height:52px}.xw-journal-bar--vault .xw-journal-bar__back--settings{font-size:13px}}

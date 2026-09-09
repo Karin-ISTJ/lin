@@ -732,7 +732,7 @@
                 renderDockBeautifyBtn() +
                 '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回场景">' +
                 '<span class="xw-dock__glyph">场</span><span class="xw-dock__lbl">回去</span></button>';
-        } else if (ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive)) {
+        } else if (ui.view === 'story' && ui.viewingArchive) {
             aria = '卷宗工具';
             navInner =
                 renderDockBeautifyBtn() +
@@ -754,19 +754,27 @@
     }
 
     function renderJournalChrome() {
+        // 卷宗列表与卷宗详情统一使用与聊天设置一致的简洁返回栏。
+        // 不显示角色头像、状态以及顶部样式/调参/卷宗工具；故事正文页仍保留原来的顶部结构。
+        if (ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive)) {
+            return (
+                '<header class="xw-journal-bar xw-journal-bar--vault">' +
+                '<button type="button" class="xw-journal-bar__back xw-journal-bar__back--settings" id="xw-exit" aria-label="返回">' +
+                ICON_BACK + '<span>返回</span></button>' +
+                '<h1 class="xw-journal-bar__vault-title">卷宗</h1>' +
+                '<span class="xw-journal-bar__vault-spacer" aria-hidden="true"></span>' +
+                '</header>'
+            );
+        }
+
         var castContacts = resolveCastContacts(activeSessionCast());
         if (!castContacts.length) {
             var one = activeContact();
             if (one) castContacts = [one];
         }
-        var showWho = castContacts.length && (ui.view === 'story' || ui.view === 'history');
+        var showWho = castContacts.length && ui.view === 'story';
         var statusLine = '在线';
-        if (ui.view === 'story' && ui.viewingArchive) {
-            var archSess = apStore().getSession(ui.chatId, ui.sessionId);
-            statusLine = String((archSess && archSess.title) || '').trim() || '未命名场景';
-        } else if (ui.view === 'history') {
-            statusLine = '往日卷宗';
-        } else if (castContacts.length > 1) {
+        if (castContacts.length > 1) {
             statusLine = String(castContacts.length) + ' 人同场';
         }
         var whoName = castDisplayName(castContacts, 6);
@@ -786,12 +794,12 @@
             : '<div class="xw-journal-bar__brand">手帐</div>';
 
         var toolHtml = '';
-        if (ui.view === 'story' || ui.view === 'history') {
+        if (ui.view === 'story') {
             toolHtml +=
                 '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
                 ICON_ARCHIVE + '</button>';
         }
-        if (ui.view === 'story' && !ui.viewingArchive) {
+        if (ui.view === 'story') {
             toolHtml +=
                 '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
                 ICON_SET + '</button>';
