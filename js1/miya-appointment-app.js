@@ -690,9 +690,13 @@
         );
     }
 
+    function isVaultLikeView() {
+        return ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive);
+    }
+
     function renderExitBtn() {
         if (isJournalTheme()) return '';
-        if (ui.view === 'history') return renderVaultBackBtn('xw-exit');
+        if (isVaultLikeView()) return renderVaultBackBtn('xw-exit');
         return '<button type="button" class="xw-exit" id="xw-exit" aria-label="离开现场">收起</button>';
     }
 
@@ -733,31 +737,10 @@
     }
 
     function renderDock() {
-        if (isJournalTheme()) return '';
-        // 卷宗页（历史场景列表）顶部不再放置样式/回场景等功能按钮，
-        // 返回改由左上角的「← 返回」按钮（见 renderExitBtn）承担。
-        if (ui.view === 'history') return '';
-        var navInner = '';
-        var aria = '现场工具';
-        if (ui.view === 'story' && ui.viewingArchive) {
-            aria = '卷宗工具';
-            navInner =
-                renderDockBeautifyBtn() +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回卷宗列表">' +
-                '<span class="xw-dock__glyph">卷</span><span class="xw-dock__lbl">回去</span></button>';
-        } else if (ui.view === 'story') {
-            // 故事页的三个工具已移到输入栏四角星菜单；这里不再渲染顶部工具栏。
-            return '';
-        } else {
-            return '';
-        }
-        return (
-            '<nav class="xw-dock xw-dock--top" aria-label="' +
-            aria +
-            '">' +
-            navInner +
-            '</nav>'
-        );
+        // 卷宗相关页面（历史场景列表 / 查看某一卷具体聊天记录）顶部不再放置
+        // 样式/回场景等功能按钮，返回改由左上角的「← 返回」按钮（见 renderExitBtn）承担。
+        // 现场故事页的三个工具已移到输入栏四角星菜单，这里同样不渲染顶部工具栏。
+        return '';
     }
 
     function renderJournalChrome() {
@@ -792,7 +775,7 @@
             )
             : '<div class="xw-journal-bar__brand">手帐</div>';
 
-        var isVault = ui.view === 'history';
+        var isVault = isVaultLikeView();
 
         // 卷宗页（往日卷宗列表）顶部不再放置样式/调参/卷宗这些功能按钮。
         var toolHtml = '';
