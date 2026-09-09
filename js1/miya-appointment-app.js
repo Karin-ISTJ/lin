@@ -681,8 +681,18 @@
         return '<div class="xw-bg xw-bg--journal" aria-hidden="true"></div>';
     }
 
+    function renderVaultBackBtn(extraClass) {
+        return (
+            '<button type="button" class="xw-vault-back' + (extraClass ? ' ' + extraClass : '') +
+            '" id="xw-exit" aria-label="返回">' +
+            '<svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+            '<span>返回</span></button>'
+        );
+    }
+
     function renderExitBtn() {
         if (isJournalTheme()) return '';
+        if (ui.view === 'history') return renderVaultBackBtn('xw-exit');
         return '<button type="button" class="xw-exit" id="xw-exit" aria-label="离开现场">收起</button>';
     }
 
@@ -724,15 +734,12 @@
 
     function renderDock() {
         if (isJournalTheme()) return '';
+        // 卷宗页（历史场景列表）顶部不再放置样式/回场景等功能按钮，
+        // 返回改由左上角的「← 返回」按钮（见 renderExitBtn）承担。
+        if (ui.view === 'history') return '';
         var navInner = '';
         var aria = '现场工具';
-        if (ui.view === 'history') {
-            aria = '卷宗工具';
-            navInner =
-                renderDockBeautifyBtn() +
-                '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回场景">' +
-                '<span class="xw-dock__glyph">场</span><span class="xw-dock__lbl">回去</span></button>';
-        } else if (ui.view === 'story' && ui.viewingArchive) {
+        if (ui.view === 'story' && ui.viewingArchive) {
             aria = '卷宗工具';
             navInner =
                 renderDockBeautifyBtn() +
@@ -754,27 +761,19 @@
     }
 
     function renderJournalChrome() {
-        // 卷宗列表与卷宗详情统一使用与聊天设置一致的简洁返回栏。
-        // 不显示角色头像、状态以及顶部样式/调参/卷宗工具；故事正文页仍保留原来的顶部结构。
-        if (ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive)) {
-            return (
-                '<header class="xw-journal-bar xw-journal-bar--vault">' +
-                '<button type="button" class="xw-journal-bar__back xw-journal-bar__back--settings" id="xw-exit" aria-label="返回">' +
-                ICON_BACK + '<span>返回</span></button>' +
-                '<h1 class="xw-journal-bar__vault-title">卷宗</h1>' +
-                '<span class="xw-journal-bar__vault-spacer" aria-hidden="true"></span>' +
-                '</header>'
-            );
-        }
-
         var castContacts = resolveCastContacts(activeSessionCast());
         if (!castContacts.length) {
             var one = activeContact();
             if (one) castContacts = [one];
         }
-        var showWho = castContacts.length && ui.view === 'story';
+        var showWho = castContacts.length && (ui.view === 'story' || ui.view === 'history');
         var statusLine = '在线';
-        if (castContacts.length > 1) {
+        if (ui.view === 'story' && ui.viewingArchive) {
+            var archSess = apStore().getSession(ui.chatId, ui.sessionId);
+            statusLine = String((archSess && archSess.title) || '').trim() || '未命名场景';
+        } else if (ui.view === 'history') {
+            statusLine = '往日卷宗';
+        } else if (castContacts.length > 1) {
             statusLine = String(castContacts.length) + ' 人同场';
         }
         var whoName = castDisplayName(castContacts, 6);
@@ -793,27 +792,40 @@
             )
             : '<div class="xw-journal-bar__brand">手帐</div>';
 
+        var isVault = ui.view === 'history';
+
+        // 卷宗页（往日卷宗列表）顶部不再放置样式/调参/卷宗这些功能按钮。
         var toolHtml = '';
-        if (ui.view === 'story') {
+        if (!isVault) {
+            if (ui.view === 'story' || ui.view === 'history') {
+                toolHtml +=
+                    '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
+                    ICON_ARCHIVE + '</button>';
+            }
+            if (ui.view === 'story' && !ui.viewingArchive) {
+                toolHtml +=
+                    '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
+                    ICON_SET + '</button>';
+            }
             toolHtml +=
-                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
-                ICON_ARCHIVE + '</button>';
+                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-beautify" title="样式" aria-label="样式">' +
+                ICON_STYLE + '</button>';
         }
-        if (ui.view === 'story') {
-            toolHtml +=
-                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
-                ICON_SET + '</button>';
-        }
-        toolHtml +=
-            '<button type="button" class="xw-journal-bar__ico" id="xw-dock-beautify" title="样式" aria-label="样式">' +
-            ICON_STYLE + '</button>';
+
+        // 卷宗页的返回键改为与「聊天设置」一致的「← 返回」样式，放在左上角。
+        var backHtml = isVault
+            ? renderVaultBackBtn('xw-journal-bar__back')
+            : (
+                '<button type="button" class="xw-journal-bar__back" id="xw-exit" aria-label="离开">' +
+                ICON_BACK + '</button>'
+            );
 
         return (
-            '<header class="xw-journal-bar">' +
-            '<button type="button" class="xw-journal-bar__back" id="xw-exit" aria-label="离开">' +
-            ICON_BACK + '</button>' +
+            '<header class="xw-journal-bar' + (isVault ? ' xw-journal-bar--vault' : '') + '">' +
+            backHtml +
             whoHtml +
-            '<div class="xw-journal-bar__tools">' + toolHtml + '</div></header>'
+            (toolHtml ? '<div class="xw-journal-bar__tools">' + toolHtml + '</div>' : '') +
+            '</header>'
         );
     }
 

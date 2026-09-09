@@ -389,6 +389,24 @@
   margin-left: -4px;
 }
 
+/* 卷宗页返回键 — 与「聊天设置」页一致的「← 返回」样式，仍处于左上角位置 */
+.miya-offline-app.xw-theme-korean .xw-journal-bar__back.xw-vault-back {
+  width: auto;
+  height: auto;
+  margin-left: 0;
+  gap: 6px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid rgba(34, 28, 20, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  font-family: var(--xw-sans);
+  font-size: 13px;
+}
+.miya-offline-app.xw-theme-korean .xw-journal-bar__back.xw-vault-back svg {
+  width: 10px;
+  height: 18px;
+}
+
 .miya-offline-app.xw-theme-korean .xw-journal-bar__who {
   flex: 1;
   min-width: 0;

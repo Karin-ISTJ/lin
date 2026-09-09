@@ -82,6 +82,19 @@
   cursor: pointer;
 }
 
+/* 卷宗页返回键 — 与「聊天设置」页一致的「← 返回」样式，左上角覆盖显示 */
+.xw-vault-back.xw-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 14px;
+  padding: 8px 12px 8px 8px;
+  letter-spacing: normal;
+  font-size: 13px;
+  color: var(--xw-ink);
+}
+.xw-vault-back.xw-exit svg { flex: 0 0 auto; }
+
 /* 顶部工具栏：原右侧工具改为顶部横向排列 */
 .xw-dock {
   position: absolute;
@@ -1876,14 +1889,3 @@
   min-width: 3.5em;
   text-align: center;
 }
-
-
-/* v41: 卷宗页顶部统一为聊天设置式简洁返回栏 */
-.xw-journal-bar--vault{height:54px;min-height:54px;display:flex;align-items:center;padding:0 14px;box-sizing:border-box;border-bottom:1px solid rgba(0,0,0,.07);position:relative;z-index:10;}
-.xw-journal-bar--vault .xw-journal-bar__back--settings{display:inline-flex;align-items:center;justify-content:flex-start;gap:5px;width:auto;height:36px;margin:0;padding:0 6px 0 0;border:0;background:transparent;border-radius:10px;font-size:13px;color:inherit;cursor:pointer;}
-.xw-journal-bar--vault .xw-journal-bar__back--settings svg{width:18px;height:18px;flex:0 0 18px;}
-.xw-journal-bar--vault .xw-journal-bar__back--settings span{display:inline-block;line-height:1;}
-.xw-journal-bar--vault .xw-journal-bar__vault-title{position:absolute;left:50%;transform:translateX(-50%);margin:0;font-size:16px;font-weight:600;line-height:1;white-space:nowrap;}
-.xw-journal-bar--vault .xw-journal-bar__vault-spacer{margin-left:auto;width:58px;height:1px;}
-.xw-journal-bar--vault + .xw-dock{display:none!important;}
-@media (max-width:560px){.xw-journal-bar--vault{padding-left:12px;padding-right:12px;height:52px;min-height:52px}.xw-journal-bar--vault .xw-journal-bar__back--settings{font-size:13px}}
