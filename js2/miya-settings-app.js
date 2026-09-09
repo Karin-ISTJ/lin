@@ -2248,6 +2248,23 @@
 
     onClick('miya-st-panel-header-back', function () {
       var active = app.querySelector('.ins-vault-panel.is-active');
+      var ctx = global.__miyaChatSettingsReturnContext;
+      var isChatReturn = !!(ctx && ctx.chatId && active && [
+        'miya-st-panel-chat',
+        'miya-st-panel-voice',
+        'miya-st-panel-cstore',
+        'miya-st-panel-imagegen'
+      ].indexOf(active.id) >= 0);
+      if (isChatReturn) {
+        var chatId = ctx.chatId;
+        global.__miyaChatSettingsReturnContext = null;
+        returnToChatContactSettings = false;
+        closeSettingsApp();
+        if (global.miyaChatSettingsPanel && typeof global.miyaChatSettingsPanel.open === 'function') {
+          global.miyaChatSettingsPanel.open(chatId);
+        }
+        return;
+      }
       if (returnToChatContactSettings && active && [
         'miya-st-panel-chat',
         'miya-st-panel-voice',
