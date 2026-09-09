@@ -2248,7 +2248,12 @@
 
     onClick('miya-st-panel-header-back', function () {
       var active = app.querySelector('.ins-vault-panel.is-active');
-      if (returnToChatContactSettings && active && active.id === 'miya-st-panel-chat') {
+      if (returnToChatContactSettings && active && [
+        'miya-st-panel-chat',
+        'miya-st-panel-voice',
+        'miya-st-panel-cstore',
+        'miya-st-panel-imagegen'
+      ].indexOf(active.id) >= 0) {
         returnToChatContactSettings = false;
         closeSettingsApp();
         return;
@@ -2570,8 +2575,12 @@
     var app = $('miya-settings-app');
     if (!app) return;
     // 仅记录“从聊天联系人设置进入对话 API”这一条返回链路，避免影响正常的设置入口。
-    returnToChatContactSettings = !!(panelId === 'miya-st-panel-chat' &&
-      document.querySelector('[data-mq-set-body]') && document.querySelector('[data-mq-set-back]') && document.querySelector('.miya-chat-app.mi-set-open'));
+    returnToChatContactSettings = !!(
+      ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-cstore', 'miya-st-panel-imagegen'].indexOf(panelId) >= 0 &&
+      document.querySelector('[data-mq-set-body]') &&
+      document.querySelector('[data-mq-set-back]') &&
+      document.querySelector('.miya-chat-app.mi-set-open')
+    );
     panelClosing = false;
     app.classList.remove('is-panel-returning');
     app.classList.add('is-open');
