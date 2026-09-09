@@ -2534,17 +2534,9 @@
         src.forEach(function (line) {
             var txt = trim(line);
             if (!txt) return;
-
-            // 旁白行属于线上专用的非气泡结构。无论当前是否启用
-            //「线上旁白」，都必须先从气泡候选中剥离；关闭旁白时只是
-            //不生成 narrationOps，而不是把「旁白-…」重新当普通气泡。
-            //否则当本轮恰好只有旁白行时，engine 的空结果兜底会把它
-            //重新塞进角色气泡，表现为“线下剧情正文跑进聊天气泡”。
-            var body = parseNarrationLineToBody(txt);
+            var body = narrationEnabled ? parseNarrationLineToBody(txt) : '';
             if (body) {
-                if (narrationEnabled) {
-                    narrationOps.push({ text: body, afterBubbleIndex: bubbleIndex });
-                }
+                narrationOps.push({ text: body, afterBubbleIndex: bubbleIndex });
                 return;
             }
             outLines.push(line);

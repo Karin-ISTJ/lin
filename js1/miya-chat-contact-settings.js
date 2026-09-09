@@ -1956,10 +1956,7 @@
       var apiNav = e.target.closest('[data-mq-set-api-nav]');
       if (apiNav) {
         var apiPanelId = apiNav.getAttribute('data-mq-set-api-nav');
-        // 记录明确的返回目标：这些 API 页面实际属于“联系人聊天设置”，
-        // 不能让设置 App 的返回键把用户带回桌面设置首页。
         if (apiPanelId && global.miyaSettingsApp && typeof global.miyaSettingsApp.open === 'function') {
-          global.__miyaChatSettingsReturnContext = { chatId: state.chatId, ts: Date.now() };
           global.miyaSettingsApp.open(apiPanelId);
         }
         return;

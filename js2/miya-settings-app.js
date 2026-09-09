@@ -138,8 +138,14 @@
   };
   var mainListScrollPos = 0;
   var panelClosing = false;
-  // 从聊天页的联系人设置进入对话 API 时，API 页返回应回到联系人设置，而不是设置主页。
+  // 从角色聊天的联系人设置进入任一 API 子页时，返回应回到原来的聊天设置页。
   var returnToChatContactSettings = false;
+  var CHAT_API_PANEL_IDS = {
+    'miya-st-panel-chat': true,
+    'miya-st-panel-voice': true,
+    'miya-st-panel-cstore': true,
+    'miya-st-panel-imagegen': true
+  };
   var apiConfigCache = null;
   var apiConfigHydrated = false;
   var apiPresetsCache = null;
@@ -2248,30 +2254,8 @@
 
     onClick('miya-st-panel-header-back', function () {
       var active = app.querySelector('.ins-vault-panel.is-active');
-      var ctx = global.__miyaChatSettingsReturnContext;
-      var isChatReturn = !!(ctx && ctx.chatId && active && [
-        'miya-st-panel-chat',
-        'miya-st-panel-voice',
-        'miya-st-panel-cstore',
-        'miya-st-panel-imagegen'
-      ].indexOf(active.id) >= 0);
-      if (isChatReturn) {
-        var chatId = ctx.chatId;
-        global.__miyaChatSettingsReturnContext = null;
-        returnToChatContactSettings = false;
-        closeSettingsApp();
-        if (global.miyaChatSettingsPanel && typeof global.miyaChatSettingsPanel.open === 'function') {
-          global.miyaChatSettingsPanel.open(chatId);
-        }
-        return;
-      }
-      if (returnToChatContactSettings && active && [
-        'miya-st-panel-chat',
-        'miya-st-panel-voice',
-        'miya-st-panel-cstore',
-        'miya-st-panel-imagegen'
-      ].indexOf(active.id) >= 0) {
-        returnToChatContactSettings = false;
+      if (returnToChatContactSettings && active && CHAT_API_PANEL_IDS[active.id]) {
+        // 不重新打开/重建聊天设置，只关闭这一层全局设置 App，让下面原本的聊天设置页自然露出来。
         closeSettingsApp();
         return;
       }
@@ -2591,13 +2575,11 @@
   function openSettingsApp(panelId) {
     var app = $('miya-settings-app');
     if (!app) return;
-    // 仅记录“从聊天联系人设置进入对话 API”这一条返回链路，避免影响正常的设置入口。
-    returnToChatContactSettings = !!(
-      ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-cstore', 'miya-st-panel-imagegen'].indexOf(panelId) >= 0 &&
+    // 只记录“从角色聊天设置进入 API 子页”这一条返回链路，普通桌面设置入口保持原行为。
+    returnToChatContactSettings = !!(CHAT_API_PANEL_IDS[panelId] &&
       document.querySelector('[data-mq-set-body]') &&
       document.querySelector('[data-mq-set-back]') &&
-      document.querySelector('.miya-chat-app.mi-set-open')
-    );
+      document.querySelector('.miya-chat-app.mi-set-open'));
     panelClosing = false;
     app.classList.remove('is-panel-returning');
     app.classList.add('is-open');
