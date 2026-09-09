@@ -1878,45 +1878,54 @@
 }
 
 
-/* 卷宗页简洁返回栏：与聊天设置的「← 返回」保持同类样式，不再显示角色信息/样式/调参/卷宗工具。 */
+/* v42: 卷宗页统一使用与聊天设置一致的简洁返回栏 */
 #miya-offline-app .xw-journal-bar--vault {
-  justify-content: flex-start;
-  gap: 12px;
-  min-height: 58px;
-  box-sizing: border-box;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
-  background: linear-gradient(180deg, rgba(245, 243, 239, 0.96) 0%, rgba(245, 243, 239, 0) 100%);
-  border-bottom: 0;
+  min-height: 54px !important;
+  height: 54px !important;
+  padding: 0 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  box-sizing: border-box !important;
 }
-#miya-offline-app .xw-journal-bar__simple-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px 8px 8px;
-  border: 1px solid rgba(60, 55, 50, 0.14);
-  border-radius: 14px;
-  background: rgba(255,255,255,0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: #292724;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.05);
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  width: auto !important;
+  min-width: 62px !important;
+  height: 36px !important;
+  padding: 0 8px 0 2px !important;
+  border: 0 !important;
+  background: transparent !important;
+  border-radius: 9px !important;
+  color: inherit !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
 }
-#miya-offline-app .xw-journal-bar__simple-back:active { transform: scale(0.97); }
-#miya-offline-app .xw-journal-bar__simple-back svg {
-  width: 10px;
-  height: 18px;
-  flex: 0 0 auto;
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings svg {
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
 }
-#miya-offline-app .xw-journal-bar__simple-title {
-  margin: 0;
-  font-family: 'Noto Serif SC', serif;
-  font-size: 16px;
-  line-height: 1.2;
-  font-weight: 500;
-  color: #292724;
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__back--settings:active {
+  background: rgba(0,0,0,.055) !important;
+  transform: scale(.98);
 }
-#miya-offline-app .xw-journal-bar__simple-spacer { flex: 1 1 auto; min-width: 0; }
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__vault-title {
+  display: block !important;
+  margin: 0 0 0 8px !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em !important;
+}
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__vault-spacer {
+  display: block !important;
+  flex: 1 1 auto !important;
+}
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__who,
+#miya-offline-app .xw-journal-bar--vault .xw-journal-bar__tools {
+  display: none !important;
+}

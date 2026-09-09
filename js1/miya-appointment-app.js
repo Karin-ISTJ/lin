@@ -732,7 +732,7 @@
                 renderDockBeautifyBtn() +
                 '<button type="button" class="xw-dock__btn" id="xw-dock-vault" title="回场景">' +
                 '<span class="xw-dock__glyph">场</span><span class="xw-dock__lbl">回去</span></button>';
-        } else if (ui.view === 'story' && ui.viewingArchive) {
+        } else if (ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive)) {
             aria = '卷宗工具';
             navInner =
                 renderDockBeautifyBtn() +
@@ -754,19 +754,6 @@
     }
 
     function renderJournalChrome() {
-        // 卷宗页（列表 / 旧卷只读）只保留简洁返回栏；角色信息与顶部工具不再占据空间。
-        if (ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive)) {
-            return (
-                '<header class="xw-journal-bar xw-journal-bar--vault">' +
-                '<button type="button" class="xw-journal-bar__simple-back" id="xw-exit" aria-label="返回">' +
-                '<svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-                '<span>返回</span></button>' +
-                '<h1 class="xw-journal-bar__simple-title">卷宗</h1>' +
-                '<span class="xw-journal-bar__simple-spacer" aria-hidden="true"></span>' +
-                '</header>'
-            );
-        }
-
         var castContacts = resolveCastContacts(activeSessionCast());
         if (!castContacts.length) {
             var one = activeContact();
