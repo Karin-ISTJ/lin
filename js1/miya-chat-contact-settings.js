@@ -1957,7 +1957,9 @@
       if (apiNav) {
         var apiPanelId = apiNav.getAttribute('data-mq-set-api-nav');
         if (apiPanelId && global.miyaSettingsApp && typeof global.miyaSettingsApp.open === 'function') {
-          global.miyaSettingsApp.open(apiPanelId);
+          // 明确告诉设置 App：这是从当前角色的聊天设置进入的 API 子页。
+          // 返回时应关闭设置 App，而不是回到桌面的“设置”主页。
+          global.miyaSettingsApp.open(apiPanelId, { fromChatContactSettings: true });
         }
         return;
       }

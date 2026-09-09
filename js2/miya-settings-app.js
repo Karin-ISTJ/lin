@@ -138,14 +138,8 @@
   };
   var mainListScrollPos = 0;
   var panelClosing = false;
-  // 从角色聊天的联系人设置进入任一 API 子页时，返回应回到原来的聊天设置页。
+  // 从聊天页的联系人设置进入对话 API 时，API 页返回应回到联系人设置，而不是设置主页。
   var returnToChatContactSettings = false;
-  var CHAT_API_PANEL_IDS = {
-    'miya-st-panel-chat': true,
-    'miya-st-panel-voice': true,
-    'miya-st-panel-cstore': true,
-    'miya-st-panel-imagegen': true
-  };
   var apiConfigCache = null;
   var apiConfigHydrated = false;
   var apiPresetsCache = null;
@@ -2254,8 +2248,10 @@
 
     onClick('miya-st-panel-header-back', function () {
       var active = app.querySelector('.ins-vault-panel.is-active');
-      if (returnToChatContactSettings && active && CHAT_API_PANEL_IDS[active.id]) {
-        // 不重新打开/重建聊天设置，只关闭这一层全局设置 App，让下面原本的聊天设置页自然露出来。
+      if (returnToChatContactSettings && active &&
+          ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-cstore', 'miya-st-panel-imagegen'].indexOf(active.id) !== -1) {
+        // 与原“对话 API”返回方式一致：直接关闭全局设置层，回到仍保持打开的角色聊天设置页。
+        returnToChatContactSettings = false;
         closeSettingsApp();
         return;
       }
@@ -2572,14 +2568,19 @@
     }
   }
 
-  function openSettingsApp(panelId) {
+  function openSettingsApp(panelId, options) {
     var app = $('miya-settings-app');
     if (!app) return;
-    // 只记录“从角色聊天设置进入 API 子页”这一条返回链路，普通桌面设置入口保持原行为。
-    returnToChatContactSettings = !!(CHAT_API_PANEL_IDS[panelId] &&
-      document.querySelector('[data-mq-set-body]') &&
-      document.querySelector('[data-mq-set-back]') &&
-      document.querySelector('.miya-chat-app.mi-set-open'));
+    // API 子页从角色聊天设置进入时，必须沿用“对话 API”之前已经验证过的返回链路。
+    // 不再依赖聊天设置 DOM / miya-chat-app 状态去猜测来源，而由调用方明确标记来源。
+    options = options || {};
+    var chatApiPanelIds = ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-cstore', 'miya-st-panel-imagegen'];
+    var fromChatContactSettings = !!options.fromChatContactSettings;
+    if (!fromChatContactSettings && panelId === 'miya-st-panel-chat') {
+      // 保留旧版“对话 API”入口的兼容判断。
+      fromChatContactSettings = !!(document.querySelector('[data-mq-set-body]') && document.querySelector('[data-mq-set-back]') && document.querySelector('.miya-chat-app.mi-set-open'));
+    }
+    returnToChatContactSettings = chatApiPanelIds.indexOf(panelId) !== -1 && fromChatContactSettings;
     panelClosing = false;
     app.classList.remove('is-panel-returning');
     app.classList.add('is-open');
