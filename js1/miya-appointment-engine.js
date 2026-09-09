@@ -935,6 +935,51 @@
         return '';
     }
 
+    /**
+     * 线下专用：某些模型/网关会把 reasoning_content 同时复制进 message.content。
+     * 这种情况下 parseThinking 已经拿到了真正的思维链，但正文仍会完整重复一份。
+     * 这里只处理“正文与思维链高度重复”的情况，不按关键词粗暴删除，避免误伤正常剧情。
+     */
+    function stripDuplicatedOfflineThinking(content, thinking) {
+        var body = String(content || '').trim();
+        var think = String(thinking || '').trim();
+        if (!body || !think) return body;
+
+        function norm(s) {
+            return String(s || '')
+                .replace(/\r/g, '')
+                .replace(/[ \t]+/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }
+
+        var b = norm(body);
+        var t = norm(think);
+        if (b === t) return '';
+
+        // 只有当正文开头与 thinking 有很长且高度一致的重叠时才剥离。
+        // 这样“思考后真正开始写剧情”的正文会保留下来。
+        var max = Math.min(b.length, t.length);
+        if (max < 80) return body;
+        var common = 0;
+        while (common < max && b.charAt(common) === t.charAt(common)) common += 1;
+
+        var threshold = Math.max(80, Math.floor(Math.min(t.length, b.length) * 0.72));
+        if (common < threshold) return body;
+
+        // 优先从一个完整的 thinking 结尾切掉；如果只是轻微尾部差异，则保留差异部分。
+        if (b.indexOf(t) === 0) {
+            var rest = b.slice(t.length).trim();
+            return rest;
+        }
+
+        // 常见情况是末尾多一个标点/换行，允许在 thinking 末尾附近切分。
+        var cut = common;
+        while (cut > 0 && /[\s，。！？；：、,!?;:]/.test(b.charAt(cut - 1))) cut -= 1;
+        var rest2 = b.slice(cut).trim();
+        return rest2 && rest2 !== b ? rest2 : '';
+    }
+
     function parseAppointmentResponse(fullRaw, data) {
         var raw = String(fullRaw || '');
         var e = eng();
@@ -981,6 +1026,8 @@
                 }
             }
         }
+        // 线下专用去重：只在正文高度重复思维链时处理。
+        content = stripDuplicatedOfflineThinking(content, thinking);
         return { thinking: thinking, content: content };
     }
 
