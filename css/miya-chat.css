@@ -6409,3 +6409,23 @@ html.is-ios .qq-room__input {
 .qq-farm__empty{font-size:12px;opacity:.55;padding:8px 2px}
 .qq-farm__log{display:flex;flex-direction:column;gap:4px}
 .qq-farm__log-item{font-size:11px;opacity:.7;padding:4px 0;border-bottom:1px dashed rgba(0,0,0,.05)}
+
+.qq-farm__inv{display:flex;flex-direction:column;gap:8px}
+.qq-farm__inv-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.9);border:1px solid rgba(80,120,60,.12)}
+.qq-farm__inv-left{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-width:0}
+.qq-farm__inv-icon{font-size:20px}
+.qq-farm__inv-name{font-size:13px;font-weight:600}
+.qq-farm__inv-price{font-size:11px;opacity:.55}
+.qq-farm__inv-acts{display:flex;gap:6px;flex-shrink:0}
+.qq-farm__inv-foot{margin-top:10px}
+.qq-farm__seeds{max-height:160px;overflow:auto}
+
+.qq-farm__seeds{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;max-height:160px;overflow:auto;padding-bottom:4px}
+.qq-farm__seed{display:inline-flex;flex-direction:column;align-items:center;gap:2px;min-width:56px;appearance:none;border:1px dashed rgba(80,120,60,.28);background:rgba(255,255,255,.75);border-radius:12px;padding:8px 6px;font-size:11px;cursor:pointer}
+.qq-farm__seed span{opacity:.85;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qq-farm__wh{display:flex;flex-direction:column;gap:6px}
+.qq-farm__wh-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.88);border:1px solid rgba(80,120,60,.12)}
+.qq-farm__wh-icon{font-size:20px}
+.qq-farm__wh-name{font-size:13px;font-weight:600;flex:1;min-width:72px}
+.qq-farm__wh-price{font-size:11px;opacity:.6}
+.qq-farm__wh-foot{margin-top:8px}

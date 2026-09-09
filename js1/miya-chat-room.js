@@ -5205,6 +5205,13 @@
     roomEl.addEventListener('click', function (e) {
       var t = e.target;
       dismissMsgMenuIfOutside(t);
+      // 通用抽屉/面板关闭：必须在农场等面板自己的点击逻辑之前处理，避免事件被拦截
+      if (t.closest && t.closest('[data-sheet-close]')) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeOverlay();
+        return;
+      }
       // 小农场面板
       if (t.closest && t.closest('[data-farm-act]')) {
         var farmApiClick = global.MiyaChatFarm;

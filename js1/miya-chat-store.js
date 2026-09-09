@@ -729,7 +729,7 @@
                 lifeLikeEnabled: false,
                 anonymousDisguiseEnabled: false,
                 timeEvents: [],
-                farm: { playerPlots: [], rolePlots: [], log: [], updatedAt: 0 },
+                farm: { playerPlots: [], rolePlots: [], warehouse: {}, log: [], missFour: 0, missAnimal: 0, updatedAt: 0 },
                 lifeLikeNextPushAt: 0,
                 lifeLikeNextPushAnchorTs: 0,
                 lifeLikeEnabledAt: 0
@@ -1259,11 +1259,22 @@
         bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
         bm.timeEvents = Array.isArray(bm.timeEvents) ? bm.timeEvents.slice(-120) : [];
         if (!bm.farm || typeof bm.farm !== 'object') {
-            bm.farm = { playerPlots: [], rolePlots: [], log: [], updatedAt: 0 };
+            bm.farm = { playerPlots: [], rolePlots: [], warehouse: {}, log: [], missFour: 0, missAnimal: 0, updatedAt: 0 };
         } else {
             if (!Array.isArray(bm.farm.playerPlots)) bm.farm.playerPlots = [];
             if (!Array.isArray(bm.farm.rolePlots)) bm.farm.rolePlots = [];
+            if (!bm.farm.warehouse || typeof bm.farm.warehouse !== 'object') bm.farm.warehouse = {};
+            // 兼容旧 inventory 字段
+            if (bm.farm.inventory && typeof bm.farm.inventory === 'object') {
+                Object.keys(bm.farm.inventory).forEach(function (k) {
+                    var n = Number(bm.farm.inventory[k]) || 0;
+                    if (n > 0) bm.farm.warehouse[k] = (bm.farm.warehouse[k] || 0) + n;
+                });
+                delete bm.farm.inventory;
+            }
             if (!Array.isArray(bm.farm.log)) bm.farm.log = [];
+            bm.farm.missFour = Math.max(0, Math.floor(Number(bm.farm.missFour) || 0));
+            bm.farm.missAnimal = Math.max(0, Math.floor(Number(bm.farm.missAnimal) || 0));
         }
         if (bm.lifeLikeEnabled) {
             bm.activeEnabled = false;

@@ -29,10 +29,15 @@
             return store.getMergedMessagesForApi(chatId) || [];
         }
         var hid = resolveProactiveApiChatId(store, chatId);
+        var rows;
         if (store.getMessagesForApi && typeof store.getMessagesForApi === 'function') {
-            return store.getMessagesForApi(hid) || [];
+            rows = store.getMessagesForApi(hid) || [];
+        } else {
+            rows = store.getMessages(hid) || [];
         }
-        return store.getMessages(hid) || [];
+        // 线下剧情镜像只用于线上回顾/记忆，不应作为线上主动消息的触发锚点，
+        // 否则线下每发一轮都会被线上后台当成“刚发生的线上对话”参与自动回复。
+        return rows.filter(function (m) { return m && !m.offlineMeet; });
     }
 
     function historyLastTs(store, chatId, roleFilter) {
@@ -41,7 +46,7 @@
         if (aw && typeof aw.historyLastTs === 'function') return aw.historyLastTs(list, roleFilter);
         for (var i = list.length - 1; i >= 0; i--) {
             var row = list[i];
-            if (!row || row.deleted) continue;
+            if (!row || row.deleted || row.offlineMeet) continue;
             if (roleFilter === 'user' && row.role !== 'user') continue;
             if (roleFilter === 'assistant' && row.role !== 'assistant') continue;
             var t = pickTs(row.createdAt);
@@ -73,7 +78,7 @@
         var list = loadHistoryForApi(store, chatId);
         for (var i = list.length - 1; i >= 0; i--) {
             var row = list[i];
-            if (!row || row.deleted) continue;
+            if (!row || row.deleted || row.offlineMeet) continue;
             if (row.role !== 'user' && row.role !== 'assistant') continue;
             var t = pickTs(row.createdAt);
             if (t) return t;
