@@ -729,6 +729,7 @@
                 lifeLikeEnabled: false,
                 anonymousDisguiseEnabled: false,
                 timeEvents: [],
+                farm: { playerPlots: [], rolePlots: [], log: [], updatedAt: 0 },
                 lifeLikeNextPushAt: 0,
                 lifeLikeNextPushAnchorTs: 0,
                 lifeLikeEnabledAt: 0
@@ -1257,6 +1258,13 @@
         // 时间事件与 LifeLike 无关，始终归一化
         bm.anonymousDisguiseEnabled = !!bm.anonymousDisguiseEnabled;
         bm.timeEvents = Array.isArray(bm.timeEvents) ? bm.timeEvents.slice(-120) : [];
+        if (!bm.farm || typeof bm.farm !== 'object') {
+            bm.farm = { playerPlots: [], rolePlots: [], log: [], updatedAt: 0 };
+        } else {
+            if (!Array.isArray(bm.farm.playerPlots)) bm.farm.playerPlots = [];
+            if (!Array.isArray(bm.farm.rolePlots)) bm.farm.rolePlots = [];
+            if (!Array.isArray(bm.farm.log)) bm.farm.log = [];
+        }
         if (bm.lifeLikeEnabled) {
             bm.activeEnabled = false;
             bm.offlineEnabled = false;

@@ -6382,3 +6382,30 @@ html.is-ios .qq-room__input {
 .qq-room__time-event-actions{margin-top:8px;display:flex;gap:8px}
 .qq-room__time-event-btn{appearance:none;border:1px solid rgba(120,120,120,.22);background:rgba(255,255,255,.9);border-radius:999px;padding:5px 12px;font-size:12px;line-height:1.2;cursor:pointer}
 .qq-room__time-event-btn--claim{border-color:rgba(46,125,50,.35);background:rgba(46,125,50,.1);color:#1b5e20;font-weight:600}
+
+/* —— 小农场 —— */
+.qq-room__farm-btn{appearance:none;border:0;background:transparent;width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;margin-right:2px}
+.qq-room__farm-btn:active{transform:scale(.94)}
+.qq-sheet--farm .qq-sheet__panel--farm{padding:0;max-height:min(78vh,640px);overflow:auto;border-radius:18px 18px 0 0}
+.qq-farm{padding:14px 14px 22px;background:linear-gradient(180deg,#f3faf0 0%,#fff 40%)}
+.qq-farm__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.qq-farm__title{font-size:17px;font-weight:700}
+.qq-farm__close{appearance:none;border:0;background:rgba(0,0,0,.06);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
+.qq-farm__hint{font-size:11px;opacity:.62;line-height:1.45;margin-bottom:12px}
+.qq-farm__section{margin-top:14px}
+.qq-farm__section-title{font-size:13px;font-weight:600;margin-bottom:8px;opacity:.85}
+.qq-farm__plots{display:flex;flex-direction:column;gap:8px}
+.qq-farm__plot{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.88);border:1px solid rgba(80,120,60,.14);box-shadow:0 2px 10px rgba(0,0,0,.03)}
+.qq-farm__plot-icon{font-size:28px;line-height:1;width:40px;text-align:center}
+.qq-farm__plot-body{flex:1;min-width:0}
+.qq-farm__plot-name{font-size:14px;font-weight:600}
+.qq-farm__plot-sub{font-size:11px;opacity:.62;margin-top:2px}
+.qq-farm__plot-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.qq-farm__btn{appearance:none;border:1px solid rgba(120,120,120,.2);background:#fff;border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer}
+.qq-farm__btn--main{border-color:rgba(46,125,50,.35);background:rgba(46,125,50,.1);color:#1b5e20;font-weight:600}
+.qq-farm__btn--warn{border-color:rgba(198,40,40,.3);background:rgba(198,40,40,.08);color:#b71c1c}
+.qq-farm__seeds{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.qq-farm__seed{appearance:none;border:1px dashed rgba(80,120,60,.28);background:rgba(255,255,255,.75);border-radius:12px;padding:8px 10px;font-size:12px;cursor:pointer}
+.qq-farm__empty{font-size:12px;opacity:.55;padding:8px 2px}
+.qq-farm__log{display:flex;flex-direction:column;gap:4px}
+.qq-farm__log-item{font-size:11px;opacity:.7;padding:4px 0;border-bottom:1px dashed rgba(0,0,0,.05)}

@@ -2671,6 +2671,12 @@
                 ? timeEventsApi.buildPromptContext(store, chatId, Date.now())
                 : '';
         if (timeEventsContext) contextText += '\n\n' + timeEventsContext;
+        var farmApi = global.MiyaChatFarm;
+        var farmContext =
+            !opts.callMode && !opts.appointmentMode && farmApi && typeof farmApi.buildPromptContext === 'function'
+                ? farmApi.buildPromptContext(store, chatId, Date.now())
+                : '';
+        if (farmContext) contextText += '\n\n' + farmContext;
         /*
          * ST 预设分成相对聊天记录的「前置 / 后置」两层。
          * 前置保留背景设定语义；后置在历史注入后再追加，给人称/格式/行为等强执行规则更高的就近性。
@@ -3992,6 +3998,18 @@
                     timeEventsExtract = timeEventsMod.extractAndStore(store, chatId, replyRaw);
                     if (timeEventsExtract && timeEventsExtract.text != null) replyRaw = timeEventsExtract.text;
                 }
+                try {
+                    var farmMod = global.MiyaChatFarm;
+                    if (
+                        farmMod &&
+                        typeof farmMod.extractAndStore === 'function' &&
+                        chatRowEarlyForEvents &&
+                        chatRowEarlyForEvents.type !== 'group'
+                    ) {
+                        var farmExtract = farmMod.extractAndStore(store, chatId, replyRaw);
+                        if (farmExtract && farmExtract.text != null) replyRaw = farmExtract.text;
+                    }
+                } catch (eFarm) {}
                 /* 记忆表格：解析 tableEdit 并剥离标签 */
                 try {
                     var mtEng = global.MiyaMemoryTableEngine;
