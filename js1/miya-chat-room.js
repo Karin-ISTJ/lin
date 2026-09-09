@@ -5225,7 +5225,7 @@
         deleteSelectedMessages();
         return;
       }
-      if (t.closest('[data-sheet-close]') || (t.closest('.qq-sheet') && !t.closest('.qq-sheet__panel') && !t.closest('.qq-lovepoem-sheet') && !t.closest('.qq-journal__book'))) {
+      if (t.closest('[data-sheet-close]') || (t.closest('.qq-sheet') && !t.closest('.qq-sheet__panel') && !t.closest('.qq-journal__book'))) {
         if (t.closest('[data-sheet-close]') || t.classList.contains('qq-room__overlay')) closeOverlay();
       }
       if (t.closest('[data-pick="photo"]')) { e.preventDefault(); pickPhotoFile(); return; }
