@@ -175,6 +175,11 @@
   padding-top: calc(var(--soft-safe-t) + var(--soft-topbar-h) + 40px);
 }
 
+/* ── 联系人页：与消息 / 动态统一顶栏位置与内容起始间距 ── */
+.theme-soft .qq-page--contacts .qq-page__scroll {
+  padding-top: calc(var(--soft-safe-t) + var(--soft-topbar-h) + 40px);
+}
+
 /* ── 顶栏（透明融入背景） ── */
 .soft-topbar {
   position: absolute;
@@ -236,20 +241,6 @@
   font-size: 13px;
 }
 
-.qq-page--contacts .soft-topbar {
-  min-height: 48px;
-  align-items: flex-start;
-  padding-top: 2px;
-}
-
-.qq-page--contacts .soft-topbar__title {
-  font-size: 20px;
-  line-height: 1.2;
-}
-
-.qq-page--contacts .soft-topbar__subtitle--inline {
-  margin-top: 1px;
-}
 
 .soft-topbar__meta {
   font-size: 11px;

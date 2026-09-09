@@ -231,13 +231,7 @@
       el.id = PREVIEW_STYLE_ID;
       document.body.appendChild(el);
     }
-    // Replace the stylesheet as a fresh text node and force a style/layout
-    // boundary. This avoids occasional stale preview after CSS is imported
-    // programmatically (the textarea value changes without a native input event).
-    var scoped = scopeCss(css, '#mq-cab-preview');
-    el.textContent = '';
-    if (scoped) el.appendChild(document.createTextNode(scoped));
-    void el.offsetHeight;
+    el.textContent = scopeCss(css, '#mq-cab-preview');
     return el;
   }
 
@@ -416,10 +410,10 @@
     state = normalizeState(state || getState());
     var activeTheme = state.themeId || 'default-orange';
     return '<div class="mi-bf-wrap mi-bf-wrap--cab" data-cab-root>' +
-      '<p class="mi-me-lead">聊天 App 四屏美化 · 内置预设可随时切换，不影响下方自定义 CSS</p>' +
+      '<p class="mi-me-lead">聊天 App 四屏美化 · 内置预设可随时切换，不影响下方自定义 CSS 与装饰</p>' +
       '<div class="mi-bf-block">' +
         '<span class="mi-bf-block__label">内置预设</span>' +
-        '<p class="mi-bf-preview-hint">切换预设只改外观主题，自定义 CSS / 已存预设均保留</p>' +
+        '<p class="mi-bf-preview-hint">切换预设只改外观主题，自定义 CSS / 装饰 / 已存预设均保留</p>' +
         '<div class="cab-theme-grid" data-cab-themes>' + buildThemePickerHtml(activeTheme) + '</div>' +
       '</div>' +
       '<div class="mi-bf-block mi-bf-block--preview">' +
@@ -438,10 +432,32 @@
           '<button type="button" class="mi-pill" data-cab-clear-css>清除 CSS</button>' +
         '</div>' +
       '</div>' +
+      '<div class="mi-bf-block">' +
+        '<span class="mi-bf-block__label">自定义装饰</span>' +
+        '<p class="mi-bf-preview-hint">上传图片后可设页面、位置与尺寸（单位 px）</p>' +
+        '<div class="cab-deco-form">' +
+          '<select class="mi-input" data-cab-deco-page>' +
+            '<option value="all">全部页面</option>' +
+            '<option value="msg">消息</option>' +
+            '<option value="feed">动态</option>' +
+            '<option value="contacts">联系人</option>' +
+            '<option value="mine">我的</option>' +
+          '</select>' +
+          '<div class="cab-deco-form__nums">' +
+            '<label>x<input type="number" class="mi-input" data-cab-deco-x value="0" step="1"></label>' +
+            '<label>y<input type="number" class="mi-input" data-cab-deco-y value="0" step="1"></label>' +
+            '<label>宽<input type="number" class="mi-input" data-cab-deco-w value="72" min="8" step="1"></label>' +
+            '<label>高<input type="number" class="mi-input" data-cab-deco-h value="72" min="8" step="1"></label>' +
+          '</div>' +
+          '<button type="button" class="mi-pill mi-pill--dark" data-cab-deco-upload>上传装饰图</button>' +
+          '<input type="file" accept="image/*" hidden data-cab-deco-file>' +
+        '</div>' +
+        '<div data-cab-deco-list>' + buildDecoListHtml(state.decoItems) + '</div>' +
+      '</div>' +
       buildSourceReferenceHtml() +
       '<div class="mi-bf-block">' +
         '<span class="mi-bf-block__label">我的预设</span>' +
-        '<p class="mi-bf-preview-hint">保存主题 + CSS 组合；读取后需点「应用 CSS」生效</p>' +
+        '<p class="mi-bf-preview-hint">保存主题 + CSS + 装饰组合；读取后需点「应用 CSS」生效</p>' +
         '<select class="mi-input" data-cab-preset-pick>' + buildPresetSelectOptions(state.presetName) + '</select>' +
         '<div class="mi-btn-row" style="margin-top:10px">' +
           '<button type="button" class="mi-pill mi-pill--dark" data-cab-preset-save>保存预设</button>' +
@@ -678,9 +694,6 @@
         var docImp = global.miyaBeautifyDocImport;
         if (!docImp || !cssTa) return toast('导入模块未加载');
         docImp.pickAndImport(cssTa).then(function () {
-          // The importer sets textarea.value programmatically, so no native
-          // input event is guaranteed. Re-read and repaint explicitly.
-          hydratePreview(root, readPanelState(root));
           notify();
           toast('CSS 已导入');
         }).catch(function (err) {
@@ -773,9 +786,6 @@
 
     root.addEventListener('input', function (e) {
       if (!e.target.matches('[data-cab-custom-css]')) return;
-      // Update the preview immediately while typing; the debounce only avoids
-      // excessive full refreshes for the rest of the panel.
-      hydratePreview(root, readPanelState(root));
       clearTimeout(previewTimer);
       previewTimer = setTimeout(notify, 120);
     });

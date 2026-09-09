@@ -257,15 +257,13 @@
       var items = byGroup[g.id] || [];
       if (!items.length) return;
       var collapsed = !!collapsedGroups[g.id];
-      var groupOn = g.enabled !== false;
       var actions = g.fixed ? '' : (
         '<span class="ins-wb-group-head-ops">' +
-        '<button type="button" class="ins-toggle ins-wb-group-toggle' + (groupOn ? ' is-on' : '') + '" data-wb-group-toggle="' + esc(g.id) + '" role="switch" aria-checked="' + groupOn + '" aria-label="启用此世界书"></button>' +
         '<button type="button" class="ins-wb-group-op" data-wb-group-edit="' + esc(g.id) + '" aria-label="重命名">改名</button>' +
         '<button type="button" class="ins-wb-group-op ins-wb-group-op--del" data-wb-group-del="' + esc(g.id) + '" aria-label="删除世界书">删</button>' +
         '</span>'
       );
-      html += '<section class="ins-wb-book' + (groupOn ? '' : ' is-disabled') + (collapsed ? ' is-collapsed' : ' is-open') + '" data-wb-book="' + esc(g.id) + '">' +
+      html += '<section class="ins-wb-book' + (collapsed ? ' is-collapsed' : ' is-open') + '" data-wb-book="' + esc(g.id) + '">' +
         '<div class="ins-wb-book-head">' +
         '<button type="button" class="ins-wb-book-toggle" data-wb-collapse="' + esc(g.id) + '" aria-expanded="' + !collapsed + '">' +
         '<span class="ins-wb-book-arrow">' + (collapsed ? '▸' : '▾') + '</span>' +
@@ -635,7 +633,7 @@
                 collapsedGroups[res.groupId] = false;
                 filterGroupId = 'all';
               }
-              alert('已导入世界书「' + book + '」共 ' + n + ' 条\n该世界书默认未启用，请在世界书标题右侧打开启用开关。');
+              alert('已导入世界书「' + book + '」共 ' + n + ' 条\n可在列表中展开 / 收起切换');
               if (typeof renderList === 'function') renderList();
               else if (typeof refresh === 'function') refresh();
             }).catch(function (err) {
@@ -733,15 +731,6 @@
       if (groupChip && groupChip.hasAttribute('data-wb-group')) {
         filterGroupId = groupChip.getAttribute('data-wb-group') || 'all';
         renderList();
-        return;
-      }
-      var groupToggle = e.target.closest('[data-wb-group-toggle]');
-      if (groupToggle) {
-        e.stopPropagation();
-        var gid2 = groupToggle.getAttribute('data-wb-group-toggle');
-        var group2 = store.getGroup(gid2);
-        if (!group2) return;
-        store.toggleGroupEnabled(gid2, group2.enabled === false).then(renderList);
         return;
       }
       var collapseBtn = e.target.closest('[data-wb-collapse]');
