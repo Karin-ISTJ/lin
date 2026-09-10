@@ -236,20 +236,6 @@
   font-size: 13px;
 }
 
-.qq-page--contacts .soft-topbar {
-  min-height: 48px;
-  align-items: flex-start;
-  padding-top: 2px;
-}
-
-.qq-page--contacts .soft-topbar__title {
-  font-size: 20px;
-  line-height: 1.2;
-}
-
-.qq-page--contacts .soft-topbar__subtitle--inline {
-  margin-top: 1px;
-}
 
 .soft-topbar__meta {
   font-size: 11px;
@@ -1412,6 +1398,7 @@
 .miya-chat-app.theme-soft .qq-page--feed .qq-page__scroll--feed,
 .miya-chat-app.theme-soft .qq-page--contacts .qq-page__scroll,
 .miya-chat-app.theme-soft .qq-page--mine .qq-page__scroll {
+  padding-top: calc(var(--soft-safe-t) + var(--soft-topbar-h) + 40px) !important;
   padding-bottom: calc(var(--soft-safe-b) + var(--soft-tabbar-h) + var(--soft-float-gap) + 24px) !important;
 }
 
