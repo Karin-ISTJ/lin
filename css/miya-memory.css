@@ -1,14 +1,22 @@
-/* 记忆 · 黑白漫画阅览室 */
+/* 记忆 · 暖色刊面（与设置页/全站统一风格） */
 .miya-memory-app {
-  --mm-ink: #f5f5f0;
-  --mm-paper: #0a0a0a;
-  --mm-panel: #111111;
-  --mm-muted: rgba(245, 245, 240, 0.38);
-  --mm-line: rgba(245, 245, 240, 0.9);
-  --mm-line-soft: rgba(245, 245, 240, 0.22);
-  --mm-accent: #ffffff;
-  --mm-display: "Cormorant Garamond", "Noto Serif SC", serif;
-  --mm-ui: "Jost", "Noto Sans SC", sans-serif;
+  /* 与 .miya-settings-app 同一套设计令牌，保证全站观感一致 */
+  --mm-paper: #F5F3EF;
+  --mm-panel: rgba(255, 255, 255, 0.72);
+  --mm-ink: #1A1A1A;
+  --mm-muted: #6B6B6B;
+  --mm-tertiary: #999999;
+  --mm-line: rgba(0, 0, 0, 0.08);
+  --mm-line-soft: rgba(0, 0, 0, 0.04);
+  --mm-accent: #007AFF;
+  --mm-accent-soft: rgba(0, 122, 255, 0.08);
+  --mm-accent-warm: #E85D4C;
+  --mm-card-bg: rgba(255, 255, 255, 0.72);
+  --mm-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --mm-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.03);
+  --mm-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(0, 0, 0, 0.04);
+  --mm-display: "Noto Serif SC", "Cormorant Garamond", serif;
+  --mm-ui: "Noto Serif SC", "Inter", serif;
   position: fixed;
   inset: 0;
   z-index: 500;
@@ -17,6 +25,7 @@
   background: var(--mm-paper);
   color: var(--mm-ink);
   font-family: var(--mm-ui);
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
@@ -29,177 +38,107 @@
   visibility: visible;
 }
 
-/* 网点与氛围 */
+/* 氛围背景：改为暖色柔和光晕（原网点/斜线漫画质感已移除） */
 .mm-veil {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 80% 50% at 12% 0%, rgba(255, 255, 255, 0.07) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 95% 100%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+    radial-gradient(circle at 12% 0%, rgba(0, 122, 255, 0.04) 0%, transparent 70%),
+    radial-gradient(circle at 95% 100%, rgba(232, 93, 76, 0.03) 0%, transparent 60%);
 }
 
-.mm-veil::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0.16;
-  background-image: radial-gradient(circle, #fff 0.55px, transparent 0.55px);
-  background-size: 4px 4px;
-}
-
+.mm-veil::before,
 .mm-veil::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0.04;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 47px,
-    rgba(255, 255, 255, 0.5) 47px,
-    rgba(255, 255, 255, 0.5) 48px
-  );
+  content: none;
 }
 
-.mm-burst {
-  position: absolute;
-  top: 8%;
-  right: -15%;
-  width: 55%;
-  height: 45%;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.12;
-  background: repeating-conic-gradient(
-    from 0deg at 50% 50%,
-    transparent 0deg 8deg,
-    rgba(255, 255, 255, 0.9) 8deg 9deg
-  );
-  transform: rotate(-12deg);
-  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 72%);
-}
-
+/* 原作画装饰（放射线、四角边框、印章）在统一风格下全部隐藏 */
+.mm-burst,
 .mm-frame-corner {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  pointer-events: none;
-  z-index: 3;
-  border-color: var(--mm-line);
-  border-style: solid;
-  opacity: 0.55;
+  display: none;
 }
 
-.mm-frame-corner--tl {
-  top: calc(56px + env(safe-area-inset-top, 0px));
-  left: 8px;
-  border-width: 3px 0 0 3px;
-}
-
-.mm-frame-corner--br {
-  right: 8px;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  border-width: 0 3px 3px 0;
-}
-
-/* 报头 */
+/* 顶部标题栏：对齐设置页的简洁药丸返回键 + 居中标题 */
 .mm-masthead {
   position: relative;
   z-index: 2;
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 44px 1fr auto;
-  align-items: end;
-  gap: 10px;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 12px;
-  border-bottom: 3px solid var(--mm-line);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 0;
 }
 
 .mm-masthead::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -8px;
-  height: 8px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--mm-line) 0 5px,
-    transparent 5px 9px
-  );
-  opacity: 0.3;
+  content: none;
 }
 
+/* 返回键：与设置页同款圆角药丸造型 */
 .mm-back {
-  width: 40px;
-  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
   align-self: center;
-  border: 2px solid var(--mm-line);
-  background: transparent;
+  padding: 0;
+  border: 1px solid var(--mm-line);
+  border-radius: 14px;
+  background: var(--mm-card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--mm-shadow-sm);
   color: var(--mm-ink);
-  font-size: 18px;
+  font-size: 17px;
+  line-height: 1;
   cursor: pointer;
-  transform: skewX(-8deg);
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mm-back:active {
-  transform: skewX(-8deg) scale(0.9);
+  transform: scale(0.97);
 }
 
 .mm-masthead__copy {
+  flex: 1;
   min-width: 0;
-  padding-bottom: 2px;
+  text-align: center;
 }
 
+/* 小字标签在统一风格下不再展示（保留节点，避免影响 JS） */
 .mm-kicker {
-  display: block;
-  font-size: 8px;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--mm-muted);
-  margin-bottom: 3px;
+  display: none;
 }
 
 .mm-title {
   margin: 0;
   font-family: var(--mm-display);
-  font-size: clamp(21px, 5.2vw, 27px);
+  font-size: 16px;
   font-weight: 500;
-  letter-spacing: 0.14em;
-  line-height: 1;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--mm-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* 印章与卷号：不再展示，仅保留等宽槽位维持标题居中 */
 .mm-masthead__badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding-bottom: 4px;
+  display: block;
+  width: 38px;
+  flex-shrink: 0;
 }
 
-.mm-masthead__stamp {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 2px solid var(--mm-line);
-  border-radius: 50%;
-  font-family: var(--mm-display);
-  font-size: 18px;
-  transform: rotate(-12deg);
-  box-shadow: inset 0 0 0 2px var(--mm-paper), inset 0 0 0 4px var(--mm-line-soft);
-}
-
+.mm-masthead__stamp,
 .mm-masthead__vol {
-  font-size: 7px;
-  letter-spacing: 0.22em;
-  color: var(--mm-muted);
+  display: none;
 }
 
 /* 主体 · 上栏角色横滑 + 下栏详情纵滑 */
@@ -224,15 +163,12 @@
   max-width: 100%;
   overflow: hidden;
   border-right: none;
-  border-bottom: 3px solid var(--mm-line);
+  border-bottom: 1px solid var(--mm-line);
 }
 
+/* 标题栏已展示页面名，这里的小字标签重复，隐藏 */
 .miya-memory-app .mm-index__spine {
-  flex-shrink: 0;
-  width: 100%;
-  height: 24px;
-  border-right: none;
-  border-bottom: 1px solid var(--mm-line-soft);
+  display: none;
 }
 
 .miya-memory-app .mm-index__spine-text {
@@ -372,27 +308,12 @@
   position: relative;
   display: flex;
   min-height: 0;
-  border-right: 3px solid var(--mm-line);
-  background:
-    linear-gradient(165deg, rgba(255, 255, 255, 0.03) 0%, transparent 40%),
-    #0e0e0e;
+  border-right: none;
+  background: transparent;
 }
 
 .mm-index::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: -1px;
-  bottom: 0;
-  width: 12px;
-  background: repeating-linear-gradient(
-    -55deg,
-    transparent,
-    transparent 4px,
-    rgba(245, 245, 240, 0.06) 4px,
-    rgba(245, 245, 240, 0.06) 5px
-  );
-  pointer-events: none;
+  content: none;
 }
 
 .mm-index__spine {
@@ -402,7 +323,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: transparent;
 }
 
 .mm-index__spine-text {
@@ -438,68 +359,41 @@
   display: block;
   width: 100%;
   text-align: left;
-  border: none;
-  background: var(--mm-panel);
+  border: 1px solid var(--mm-line);
+  border-radius: 16px;
+  background: var(--mm-card-bg);
+  box-shadow: var(--mm-shadow-sm);
   color: inherit;
   cursor: pointer;
-  padding: 10px 10px 10px 28px;
+  padding: 12px 14px;
   margin-bottom: 10px;
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  box-shadow:
-    inset 0 0 0 2px var(--mm-line-soft),
-    3px 3px 0 rgba(0, 0, 0, 0.6);
-  transform: rotate(var(--mm-tilt, -0.8deg));
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
-.mm-ticket:nth-child(even) { --mm-tilt: 0.7deg; }
-.mm-ticket:nth-child(3n) { --mm-tilt: -1.2deg; }
-
-.mm-ticket::before {
-  content: attr(data-mm-idx);
-  position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-family: var(--mm-display);
-  font-size: 20px;
-  font-weight: 300;
-  color: rgba(245, 245, 240, 0.12);
-  line-height: 1;
-}
-
+.mm-ticket::before,
 .mm-ticket::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--mm-line-soft);
+  content: none;
 }
 
 .mm-ticket.is-active {
-  box-shadow:
-    inset 0 0 0 2px var(--mm-line),
-    4px 4px 0 var(--mm-accent);
-  transform: rotate(0deg) translateX(4px);
-}
-
-.mm-ticket.is-active::after {
-  background: var(--mm-accent);
+  border-color: var(--mm-accent);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--mm-shadow-md);
 }
 
 .mm-ticket:active {
-  transform: rotate(0deg) scale(0.97);
+  transform: scale(0.98);
 }
 
 .mm-ticket__name {
   display: block;
   font-family: var(--mm-display);
   font-size: 15px;
-  letter-spacing: 0.06em;
-  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
   margin-bottom: 4px;
+  color: var(--mm-ink);
 }
 
 .mm-ticket__meta {
@@ -513,13 +407,15 @@
 
 .mm-ticket__chip {
   font-style: normal;
-  border: 1px solid var(--mm-line-soft);
-  padding: 1px 5px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.045);
+  padding: 2px 6px;
 }
 
 .mm-ticket__chip--mega {
-  border-color: var(--mm-line);
-  color: var(--mm-ink);
+  background: var(--mm-accent-soft);
+  color: var(--mm-accent);
 }
 
 /* 详情区 */
@@ -528,14 +424,7 @@
   min-height: 0;
   overflow: hidden;
   overflow-x: hidden;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 39px,
-      rgba(245, 245, 240, 0.03) 39px,
-      rgba(245, 245, 240, 0.03) 40px
-    );
+  background: transparent;
 }
 
 .mm-archive__inner {
@@ -564,13 +453,7 @@
 }
 
 .mm-void::before {
-  content: "—";
-  display: block;
-  font-family: var(--mm-display);
-  font-size: 48px;
-  color: rgba(245, 245, 240, 0.08);
-  margin-bottom: 12px;
-  letter-spacing: 0.2em;
+  content: none;
 }
 
 .mm-empty {
@@ -578,52 +461,33 @@
   padding: 16px 8px;
   text-align: center;
   font-size: 12px;
-  letter-spacing: 0.1em;
   color: var(--mm-muted);
-  border: 1px dashed var(--mm-line-soft);
+  border: none;
 }
 
 /* 角色报头 */
 .mm-hero {
   position: relative;
-  margin-bottom: 20px;
-  padding: 16px 14px 14px 18px;
-  border: 2px solid var(--mm-line);
-  background: var(--mm-panel);
-  transform: skewX(-1.5deg);
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid var(--mm-line);
+  border-radius: 20px;
+  background: var(--mm-card-bg);
+  box-shadow: var(--mm-shadow-md);
 }
 
 .mm-hero::before,
 .mm-hero::after {
-  content: "";
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--mm-line);
-}
-
-.mm-hero::before {
-  top: -6px;
-  left: -6px;
-  border-right: none;
-  border-bottom: none;
-}
-
-.mm-hero::after {
-  bottom: -6px;
-  right: -6px;
-  border-left: none;
-  border-top: none;
+  content: none;
 }
 
 .mm-hero__name {
   margin: 0 0 8px;
   font-family: var(--mm-display);
-  font-size: clamp(24px, 6vw, 32px);
-  font-weight: 400;
-  letter-spacing: 0.1em;
-  line-height: 1.05;
-  transform: skewX(1.5deg);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
 }
 
 .mm-hero__stats {
@@ -650,23 +514,24 @@
 /* 生成控制台 */
 .mm-console {
   position: relative;
-  margin-bottom: 24px;
-  padding: 14px 12px 12px;
-  border: 2px solid var(--mm-line);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 100%),
-    #0d0d0d;
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid var(--mm-line);
+  border-radius: 20px;
+  background: var(--mm-card-bg);
+  box-shadow: var(--mm-shadow-md);
 }
 
 .mm-console__label {
-  position: absolute;
-  top: -10px;
-  left: 12px;
-  padding: 0 8px;
-  background: var(--mm-paper);
-  font-size: 9px;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
+  display: block;
+  margin-bottom: 10px;
+  padding: 0;
+  background: transparent;
+  color: var(--mm-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .mm-console__row {
@@ -679,26 +544,29 @@
 .mm-console__field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0;
   color: var(--mm-muted);
 }
 
 .mm-console__field input {
-  width: 72px;
-  border: none;
-  border-bottom: 2px solid var(--mm-line-soft);
-  background: transparent;
+  width: 76px;
+  border: 1px solid var(--mm-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
   color: var(--mm-ink);
   font-family: var(--mm-ui);
-  font-size: 16px;
-  padding: 4px 2px;
+  font-size: 15px;
+  padding: 7px 10px;
   outline: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .mm-console__field input:focus {
-  border-bottom-color: var(--mm-accent);
+  border-color: var(--mm-accent);
+  box-shadow: 0 0 0 3px var(--mm-accent-soft);
 }
 
 .mm-console__field--wide input {
@@ -711,25 +579,26 @@
 }
 
 .mm-console__hint {
-  margin: 10px 0 0;
-  font-size: 10px;
+  margin: 12px 0 0;
+  font-size: 12px;
   line-height: 1.65;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   color: var(--mm-muted);
 }
 
 .mm-ticket__chip--auto {
-  border-color: var(--mm-accent);
-  color: var(--mm-ink);
+  background: var(--mm-accent-soft);
+  color: var(--mm-accent);
 }
 
 .mm-ticket__chip--char {
-  border-style: dashed;
+  background: rgba(232, 93, 76, 0.08);
+  color: var(--mm-accent-warm);
 }
 
 .mm-clip--char {
-  border: 2px solid var(--mm-line-soft);
-  border-left: 4px solid rgba(180, 220, 255, 0.55);
+  border: 1px solid var(--mm-line);
+  border-left: 3px solid var(--mm-accent);
   width: 100%;
   max-width: 100%;
   margin-left: 0 !important;
@@ -757,20 +626,7 @@
 }
 
 .mm-clip--char::before {
-  content: "忆";
-  position: absolute;
-  top: -10px;
-  left: 12px;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--mm-display);
-  font-size: 11px;
-  border: 2px solid var(--mm-line-soft);
-  border-radius: 50%;
-  background: var(--mm-paper);
+  content: none;
 }
 
 .mm-console__actions {
@@ -781,26 +637,31 @@
 }
 
 .mm-btn {
-  border: 2px solid var(--mm-line);
-  background: transparent;
+  border: 1px solid var(--mm-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
   color: var(--mm-ink);
   font-family: var(--mm-ui);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 9px 16px;
   cursor: pointer;
-  transform: skewX(-5deg);
   white-space: nowrap;
+  box-shadow: var(--mm-shadow-sm);
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mm-btn--fill {
   background: var(--mm-accent);
-  color: var(--mm-paper);
+  color: #fff;
   border-color: var(--mm-accent);
 }
 
 .mm-btn:active {
-  transform: skewX(-5deg) scale(0.94);
+  transform: scale(0.97);
 }
 
 /* 分镜区块 */
@@ -811,17 +672,17 @@
 .mm-chapter__head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding-bottom: 6px;
-  border-bottom: 1px dashed var(--mm-line-soft);
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 2px;
+  border-bottom: none;
 }
 
 .mm-chapter__no {
   font-family: var(--mm-display);
-  font-size: 28px;
-  font-weight: 300;
-  color: rgba(245, 245, 240, 0.15);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mm-accent);
   line-height: 1;
 }
 
@@ -829,15 +690,16 @@
   margin: 0;
   font-family: var(--mm-display);
   font-size: 14px;
-  letter-spacing: 0.2em;
-  font-weight: 400;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--mm-ink);
 }
 
 .mm-chapter__sub {
   margin-left: auto;
-  font-size: 9px;
-  letter-spacing: 0.16em;
-  color: var(--mm-muted);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--mm-tertiary);
 }
 
 /* 锯齿时间轴 */
@@ -849,50 +711,37 @@
 
 .mm-clip {
   position: relative;
-  width: calc(100% - 8px);
-  margin-bottom: 16px;
-  padding: 12px 12px 14px;
-  border: 2px solid var(--mm-line-soft);
-  background: var(--mm-panel);
-  transform: rotate(var(--mm-clip-rot, 0deg));
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid var(--mm-line);
+  border-radius: 18px;
+  background: var(--mm-card-bg);
+  box-shadow: var(--mm-shadow-sm);
 }
 
-.mm-clip:nth-child(odd) {
-  --mm-clip-rot: -0.5deg;
-  margin-right: auto;
-  margin-left: 0;
-  border-left-width: 4px;
-  border-left-color: var(--mm-line);
-}
-
+.mm-clip:nth-child(odd),
 .mm-clip:nth-child(even) {
-  --mm-clip-rot: 0.6deg;
-  margin-left: auto;
-  margin-right: 0;
-  border-right-width: 4px;
-  border-right-color: var(--mm-line);
-  text-align: right;
-}
-
-.mm-clip:nth-child(even) .mm-clip__head {
-  flex-direction: row-reverse;
-}
-
-.mm-clip--mega {
-  border: 3px double var(--mm-line);
-  background:
-  repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 6px,
-    rgba(255, 255, 255, 0.02) 6px,
-    rgba(255, 255, 255, 0.02) 7px
-  ),
-  #141414;
   width: 100%;
   margin-left: 0;
   margin-right: 0;
-  transform: none;
+  border-width: 1px;
+  border-color: var(--mm-line);
+  text-align: left;
+}
+
+.mm-clip:nth-child(even) .mm-clip__head {
+  flex-direction: row;
+}
+
+/* 重点片段：淡蓝底区分，保留强调但不做双线边框+斜纹 */
+.mm-clip--mega {
+  border: 1px solid rgba(0, 122, 255, 0.22);
+  background: var(--mm-accent-soft);
+  box-shadow: var(--mm-shadow-md);
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
   text-align: left;
 }
 
@@ -901,32 +750,16 @@
 }
 
 .mm-clip--mega::before {
-  content: "★";
-  position: absolute;
-  top: -12px;
-  right: 12px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  border: 2px solid var(--mm-line);
-  border-radius: 50%;
-  background: var(--mm-paper);
-  transform: rotate(15deg);
+  content: none;
 }
 
 .mm-clip__connector {
   display: block;
   width: 2px;
-  height: 12px;
-  margin: -4px auto 4px;
-  background: repeating-linear-gradient(
-    180deg,
-    var(--mm-line-soft) 0 3px,
-    transparent 3px 6px
-  );
+  height: 10px;
+  margin: -2px auto 2px;
+  background: var(--mm-line);
+  opacity: 0.5;
 }
 
 .mm-clip__head {
@@ -935,14 +768,16 @@
   flex-wrap: wrap;
   gap: 6px 8px;
   margin-bottom: 10px;
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--mm-muted);
 }
 
 .mm-clip__head strong {
   font-family: var(--mm-display);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--mm-ink);
   flex: 1;
   min-width: 0;
 }
@@ -956,24 +791,26 @@
 
 .mm-clip__edit,
 .mm-clip__del {
-  border: 1px solid var(--mm-line-soft);
-  background: transparent;
+  border: 1px solid var(--mm-line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.8);
   color: var(--mm-muted);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  padding: 3px 8px;
+  font-size: 11px;
+  letter-spacing: 0;
+  padding: 4px 10px;
   cursor: pointer;
-  transform: skewX(-4deg);
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .mm-clip__edit:hover {
-  border-color: var(--mm-line);
-  color: var(--mm-ink);
+  border-color: var(--mm-accent);
+  color: var(--mm-accent);
 }
 
 .mm-clip__del {
-  border-color: rgba(255, 120, 120, 0.45);
-  color: rgba(255, 160, 160, 0.9);
+  border-color: rgba(232, 93, 76, 0.3);
+  color: var(--mm-accent-warm);
 }
 
 .mm-clip__edit-wrap {
@@ -986,20 +823,22 @@
   width: 100%;
   min-height: 120px;
   box-sizing: border-box;
-  border: 2px solid var(--mm-line-soft);
-  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--mm-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
   color: var(--mm-ink);
   font-family: var(--mm-ui);
   font-size: 13px;
   line-height: 1.6;
-  letter-spacing: 0.02em;
-  padding: 10px;
+  letter-spacing: 0;
+  padding: 12px;
   resize: vertical;
   outline: none;
 }
 
 .mm-clip__textarea:focus {
   border-color: var(--mm-accent);
+  box-shadow: 0 0 0 3px var(--mm-accent-soft);
 }
 
 .mm-clip__edit-actions {
@@ -1011,37 +850,42 @@
 
 .mm-clip__body {
   font-size: 13px;
-  line-height: 1.65;
-  color: rgba(245, 245, 240, 0.88);
-  letter-spacing: 0.02em;
+  line-height: 1.7;
+  color: #3A3A3A;
+  letter-spacing: 0;
 }
 
 .mm-tag {
   font-style: normal;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  border: 1px dashed var(--mm-line-soft);
-  padding: 2px 6px;
+  font-size: 11px;
+  letter-spacing: 0;
+  border: none;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.045);
+  padding: 3px 8px;
   color: var(--mm-muted);
 }
 
 /* Toast */
 .mm-toast {
   position: fixed;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
   left: 50%;
-  transform: translateX(-50%) skewX(-4deg);
-  background: var(--mm-accent);
-  color: var(--mm-paper);
+  transform: translateX(-50%);
+  background: rgba(26, 26, 26, 0.92);
+  color: #fff;
   padding: 10px 20px;
-  border: 2px solid var(--mm-line);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  border: none;
+  border-radius: 14px;
+  font-size: 13px;
+  letter-spacing: 0;
   opacity: 0;
   transition: opacity 0.22s ease;
   z-index: 600;
   pointer-events: none;
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: var(--mm-shadow-lg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .mm-toast.is-show {
