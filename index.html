@@ -884,6 +884,22 @@
       <div class="ins-vault-panel" id="miya-st-panel-chat" data-panel-title="对话">
         <div class="st-form">
           <section class="st-form-section">
+            <h4 class="st-form-section__title">接口预设</h4>
+            <div class="st-form-card ins-form-block">
+              <label class="ins-field-label" for="miya-st-preset-pick">载入预设</label>
+              <div class="ins-inline-field">
+                <select class="ins-select" id="miya-st-preset-pick"><option value="">选择已存预设</option></select>
+                <button type="button" class="ins-icon-btn" id="miya-st-preset-delete" title="删除预设">×</button>
+              </div>
+              <label class="ins-field-label" for="miya-st-preset-name">预设名称</label>
+              <div class="ins-inline-field">
+                <input type="text" class="ins-text-input" id="miya-st-preset-name" placeholder="例如：备用线路" maxlength="64">
+                <button type="button" class="ins-icon-btn" id="miya-st-preset-save" title="保存预设">✓</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="st-form-section">
             <h4 class="st-form-section__title">主线路</h4>
             <div class="st-form-card ins-form-block">
               <label class="ins-field-label" for="miya-st-chat-base">网关地址</label>
@@ -917,22 +933,6 @@
               <div class="st-toggle-in-form">
                 <strong>主线路失败时自动切换副线路</strong>
                 <button type="button" class="ins-toggle" id="miya-st-chat-fallback" role="switch" aria-checked="false"></button>
-              </div>
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">接口预设</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-preset-name">预设名称</label>
-              <div class="ins-inline-field">
-                <input type="text" class="ins-text-input" id="miya-st-preset-name" placeholder="例如：备用线路" maxlength="64">
-                <button type="button" class="ins-icon-btn" id="miya-st-preset-save" title="保存预设">✓</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-preset-pick">载入预设</label>
-              <div class="ins-inline-field">
-                <select class="ins-select" id="miya-st-preset-pick"><option value="">选择已存预设</option></select>
-                <button type="button" class="ins-icon-btn" id="miya-st-preset-delete" title="删除预设">×</button>
               </div>
             </div>
           </section>
