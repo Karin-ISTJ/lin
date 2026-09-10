@@ -57,11 +57,7 @@
       if (!key || data[key] == null) return;
       el.textContent = String(data[key]);
     });
-
-    var statusImg = $('soft-status-avatar-img');
-    if (statusImg && data.statusAvatar) {
-      statusImg.src = data.statusAvatar;
-    }
+    /* 我的状态卡片已移除，不再恢复状态头像 */
   }
 
   function commitSoftEditEl(el) {
@@ -69,14 +65,6 @@
     var key = el.getAttribute('data-soft-edit');
     if (!key) return;
     var raw = String(el.textContent || '').replace(/\u00a0/g, ' ').trim();
-    if (key === 'status') {
-      if (!raw) {
-        raw = '在想你';
-        el.textContent = raw;
-      }
-      saveSoftUi({ status: raw.slice(0, 40) });
-      return;
-    }
     if (key === 'bio') {
       if (!raw) {
         raw = '记录日常，保留质感';
@@ -85,14 +73,7 @@
       saveSoftUi({ bio: raw.slice(0, 80) });
       return;
     }
-    if (key === 'following' || key === 'fans' || key === 'likes') {
-      var num = raw.replace(/[^\d]/g, '');
-      if (!num) num = '0';
-      el.textContent = num;
-      var patch = {};
-      patch[key] = num;
-      saveSoftUi(patch);
-    }
+    /* status / following / fans / likes 对应的编辑区已随卡片移除 */
   }
 
   function bindSoftMineInlineEdit() {
@@ -126,29 +107,7 @@
       }
     });
 
-    var avaBtn = app.querySelector('[data-soft-status-ava]');
-    var avaFile = $('soft-status-avatar-file');
-    if (avaBtn && avaFile && !avaFile.dataset.bound) {
-      avaFile.dataset.bound = '1';
-      avaBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        avaFile.click();
-      });
-      avaFile.addEventListener('change', function () {
-        var file = avaFile.files && avaFile.files[0];
-        avaFile.value = '';
-        if (!file || !/^image\//i.test(file.type)) return;
-        var reader = new FileReader();
-        reader.onload = function () {
-          var url = String(reader.result || '');
-          if (!url) return;
-          saveSoftUi({ statusAvatar: url });
-          var img = $('soft-status-avatar-img');
-          if (img) img.src = url;
-        };
-        reader.readAsDataURL(file);
-      });
-    }
+    /* 我的状态卡片已移除：状态头像上传绑定一并删除 */
   }
 
   function $(id) { return document.getElementById(id); }
