@@ -229,10 +229,10 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   box-sizing: border-box;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px;
   /* 不透明底色：下方渐变区域若用 rgba 半透明，背后的内容（旧聊天顶栏 / 滚动中的正文）
      会被 backdrop-filter 采样后透出来，看起来像顶栏串页。 */
   background: var(--st-bg);
@@ -300,7 +300,7 @@
   max-width: none;
   margin: 0;
   overflow-x: hidden;
-  padding: 0 20px calc(40px + env(safe-area-inset-bottom, 0px));
+  padding: 0 12px calc(16px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -323,10 +323,10 @@
   letter-spacing: 2.5px;
   text-transform: uppercase;
   color: var(--st-text-tertiary);
-  margin: 28px 0 10px;
+  margin: 12px 0 6px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -343,9 +343,9 @@
 
 .mi-set-page .st-form-card {
   background: rgba(255, 255, 255, 0.96);
-  border-radius: 20px;
-  padding: 18px 16px;
-  margin-bottom: 12px;
+  border-radius: 14px;
+  padding: 12px 12px;
+  margin-bottom: 8px;
   border: 1px solid var(--st-border);
   box-shadow: var(--st-shadow-md);
   max-width: none;
@@ -559,18 +559,18 @@
 
 .mi-set-page .st-card {
   background: var(--st-card-bg);
-  border-radius: 20px;
-  padding: 4px 12px;
-  margin-bottom: 12px;
+  border-radius: 14px;
+  padding: 2px 8px;
+  margin-bottom: 8px;
   border: 1px solid var(--st-border);
   box-shadow: var(--st-shadow-md);
 }
-.mi-set-page .st-set-search-card { padding: 8px 12px; }
+.mi-set-page .st-set-search-card { padding: 6px 10px; }
 .mi-set-page .st-card-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 6px;
+  padding: 10px 4px;
   position: relative;
   border: none;
   background: transparent;
@@ -642,34 +642,34 @@
 .mi-set-page .mi-set-action-row--warn .st-card-label { color: var(--st-accent-warm); }
 
 .mi-set-page .st-footer {
-  margin-top: 28px;
+  margin-top: 12px;
   text-align: center;
-  padding-bottom: 8px;
+  padding-bottom: 4px;
 }
 .mi-set-page .st-footer-brand {
   font-family: 'Playfair Display', serif;
-  font-size: 14px;
+  font-size: 12px;
   font-style: italic;
   color: var(--st-text-muted);
   letter-spacing: 1px;
 }
 .mi-set-page .st-footer-version {
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--st-text-muted);
-  margin-top: 6px;
+  margin-top: 2px;
   letter-spacing: 1px;
 }
 
 .mi-set-flow {
   position: relative;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
-/* ── 分区折叠 ── */
+/* ── 分区折叠（紧凑布局：一屏尽量看全所有栏） ── */
 .mi-set-zone {
-  margin: 10px 0 14px;
-  border-radius: 18px;
+  margin: 3px 0 4px;
+  border-radius: 12px;
   border: 1px solid var(--st-border);
   background: rgba(255, 255, 255, 0.55);
   box-shadow: var(--st-shadow-sm);
@@ -678,10 +678,10 @@
 .mi-set-zone__head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   box-sizing: border-box;
-  padding: 14px 16px;
+  padding: 8px 12px;
   border: none;
   background: rgba(255, 255, 255, 0.92);
   cursor: pointer;
@@ -696,42 +696,45 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 .mi-set-zone__title {
   font-family: 'Noto Serif SC', serif;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.15px;
   color: var(--st-text-primary);
+  line-height: 1.25;
 }
 .mi-set-zone__hint {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 10px;
+  line-height: 1.3;
   color: var(--st-text-tertiary);
 }
 .mi-set-zone__chev {
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
   color: var(--st-text-muted);
   transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .mi-set-zone.is-open .mi-set-zone__chev { transform: rotate(90deg); }
 .mi-set-zone__body {
-  padding: 2px 10px 12px;
+  padding: 2px 8px 8px;
   border-top: 1px solid var(--st-border);
 }
 .mi-set-zone__body[hidden] { display: none !important; }
 
 .mi-set-sub {
-  margin-top: 10px;
+  margin-top: 6px;
 }
-.mi-set-sub:first-child { margin-top: 8px; }
+.mi-set-sub:first-child { margin-top: 4px; }
 .mi-set-sub__head {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 4px 6px;
+  gap: 1px;
+  padding: 0 2px 4px;
 }
 .mi-set-sub__title {
   font-family: 'Inter', sans-serif;
@@ -748,13 +751,13 @@
 }
 .mi-set-zone .st-form-card {
   margin-bottom: 0;
-  padding: 14px 12px;
-  border-radius: 14px;
+  padding: 10px 10px;
+  border-radius: 12px;
   box-shadow: none;
   border-color: var(--st-border);
   background: rgba(255, 255, 255, 0.96);
 }
-.mi-set-zone .st-form-card.mi-set-bf-card { padding: 12px 10px; }
+.mi-set-zone .st-form-card.mi-set-bf-card { padding: 8px 8px; }
 .mi-set-zone .mi-wb-sort-panel {
   border-radius: 14px;
   border: 1px solid var(--st-border);
