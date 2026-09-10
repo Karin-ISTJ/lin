@@ -798,7 +798,23 @@
         /*
          * ST 最终执行层：必须是所有 system 规则里的最后一层，紧贴本轮 user。
          * 这样即使世界书存在后置注入，也不能把 ST COT/身份/环境规则隔开。
+         *
+         * 这里必须真正把 ST 预设原文送进请求：ST 的工作流是
+         * 「先读提示词与预设 → 生成思维链 CoT → 再输出正文」，
+         * 因此启用条目的身份 / 环境 / 世界观 / 人称 / 格式等规则
+         * 必须出现在思维链开始之前、且尽量贴近生成点。
+         * 否则模型会另起一套默认角色设定，表现为
+         * 「思维链里全是默认内容，没有我导入的预设身份」。
+         * 原先 buildStCotPromptBlock() 只定义与导出、从未被调用，属于断链，此处补上。
          */
+        if (stEngine && typeof stEngine.buildStCotPromptBlock === 'function') {
+            try {
+                var stCotBlock = String(stEngine.buildStCotPromptBlock() || '').trim();
+                if (stCotBlock) {
+                    apiMessages.push({ role: 'system', content: stCotBlock });
+                }
+            } catch (eStCot) {}
+        }
         if (htmlMode && hpApiEarly) {
             apiMessages.push({
                 role: 'system',

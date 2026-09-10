@@ -1334,7 +1334,17 @@
                 if (!body) return;
                 var name = String(entry && (entry.name || entry.identifier) || '').trim();
                 var id = String(entry && entry.identifier || '').trim();
-                var position = entry && entry.position === 'back' ? '后置' : '前置';
+                /*
+                 * 位置标签兼容两套语义：
+                 * - 旧版 UI 的 front / back；
+                 * - ST 原生 position='in_chat' 或 injection_position=1。
+                 * store 现在统一产出 relative / in_chat，
+                 * 只判断 'back' 会把所有后置条目误标成「前置」。
+                 */
+                var posRaw = String(entry && entry.position || '').toLowerCase();
+                var isBack = posRaw === 'back' || posRaw === 'in_chat' || posRaw === 'in-chat' ||
+                    Number(entry && entry.injection_position) === 1;
+                var position = isBack ? '后置' : '前置';
                 rows.push({
                     name: name || id || '未命名 ST 条目',
                     identifier: id,
@@ -3120,6 +3130,25 @@
             appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
         }
         appendChronicleBeforeOperationRulesMessage(apiMessages, contact, opts);
+        /*
+         * ST 最终执行层（线上）：把启用中的 ST 预设条目原文送到生成前最近位置。
+         *
+         * ST 的工作流是「先读提示词与预设 → 生成思维链 CoT → 再输出正文」，
+         * 所以身份 / 环境 / 世界观 / 人称 / 格式等规则必须出现在思维链开始之前，
+         * 否则模型会另起一套默认角色设定，表现为「思维链里没有预设身份」。
+         *
+         * 位置取在所有世界书后置与编年史之后、【生成前最后确认】之前：
+         * 既贴近生成点拿到强注意力，又不会打断「最后确认」紧贴末尾的衔接语义。
+         * 原先 buildStCotPromptBlock() 只定义与导出、从未被调用，属于断链，此处补上。
+         */
+        if (!opts.callMode) {
+            try {
+                var stCotBlockOnline = String(buildStCotPromptBlock() || '').trim();
+                if (stCotBlockOnline) {
+                    apiMessages.push({ role: 'system', content: stCotBlockOnline });
+                }
+            } catch (eStCotOnline) {}
+        }
         if (
             historyTailState === 'assistant_spoke_last' &&
             !opts.callMode &&
