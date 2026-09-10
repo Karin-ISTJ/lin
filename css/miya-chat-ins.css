@@ -793,6 +793,8 @@
 .soft-quick-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  /* 固定行高，让卡片内的图标+文字能在卡片中心垂直居中 */
+  grid-auto-rows: 78px;
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -801,8 +803,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* 撑满网格行高并整体垂直居中：此前卡片高度随内容收缩，图标+文字整体偏上约 8px */
+  justify-content: center;
+  height: 100%;
   gap: 7px;
   padding: 12px 4px;
+  box-sizing: border-box;
   border: none;
   border-radius: var(--soft-r);
   background: var(--soft-surface-2);
@@ -820,14 +826,17 @@
   display: grid;
   place-items: center;
   color: var(--soft-ink);
+  flex: none;
 }
 
-.soft-quick-card__icon svg { width: 17px; height: 17px; stroke-width: 1.4; }
+.soft-quick-card__icon svg { display: block; width: 17px; height: 17px; stroke-width: 1.4; }
 
 .soft-quick-card__label {
   font-size: 11px;
   font-weight: 300;
   text-align: center;
+  /* 固定行高，避免 CJK 文字在 normal 行高下行盒虚高、字形不下沉居中 */
+  line-height: 1.2;
 }
 
 .soft-section-head {

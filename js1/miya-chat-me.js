@@ -337,7 +337,8 @@
     var del = !!(data && data.deleteMode);
     stackEl.classList.toggle('mi-me--emo-delete', del);
     /* 右上角关闭键已删除，表情管理模式改由左上角返回键退出 */
-    setHead(del ? '删除' : '表情', del ? '点击 × 快速删除' : '表情包');
+    /* 标题栏只保留字数最少的那个：只填大标题，小字副标题留空 */
+    setHead('', del ? '删除' : '表情');
   }
 
   function toggleExpandedGroup(gid) {
@@ -1009,7 +1010,8 @@
   }
 
   function renderDressEmojiHub() {
-    setHead('我的', '装扮与表情');
+    /* 标题栏只保留字数最少的那个：只填大标题，小字副标题留空 */
+    setHead('', '我的');
     return '<div class="mi-me-flow mi-dress-hub">' +
       '<p class="mi-me-lead">软件外观、表情包与心声模版</p>' +
       '<button type="button" class="mi-dress-hub__item" data-mq-dress-hub="dress">' +
@@ -1051,7 +1053,8 @@
   function renderDressUp() {
     var cabMod = global.MiyaChatAppBeautify;
     var bfMod = global.MiyaChatBeautify;
-    setHead('个性装扮', '聊天 App 四屏美化');
+    /* 标题栏只保留字数最少的那个：只填大标题，小字副标题留空 */
+    setHead('', '个性装扮');
     if (!cabMod) {
       return '<div class="mi-me-flow"><p class="mi-empty-hint">美化模块未加载，请刷新页面</p></div>';
     }
