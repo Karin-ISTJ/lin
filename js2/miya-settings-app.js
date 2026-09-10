@@ -1376,6 +1376,22 @@
       panel.scrollTop = 0;
     }
     setTopTitle(panel ? panel.getAttribute('data-panel-title') || '设置' : '设置');
+    syncTopbarSaveButton(panelId);
+  }
+
+  /* 顶栏右侧保存按钮：只在下面这四个 API 面板里出现。
+     面板本身是滚动容器，原来保存按钮在表单最末尾，得一路滚到底才能点。 */
+  var TOPBAR_SAVE_PANELS = {
+    'miya-st-panel-chat': 1,
+    'miya-st-panel-cstore': 1,
+    'miya-st-panel-imagegen': 1,
+    'miya-st-panel-voice': 1
+  };
+
+  function syncTopbarSaveButton(panelId) {
+    var btn = $('miya-st-panel-save');
+    if (!btn) return;
+    btn.hidden = !(panelId && TOPBAR_SAVE_PANELS[panelId]);
   }
 
   function showMainList() {
@@ -1388,6 +1404,7 @@
         p.classList.remove('is-active', 'is-leaving');
       });
       setTopTitle('设置');
+      syncTopbarSaveButton(null);
       return;
     }
     panelClosing = true;
@@ -1399,6 +1416,7 @@
     var main = $('miya-st-main');
     if (main) main.scrollTop = mainListScrollPos;
     setTopTitle('设置');
+    syncTopbarSaveButton(null);
     panelClosing = false;
     if (active && active.id === 'miya-st-panel-chat') scheduleChatApiPanelPrepare();
   }
@@ -2111,6 +2129,24 @@
     if (el) el.addEventListener('click', fn);
   }
 
+  /* ── 三个 API 面板的保存动作（顶栏保存按钮与原底部按钮共用） ── */
+  function saveChatApiPanel() {
+    setApiConfig(Object.assign({}, getApiConfig(), readChatApiSavePayload()));
+    toast('已保存');
+  }
+
+  function saveCstoreApiPanel() {
+    setApiConfig(Object.assign({}, getApiConfig(), readCstoreApiForm()));
+    toast('已保存便利店 API');
+  }
+
+  function saveVoiceApiPanel() {
+    var prev = getApiConfig();
+    var prevMm = prev.minimaxTts && typeof prev.minimaxTts === 'object' ? prev.minimaxTts : {};
+    setApiConfig(Object.assign({}, prev, { minimaxTts: Object.assign({}, prevMm, readMinimaxForm()) }));
+    toast('已保存');
+  }
+
 
   function renderGithubPluginList() {
     var box = $('miya-st-plugin-list');
@@ -2461,23 +2497,24 @@
       }).catch(function () { toast('连接失败'); });
     });
 
-    onClick('miya-st-chat-save', function () {
-      setApiConfig(Object.assign({}, getApiConfig(), readChatApiSavePayload()));
-      toast('已保存');
-    });
-    var cstoreSaveBtn = $('miya-st-cstore-save');
-    if (cstoreSaveBtn) {
-      cstoreSaveBtn.addEventListener('click', function () {
-        setApiConfig(Object.assign({}, getApiConfig(), readCstoreApiForm()));
-        toast('已保存便利店 API');
-      });
-    }
+    onClick('miya-st-chat-save', saveChatApiPanel);
+    onClick('miya-st-cstore-save', saveCstoreApiPanel);
+    onClick('miya-st-mm-save', saveVoiceApiPanel);
 
-    onClick('miya-st-mm-save', function () {
-      var prev = getApiConfig();
-      var prevMm = prev.minimaxTts && typeof prev.minimaxTts === 'object' ? prev.minimaxTts : {};
-      setApiConfig(Object.assign({}, prev, { minimaxTts: Object.assign({}, prevMm, readMinimaxForm()) }));
-      toast('已保存');
+    /* 顶栏常驻保存：按当前激活的 API 面板分发到对应保存逻辑。
+       生图面板的保存逻辑在 miya-image-gen.js 里（事件委托绑定在面板节点上），
+       这里不重复实现，改为转发一次点击，让那边原有链路照常处理。 */
+    onClick('miya-st-panel-save', function () {
+      var active = app.querySelector('.ins-vault-panel.is-active');
+      var panelId = active ? active.id : '';
+      if (panelId === 'miya-st-panel-chat') { saveChatApiPanel(); return; }
+      if (panelId === 'miya-st-panel-cstore') { saveCstoreApiPanel(); return; }
+      if (panelId === 'miya-st-panel-voice') { saveVoiceApiPanel(); return; }
+      if (panelId === 'miya-st-panel-imagegen') {
+        var proxy = $('miya-st-ig-save');
+        if (proxy) { proxy.click(); return; }
+        toast('生图模块未加载，请刷新页面');
+      }
     });
 
     onClick('miya-st-storage-refresh', invalidateAndRenderStoragePanel);

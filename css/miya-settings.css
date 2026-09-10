@@ -198,8 +198,32 @@
   position: relative;
   z-index: 10;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: calc(env(safe-area-inset-top, 0px) + 8px) 20px 0;
 }
+
+/* 顶栏右侧常驻保存：API 面板不用滚到底就能保存 */
+.miya-settings-app .st-topbar-save {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.25);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.miya-settings-app .st-topbar-save:active { transform: scale(0.97); }
+.miya-settings-app .st-topbar-save[hidden] { display: none !important; }
 
 .miya-settings-app .st-header-badge::before {
   content: '';

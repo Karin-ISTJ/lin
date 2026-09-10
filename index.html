@@ -33,7 +33,7 @@
   <link rel="stylesheet" href="css/miya-apps.css?v=30">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=20">
+  <link rel="stylesheet" href="css/miya-settings.css?v=21">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=9">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=3">
@@ -880,6 +880,7 @@
     <div class="ins-vault-drawer">
       <div class="st-panel-topbar">
         <button type="button" class="st-header-badge" id="miya-st-panel-header-back" aria-label="返回设置列表">Preferences</button>
+        <button type="button" class="st-topbar-save" id="miya-st-panel-save" hidden>保存</button>
       </div>
       <div class="ins-vault-panel" id="miya-st-panel-chat" data-panel-title="对话">
         <div class="st-form">
@@ -936,8 +937,6 @@
               </div>
             </div>
           </section>
-
-          <button type="button" class="st-save-btn ins-chip ins-chip--gold ins-chip--block" id="miya-st-chat-save">保存对话 API</button>
         </div>
       </div>
 
@@ -959,7 +958,6 @@
             <label class="ins-field-label">温度 <span id="miya-st-cstore-temp-lbl">1</span></label>
             <input type="range" class="ins-range" id="miya-st-cstore-temp" min="0" max="2" step="0.1" value="1">
           </div>
-          <button type="button" class="st-save-btn ins-chip ins-chip--gold ins-chip--block" id="miya-st-cstore-save">保存便利店 API</button>
         </div>
       </div>
 
@@ -1065,8 +1063,9 @@
               <div id="miya-st-ig-contacts-list"></div>
             </div>
           </section>
-
-          <button type="button" class="st-save-btn ins-chip ins-chip--gold ins-chip--block" id="miya-st-ig-save">保存生图配置</button>
+          <!-- 生图的保存逻辑由 miya-image-gen.js 通过面板事件委托实现，
+               这里保留一个不可见触发器，供顶栏「保存」按钮转发点击使用。 -->
+          <button type="button" id="miya-st-ig-save" hidden aria-hidden="true" tabindex="-1"></button>
         </div>
       </div>
 
@@ -1084,7 +1083,6 @@
             <label class="ins-field-label" for="miya-st-mm-prompt">语音专用提示词</label>
             <textarea class="ins-text-input ins-text-input--area" id="miya-st-mm-prompt" rows="3" placeholder="合成前附加到台词前，留空则不附加"></textarea>
           </div>
-          <button type="button" class="st-save-btn ins-chip ins-chip--gold ins-chip--block" id="miya-st-mm-save">保存语音 API</button>
         </div>
       </div>
 
@@ -5774,7 +5772,7 @@
   <script defer src="js1/miya-beautify-app.js?v=26"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=4"></script>
-  <script defer src="js2/miya-settings-app.js?v=58"></script>
+  <script defer src="js2/miya-settings-app.js?v=59"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
