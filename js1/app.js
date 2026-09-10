@@ -500,11 +500,13 @@
 
   /* 开屏遮罩收尾：桌面层此时已完成渲染，撤掉遮罩并放出桌面。
      先让 body 退出 miya-booting（触发 .phone 的入场过渡），
-     再给遮罩加 is-done 淡出，最后从 DOM 里摘掉，避免残留节点影响命中测试。 */
+     再给遮罩加 is-done 淡出，最后从 DOM 里摘掉，避免残留节点影响命中测试。
+     淡出只留 200ms：遮罩本身只是为了盖住首帧，停留越短越不浪费用户时间。 */
   var bootCoverDone = false;
   function finishPhoneBoot() {
     if (bootCoverDone) return;
     bootCoverDone = true;
+    clearTimeout(bootCoverFallback);
     document.body.classList.remove('miya-booting');
     phoneLayer.classList.add('is-active');
     var cover = document.getElementById('miya-bootcover');
@@ -512,41 +514,59 @@
     cover.classList.add('is-done');
     setTimeout(function () {
       if (cover.parentNode) cover.parentNode.removeChild(cover);
-    }, 460);
+    }, 220);
   }
 
-  /* 兜底保险：主题水合依赖网络（远程字体 / 壁纸），弱网或接口挂起时
-     不能让遮罩无限期盖着。无论前面是否 resolve，到点一律放行。 */
-  setTimeout(finishPhoneBoot, 2600);
+  /* 兜底保险：一切正常时下面会主动提前释放，走不到这里。
+     仅在远程资源请求彻底挂起（无响应）时兜底，避免遮罩无限期盖住界面。 */
+  var bootCoverFallback = setTimeout(finishPhoneBoot, 1800);
+
+  /* 遮罩的真正目的是「别让用户看到半成品桌面」。
+     桌面骨架只要 DOM 挂好就能看，没必要等壁纸 / 字体 / 小组件配图这些
+     装饰性资源全部 settle。所以这里改用两段式：
+       1) 桌面节点一挂载（或主题水合完成）→ 立刻放行遮罩
+       2) 剩余装饰资源继续在后台补齐，用户已经在操作了 */
+  function releaseCoverNow() {
+    if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
+      window.miyaLockscreen.showIfNeeded();
+    }
+    if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
+      window.miyaUpdateNotice.onEntryStep('splash');
+    }
+    finishPhoneBoot();
+  }
+
+  /* 等桌面骨架出现：轮询 desk-custom-track 是否已有子节点。
+     这通常比 miyaHydrateTheme 的完整 resolve 早一大截（后者还在等壁纸加载）。 */
+  function releaseWhenDeskMounted() {
+    var deadline = Date.now() + 1500;
+    (function poll() {
+      if (bootCoverDone) return;
+      var track = document.getElementById('desk-custom-track');
+      if (track && track.children.length) {
+        releaseCoverNow();
+        return;
+      }
+      if (Date.now() > deadline) return; /* 交给兜底或水合回调 */
+      requestAnimationFrame(poll);
+    })();
+  }
 
   function runPhoneBoot() {
     if (typeof window.miyaHydrateTheme === 'function') {
+      /* 并行：一边等主题水合，一边盯着桌面骨架是否已经挂好 */
+      releaseWhenDeskMounted();
       window.miyaHydrateTheme().then(function () {
-        if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
-          window.miyaLockscreen.showIfNeeded();
-        }
-        if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
-          window.miyaUpdateNotice.onEntryStep('splash');
-        }
-        finishPhoneBoot();
+        releaseCoverNow();
       }).catch(function () {
         if (typeof window.miyaInitHomeCopyEdit === 'function') window.miyaInitHomeCopyEdit();
-        if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
-          window.miyaLockscreen.showIfNeeded();
-        }
-        if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
-          window.miyaUpdateNotice.onEntryStep('splash');
-        }
-        finishPhoneBoot();
+        releaseCoverNow();
       });
     } else if (typeof window.miyaInitHomeCopyEdit === 'function') {
       window.miyaInitHomeCopyEdit();
-      if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
-        window.miyaUpdateNotice.onEntryStep('splash');
-      }
-      finishPhoneBoot();
+      releaseCoverNow();
     } else {
-      finishPhoneBoot();
+      releaseCoverNow();
     }
   }
 
@@ -565,7 +585,7 @@
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=58').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=59').then(function (reg) {
         try { reg.update(); } catch (e) {}
       }).catch(function () {});
     });

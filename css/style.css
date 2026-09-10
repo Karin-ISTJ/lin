@@ -1185,7 +1185,7 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
   justify-content: center;
   background: #f5f1eb;
   opacity: 1;
-  transition: opacity 0.42s ease;
+  transition: opacity 0.2s ease;
 }
 
 .miya-bootcover.is-done {
