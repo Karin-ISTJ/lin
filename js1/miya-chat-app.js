@@ -1375,18 +1375,11 @@
 
     hydrateSoftUiTexts();
 
-    var data = readSoftUi();
     var cs = global.miyaContactsStore;
     var charCount = cs && cs.getState ? (cs.getState().characters || []).length : 0;
     var fgFriends = $('fg-friends-count');
     if (fgFriends) fgFriends.textContent = String(charCount);
-    var chatCount = st && st.getChats ? st.getChats('all').length : 0;
-    var statContacts = $('soft-stat-contacts');
-    var statFollowing = $('soft-stat-following');
-    var statMoments = $('soft-stat-moments');
-    if (statFollowing && data.following == null) statFollowing.textContent = String(chatCount);
-    if (statContacts && data.fans == null) statContacts.textContent = String(charCount);
-    if (statMoments && data.likes == null) statMoments.textContent = '0';
+    /* 关注 / 粉丝 / 获赞统计卡已移除，本页不再渲染这三个数字 */
   }
 
   var SOFT_MENU_ICONS = {

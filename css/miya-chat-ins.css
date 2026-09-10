@@ -943,7 +943,7 @@
   background: var(--soft-surface-2);
   border-radius: var(--soft-r-lg);
   box-shadow: var(--soft-shadow);
-  padding: 18px 16px 0;
+  padding: 18px 16px;
   margin-bottom: 12px;
   border: 1px solid var(--soft-line);
 }
@@ -951,8 +951,10 @@
 .soft-profile-card__main {
   display: flex;
   gap: 14px;
-  align-items: flex-start;
-  margin-bottom: 14px;
+  align-items: center;
+  margin-bottom: 0;
+  /* 给头像右下角的 SVIP 徽章留出外扩空间，避免遮挡简介行 */
+  padding-bottom: 6px;
 }
 
 .soft-profile-card__ava-wrap {
@@ -989,6 +991,12 @@
 .soft-profile-card__info {
   flex: 1;
   min-width: 0;
+  /* 名称 / ID / 简介三行整体在卡片内垂直居中 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* 左侧留出徽章横向侵入的空间 */
+  padding-left: 4px;
 }
 
 .soft-profile-card__badge {
@@ -1038,25 +1046,7 @@
   color: var(--soft-ink);
 }
 
-.soft-stats {
-  display: flex;
-  justify-content: space-around;
-  padding: 12px 0 14px;
-  border-top: 1px solid var(--soft-line);
-}
-
-.soft-stat__num {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--soft-ink);
-}
-
-.soft-stat__lbl {
-  font-size: 11px;
-  font-weight: 300;
-  color: var(--soft-ink-3);
-  margin-top: 2px;
-}
+/* 关注 / 粉丝 / 获赞统计块已移除（.soft-stats 系列样式一并删除） */
 
 .soft-status-card {
   display: flex;
@@ -1155,25 +1145,6 @@
   opacity: 1;
   background: rgba(0, 0, 0, 0.35);
   color: #fff;
-}
-
-.soft-stat__num[data-soft-edit] {
-  outline: none;
-  cursor: text;
-  border-radius: 6px;
-  padding: 2px 6px;
-  margin: -2px -6px;
-  min-width: 1.5em;
-}
-
-.soft-stat__num[data-soft-edit]:focus {
-  background: var(--soft-bg-3);
-  box-shadow: 0 0 0 1px var(--soft-line);
-}
-
-.soft-stat__num[data-soft-edit]:empty::before {
-  content: "0";
-  color: var(--soft-ink-3);
 }
 
 .soft-priv-grid {
