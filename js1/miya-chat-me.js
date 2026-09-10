@@ -336,12 +336,7 @@
     if (!stackEl) return;
     var del = !!(data && data.deleteMode);
     stackEl.classList.toggle('mi-me--emo-delete', del);
-    var closeBtn = stackEl.querySelector('[data-mq-me-close]');
-    if (closeBtn) {
-      closeBtn.textContent = del ? '完成' : '×';
-      closeBtn.classList.toggle('mi-me-header__close--done', del);
-      closeBtn.setAttribute('aria-label', del ? '完成' : '关闭');
-    }
+    /* 右上角关闭键已删除，表情管理模式改由左上角返回键退出 */
     setHead(del ? '删除' : '表情', del ? '点击 × 快速删除' : '表情包');
   }
 
@@ -611,9 +606,8 @@
             '<h2 class="mi-album-header__album-title" data-mq-me-title>我的</h2>' +
             '<span class="mi-album-header__album-date" data-mq-me-kicker>我的</span>' +
           '</div>' +
-          '<div class="mi-album-header__side">' +
-            '<button type="button" class="mi-album-icon-btn mi-album-icon-btn--ghost mi-me-header__close" data-mq-me-close aria-label="关闭">×</button>' +
-          '</div>' +
+          /* 右上角关闭键已整体删除，本页只保留左上角返回键 */
+          '<div class="mi-album-header__side mi-me-header__side--phantom" aria-hidden="true"></div>' +
         '</header>' +
         '<div class="mi-me-body" data-mq-me-body></div>' +
       '</div>' +
@@ -1197,12 +1191,6 @@
       syncEmojiHubChrome(top.data);
     } else if (stackEl) {
       stackEl.classList.remove('mi-me--emo-delete');
-      var closeBtn = stackEl.querySelector('[data-mq-me-close]');
-      if (closeBtn) {
-        closeBtn.textContent = '×';
-        closeBtn.classList.remove('mi-me-header__close--done');
-        closeBtn.setAttribute('aria-label', '关闭');
-      }
     }
     if (top && top.screen === 'dress') {
       var cabMod = global.MiyaChatAppBeautify;
@@ -1234,14 +1222,6 @@
       var topNav = navStack[navStack.length - 1];
       var inEmoDelete = topNav && topNav.screen === 'emoji' && topNav.data && topNav.data.deleteMode;
 
-      if (e.target.closest('[data-mq-me-close]')) {
-        if (inEmoDelete) {
-          exitEmojiDeleteMode();
-          return;
-        }
-        close();
-        return;
-      }
       if (e.target.closest('[data-mq-me-back]')) {
         if (inEmoDelete) {
           exitEmojiDeleteMode();

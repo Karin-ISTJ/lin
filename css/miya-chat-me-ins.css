@@ -93,20 +93,10 @@
   background: transparent;
 }
 
-.mi-me-page:not(.mi-me-page--album) .mi-me-header__close {
-  font-size: 20px;
-  line-height: 1;
-  font-weight: 400;
-}
-
-.mi-me-page:not(.mi-me-page--album) .mi-me-header__close--done {
-  width: auto;
-  min-width: 52px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 999px;
-  letter-spacing: 0.04em;
+/* 右上角关闭键已整体删除：保留等宽占位块，仅用于让标题保持视觉居中 */
+.mi-me-page:not(.mi-me-page--album) .mi-me-header__side--phantom {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .mi-me-page:not(.mi-me-page--album) .mi-me-lead {

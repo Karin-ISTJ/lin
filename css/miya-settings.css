@@ -228,7 +228,9 @@
 }
 .miya-settings-app .st-panel-topbar .st-navback:active { transform: scale(0.97); }
 
-/* 顶栏标题：与聊天设置页同款居中标题 */
+/* 顶栏标题：与聊天设置页同款居中标题。
+   顶栏是 flex + space-between，左右两侧控件宽度不等会把标题挤出屏幕中心；
+   这里给左右两侧各留一个等宽槽位，保证「联系人聊天设置」等长标题恒定居中。 */
 .miya-settings-app .st-panel-topbar .st-navtitle {
   flex: 1;
   margin: 0;
@@ -243,10 +245,31 @@
   text-overflow: ellipsis;
 }
 
+/* 返回键只留箭头图标，宽度收敛到与右侧保存键同一档 */
+.miya-settings-app .st-panel-topbar .st-navback span {
+  display: none;
+}
+
+.miya-settings-app .st-panel-topbar .st-navback {
+  padding: 8px;
+}
+
+/* 无保存键的面板（如「联系人聊天设置」）补等宽占位，避免标题被顶到左侧 */
+.miya-settings-app .st-panel-topbar::after {
+  content: '';
+  flex-shrink: 0;
+  width: 38px;
+}
+
+.miya-settings-app .st-panel-topbar:has(> .st-topbar-save:not([hidden]))::after {
+  display: none;
+}
+
 /* 顶栏右侧常驻保存：API 面板不用滚到底就能保存 */
 .miya-settings-app .st-topbar-save {
   flex-shrink: 0;
   margin-left: auto;
+  min-width: 38px;
   padding: 7px 16px;
   border: none;
   border-radius: 14px;
