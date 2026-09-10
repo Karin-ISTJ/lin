@@ -7,7 +7,7 @@
   var store = null;
   var pageEl = null;
   var state = { chatId: null, searchQuery: '', formDraft: null, wbSortOpen: false, zoneOpen: {} };
-  var DEFAULT_ZONE_OPEN = { api: true, basic: false };
+  var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
 
@@ -114,6 +114,19 @@
         '<svg class="st-chevron mi-set-zone__chev" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>' +
       '</button>' +
       '<div class="mi-set-zone__body"' + (open ? '' : ' hidden') + '>' + content + '</div>' +
+    '</section>';
+  }
+
+  /* API 入口：与其它折叠栏同款外观，点击直接进入对应设置页（不展开内容） */
+  function renderApiNavBar(id, title, hint, panelId) {
+    return '<section class="mi-set-zone" data-mq-set-zone="' + esc(id) + '">' +
+      '<button type="button" class="mi-set-zone__head" data-mq-set-api-nav="' + esc(panelId) + '">' +
+        '<div class="mi-set-zone__text">' +
+          '<strong class="mi-set-zone__title">' + esc(title) + '</strong>' +
+          (hint ? '<span class="mi-set-zone__hint">' + esc(hint) + '</span>' : '') +
+        '</div>' +
+        '<svg class="st-chevron mi-set-zone__chev" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>' +
+      '</button>' +
     '</section>';
   }
 
@@ -1094,15 +1107,12 @@
 
       /* 顶部不再重复渲染「角色名 + x 条消息」：
          页面导航栏已写明「聊天设置」，角色名与消息数在聊天页顶栏和「基础」分区里都有，
-         这里再放一块会被导航栏的半透明渐变 + 毛玻璃透出来，看起来像顶栏串进了设置页。 */
-      renderZone('api', 'API 配置', '管理各模块的服务端点与密钥',
-        '<div class="st-form-card ins-form-block">' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">对话 API</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-voice">语音合成</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-cstore">便利店 API</button>' +
-          '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-imagegen">生图 API</button>' +
-        '</div>'
-      ) +
+         这里再放一块会被导航栏的半透明渐变 + 毛玻璃透出来，看起来像顶栏串进了设置页。
+         API 四项各自独立成栏（与其它折叠栏同外观），仍排在最上方。 */
+      renderApiNavBar('api-chat', '对话 API', '对话模型服务端点与密钥', 'miya-st-panel-chat') +
+      renderApiNavBar('api-voice', '语音合成', '语音合成服务端点与密钥', 'miya-st-panel-voice') +
+      renderApiNavBar('api-cstore', '便利店 API', '便利店相关服务端点与密钥', 'miya-st-panel-cstore') +
+      renderApiNavBar('api-imagegen', '生图 API', '生图服务端点与密钥', 'miya-st-panel-imagegen') +
 
       renderZone('basic', '基础', '身份、头像、通知与主动消息',
         subBlock('身份与显示', '', formCard(
