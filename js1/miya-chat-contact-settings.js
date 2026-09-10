@@ -1092,11 +1092,9 @@
       '<div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>' +
       '<div class="st-deco-ornament" style="bottom: 280px; left: -40px; font-size: 100px;">¶</div>' +
 
-      '<header class="mi-set-title-bar">' +
-        '<h1 class="mi-set-title-bar__name">' + esc(name) + '</h1>' +
-        '<p class="mi-set-title-bar__meta">' + formatNum(msgCount) + ' 条消息</p>' +
-      '</header>' +
-
+      /* 顶部不再重复渲染「角色名 + x 条消息」：
+         页面导航栏已写明「聊天设置」，角色名与消息数在聊天页顶栏和「基础」分区里都有，
+         这里再放一块会被导航栏的半透明渐变 + 毛玻璃透出来，看起来像顶栏串进了设置页。 */
       renderZone('api', 'API 配置', '管理各模块的服务端点与密钥',
         '<div class="st-form-card ins-form-block">' +
           '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">对话 API</button>' +

@@ -233,7 +233,10 @@
   width: 100%;
   box-sizing: border-box;
   padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
-  background: linear-gradient(180deg, rgba(245, 243, 239, 0.96) 0%, rgba(245, 243, 239, 0) 100%);
+  /* 不透明底色：下方渐变区域若用 rgba 半透明，背后的内容（旧聊天顶栏 / 滚动中的正文）
+     会被 backdrop-filter 采样后透出来，看起来像顶栏串页。 */
+  background: var(--st-bg);
+  border-bottom: 1px solid var(--st-border);
 }
 .mi-set-page .st-navback {
   display: inline-flex;

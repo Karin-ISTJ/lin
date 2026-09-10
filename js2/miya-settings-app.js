@@ -1272,7 +1272,8 @@
   function syncFormsFromConfig() {
     var cfg = getApiConfig();
     var mm = cfg.minimaxTts && typeof cfg.minimaxTts === 'object' ? cfg.minimaxTts : {};
-      var cstore = cfg.cstoreApi && typeof cfg.cstoreApi === 'object' ? cfg.cstoreApi : {};
+    var forum = cfg.forumApi && typeof cfg.forumApi === 'object' ? cfg.forumApi : {};
+    var cstore = cfg.cstoreApi && typeof cfg.cstoreApi === 'object' ? cfg.cstoreApi : {};
     var chatTemp = cfg.temperature != null ? cfg.temperature : 1;
     syncChatApiPanelForms();
     syncScopedApiForm('forum', forum, chatTemp);

@@ -785,18 +785,15 @@
     var chat = c.chat;
     var s = c.settings;
     var ta = s.timeAwareness || {};
-    var profileName = (c.profile && c.profile.name) || '我';
     var msgCount = store.getMessages(state.chatId).filter(function (m) { return m && !m.deleted; }).length;
 
     return '<div class="st-container mi-set-flow">' +
       '<div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>' +
       '<div class="st-deco-ornament" style="bottom: 280px; left: -40px; font-size: 100px;">¶</div>' +
 
-      '<header class="mi-set-title-bar">' +
-        '<h1 class="mi-set-title-bar__name">' + esc(chat.title || '群聊') + '</h1>' +
-        '<p class="mi-set-title-bar__meta">' + esc(profileName) + ' · ' + c.members.length + ' 位成员 · ' + formatNum(msgCount) + ' 条消息</p>' +
-      '</header>' +
-
+      /* 顶部不再重复渲染「群名 + x 条消息」：导航栏已写明「聊天设置」，
+         这些信息在聊天页顶栏和「基础」分区里都有，重复渲染会被导航栏的
+         半透明渐变 + 毛玻璃透出来，看起来像聊天顶栏串进了设置页。 */
       renderZone('basic', '基础', '群信息与成员',
         subBlock('群信息', '', formCard(
           fieldBlock('群名称', '', '<input type="text" class="ins-text-input" data-mq-grp-title value="' + esc(chat.title || '') + '" maxlength="32" placeholder="给这群起个名字">') +
