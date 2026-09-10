@@ -861,7 +861,7 @@
 
       '<footer class="st-footer">' +
         '<div class="st-footer-brand">Group Preferences</div>' +
-        '<div class="st-footer-version">miya 小手机 · 2026</div>' +
+        '<div class="st-footer-version">Karin · 2026</div>' +
       '</footer>' +
     '</div>';
   }

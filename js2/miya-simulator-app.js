@@ -508,7 +508,7 @@
         '<section class="sim-hub sim-hub--ins">' +
           '<header class="sim-masthead sim-masthead--ins">' +
             '<div class="sim-masthead__main">' +
-              '<p class="sim-masthead__eyebrow">MIYA · LIFE SIMULATOR</p>' +
+              '<p class="sim-masthead__eyebrow">KARIN · LIFE SIMULATOR</p>' +
               '<h1 class="sim-masthead__title">人生分镜馆</h1>' +
             '</div>' +
             '<div class="sim-masthead__actions">' +

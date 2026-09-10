@@ -8,7 +8,7 @@
   if (!eng) return;
 
   var LIKED_PL_NAME = '我喜欢的音乐';
-  var USER_LABEL = 'miya';
+  var USER_LABEL = 'Karin';
 
   var currentTab = 'home';
   var tabBeforeAppearance = 'home';

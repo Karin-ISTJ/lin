@@ -1870,7 +1870,7 @@
 }
 
 .mi-me-page__veil::after {
-  content: "MIYA · SELF";
+  content: "KARIN · SELF";
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 18px);
   right: 20px;

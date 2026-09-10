@@ -1277,7 +1277,7 @@
             '<span class="mi-wcard__shine" aria-hidden="true"></span>' +
             '<span class="mi-wcard__chip" aria-hidden="true"></span>' +
             '<div class="mi-wcard__head">' +
-              '<span class="mi-wcard__brand">MIYA WALLET</span>' +
+              '<span class="mi-wcard__brand">KARIN WALLET</span>' +
             '</div>' +
             '<div class="mi-wcard__body">' +
               '<span class="mi-wcard__label">' + esc(name) + ' 的钱包</span>' +
@@ -1330,7 +1330,7 @@
 
       '<footer class="st-footer">' +
         '<div class="st-footer-brand">Chat Preferences</div>' +
-        '<div class="st-footer-version">miya 小手机 · 2026</div>' +
+        '<div class="st-footer-version">Karin · 2026</div>' +
       '</footer>' +
     '</div>';
   }

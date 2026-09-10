@@ -650,7 +650,7 @@
       bg: null, photo: null, line1: '今日消费：一杯冰美式', line2: '备注：窗边的位置最好'
     },
     player: {
-      cover: null, title: '慢速浪漫', artist: 'miya playlist', time: '1:24 / 3:48'
+      cover: null, title: '慢速浪漫', artist: 'Karin playlist', time: '1:24 / 3:48'
     },
     dialogue: {
       bg: null, ava1: null, ava2: null,
@@ -664,7 +664,7 @@
     },
     instprofile: {
       avatar: null, post1: null, post2: null, post3: null,
-      username: 'miya.daily', bio: '记录慢生活与审美碎片',
+      username: 'karin.daily', bio: '记录慢生活与审美碎片',
       stats: '128 posts · 2.4k followers · 892 following'
     },
     glassdeck: {
@@ -677,7 +677,7 @@
     mooddiary: {
       avatar: null,
       headTitle: '日记',
-      username: 'miya',
+      username: 'Karin',
       body: '把今天发生的小事，留在这里。',
       stamp: formatMooddiaryStamp()
     },
@@ -723,7 +723,7 @@
     postcard: {
       photo: null,
       message: '愿你在每一个寻常日子，都能被温柔接住。',
-      to: 'to · miya'
+      to: 'to · Karin'
     },
     folder: {
       photo: null
@@ -736,7 +736,7 @@
     },
     inspair: {
       cover: null, ava1: null, ava2: null,
-      name1: 'miya._', name2: 'you.zz',
+      name1: 'Karin._', name2: 'you.zz',
       quote: '— ♡ 我的世界很小，刚刚好装下你 —',
       location: '上海 · 外滩'
     },
@@ -744,7 +744,7 @@
       bg: null,
       avatar: null, post1: null, post2: null, post3: null,
       time: '14:32',
-      username: 'miya ♡₊˚',
+      username: 'Karin ♡₊˚',
       bio: '★ ‹ 把琐碎过成诗 ›',
       date: '2026/07/02 THU',
       plog: '「plog ✨ ʚɞ ˚ !! ♪」',
@@ -755,7 +755,7 @@
     wxmoments: {
       cover: null,
       avatar: null,
-      nickname: 'miya',
+      nickname: 'Karin',
       signature: '把琐碎的日子过成诗',
       momentText: '今天天气很好，想把这片云分享给你。',
       momentPhoto: null,
@@ -2944,7 +2944,7 @@
         '</div>' +
         '<div class="wg-4x2-player__panel">' +
           '<p class="wg-4x2-player__track">慢速浪漫</p>' +
-          '<p class="wg-4x2-player__artist">miya playlist</p>' +
+          '<p class="wg-4x2-player__artist">Karin playlist</p>' +
           '<div class="wg-4x2-player__bars" aria-hidden="true">' +
             '<span></span><span></span><span></span><span></span><span></span><span></span>' +
             '<span></span><span></span><span></span><span></span><span></span><span></span>' +
@@ -3012,7 +3012,7 @@
     el.innerHTML =
       '<div class="wg-4x2-ins">' +
         '<div class="wg-4x2-ins__top">' +
-          '<span class="wg-4x2-ins__username">miya.daily</span>' +
+          '<span class="wg-4x2-ins__username">karin.daily</span>' +
           '<span class="wg-4x2-ins__menu" aria-hidden="true">' +
             '<span></span><span></span><span></span>' +
           '</span>' +
@@ -3107,7 +3107,7 @@
         '<div class="wg-4x1-mooddiary__main">' +
           '<div class="wg-4x1-mooddiary__top">' +
             '<span class="wg-4x1-mooddiary__head-title">日记</span>' +
-            '<span class="wg-4x1-mooddiary__username">miya</span>' +
+            '<span class="wg-4x1-mooddiary__username">Karin</span>' +
           '</div>' +
           '<p class="wg-4x1-mooddiary__body">把今天发生的小事，留在这里。</p>' +
         '</div>' +
@@ -3481,7 +3481,7 @@
           '</div>' +
           '<div class="wg-4x4-home__profile">' +
             '<div class="wg-4x4-home__name-row">' +
-              '<span class="wg-4x4-home__user">miya ♡₊˚</span>' +
+              '<span class="wg-4x4-home__user">Karin ♡₊˚</span>' +
               '<span class="wg-4x4-home__album" aria-hidden="true"></span>' +
             '</div>' +
             '<p class="wg-4x4-home__bio">★ ‹ 把琐碎过成诗 ›</p>' +
@@ -3521,7 +3521,7 @@
       '<div class="wg-4x4-wx">' +
         '<div class="wg-4x4-wx__header">' +
           '<div class="wg-4x4-wx__cover-img"></div>' +
-          '<span class="wg-4x4-wx__nick">miya</span>' +
+          '<span class="wg-4x4-wx__nick">Karin</span>' +
           '<div class="wg-4x4-wx__avatar"></div>' +
         '</div>' +
         '<div class="wg-4x4-wx__feed">' +
@@ -3529,7 +3529,7 @@
           '<div class="wg-4x4-wx__moment">' +
             '<div class="wg-4x4-wx__moment-ava"></div>' +
             '<div class="wg-4x4-wx__moment-body">' +
-              '<span class="wg-4x4-wx__moment-name">miya</span>' +
+              '<span class="wg-4x4-wx__moment-name">Karin</span>' +
               '<p class="wg-4x4-wx__moment-text">今天天气很好，想把这片云分享给你。</p>' +
               '<div class="wg-4x4-wx__moment-photo is-hidden"></div>' +
               '<span class="wg-4x4-wx__moment-time">2分钟前</span>' +
@@ -3568,7 +3568,7 @@
             '<span class="wg-2x2-postcard__stamp" aria-hidden="true"></span>' +
             '<div class="wg-2x2-postcard__photo"></div>' +
             '<p class="wg-2x2-postcard__message">愿你在每一个寻常日子，都能被温柔接住。</p>' +
-            '<span class="wg-2x2-postcard__to">to · miya</span>' +
+            '<span class="wg-2x2-postcard__to">to · Karin</span>' +
           '</div>' +
         '</div>' +
       '</div>' +

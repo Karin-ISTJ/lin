@@ -858,7 +858,7 @@
       '<span class="mi-wcard__shine" aria-hidden="true"></span>' +
       '<span class="mi-wcard__chip" aria-hidden="true"></span>' +
       '<div class="mi-wcard__head">' +
-        '<span class="mi-wcard__brand">MIYA WALLET</span>' +
+        '<span class="mi-wcard__brand">KARIN WALLET</span>' +
         ava +
       '</div>' +
       '<div class="mi-wcard__body">' +

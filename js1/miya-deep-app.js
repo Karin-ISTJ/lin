@@ -213,7 +213,7 @@
     var days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     var base = {
       time: pad(now.getHours()) + ':' + pad(now.getMinutes()),
-      username: String(charName || 'miya') + ' ♡₊˚',
+      username: String(charName || 'Karin') + ' ♡₊˚',
       bio: String(w.profileBio || '★ ‹ 把琐碎过成诗 ›'),
       date: now.getFullYear() + '/' + pad(now.getMonth() + 1) + '/' + pad(now.getDate()) + ' ' + days[now.getDay()],
       plog: String(w.plogTitle || '「plog ✨ ʚɞ ˚ !! ♪」'),
@@ -229,7 +229,7 @@
     if (!state.phoneData) return Promise.resolve();
     var w = state.phoneData.widgets || {};
     var now = new Date();
-    var charName = state.contactName || 'miya';
+    var charName = state.contactName || 'Karin';
     return resolveAvatarUrl(getContact(state.contactId)).then(function (avatarUrl) {
       mountPhoneWidgets(w, now, charName, avatarUrl);
       var deco = global.miyaDeepDeco;
@@ -296,7 +296,7 @@
 
     var w = data && data.widgets ? data.widgets : {};
     var now = new Date();
-    var charName = state.contactName || 'miya';
+    var charName = state.contactName || 'Karin';
 
     root.innerHTML =
       '<div class="dp-phone__wall" aria-hidden="true"></div>' +
@@ -559,7 +559,7 @@
       '</div>' +
       '<footer class="dp-settings__foot">' +
         '<button type="button" class="dp-settings__save" id="dp-set-save">保存设置</button>' +
-        '<p class="dp-settings__foot-note">MIYA · DEEP PHONE · ' + esc(name) + '</p>' +
+        '<p class="dp-settings__foot-note">KARIN · DEEP PHONE · ' + esc(name) + '</p>' +
       '</footer>';
 
     fillSettingsModelSelect(api.model ? [api.model] : [], api.model || '');

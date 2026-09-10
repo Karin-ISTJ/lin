@@ -898,7 +898,7 @@
     var theme = global.miyaGetTheme();
     var activeFont = getActiveFontRef();
     var text = (theme.fontPreviewText || '').trim() ||
-      'miya · 雪景窗\nABCDEFG abcdefghijk 0123456789';
+      'Karin · 雪景窗\nABCDEFG abcdefghijk 0123456789';
     sample.textContent = text;
     var size = sizeIn ? parseFloat(sizeIn.value) : 18;
     if (!Number.isFinite(size)) size = 18;

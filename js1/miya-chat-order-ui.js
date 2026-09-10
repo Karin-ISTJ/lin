@@ -258,7 +258,7 @@
             '<div class="qq-card-to__barcode" aria-hidden="true">' +
             '<span></span><span></span><span></span><span></span><span></span>' +
             '<span></span><span></span><span></span></div>' +
-            '<span class="qq-card-to__stamp">MIYA EATS</span></div></footer></div>'
+            '<span class="qq-card-to__stamp">KARIN EATS</span></div></footer></div>'
         );
     }
 

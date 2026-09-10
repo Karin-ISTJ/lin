@@ -88,7 +88,7 @@
         'js2/miya-deep-shop-store.js?v=1',
         'js2/miya-deep-shop-bridge.js?v=1',
         'js2/miya-deep-shop.js?v=1',
-        'js1/miya-deep-app.js?v=25'
+        'js1/miya-deep-app.js?v=26'
       ]
     },
     apiCore: {
@@ -101,7 +101,7 @@
         'js2/miya-simulator-engine.js?v=11',
         'js2/miya-simulator-narrative.js?v=2',
         'js2/miya-simulator-play-modules.js?v=7',
-        'js2/miya-simulator-app.js?v=17'
+        'js2/miya-simulator-app.js?v=18'
       ]
     },
     coupleUi: {
