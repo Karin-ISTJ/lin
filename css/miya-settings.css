@@ -202,7 +202,45 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 20px 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 0;
+}
+
+/* 顶栏返回按钮：与「聊天设置」页保持完全一致的药丸造型 */
+.miya-settings-app .st-panel-topbar .st-navback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--st-border-strong);
+  border-radius: 14px;
+  background: var(--st-card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: var(--st-text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: var(--st-shadow-sm);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.miya-settings-app .st-panel-topbar .st-navback:active { transform: scale(0.97); }
+
+/* 顶栏标题：与聊天设置页同款居中标题 */
+.miya-settings-app .st-panel-topbar .st-navtitle {
+  flex: 1;
+  margin: 0;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  letter-spacing: 0.3px;
+  color: var(--st-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 顶栏右侧常驻保存：API 面板不用滚到底就能保存 */

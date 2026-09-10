@@ -1299,7 +1299,7 @@
   }
 
   function setTopTitle(text) {
-    var title = $('miya-st-top-title');
+    var title = $('miya-st-panel-title') || $('miya-st-top-title');
     if (title) title.textContent = text || '设置';
   }
 

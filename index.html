@@ -33,7 +33,7 @@
   <link rel="stylesheet" href="css/miya-apps.css?v=30">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=21">
+  <link rel="stylesheet" href="css/miya-settings.css?v=22">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=9">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=3">
@@ -872,7 +872,11 @@
 
     <div class="ins-vault-drawer">
       <div class="st-panel-topbar">
-        <button type="button" class="st-header-badge" id="miya-st-panel-header-back" aria-label="返回设置列表">Preferences</button>
+        <button type="button" class="st-navback" id="miya-st-panel-header-back" aria-label="返回设置列表">
+          <svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>返回</span>
+        </button>
+        <h1 class="st-navtitle" id="miya-st-panel-title"></h1>
         <button type="button" class="st-topbar-save" id="miya-st-panel-save" hidden>保存</button>
       </div>
       <div class="ins-vault-panel" id="miya-st-panel-chat" data-panel-title="对话">
@@ -5751,7 +5755,7 @@
   <script defer src="js1/miya-beautify-app.js?v=26"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=4"></script>
-  <script defer src="js2/miya-settings-app.js?v=60"></script>
+  <script defer src="js2/miya-settings-app.js?v=61"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
