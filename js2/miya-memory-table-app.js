@@ -261,49 +261,57 @@
     });
   }
 
-  // 插件钩子：生成前注入、生成后解析
-  function installHooks() {
-    if (!global.MiyaPlugins || typeof global.MiyaPlugins.register !== 'function') return;
-    global.MiyaPlugins.register({
-      id: 'miya-memory-table',
-      name: '记忆增强表格',
-      version: '1.0.0',
-      hooks: {
-        beforeGenerate: function (ctx) {
-          if (!ctx || !Array.isArray(ctx.messages)) return ctx;
-          var chatId = ctx.chatId;
-          if (global.MiyaMemoryTableEngine && global.MiyaMemoryTableEngine.injectIntoMessages) {
-            global.MiyaMemoryTableEngine.injectIntoMessages(ctx.messages, chatId);
-          }
-          return ctx;
-        },
-        afterGenerate: function (ctx) {
-          if (!ctx || !ctx.result) return;
-          var chatId = ctx.chatId;
-          var eng = global.MiyaMemoryTableEngine;
-          if (!eng) return;
-          // online path may return various shapes
-          var text = '';
-          if (typeof ctx.result === 'string') text = ctx.result;
-          else if (ctx.result.reply) text = ctx.result.reply;
-          else if (ctx.result.message && ctx.result.message.content) text = ctx.result.message.content;
-          else if (ctx.result.raw) text = ctx.result.raw;
-          if (!text) return;
-          eng.processAssistantReply(chatId, text);
-        }
-      }
-    });
+  // 生成钩子：生成前注入、生成后解析
+  // 原先通过 MiyaPlugins.register 注册，现直接暴露同名方法，
+  // 由 miya-chat-engine / miya-appointment-engine 直接调用（插件宿主已移除）。
+  function beforeGenerate(ctx) {
+    if (!ctx || !Array.isArray(ctx.messages)) return ctx;
+    var chatId = ctx.chatId;
+    if (global.MiyaMemoryTableEngine && global.MiyaMemoryTableEngine.injectIntoMessages) {
+      global.MiyaMemoryTableEngine.injectIntoMessages(ctx.messages, chatId);
+    }
+    return ctx;
+  }
+
+  function afterGenerate(ctx) {
+    if (!ctx || !ctx.result) return;
+    var chatId = ctx.chatId;
+    var eng = global.MiyaMemoryTableEngine;
+    if (!eng) return;
+    // online path 返回的是已落库的消息数组，离线/预约路径返回 { message, raw } 等
+    var text = '';
+    if (typeof ctx.result === 'string') {
+      text = ctx.result;
+    } else if (Array.isArray(ctx.result)) {
+      // 在线路径：[{role, content}, ...]，取 assistant 正文拼接
+      text = ctx.result
+        .filter(function (m) {
+          return m && m.role === 'assistant' && !m.excludedFromContext &&
+            String(m.type || 'text') === 'text' && m.content;
+        })
+        .map(function (m) { return String(m.content); })
+        .join('\n');
+    } else if (ctx.result.reply) {
+      text = ctx.result.reply;
+    } else if (ctx.result.message && ctx.result.message.content) {
+      text = ctx.result.message.content;
+    } else if (ctx.result.raw) {
+      text = ctx.result.raw;
+    }
+    if (!text) return;
+    eng.processAssistantReply(chatId, text);
   }
 
   global.MiyaMemoryTableApp = {
     open: open,
     close: close,
-    render: render
+    render: render,
+    beforeGenerate: beforeGenerate,
+    afterGenerate: afterGenerate
   };
 
   function boot() {
     bind();
-    installHooks();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

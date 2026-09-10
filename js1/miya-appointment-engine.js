@@ -1468,9 +1468,12 @@
                 options: handlers,
                 signal: handlers.signal
             };
-            var pluginReady = global.MiyaPlugins && typeof global.MiyaPlugins.beforeGenerate === 'function'
-                ? global.MiyaPlugins.beforeGenerate(pluginCtx)
-                : Promise.resolve(pluginCtx);
+            var pluginReady;
+            if (global.MiyaMemoryTableApp && typeof global.MiyaMemoryTableApp.beforeGenerate === 'function') {
+                pluginReady = Promise.resolve(global.MiyaMemoryTableApp.beforeGenerate(pluginCtx));
+            } else {
+                pluginReady = Promise.resolve(pluginCtx);
+            }
             return pluginReady.then(function (ctxOut) {
             if (ctxOut && Array.isArray(ctxOut.messages)) {
                 built.messages = ctxOut.messages;
@@ -1560,15 +1563,14 @@
                 }
                 maybeAutoSummary(chatId, sessionId, preset);
                 var result = { message: msg, lines: lines, raw: fullRaw };
-                if (global.MiyaPlugins && typeof global.MiyaPlugins.afterGenerate === 'function') {
+                if (global.MiyaMemoryTableApp && typeof global.MiyaMemoryTableApp.afterGenerate === 'function') {
                     try {
-                        global.MiyaPlugins.afterGenerate({
+                        global.MiyaMemoryTableApp.afterGenerate({
                             scope: 'offline',
                             chatId: chatId,
-                            sessionId: sessionId,
                             result: result
                         });
-                    } catch (ePlug) {}
+                    } catch (eMtAfter) {}
                 }
                 return result;
             });

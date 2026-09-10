@@ -3943,9 +3943,12 @@
                 options: options,
                 signal: genSignal
             };
-            var pluginReady = global.MiyaPlugins && typeof global.MiyaPlugins.beforeGenerate === 'function'
-                ? global.MiyaPlugins.beforeGenerate(pluginCtx)
-                : Promise.resolve(pluginCtx);
+            var pluginReady;
+            if (global.MiyaMemoryTableApp && typeof global.MiyaMemoryTableApp.beforeGenerate === 'function') {
+                pluginReady = Promise.resolve(global.MiyaMemoryTableApp.beforeGenerate(pluginCtx));
+            } else {
+                pluginReady = Promise.resolve(pluginCtx);
+            }
 
             return pluginReady.then(function (ctxOut) {
             if (ctxOut && Array.isArray(ctxOut.messages)) built.messages = ctxOut.messages;
@@ -4819,15 +4822,15 @@
         })
             .then(function (value) {
                 clearInFlight('done');
-                if (global.MiyaPlugins && typeof global.MiyaPlugins.afterGenerate === 'function') {
+                if (global.MiyaMemoryTableApp && typeof global.MiyaMemoryTableApp.afterGenerate === 'function') {
                     try {
-                        global.MiyaPlugins.afterGenerate({
+                        global.MiyaMemoryTableApp.afterGenerate({
                             scope: 'chat',
                             chatId: chatId,
                             result: value,
                             options: options
                         });
-                    } catch (ePlug) {}
+                    } catch (eMtAfter) {}
                 }
                 return value;
             }, function (err) {
@@ -4836,16 +4839,6 @@
                     clearInFlight('abort', err);
                 } else {
                     clearInFlight('error', err);
-                }
-                if (global.MiyaPlugins && typeof global.MiyaPlugins.onGenerateError === 'function') {
-                    try {
-                        global.MiyaPlugins.onGenerateError({
-                            scope: 'chat',
-                            chatId: chatId,
-                            error: err,
-                            options: options
-                        });
-                    } catch (ePlug2) {}
                 }
                 throw err;
             });

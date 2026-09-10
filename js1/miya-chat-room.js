@@ -5581,9 +5581,7 @@
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
     state.chatId = chatId;
-    if (global.MiyaPlugins && typeof global.MiyaPlugins.notifyRoomOpen === 'function') {
-      try { global.MiyaPlugins.notifyRoomOpen(chatId); } catch (ePlugRoom) {}
-    }
+    // 插件宿主已移除：房间打开通知不再需要
     if (store.updateChat) {
       store.updateChat(chatId, { unread: 0 }).catch(function () {});
     }
