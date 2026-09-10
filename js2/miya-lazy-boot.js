@@ -95,7 +95,7 @@
       js: ['js2/miya-api-bridge.js?v=1']
     },
     simulator: {
-      css: ['css/miya-simulator.css?v=10'],
+      css: ['css/miya-simulator.css?v=11'],
       js: [
         'js2/miya-simulator-store.js?v=14',
         'js2/miya-simulator-engine.js?v=11',

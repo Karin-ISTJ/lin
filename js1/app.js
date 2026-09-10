@@ -498,6 +498,27 @@
   });
   }
 
+  /* 开屏遮罩收尾：桌面层此时已完成渲染，撤掉遮罩并放出桌面。
+     先让 body 退出 miya-booting（触发 .phone 的入场过渡），
+     再给遮罩加 is-done 淡出，最后从 DOM 里摘掉，避免残留节点影响命中测试。 */
+  var bootCoverDone = false;
+  function finishPhoneBoot() {
+    if (bootCoverDone) return;
+    bootCoverDone = true;
+    document.body.classList.remove('miya-booting');
+    phoneLayer.classList.add('is-active');
+    var cover = document.getElementById('miya-bootcover');
+    if (!cover) return;
+    cover.classList.add('is-done');
+    setTimeout(function () {
+      if (cover.parentNode) cover.parentNode.removeChild(cover);
+    }, 460);
+  }
+
+  /* 兜底保险：主题水合依赖网络（远程字体 / 壁纸），弱网或接口挂起时
+     不能让遮罩无限期盖着。无论前面是否 resolve，到点一律放行。 */
+  setTimeout(finishPhoneBoot, 2600);
+
   function runPhoneBoot() {
     if (typeof window.miyaHydrateTheme === 'function') {
       window.miyaHydrateTheme().then(function () {
@@ -507,6 +528,7 @@
         if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
           window.miyaUpdateNotice.onEntryStep('splash');
         }
+        finishPhoneBoot();
       }).catch(function () {
         if (typeof window.miyaInitHomeCopyEdit === 'function') window.miyaInitHomeCopyEdit();
         if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
@@ -515,12 +537,16 @@
         if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
           window.miyaUpdateNotice.onEntryStep('splash');
         }
+        finishPhoneBoot();
       });
     } else if (typeof window.miyaInitHomeCopyEdit === 'function') {
       window.miyaInitHomeCopyEdit();
       if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
         window.miyaUpdateNotice.onEntryStep('splash');
       }
+      finishPhoneBoot();
+    } else {
+      finishPhoneBoot();
     }
   }
 
@@ -539,7 +565,7 @@
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=56').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=58').then(function (reg) {
         try { reg.update(); } catch (e) {}
       }).catch(function () {});
     });

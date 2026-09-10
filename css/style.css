@@ -1170,3 +1170,60 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
     height: var(--app-height, 100dvh);
   }
 }
+
+/* ─── 开屏遮罩（必须放在首屏同步加载的样式表里） ───
+   桌面（#miya-phone-layer / .desk-custom-track）的内容由 JS 异步渲染，
+   首帧时会先露出空桌面。这里在 body.miya-booting 期间用整屏遮罩盖住，
+   等 js1/app.js 的 finishPhoneBoot() 完成后淡出并移除。
+   注意：不能放进 miya-simulator.css，那是懒加载样式表，首帧根本还没到。 */
+.miya-bootcover {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f1eb;
+  opacity: 1;
+  transition: opacity 0.42s ease;
+}
+
+.miya-bootcover.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.miya-bootcover__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.miya-bootcover__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #c4a882;
+  animation: miya-bootcover-pulse 1.1s ease-in-out infinite;
+}
+
+.miya-bootcover__name {
+  font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+  font-size: 20px;
+  letter-spacing: 0.28em;
+  color: #a68b6f;
+  text-indent: 0.28em;
+}
+
+@keyframes miya-bootcover-pulse {
+  0%, 100% { transform: scale(0.82); opacity: 0.5; }
+  50%      { transform: scale(1);    opacity: 1; }
+}
+
+/* 无 JS 兜底：脚本未执行时不要永久遮住界面 */
+html.no-js .miya-bootcover { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .miya-bootcover__dot { animation: none; }
+}
