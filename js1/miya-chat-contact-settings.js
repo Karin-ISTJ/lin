@@ -1092,6 +1092,11 @@
       '<div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>' +
       '<div class="st-deco-ornament" style="bottom: 280px; left: -40px; font-size: 100px;">¶</div>' +
 
+      '<header class="mi-set-title-bar">' +
+        '<h1 class="mi-set-title-bar__name">' + esc(name) + '</h1>' +
+        '<p class="mi-set-title-bar__meta">' + formatNum(msgCount) + ' 条消息</p>' +
+      '</header>' +
+
       renderZone('api', 'API 配置', '管理各模块的服务端点与密钥',
         '<div class="st-form-card ins-form-block">' +
           '<button type="button" class="st-card-row" data-mq-set-api-nav="miya-st-panel-chat">对话 API</button>' +
