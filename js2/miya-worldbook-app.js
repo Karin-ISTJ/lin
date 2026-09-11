@@ -79,18 +79,13 @@
   }
 
   function setActiveDepth(depth) {
-    var app = $('miya-worldbook-app');
-    if (!app) return;
-    var value = store.normalizeDepth ? store.normalizeDepth(depth) : (depth || 'middle');
-    app.querySelectorAll('[data-wb-depth]').forEach(function (btn) {
-      btn.classList.toggle('is-active', btn.getAttribute('data-wb-depth') === value);
-    });
+    /* 历史上这里会去点亮 [data-wb-depth] 按钮，但表单里并不存在这组按钮
+       （深度由「位置」下拉统一决定），属于死代码。保留空实现仅为兼容旧调用。 */
   }
 
   function collectDepth() {
-    var btn = $('miya-worldbook-app') && $('miya-worldbook-app').querySelector('[data-wb-depth].is-active');
-    var raw = btn ? btn.getAttribute('data-wb-depth') : 'middle';
-    return store.normalizeDepth ? store.normalizeDepth(raw) : (raw || 'middle');
+    /* 深度由「位置」下拉经 positionToDepth 推导，不再单独采集。 */
+    return 'middle';
   }
 
   function collectGlobalReach() {
@@ -589,13 +584,6 @@
     app.querySelectorAll('[data-wb-global-reach]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         app.querySelectorAll('[data-wb-global-reach]').forEach(function (b) { b.classList.remove('is-active'); });
-        btn.classList.add('is-active');
-      });
-    });
-
-    app.querySelectorAll('[data-wb-depth]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        app.querySelectorAll('[data-wb-depth]').forEach(function (b) { b.classList.remove('is-active'); });
         btn.classList.add('is-active');
       });
     });

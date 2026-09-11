@@ -813,12 +813,26 @@
          * 否则模型会另起一套默认角色设定，表现为
          * 「思维链里全是默认内容，没有我导入的预设身份」。
          * 原先 buildStCotPromptBlock() 只定义与导出、从未被调用，属于断链，此处补上。
+         *
+         * 去重：条目正文已在 buildStPresetMessages 阶段注入（relative 在前、
+         * in_chat 按深度插入历史内）。这里不再重复整份原文，只补一条轻量的
+         * 「执行检查」提示，避免同一段规则出现两次、白白占用上下文。
+         * 仅当本轮没有任何 ST 条目注入时，才退化为全量兜底输出。
          */
         if (stEngine && typeof stEngine.buildStCotPromptBlock === 'function') {
             try {
-                var stCotBlock = String(stEngine.buildStCotPromptBlock() || '').trim();
-                if (stCotBlock) {
-                    apiMessages.push({ role: 'system', content: stCotBlock });
+                var stInjected = (stPresetFrontMessages || []).concat(stPresetBackMessages || [])
+                    .some(function (m) { return String(m && m.content || '').trim(); });
+                if (stInjected) {
+                    if (typeof stEngine.buildStPresetCheckHint === 'function') {
+                        var stHint = String(stEngine.buildStPresetCheckHint() || '').trim();
+                        if (stHint) apiMessages.push({ role: 'system', content: stHint });
+                    }
+                } else {
+                    var stCotBlock = String(stEngine.buildStCotPromptBlock() || '').trim();
+                    if (stCotBlock) {
+                        apiMessages.push({ role: 'system', content: stCotBlock });
+                    }
                 }
             } catch (eStCot) {}
         }

@@ -1328,8 +1328,11 @@
               </div>
             </div>
             <label class="miya-wb-check" style="margin-top:8px"><input type="checkbox" id="miya-wb-field-group-override"> groupOverride（同组可并列）</label>
-            <label class="ins-field-label" for="miya-wb-field-scan-depth" style="margin-top:10px;display:block">scanDepth（空=全局）</label>
+            <label class="ins-field-label" for="miya-wb-field-scan-depth" style="margin-top:10px;display:block">scanDepth（扫描最近 N 行上下文；空=默认 50）</label>
             <input type="number" class="ins-text-input" id="miya-wb-field-scan-depth" min="0" max="500" placeholder="默认">
+            <p class="ins-field-label" style="margin-top:10px;opacity:.7;line-height:1.5">
+              说明：从 ST 导入的 sticky / cooldown / delay、useGroupScoring 目前不生效（本项目未实现按会话的激活计时与评分）；excludeRecursion / preventRecursion / caseSensitive / matchWholeWords 可被导入并生效，但此处暂未提供编辑入口。
+            </p>
           </details>
 
           <label class="ins-field-label" for="miya-wb-field-name">标题</label>
@@ -4614,7 +4617,7 @@
           <label><span>上下文长度 (Token)</span><input id="stp-gen-context" type="number" min="0" step="1000"></label>
           <label><span>最大回复长度 (Token)</span><input id="stp-gen-max" type="number" min="1" step="100"></label>
           <label><span>每次生成备选回复</span><input id="stp-gen-n" type="number" min="1" max="8" step="1"></label>
-          <label class="stp-gen-check"><span>流式传输</span><input id="stp-gen-stream" type="checkbox"><small>兼容 OpenAI Chat Completions SSE</small></label>
+          <label class="stp-gen-check"><span>流式传输</span><input id="stp-gen-stream" type="checkbox"><small>当前版本固定非流式，此开关暂不生效</small></label>
           <label><span>温度</span><input id="stp-gen-temperature" type="number" min="0" max="2" step="0.01"></label>
           <label><span>频率惩罚</span><input id="stp-gen-frequency" type="number" min="-2" max="2" step="0.01"></label>
           <label><span>存在惩罚</span><input id="stp-gen-presence" type="number" min="-2" max="2" step="0.01"></label>
@@ -4637,7 +4640,7 @@
         <div class="stp-entry-top">
           <label class="stp-editor__field"><span>姓名</span><input id="stp-edit-name" type="text" maxlength="120" autocomplete="off" placeholder="例如：角色行为规则"></label>
           <label class="stp-editor__field"><span>身份</span><select id="stp-edit-role"><option value="system">system</option><option value="user">user</option><option value="assistant">assistant</option></select></label>
-          <label class="stp-editor__field"><span>触发器</span><select id="stp-edit-trigger"><option value="normal">正常</option><option value="continue">续写</option><option value="impersonate">代写</option><option value="swipe">切换回复</option><option value="regenerate">重新生成</option><option value="quiet">静默</option></select></label>
+          <label class="stp-editor__field"><span>触发器</span><select id="stp-edit-trigger" title="当前版本所有启用条目均无条件注入，此选项暂不生效"><option value="normal">正常</option><option value="continue">续写</option><option value="impersonate">代写</option><option value="swipe">切换回复</option><option value="regenerate">重新生成</option><option value="quiet">静默</option></select></label>
           <label class="stp-editor__field"><span>位置</span><select id="stp-edit-position"><option value="relative">相对 · Relative</option><option value="in_chat">In-chat · 聊天记录内</option></select></label>
         </div>
         <label class="stp-editor__field stp-content-field"><span>提示词</span><textarea id="stp-edit-content" rows="14" placeholder="输入 ST Prompt Entry 正文"></textarea></label>
@@ -4648,10 +4651,11 @@
         <label class="stp-editor__field"><span>Identifier（可选）</span><input id="stp-edit-identifier" type="text" maxlength="120" autocomplete="off"></label>
         <div class="stp-editor__checks">
           <label><input id="stp-edit-enabled" type="checkbox" checked> 启用</label>
-          <label><input id="stp-edit-system" type="checkbox" checked> system_prompt</label>
+          <label title="当前版本恒以 system 身份注入，此选项暂不生效"><input id="stp-edit-system" type="checkbox" checked> system_prompt</label>
           <label><input id="stp-edit-marker" type="checkbox"> 标记位（不注入正文）</label>
-          <label><input id="stp-edit-forbid" type="checkbox"> forbid_overrides</label>
+          <label title="当前版本无提示词覆盖机制，此选项暂不生效"><input id="stp-edit-forbid" type="checkbox"> forbid_overrides</label>
         </div>
+        <p class="stp-editor__note">说明：触发器 / system_prompt / forbid_overrides 三个选项会被记录，但当前版本尚不生效。</p>
       </div>
       <footer class="stp-editor__foot"><button type="button" class="stp-btn" data-stp-editor-close>取消</button><button type="button" class="stp-btn stp-btn--primary" id="stp-editor-save">保存条目</button></footer>
     </section>

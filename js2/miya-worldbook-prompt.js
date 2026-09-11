@@ -279,19 +279,29 @@
     var includeProfile = cfg.skipChronicleProfile !== true && cfg.layersOnly !== true;
     var profileBlock = includeProfile ? renderChronicleProfile(roleId) : '';
     var relationBlock = includeProfile ? renderRelationshipBlock(roleId) : '';
-    var keywordMatched = matcher && typeof matcher.matchEntries === 'function'
-      ? matcher.matchEntries({
-          roleId: roleId,
-          roleIds: roleIds,
-          contextText: contextText,
-          promptContext: promptContext,
-          entries: keywordPool
-        })
-      : { matched: [], global: [], local: [] };
+    /* 走 ST 流水线时，激活判定由 ST 独占负责（rg 正则 / selective / matchWholeWords /
+       caseSensitive / probability 都在那边实现）。此时不再跑 matcher 预筛，
+       否则两套判定分叉会把正常词条静默丢掉。 */
+    var st = global.miyaWorldbookST;
+    var useStPipeline = !!(st && typeof st.runPipeline === 'function' && cfg.useStPipeline !== false);
+    var keywordMatched;
+    if (useStPipeline) {
+      keywordMatched = { matched: [], global: [], local: [] };
+    } else {
+      keywordMatched = matcher && typeof matcher.matchEntries === 'function'
+        ? matcher.matchEntries({
+            roleId: roleId,
+            roleIds: roleIds,
+            contextText: contextText,
+            promptContext: promptContext,
+            entries: keywordPool
+          })
+        : { matched: [], global: [], local: [] };
+    }
 
     var merged = mergeForcedMatches({
       matched: (keywordMatched.matched || []).filter(notExcluded),
-      entries: entries,
+      entries: useStPipeline ? keywordPool : entries,
       bindings: Array.isArray(cfg.extraBindings) ? cfg.extraBindings : [],
       forcedEntryIds: cfg.forcedEntryIds || cfg.entryIds || [],
       contextText: contextText,
@@ -308,10 +318,9 @@
       merged.push(entry);
     });
 
-    /* ST 对齐：分组互斥 + sticky/cooldown + token 预算 */
-    var st = global.miyaWorldbookST;
+    /* ST 对齐：激活判定 + 分组互斥 + token 预算（sticky/cooldown/delay 见下方说明，本项目未实现） */
     var budgetMeta = null;
-    if (st && typeof st.runPipeline === 'function' && cfg.useStPipeline !== false) {
+    if (useStPipeline) {
       var budget = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
       var pipe = st.runPipeline(merged, {
         contextText: contextText,
@@ -321,7 +330,8 @@
         chatId: cfg.chatId,
         dryRun: !!cfg.dryRun
       });
-      /* 与原匹配结果取交集优先：pipeline 在已匹配集上再过滤 */
+      /* ST 流水线是激活判定的唯一权威来源；这里只把它选出的条目映射回原对象，
+         保留引用（mutable 字段如 position/depth 由原对象提供）。 */
       var idset = {};
       merged.forEach(function (e) { if (e && e.id) idset[String(e.id)] = e; });
       merged = (pipe.selected || []).map(function (e) {

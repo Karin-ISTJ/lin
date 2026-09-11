@@ -1376,6 +1376,36 @@
     }
 
     /**
+     * 轻量版「执行检查」提示。
+     *
+     * 条目正文已经通过 buildStPresetMessages 注入到最前 / 历史内了，末尾再贴一遍全文
+     * 属于重复注入。这里只保留一句元指令：提醒模型「本轮有 ST 规则在生效、必须逐条落实」，
+     * 以及本轮实际生效的条目名清单（仅名字，不含正文），既能起到点名作用又不重复占额度。
+     */
+    function buildStPresetCheckHint() {
+        var names = [];
+        try {
+            var stpStore = global.miyaStPromptPresetsStore;
+            var entries = stpStore && typeof stpStore.getEnabledForRequest === 'function'
+                ? (stpStore.getEnabledForRequest() || [])
+                : [];
+            entries.forEach(function (entry) {
+                if (!String(entry && entry.content || '').trim()) return;
+                var name = String(entry && (entry.name || entry.identifier) || '').trim();
+                if (name && names.indexOf(name) < 0) names.push(name);
+            });
+        } catch (e) {}
+        if (!names.length) return '';
+        var lines = [
+            '【ST 预设·执行检查】',
+            '本轮有 ' + names.length + ' 条 ST 预设条目已注入上下文（正文见前文与历史内相应位置）。',
+            '必须在生成前完整读取并逐条应用；不得因条目名称或位置未出现“COT/思维链”字样而跳过。',
+            '生效条目：' + names.join(' / ')
+        ];
+        return lines.join('\n');
+    }
+
+    /**
      * ST-compatible prompt export.
      *
      * SillyTavern does NOT implement "back" as simply appending a system message.
@@ -2643,10 +2673,12 @@
         var limit = settings && settings.memoryCount
             ? Math.min(500, Math.max(1, settings.memoryCount))
             : HISTORY_LIMIT;
-        /* ST 预设的上下文长度作为额外的历史预算；按约 4 字符/Token 估算，避免改动系统提示。 */
+        /* ST 预设的 contextLength 原先被换算成 stContextChars，却只用于把 limit
+           夹到 500，任何正值结果都一样，等于没生效。这里改为真正按 contextLength
+           预留历史预算：按约 4 字符/Token 估算可容纳的字符数，再按历史配置取小。 */
         var stContextChars = Number(stGeneration.contextLength) * 4;
         if (Number.isFinite(stContextChars) && stContextChars > 0) {
-            limit = Math.min(limit, 500);
+            limit = Math.min(limit, Math.max(1, Math.floor(stContextChars / 400)));
         }
         /*
          * 每次触发回复都从 store 现读时间线：按 memoryCount 注入最近完整一段
@@ -3140,12 +3172,26 @@
          * 位置取在所有世界书后置与编年史之后、【生成前最后确认】之前：
          * 既贴近生成点拿到强注意力，又不会打断「最后确认」紧贴末尾的衔接语义。
          * 原先 buildStCotPromptBlock() 只定义与导出、从未被调用，属于断链，此处补上。
+         *
+         * 去重：全部启用条目都已在 buildStPresetMessages 阶段分配了去处 ——
+         * relative 条目拼进 apiMessages 最前面，in_chat 条目按深度插进历史内部。
+         * 若这里再把整份原文拼一遍，同一段规则会出现两次，既浪费预算又稀释注意力。
+         * 因此本层默认只做「执行检查」提示，不再重复正文；
+         * 仅当本轮压根没有任何 ST 条目落到 apiMessages 时，才退化为全量兜底输出。
          */
         if (!opts.callMode) {
             try {
                 var stCotBlockOnline = String(buildStCotPromptBlock() || '').trim();
                 if (stCotBlockOnline) {
-                    apiMessages.push({ role: 'system', content: stCotBlockOnline });
+                    var stPresetInjected = (stPresetFrontMessages || []).concat(stPresetBackMessages || [])
+                        .some(function (m) { return String(m && m.content || '').trim(); });
+                    /* 正文已在上文注入过，这里只补一条轻量的执行检查提示。 */
+                    if (!stPresetInjected) {
+                        apiMessages.push({ role: 'system', content: stCotBlockOnline });
+                    } else {
+                        var stCheckHint = buildStPresetCheckHint();
+                        if (stCheckHint) apiMessages.push({ role: 'system', content: stCheckHint });
+                    }
                 }
             } catch (eStCotOnline) {}
         }
@@ -4002,6 +4048,9 @@
                 if (stGen.topP != null) reqPayload.top_p = Number(stGen.topP);
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
+                /* 请求层固定走非流式（fetchChatCompletion 按非流式解析 body），
+                   所以这里恒为 false。ST 预设里的「流式」开关只影响文案展示，
+                   不再对外宣称可切换——详见 miya-st-prompt-presets-app.js 的摘要文案。 */
                 reqPayload.stream = false;
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1, genSignal).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
@@ -4892,6 +4941,7 @@
         buildStPresetMessages: buildStPresetMessages,
         injectStInChatMessages: injectStInChatMessages,
         buildStCotPromptBlock: buildStCotPromptBlock,
+        buildStPresetCheckHint: buildStPresetCheckHint,
         buildApiMessages: buildApiMessages,
         setPendingOnlineReturnPrompt: function (chatId, text) {
             var key = String(chatId || '').trim();

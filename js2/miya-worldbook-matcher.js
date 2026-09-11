@@ -7,8 +7,24 @@
     return src.split(/[,，、;；]+/).map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
-  function includesKeyword(text, keywords) {
+  /**
+   * 关键词命中判断。
+   *
+   * 注意：这里必须与 miya-worldbook-st.keywordMatches 保持同一套语义。
+   * 历史上本函数是独立的 indexOf 实现，只做小写化字面量匹配，不认正则、
+   * 不认 matchWholeWords / caseSensitive。而词条随后还会被 ST 流水线再匹配
+   * 一次（miya-worldbook-prompt.js 的 runPipeline），两套判定不一致时，
+   * 「第一套命中、第二套未命中」的词条会被静默丢弃。
+   * 现在统一委托给 ST 实现，保证单点语义。
+   */
+  function includesKeyword(text, keywords, opts) {
     if (!Array.isArray(keywords) || keywords.length === 0) return true;
+    var st = global.miyaWorldbookST;
+    if (st && typeof st.keywordMatches === 'function') {
+      return keywords.some(function (kw) {
+        return st.keywordMatches(text, kw, opts || {});
+      });
+    }
     var source = String(text || '').toLowerCase();
     return keywords.some(function (kw) {
       var k = String(kw || '').trim().toLowerCase();
@@ -107,9 +123,10 @@
     var st = global.miyaWorldbookST;
 
     function stKeywordMatch() {
+      var opts = { caseSensitive: !!entry.caseSensitive, matchWholeWords: !!entry.matchWholeWords };
       if (!st || typeof st.activateEntries !== 'function') {
         if (entry.constant) return true;
-        return includesKeyword(contextText, entry.key || entry.keywords || []);
+        return includesKeyword(contextText, entry.key || entry.keywords || [], opts);
       }
       var res = st.activateEntries([entry], {
         contextText: contextText,

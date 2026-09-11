@@ -235,18 +235,36 @@
     return anyKeyMatch(text, sec, opts);
   }
 
+  /**
+   * 构造用于关键词扫描的文本。
+   *
+   * ST 语义里 scanDepth 是「扫描最近 N 条消息」。本项目有两条来源：
+   *  1) messages 数组存在 —— 按 ST 原意取末尾 N 条；
+   *  2) 只有 contextText —— 这是把历史按行拼成的长字符串。历史上这里直接返回
+   *     全文，导致 scanDepth 完全失效，且角色自己过去的发言也会触发词条
+   *     （「AI 说了句话，就把对应词条激活了」）。现在按行截取末尾 N 行近似 ST 行为。
+   */
   function buildScanText(input) {
     if (input.scanText) return String(input.scanText);
     var msgs = Array.isArray(input.messages) ? input.messages : [];
     var depth = input.scanDepth != null ? clampInt(input.scanDepth, 0, 1000, 50) : 50;
-    if (!msgs.length) return String(input.contextText || '');
-    var slice = msgs.slice(-Math.max(0, depth));
-    return slice
-      .map(function (m) {
-        if (typeof m === 'string') return m;
-        return String((m && (m.content || m.text)) || '');
-      })
-      .join('\n');
+    if (msgs.length) {
+      var slice = msgs.slice(-Math.max(0, depth));
+      return slice
+        .map(function (m) {
+          if (typeof m === 'string') return m;
+          return String((m && (m.content || m.text)) || '');
+        })
+        .join('\n');
+    }
+    var ctx = String(input.contextText || '');
+    if (!ctx) return '';
+    /* contextText 是逐行拼接的上下文：按行取末尾 depth 行，使 scanDepth 真正生效，
+       避免整段历史（含角色自己的历史发言）无差别参与关键词扫描。 */
+    if (ctx.indexOf('\n') < 0) return ctx;
+    var lines = ctx.split('\n');
+    if (lines.length <= depth) return ctx;
+    return lines.slice(-Math.max(1, depth)).join('\n');
   }
 
   /**

@@ -124,7 +124,8 @@
     Object.keys(map).forEach(function (id) { if ($(id)) $(id).value = String(map[id]); });
     if ($('stp-gen-stream')) $('stp-gen-stream').checked = g.stream !== false;
     var summary = $('stp-gen-summary');
-    if (summary) summary.textContent = '温度 ' + g.temperature + ' · Top P ' + g.topP + (g.stream !== false ? ' · 流式' : ' · 非流式');
+    /* 流式开关在请求层被硬编码为 false，这里不再宣称「流式」，避免误导。 */
+    if (summary) summary.textContent = '温度 ' + g.temperature + ' · Top P ' + g.topP + ' · 非流式';
   }
 
   function openEditor(id) {
