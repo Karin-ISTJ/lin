@@ -1356,12 +1356,14 @@
     syncTopbarSaveButton(panelId);
   }
 
-  /* 顶栏右侧保存按钮：只在下面这四个 API 面板里出现。
-     面板本身是滚动容器，原来保存按钮在表单最末尾，得一路滚到底才能点。 */
+  /* 顶栏右侧保存按钮：只在下面这些面板里出现。
+     面板本身是滚动容器，原来保存按钮在表单最末尾，得一路滚到底才能点。
+     联系人聊天设置面板同样改为统一走右上角保存。 */
   var TOPBAR_SAVE_PANELS = {
     'miya-st-panel-chat': 1,
     'miya-st-panel-imagegen': 1,
-    'miya-st-panel-voice': 1
+    'miya-st-panel-voice': 1,
+    'miya-st-panel-contact-chat': 1
   };
 
   function syncTopbarSaveButton(panelId) {
@@ -2363,6 +2365,14 @@
       var panelId = active ? active.id : '';
       if (panelId === 'miya-st-panel-chat') { saveChatApiPanel(); return; }
       if (panelId === 'miya-st-panel-voice') { saveVoiceApiPanel(); return; }
+      if (panelId === 'miya-st-panel-contact-chat') {
+        if (global.miyaChatSettingsPanel && typeof global.miyaChatSettingsPanel.saveFromTopbar === 'function') {
+          global.miyaChatSettingsPanel.saveFromTopbar();
+        } else {
+          toast('聊天设置模块未加载，请刷新页面');
+        }
+        return;
+      }
       if (panelId === 'miya-st-panel-imagegen') {
         var proxy = $('miya-st-ig-save');
         if (proxy) { proxy.click(); return; }

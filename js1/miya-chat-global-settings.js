@@ -167,11 +167,23 @@
     var useGlobal = contactUsesGlobal(cid);
     var slice = useGlobal ? st.global : (st.perContact[cid] && st.perContact[cid].settings) || {};
     MANAGED_KEYS.forEach(function (k) {
-      if (slice[k] != null) {
-        out[k] = typeof slice[k] === 'object' && !Array.isArray(slice[k])
-          ? Object.assign({}, out[k] || {}, slice[k])
-          : slice[k];
+      if (slice[k] == null) return;
+      if (k === 'backgroundMessage') {
+        /*
+         * farm 是会话级（每个聊天独立的）数据，不属于全局配置的管理范围。
+         * defaultChatSettings() 里带了一个 farm 空模板（playerPlots: [] 等），
+         * 它会被 defaultGlobalSlice() 拷进全局配置；若无条件浅合并，这个空模板
+         * 就会盖掉真实农场 —— 表现为「作物种下去就消失」。
+         * 这里剔除全局 slice 里的 farm，只让 backgroundMessage 的其它字段生效。
+         */
+        var clean = Object.assign({}, slice[k]);
+        delete clean.farm;
+        out[k] = Object.assign({}, out[k] || {}, clean);
+        return;
       }
+      out[k] = typeof slice[k] === 'object' && !Array.isArray(slice[k])
+        ? Object.assign({}, out[k] || {}, slice[k])
+        : slice[k];
     });
     return out;
   }

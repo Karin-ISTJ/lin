@@ -310,32 +310,11 @@
     });
 
     $('miya-ct-chat-save-global').addEventListener('click', function () {
-      var mod = gs();
-      if (!mod) return;
-      var st = mod.getState();
-      var prevBg = (st.global && st.global.backgroundMessage) || {};
-      var patch = readForm('miya-ct-chat-global', st.global);
-      stampBackgroundActiveToggle(patch.backgroundMessage, prevBg);
-      mod.saveState({ useGlobal: isToggleOn('miya-ct-chat-use-global'), global: patch }).then(function () {
-        panelDraft.global = null;
-        panelDraft.useGlobal = null;
-        loadGlobalForm();
-        if (global.miyaSettingsApp && global.miyaSettingsApp.toast) {
-          global.miyaSettingsApp.toast('全局聊天设置已保存');
-        }
-      });
+      saveGlobalForm();
     });
 
-    var useGlobalEl = $('miya-ct-chat-use-global');
-    if (useGlobalEl) {
-      useGlobalEl.addEventListener('click', function () {
-        var mod = gs();
-        if (!mod) return;
-        setTimeout(function () {
-          mod.saveState({ useGlobal: isToggleOn('miya-ct-chat-use-global') });
-        }, 0);
-      });
-    }
+    /* 「全员使用全局配置」不再自动落库：与其它字段统一语义，
+       必须点保存（面板底部按钮或右上角保存）才生效。 */
 
     $('miya-ct-chat-pick-contact').addEventListener('change', function () {
       if (selectedContactId) capturePerDraft(selectedContactId);
@@ -359,25 +338,61 @@
     });
 
     $('miya-ct-chat-save-per').addEventListener('click', function () {
-      if (!selectedContactId) return;
-      var mod = gs();
-      if (!mod) return;
-      var useGlobal = isToggleOn('miya-ct-chat-per-use-global');
-      if (useGlobal) {
-        mod.savePerContact(selectedContactId, { useGlobal: true, settings: {} }).then(function () {
-          if (global.miyaSettingsApp) global.miyaSettingsApp.toast('已恢复使用全局配置');
-        });
-        return;
+      savePerContactForm();
+    });
+  }
+
+  /** 保存全局默认区（含「全员使用全局配置」开关） */
+  function saveGlobalForm() {
+    var mod = gs();
+    if (!mod) return Promise.resolve(false);
+    var st = mod.getState();
+    var prevBg = (st.global && st.global.backgroundMessage) || {};
+    var patch = readForm('miya-ct-chat-global', st.global);
+    stampBackgroundActiveToggle(patch.backgroundMessage, prevBg);
+    return mod.saveState({ useGlobal: isToggleOn('miya-ct-chat-use-global'), global: patch }).then(function () {
+      panelDraft.global = null;
+      panelDraft.useGlobal = null;
+      loadGlobalForm();
+      if (global.miyaSettingsApp && global.miyaSettingsApp.toast) {
+        global.miyaSettingsApp.toast('全局聊天设置已保存');
       }
-      var base = mod.getState().global;
-      var prevRow = mod.getState().perContact[selectedContactId] || {};
-      var prevBg = (prevRow.settings && prevRow.settings.backgroundMessage) || base.backgroundMessage || {};
-      var patch = readForm('miya-ct-chat-per', base);
-      stampBackgroundActiveToggle(patch.backgroundMessage, prevBg);
-      mod.savePerContact(selectedContactId, { useGlobal: false, settings: patch }).then(function () {
-        delete panelDraft.perByContact[selectedContactId];
-        if (global.miyaSettingsApp) global.miyaSettingsApp.toast('联系人单独设置已保存');
+      return true;
+    });
+  }
+
+  /** 保存按联系人区（仅在选中联系人后可用） */
+  function savePerContactForm() {
+    if (!selectedContactId) return Promise.resolve(false);
+    var mod = gs();
+    if (!mod) return Promise.resolve(false);
+    var useGlobal = isToggleOn('miya-ct-chat-per-use-global');
+    if (useGlobal) {
+      return mod.savePerContact(selectedContactId, { useGlobal: true, settings: {} }).then(function () {
+        if (global.miyaSettingsApp) global.miyaSettingsApp.toast('已恢复使用全局配置');
+        return true;
       });
+    }
+    var base = mod.getState().global;
+    var prevRow = mod.getState().perContact[selectedContactId] || {};
+    var prevBg = (prevRow.settings && prevRow.settings.backgroundMessage) || base.backgroundMessage || {};
+    var patch = readForm('miya-ct-chat-per', base);
+    stampBackgroundActiveToggle(patch.backgroundMessage, prevBg);
+    return mod.savePerContact(selectedContactId, { useGlobal: false, settings: patch }).then(function () {
+      delete panelDraft.perByContact[selectedContactId];
+      if (global.miyaSettingsApp) global.miyaSettingsApp.toast('联系人单独设置已保存');
+      return true;
+    });
+  }
+
+  /**
+   * 顶栏保存按钮的统一入口：把当前面板里能保存的都存一遍。
+   * 未选中联系人时只存全局区，避免把「按联系人」表单当空表单提交。
+   */
+  function saveFromTopbar() {
+    return saveGlobalForm().then(function () {
+      if (selectedContactId) return savePerContactForm();
+      return true;
     });
   }
 
@@ -397,5 +412,8 @@
     });
   }
 
-  global.miyaChatSettingsPanel = { onPanelOpen: onPanelOpen };
+  global.miyaChatSettingsPanel = {
+    onPanelOpen: onPanelOpen,
+    saveFromTopbar: saveFromTopbar
+  };
 })(window);
