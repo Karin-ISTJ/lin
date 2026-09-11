@@ -1759,7 +1759,7 @@
 }
 
 /* v38 floor/chat-record mode */
-.xw-floor{position:relative;margin:0 0 14px}.xw-floor__head{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:3px 6px;opacity:.72;font-size:12px}.xw-floor__tools{display:flex;gap:4px}.xw-floor__tool{width:28px;height:28px;border:0;background:transparent;padding:5px;border-radius:8px;cursor:pointer}.xw-floor__tool svg{width:100%;height:100%}.xw-floor.is-floor-hidden>*:not(.xw-floor__head){display:none!important}.xw-floor.is-floor-hidden .xw-block__body,.xw-floor.is-floor-hidden [data-ap-msg-id]{display:none!important}.xw-floor.is-floor-hidden:after{content:'这一层已隐藏 · 不参与生成 · 点楼层眼睛恢复';display:block;padding:12px 14px;border:1px dashed currentColor;opacity:.42;border-radius:10px;font-size:12px}.xw-vault__head{display:flex;align-items:center;justify-content:space-between;gap:12px}.xw-vault__actions{display:flex;gap:6px;flex-wrap:wrap}.xw-vault-card__actions{display:flex;align-items:center;gap:4px;padding:0 10px 10px}.xw-vault-card__mini{border:0;background:transparent;font-size:11px;padding:4px 6px;cursor:pointer;opacity:.72}
+.xw-floor{position:relative;margin:0 0 14px}.xw-floor__head{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:3px 6px;opacity:.72;font-size:12px}.xw-floor__tools{display:flex;gap:4px}.xw-floor__tool{width:28px;height:28px;border:0;background:transparent;padding:5px;border-radius:8px;cursor:pointer}.xw-floor__tool svg{width:100%;height:100%}.xw-floor__tool.is-off{background:rgba(0,0,0,.07);color:inherit;opacity:.9}.xw-floor__tool.is-off:hover{background:rgba(0,0,0,.11)}.xw-floor.is-floor-hidden .xw-floor__head span[data-floor-tag='hidden']{font-weight:600;opacity:.95}.xw-floor.is-floor-hidden .xw-floor__head{opacity:.85}.xw-floor.is-floor-hidden>*:not(.xw-floor__head){display:none!important}.xw-floor.is-floor-hidden .xw-block__body,.xw-floor.is-floor-hidden [data-ap-msg-id]{display:none!important}.xw-floor.is-floor-hidden:after{content:'这一层已隐藏 · 不参与生成 · 点楼层眼睛恢复';display:block;padding:12px 14px;border:1px dashed currentColor;opacity:.42;border-radius:10px;font-size:12px}.xw-vault__head{display:flex;align-items:center;justify-content:space-between;gap:12px}.xw-vault__actions{display:flex;gap:6px;flex-wrap:wrap}.xw-vault-card__actions{display:flex;align-items:center;gap:4px;padding:0 10px 10px}.xw-vault-card__mini{border:0;background:transparent;font-size:11px;padding:4px 6px;cursor:pointer;opacity:.72}
 
 
 /* v39: 顶部工具栏布局优化 */
@@ -1779,6 +1779,10 @@
 .xw-floor-scope__go{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;border-radius:6px;padding:3px;cursor:pointer;color:inherit;opacity:.78}
 .xw-floor-scope__go:active{background:rgba(0,0,0,.055);transform:scale(.94)}
 .xw-floor-scope__go svg{width:100%;height:100%}
+/* 隐藏键常态就带一点警示色，和「显示」键区分开，避免误点 */
+.xw-floor-scope__go--hide{opacity:.9}
+.xw-floor-scope__go--hide:hover{background:rgba(0,0,0,.06)}
+.xw-floor-scope__go--show:hover{background:rgba(0,0,0,.06)}
 /* 非手帐主题（素纸/自定义）没有顶栏，范围输入框改为右上角悬浮胶囊 */
 .xw-floor-scope-float{position:absolute;top:10px;right:12px;z-index:30}
 .xw-floor-scope-float .xw-floor-scope{background:rgba(255,255,255,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 10px rgba(0,0,0,.08)}

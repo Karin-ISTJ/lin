@@ -55,6 +55,12 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v6a4 4 0 0 0 4 4h6" ' + _I + '/><path d="M15 12l4 3-4 3" ' + _I + '/><path d="M7 5v14" ' + _I + '/></svg>';
     var ICON_EYE =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" ' + _I + '/><circle cx="12" cy="12" r="2.5" ' + _I + '/></svg>';
+    /*
+     * 闭眼（带斜杠）：表示「这一层当前是隐藏的」。
+     * 与 ICON_EYE 成对使用——用户一眼就能分辨楼层状态，不用回想点过几次。
+     */
+    var ICON_EYE_OFF =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6c1.6 0 3 .4 4.3 1" ' + _I + '/><path d="M20.4 9.2c.7 1 1.1 1.8 1.1 1.8s-3.5 6-9.5 6c-1.2 0-2.3-.2-3.3-.6" ' + _I + '/><path d="M9.9 9.9a2.5 2.5 0 0 0 3.4 3.4" ' + _I + '/><path d="M4 4l16 16" ' + _I + '/></svg>';
     var ICON_PLUS =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" ' + _I + '/></svg>';
     var ICON_EMOJI =
@@ -704,6 +710,10 @@
      * 楼层范围输入框本体。手帐主题塞进顶栏，素纸/自定义主题没有顶栏，
      * 所以单独渲染成右上角悬浮胶囊（见 renderFloatFloorScope）。
      * 只在正片页出现：卷宗/回顾页不该改动已封存的内容。
+     *
+     * 「隐藏」「显示」做成两个独立按钮而非一个切换键：
+     * 填入范围后按哪个就是哪个，同一个范围连点两次结果不变（幂等），
+     * 不会再出现「隐藏了 1 层、显示了 2 层」这种要心算的结果。
      */
     function renderFloorScopeHtml() {
         if (!(ui.view === 'story' && !ui.viewingArchive)) return '';
@@ -711,10 +721,12 @@
             '<div class="xw-floor-scope">' +
             '<input type="text" class="xw-floor-scope__input" id="xw-floor-scope-input"' +
             ' inputmode="numeric" autocomplete="off" spellcheck="false"' +
-            ' placeholder="3-8" title="输入楼层范围后回车隐藏/显示，如 3-8 或 5"' +
-            ' aria-label="楼层范围隐藏">' +
-            '<button type="button" class="xw-floor-scope__go" id="xw-floor-scope-go"' +
-            ' title="应用楼层范围" aria-label="应用楼层范围">' + ICON_EYE + '</button>' +
+            ' placeholder="3-8" title="填楼层范围，如 3-8 或 5（支持 3-8,11）"' +
+            ' aria-label="楼层范围">' +
+            '<button type="button" class="xw-floor-scope__go xw-floor-scope__go--hide" id="xw-floor-scope-hide"' +
+            ' title="隐藏范围内楼层（不参与生成）" aria-label="隐藏范围内楼层">' + ICON_EYE_OFF + '</button>' +
+            '<button type="button" class="xw-floor-scope__go xw-floor-scope__go--show" id="xw-floor-scope-show"' +
+            ' title="显示范围内楼层" aria-label="显示范围内楼层">' + ICON_EYE + '</button>' +
             '</div>'
         );
     }
@@ -1378,13 +1390,22 @@
             if (block) {
                 var floorNo = i + 1;
                 var hiddenCls = m.hidden ? ' is-floor-hidden' : '';
+                /*
+                 * 隐藏中显示闭眼（带斜杠）+ 高亮底色，显示中显示实心眼。
+                 * 之前两种状态用的是同一个图标，用户点完根本看不出来生效没有。
+                 */
                 var floorTools = canEdit
                     ? '<div class="xw-floor__tools">' +
                       '<button type="button" class="xw-floor__tool" data-ap-floor-branch="' + esc(m.id) + '" title="从这一层建立分支">' + ICON_BRANCH + '</button>' +
-                      '<button type="button" class="xw-floor__tool" data-ap-floor-hide="' + esc(m.id) + '" title="' + (m.hidden ? '显示这一层' : '隐藏这一层') + '">' + ICON_EYE + '</button>' +
+                      '<button type="button" class="xw-floor__tool' + (m.hidden ? ' is-off' : '') + '" data-ap-floor-hide="' + esc(m.id) + '"' +
+                      ' data-floor-hidden="' + (m.hidden ? '1' : '0') + '"' +
+                      ' aria-pressed="' + (m.hidden ? 'true' : 'false') + '"' +
+                      ' title="' + (m.hidden ? '已隐藏 · 点一下恢复这一层' : '隐藏这一层（不参与生成）') + '">' +
+                      (m.hidden ? ICON_EYE_OFF : ICON_EYE) + '</button>' +
                       '</div>' : '';
                 html += '<section class="xw-floor' + hiddenCls + '" data-ap-floor="' + esc(m.id) + '">' +
-                    '<header class="xw-floor__head"><span>第 ' + String(floorNo) + ' 层</span>' + floorTools + '</header>' + block + '</section>';
+                    '<header class="xw-floor__head"><span' + (m.hidden ? ' data-floor-tag="hidden"' : '') + '>第 ' + String(floorNo) + ' 层' +
+                    (m.hidden ? ' · 已隐藏' : '') + '</span>' + floorTools + '</header>' + block + '</section>';
             }
             var idx = i + 1;
             while (sumPtr < sums.length && (sums[sumPtr].endIndex || 0) === idx) {
@@ -1471,8 +1492,27 @@
                 ? String(lastSum.id || '') + '|' + String(lastSum.content || '').length
                 : '') +
             ':td' +
-            (resolveTextDecor() ? '1' : '0')
+            (resolveTextDecor() ? '1' : '0') +
+            /*
+             * 楼层隐藏指纹必须进 key：原来只看最后一条消息，
+             * 隐藏第 1~3 层时 key 不变 → patchStoryBody 判定「无变化」→ DOM 不重建，
+             * 于是眼睛图标永远停在旧状态（用户以为没生效）。
+             */
+            ':fh' +
+            floorHiddenFingerprint(m)
         );
+    }
+
+    /** 楼层隐藏状态指纹：只关心「哪些位置是隐藏的」，与内容无关 */
+    function floorHiddenFingerprint(msgs) {
+        var out = '';
+        var list = msgs || [];
+        for (var i = 0; i < list.length; i++) {
+            var m = list[i];
+            if (!m || m.deleted) continue;
+            out += m.hidden ? '1' : '0';
+        }
+        return out;
     }
 
     function getStoryBodyEl() {
@@ -3212,8 +3252,14 @@ function renderWriter() {
         return ranges;
     }
 
-    /** 范围内每层隐藏状态各自取反 */
-    function toggleFloorRange(text) {
+    /*
+     * 范围内统一设为隐藏或显示。
+     * 语义从「取反」改为「设定」——取反的问题是你不知道点之前是什么状态，
+     * 填 1-3 可能出来「隐藏 1 层、显示 2 层」这种看不懂的结果。
+     * 现在填 1-3 点「隐藏」就是把 1~3 楼设成隐藏，幂等，重复点结果一致。
+     */
+    function setFloorRange(text, mode) {
+        var wantHidden = mode === 'hide';
         var sess = apStore().getSession(ui.chatId, ui.sessionId);
         if (!sess) { toast('当前没有打开的场次'); return false; }
         var ranges = parseFloorRange(text);
@@ -3223,7 +3269,7 @@ function renderWriter() {
         Object.keys(byNo).forEach(function (k) { maxNo = Math.max(maxNo, parseInt(k, 10)); });
         if (!maxNo) { toast('本场还没有楼层'); return false; }
 
-        var hit = 0, hid = 0, shown = 0;
+        var hit = 0, changed = 0, same = 0;
         var touched = {};
         ranges.forEach(function (r) {
             for (var n = r[0]; n <= r[1]; n++) {
@@ -3232,14 +3278,29 @@ function renderWriter() {
                 if (!m || touched[m.id]) continue;
                 touched[m.id] = 1;
                 hit += 1;
-                var next = !m.hidden;
-                apStore().updateMessage(ui.chatId, ui.sessionId, m.id, { hidden: next });
-                if (next) hid += 1; else shown += 1;
+                if (!!m.hidden === wantHidden) { same += 1; continue; }
+                apStore().updateMessage(ui.chatId, ui.sessionId, m.id, { hidden: wantHidden });
+                changed += 1;
             }
         });
         if (!hit) { toast('范围内没有楼层（本场共 ' + maxNo + ' 层）'); return false; }
         patchStoryBody();
-        toast('已隐藏 ' + hid + ' 层，恢复 ' + shown + ' 层');
+        if (!changed) {
+            toast(wantHidden
+                ? '这 ' + String(hit) + ' 层本来就是隐藏的'
+                : '这 ' + String(hit) + ' 层本来就是显示的');
+            return true;
+        }
+        /* 提示里点名具体楼层，用户不用回去数 */
+        var nums = Object.keys(touched).map(function (id) {
+            var n = 0;
+            Object.keys(byNo).forEach(function (k) { if (byNo[k].id === id) n = parseInt(k, 10); });
+            return n;
+        }).filter(Boolean).sort(function (a, b) { return a - b; });
+        var list = nums.length > 12
+            ? nums.slice(0, 12).join('、') + ' 等 ' + String(nums.length) + ' 层'
+            : nums.join('、');
+        toast((wantHidden ? '已隐藏第 ' : '已显示第 ') + list + ' 层' + (same ? '（另 ' + String(same) + ' 层已是该状态）' : ''));
         return true;
     }
     function newOfflineChat() {
@@ -3260,14 +3321,40 @@ function renderWriter() {
         }; reader.readAsText(file); }); input.click();
     }
 
+    /*
+     * 楼层工具按钮改用事件委托，绑在 #xw-root 上。
+     * 原因：patchStoryBody() 会重写 mol-story-body 的 innerHTML，
+     * 直接绑在按钮元素上的监听器会随旧节点一起消失——表现就是
+     * 「第一次点有效，之后怎么点都没反应」。委托只绑一次，DOM 换了也照样生效。
+     */
+    function bindFloorToolsDelegate() {
+        var root = $('xw-root');
+        if (!root || root.__miyaFloorToolsBound) return;
+        root.__miyaFloorToolsBound = true;
+        root.addEventListener('click', function (e) {
+            var hideBtn = e.target && e.target.closest ? e.target.closest('[data-ap-floor-hide]') : null;
+            if (hideBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                toggleFloor(hideBtn.getAttribute('data-ap-floor-hide'));
+                return;
+            }
+            var brBtn = e.target && e.target.closest ? e.target.closest('[data-ap-floor-branch]') : null;
+            if (brBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                branchFromFloor(brBtn.getAttribute('data-ap-floor-branch'));
+            }
+        });
+    }
+
     function bindEvents() {
-        document.querySelectorAll('[data-ap-floor-branch]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); branchFromFloor(btn.getAttribute('data-ap-floor-branch')); }); });
-        document.querySelectorAll('[data-ap-floor-hide]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); toggleFloor(btn.getAttribute('data-ap-floor-hide')); }); });
+        bindFloorToolsDelegate();
 
         /*
-         * 顶栏楼层范围输入框：回车 / 点眼睛按钮 都会把 "3-8" 里每层状态翻一遍。
-         * 输入框本身不需要重新渲染，切换完 patchStoryBody() 会就地刷新楼层，
-         * 所以焦点和已输入的文本都能保住——连续微调范围不用重新点输入框。
+         * 范围输入框：两个按钮各管一件事，回车 = 隐藏（最常用的那个）。
+         * 操作完只就地 patch，不整页重渲染，输入框里的文本和焦点都保得住，
+         * 方便连着调范围。
          */
         var scopeInput = $('xw-floor-scope-input');
         if (scopeInput) {
@@ -3275,7 +3362,7 @@ function renderWriter() {
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     e.stopPropagation();
-                    toggleFloorRange(scopeInput.value);
+                    setFloorRange(scopeInput.value, 'hide');
                 }
             });
             /* 数字/范围之外的字符直接挡掉，省得用户打完才发现格式不对 */
@@ -3284,11 +3371,18 @@ function renderWriter() {
                 if (cleaned !== scopeInput.value) scopeInput.value = cleaned;
             });
         }
-        var scopeGo = $('xw-floor-scope-go');
-        if (scopeGo) {
-            scopeGo.addEventListener('click', function (e) {
+        var scopeHide = $('xw-floor-scope-hide');
+        if (scopeHide) {
+            scopeHide.addEventListener('click', function (e) {
                 e.stopPropagation();
-                toggleFloorRange(scopeInput ? scopeInput.value : '');
+                setFloorRange(scopeInput ? scopeInput.value : '', 'hide');
+            });
+        }
+        var scopeShow = $('xw-floor-scope-show');
+        if (scopeShow) {
+            scopeShow.addEventListener('click', function (e) {
+                e.stopPropagation();
+                setFloorRange(scopeInput ? scopeInput.value : '', 'show');
             });
         }
         document.querySelectorAll('[data-ap-swipe-prev]').forEach(function (btn) {
