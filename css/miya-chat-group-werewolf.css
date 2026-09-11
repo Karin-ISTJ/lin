@@ -1,28 +1,96 @@
-/* miya-chat-group-werewolf.css — 群聊狼人杀面板 */
+/* miya-chat-group-werewolf.css — 群聊狼人杀面板（满屏模式） */
 
-.ww-sheet__panel {
-  max-height: 86vh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+/*
+ * 群聊的 overlay 是 align-items:flex-end + 面板 margin-top:auto，
+ * 那套样式是给「底部小卡片」用的。这里整体覆盖成整屏，
+ * 并提高选择器权重（.qq-room__overlay 前缀）确保能盖住原样式。
+ */
+.qq-room__overlay .qq-sheet.qq-sheet--ww {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+  animation: none;
+  box-shadow: none;
 }
 
+.qq-room__overlay .qq-sheet--ww .qq-sheet__panel.ww-sheet__panel {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  margin-top: 0;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 不用渐变：渐变会和 body 底色在顶部接出一条可见的横缝 */
+  background: #faf9f8;
+}
+
+/* 面板外壳：头 / 滚动体 / 日志 三段式 */
 .ww {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--mc-safe-t, 0px) 0 var(--mc-safe-b, 0px);
+  overflow: hidden;
+}
+
+/* 中间滚动区：内容长了只滚这里，头尾固定 */
+.ww__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 12px 14px 16px;
 }
 
-/* ---------- 头部 ---------- */
+/* 内容少的时候不要缩成一团堆在顶部：撑开并让弹性元素吸收剩余高度 */
+.ww__scroll > * {
+  flex: 0 0 auto;
+}
+
+/* 座位区与阶段区按比例吸收剩余空间，避免底部出现大块空白 */
+.ww__seats {
+  flex: 1 1 auto;
+  align-content: start;
+}
+
+.ww__stage {
+  flex: 0 1 auto;
+}
+
+/* ---------- 头部（固定） ---------- */
 .ww__head {
+  flex: 0 0 auto;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 2px;
+  padding: 10px 14px 9px;
+  background: rgba(250, 249, 248, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .ww__title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -31,9 +99,30 @@
   border: 0;
   background: rgba(0, 0, 0, 0.06);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 5px 12px;
   font-size: 12px;
   cursor: pointer;
+}
+
+/* ---------- 上下文体检条 ---------- */
+.ww__ctx {
+  flex: 0 0 auto;
+  padding: 5px 14px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(74, 58, 120, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ww__ctx b {
+  color: #4a3a78;
+  font-weight: 700;
+}
+
+.ww__ctx--bad {
+  color: #b3261e;
+  background: rgba(179, 38, 30, 0.07);
 }
 
 /* ---------- 开局介绍 ---------- */
@@ -70,16 +159,16 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 14px;
+  gap: 7px;
+  padding: 9px 13px;
+  border-radius: 13px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(90, 70, 140, 0.16);
   font-size: 13px;
 }
 
 .ww__myrole b {
-  font-size: 15px;
+  font-size: 14.5px;
 }
 
 .ww__myrole-desc {
@@ -118,6 +207,7 @@
 .ww__seats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: min-content;
   gap: 8px;
 }
 
@@ -125,12 +215,13 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 10px;
-  border-radius: 12px;
+  gap: 7px;
+  padding: 9px 11px;
+  border-radius: 11px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(0, 0, 0, 0.07);
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 1.3;
   min-width: 0;
 }
 
@@ -246,6 +337,7 @@
   border-radius: 999px;
   padding: 6px 13px;
   font-size: 12.5px;
+  line-height: 1.25;
   cursor: pointer;
   transition: background 0.16s, border-color 0.16s;
 }
@@ -280,27 +372,28 @@
 .ww__speeches {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  max-height: 218px;
-  overflow-y: auto;
+  gap: 9px;
+  /* 满屏布局下发言区不再限高，交给外层滚动 */
+  max-height: none;
+  min-height: 140px;
 }
 
 .ww-say {
   display: flex;
   gap: 8px;
-  padding: 8px 11px;
+  padding: 11px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(0, 0, 0, 0.05);
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: 13.5px;
+  line-height: 1.65;
 }
 
 .ww-say-name {
   flex: 0 0 auto;
   font-weight: 700;
   color: #4a3a78;
-  max-width: 5.4em;
+  max-width: 5.6em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -313,8 +406,13 @@
 }
 
 /* ---------- 结算 ---------- */
+/* 结算 / 开局这类「一屏讲完」的内容：居中并充分撑开 */
 .ww__over {
-  padding: 20px 16px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 22px 16px;
   border-radius: 16px;
   text-align: center;
   background: linear-gradient(160deg, rgba(76, 60, 120, 0.12), rgba(140, 110, 200, 0.06));
@@ -339,7 +437,7 @@
   grid-template-columns: 1fr auto auto;
   gap: 10px;
   align-items: center;
-  padding: 7px 11px;
+  padding: 8px 12px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.82);
   font-size: 12.5px;
@@ -364,8 +462,9 @@
   background: #fff;
   border-radius: 999px;
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.3;
   cursor: pointer;
 }
 
@@ -380,12 +479,15 @@
   cursor: not-allowed;
 }
 
-/* ---------- 日志 ---------- */
+/* ---------- 日志（固定在底部） ---------- */
 .ww__log {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding-top: 4px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(250, 249, 248, 0.9);
 }
 
 .ww__log-item {

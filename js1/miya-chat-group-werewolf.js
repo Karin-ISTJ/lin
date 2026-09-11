@@ -55,10 +55,10 @@
 
   function emptyGame() {
     return {
-      id: '', status: 'idle', phase: PHASE.NIGHT, day: 0,
+      id: '', chatId: '', status: 'idle', phase: PHASE.NIGHT, day: 0,
       seats: [], roles: {}, night: null, dawnDeaths: [], speeches: [],
       speechCursor: 0, votes: {}, voteCursor: 0, lastResult: null,
-      winner: '', healUsed: false, poisonUsed: false,
+      winner: '', healUsed: false, poisonUsed: false, finalVotes: null,
       log: [], updatedAt: now()
     };
   }
@@ -66,8 +66,10 @@
   function load(store, chatId) {
     var raw = getBg(store, chatId).werewolf;
     var g = emptyGame();
+    g.chatId = chatId ? String(chatId) : '';
     if (!raw || typeof raw !== 'object') return g;
     g.id = clean(raw.id, 40);
+    g.chatId = clean(raw.chatId, 80) || (chatId ? String(chatId) : '');
     g.status = ['idle', 'playing', 'over'].indexOf(raw.status) >= 0 ? raw.status : 'idle';
     g.phase = Object.keys(PHASE).map(function (k) { return PHASE[k]; }).indexOf(raw.phase) >= 0 ? raw.phase : PHASE.NIGHT;
     g.day = Math.max(0, Math.floor(num(raw.day)));
@@ -98,6 +100,7 @@
     g.winner = clean(raw.winner, 20);
     g.healUsed = raw.healUsed === true;
     g.poisonUsed = raw.poisonUsed === true;
+    g.finalVotes = raw.finalVotes && typeof raw.finalVotes === 'object' ? raw.finalVotes : null;
     g.log = Array.isArray(raw.log) ? raw.log.slice(-60) : [];
     g.updatedAt = num(raw.updatedAt) || now();
     return g;
@@ -163,6 +166,7 @@
     var picked = pickSeats(cands, TOTAL_SEATS);
     var g = emptyGame();
     g.id = uid('wwg');
+    g.chatId = chatId ? String(chatId) : '';
     g.status = 'playing';
     g.day = 0;
     var deck = shuffle(DECK);
@@ -242,6 +246,14 @@
     g.status = 'over';
     g.phase = PHASE.OVER;
     g.winner = winner;
+    /* 投票结果留档：清空票型会让「谁把谁投出去」无从追溯 */
+    if (g.lastResult && g.lastResult.type === 'out') {
+      g.finalVotes = {
+        votes: Object.assign({}, g.votes || {}),
+        text: g.lastResult.text,
+        outId: g.lastResult.outId
+      };
+    }
     pushLog(g, winner === 'wolf' ? '狼人阵营胜利' : '好人阵营胜利', 'over');
   }
 
@@ -393,13 +405,77 @@
         throw new Error('API 尚未就绪，请确认已在设置里配置好对话 API');
       }
       return br.callMainChatCompletionsRaw(systemHint, userContent, null, {
-        skipUniversalWorldbook: true,
+        /* 不用 skipUniversalWorldbook：让通用世界书也参与，角色才有设定感 */
         disableThinking: true,
         max_tokens: maxTokens || 400,
         timeoutMs: 60000
       });
     });
   }
+
+  /**
+   * 组装「群聊原生的完整上下文」。
+   * 复用群聊自己的 buildApiMessages —— 它已包含：
+   *   角色人设 / 世界书（前中后层）/ 全局提示词 / 昵称头衔 / 关系 / 群记忆 / 时间地点天气感知
+   * 再把 engine 的 ST 预设（前置换 · 后置换）拼进来。
+   * 效果：AI 会以「这个群里的这个角色」的身份说话，而不是脱缰乱答。
+   */
+  function buildWorldContext(store, chatId) {
+    var lines = [];
+    var group = global.MiyaChatGroup;
+    if (!group || typeof group.buildApiMessages !== 'function') return '';
+
+    /* 传一个空 userText，只为拿系统上下文，不产生用户消息 */
+    var built = null;
+    try {
+      built = group.buildApiMessages(chatId, '', {});
+    } catch (e) { built = null; }
+    if (!built || !Array.isArray(built.messages) || !built.messages.length) return '';
+
+    /* ST 预设：前置换放最前，后置换放最后 */
+    var eng = global.miyaChatEngine;
+    var stFront = [];
+    var stBack = [];
+    if (eng && typeof eng.buildStPresetMessages === 'function') {
+      try { stFront = eng.buildStPresetMessages('front') || []; } catch (e) {}
+      try { stBack = eng.buildStPresetMessages('back') || []; } catch (e) {}
+    }
+
+    function pushMsg(m) {
+      if (!m || !m.content) return;
+      var text = typeof m.content === 'string' ? m.content : '';
+      if (!trim(text)) return;
+      lines.push(trim(text));
+    }
+
+    (stFront || []).forEach(pushMsg);
+    built.messages.forEach(function (m) {
+      /* 只取 system：user/assistant 历史与狼人杀无关，避免把聊天记录带进对局 */
+      if (m && m.role === 'system') pushMsg(m);
+    });
+    (stBack || []).forEach(pushMsg);
+
+    var text = lines.join('\n\n');
+    /*
+     * 记一份诊断信息：设置面板里能直接看到「到底读进去了多少上下文」。
+     * 用户反馈过「角色说话像没读世界书」，这里留证据方便排查。
+     */
+    ctxStats = {
+      systemBlocks: lines.length,
+      chars: text.length,
+      stFront: (stFront || []).length,
+      stBack: (stBack || []).length,
+      groupSystem: built.messages.filter(function (m) { return m && m.role === 'system'; }).length,
+      worldbook: (built.worldbookMeta && (built.worldbookMeta.matchedSummary || []).length) || 0,
+      members: (built.members || []).length,
+      error: built.error || ''
+    };
+    return text;
+  }
+
+  /* 上一次组装上下文时的诊断快照（供 UI 展示） */
+  var ctxStats = null;
+  function getCtxStats() { return ctxStats; }
 
   /** 从各种返回结构里抠出文本 */
   function extractText(res) {
@@ -419,8 +495,11 @@
     return '';
   }
 
-  var SYS_HINT = '你是一位参与狼人杀游戏的玩家。你只输出符合要求的游戏内容本身，'
-    + '不解释规则、不加旁白括号、不重复系统提示。需要输出 JSON 时只输出 JSON。';
+    var welcome = '你正在参与一场群聊里的狼人杀游戏。'
+      + '本局在你的世界观里真实发生了：你会用你一贯的语气、称呼和判断方式参与讨论，'
+      + '不会突然变成一个「只会打牌的陌生人」。'
+      + '不解释规则、不加旁白括号、不重复系统提示、不输出「某某说：」这类前缀。'
+      + '需要输出 JSON 时只输出 JSON。';
 
   /**
    * 让某个 AI 完成一个任务
@@ -428,13 +507,24 @@
    * 返回 Promise<{ text, reason, target, targetName, save, poison }>
    */
   function askAi(g, whoId, task, extra) {
+    var selfSeat = seatOf(g, whoId);
+    var selfName = selfSeat ? selfSeat.name : '你';
+
+    /* 世界上下文（人设/世界书/ST预设/关系/记忆）—— 让 AI 不脱缰 */
+    var worldCtx = buildWorldContext(global.miyaChatStore, g.chatId);
+
+    var head = [];
+    head.push('【你在这场对局中的身份】');
+    head.push('你在群里的名字是「' + selfName + '」。下面所有发言和判断，都要以「' + selfName + '」这个角色的身份、性格和说话方式来表达。');
+    head.push('');
+
     var lead = buildSituation(g, { selfId: whoId });
     var others = aliveSeats(g).filter(function (s) { return s.whoId !== whoId; });
 
     if (task === 'speech') {
       lead += '\n\n现在轮到你发言。请用 1~2 句话说出你的判断：可以怀疑某个人、为自己辩解、或分析局势。'
-        + '\n要求：像在群里聊天一样口语化、有个性，不要输出「某某说：」这种前缀，不要输出旁白。';
-      return callApi(SYS_HINT, lead, 300).then(function (res) {
+        + '\n要求：保持你一贯的说话风格和语气，像平时在群里聊天一样自然，不要机械套话，不要输出旁白。';
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 500).then(function (res) {
         var text = extractText(res);
         return { text: text || '（沉默）' };
       });
@@ -444,18 +534,17 @@
       lead += '\n\n现在进入投票阶段，你要投出你认为最像狼人的一个玩家（不能投自己）。'
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}';
-      return callApi(SYS_HINT, lead, 200).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
         return parseVote(extractText(res), others);
       });
     }
 
     if (task === 'wolf_kill') {
-      var targets = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf' || s.whoId === whoId; })
-        .filter(function (s) { return !(g.roles[s.whoId] === 'werewolf' && s.whoId !== whoId); });
+      var targets = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
       lead += '\n\n现在是夜晚，你要和同伴一起选一个好人猎杀（不能猎杀狼人同伴）。'
         + '\n可选目标：' + targets.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}';
-      return callApi(SYS_HINT, lead, 200).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
         return parseVote(extractText(res), targets);
       });
     }
@@ -464,7 +553,7 @@
       lead += '\n\n你是预言家，今晚要查验一个人的身份（不能查验自己）。'
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}';
-      return callApi(SYS_HINT, lead, 200).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
         return parseVote(extractText(res), others);
       });
     }
@@ -484,7 +573,7 @@
         lead += '\n你的毒药已经用过了。';
       }
       lead += '\n只输出 JSON：{"save":true或false,"poison":"玩家名字或空字符串","reason":"简短理由"}';
-      return callApi(SYS_HINT, lead, 250).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 250).then(function (res) {
         var text = extractText(res);
         var obj = extractJson(text);
         var out = { save: false, poison: '', poisonId: '', reason: '', text: text };
@@ -596,18 +685,47 @@
         '<button type="button" class="ww__close" data-sheet-close aria-label="关闭">关闭</button>' +
       '</div>';
 
+    /* 上下文体检：告诉用户「角色到底读没读世界书 / ST 预设」 */
+    var ctxTip = '';
+    (function () {
+      var st = getCtxStats();
+      var eng = global.miyaChatEngine;
+      var stCount = 0;
+      if (eng && typeof eng.buildStPresetMessages === 'function') {
+        try {
+          stCount = (eng.buildStPresetMessages('front') || []).length
+            + (eng.buildStPresetMessages('back') || []).length;
+        } catch (e) {}
+      }
+      if (!st) {
+        ctxTip = '<div class="ww__ctx ww__ctx--idle">发言时自动读取：角色人设 · 世界书 · ST 预设 · 群记忆</div>';
+        return;
+      }
+      if (st.error) {
+        ctxTip = '<div class="ww__ctx ww__ctx--bad">⚠️ 上下文读取异常（' + esc(st.error) + '），请检查该群的角色与 API 配置</div>';
+        return;
+      }
+      ctxTip = '<div class="ww__ctx">已载入上下文：'
+        + '<b>' + st.systemBlocks + '</b> 段 / <b>' + (st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k' : st.chars) + '</b> 字'
+        + ' · 世界书 <b>' + st.worldbook + '</b> 条'
+        + ' · ST预设 <b>' + stCount + '</b> 条'
+        + ' · 群成员 <b>' + st.members + '</b> 人</div>';
+    })();
+
     if (g.status === 'idle') {
       var cands = collectCandidates(store, chatId);
       var enough = cands.length >= TOTAL_SEATS;
-      return '<div class="ww" id="ww-panel">' + head +
-        '<div class="ww__intro">' +
-          '<p class="ww__intro-lead">' + TOTAL_SEATS + ' 人局 · 2 狼人 / 2 村民 / 1 预言家 / 1 女巫</p>' +
-          '<p class="ww__intro-desc">你与群里 ' + Math.max(0, cands.length - 1) + ' 位角色同桌。' +
-            '身份随机分配，AI 会真实推理发言。<br>本局记录不会出现在群聊里。</p>' +
-          (enough ? '' : '<p class="ww__intro-warn">⚠️ 群成员不足 ' + TOTAL_SEATS + ' 人（当前 ' + cands.length + ' 人），请先拉人进群</p>') +
-        '</div>' +
-        '<div class="ww__actions">' +
-          '<button type="button" class="ww__btn ww__btn--main" data-ww-act="start"' + (enough ? '' : ' disabled') + '>开始游戏</button>' +
+      return '<div class="ww" id="ww-panel">' + head + ctxTip +
+        '<div class="ww__scroll">' +
+          '<div class="ww__intro">' +
+            '<p class="ww__intro-lead">' + TOTAL_SEATS + ' 人局 · 2 狼人 / 2 村民 / 1 预言家 / 1 女巫</p>' +
+            '<p class="ww__intro-desc">你与群里 ' + Math.max(0, cands.length - 1) + ' 位角色同桌。' +
+              '身份随机分配，AI 会真实推理发言。<br>本局记录不会出现在群聊里。</p>' +
+            (enough ? '' : '<p class="ww__intro-warn">⚠️ 群成员不足 ' + TOTAL_SEATS + ' 人（当前 ' + cands.length + ' 人），请先拉人进群</p>') +
+          '</div>' +
+          '<div class="ww__actions">' +
+            '<button type="button" class="ww__btn ww__btn--main" data-ww-act="start"' + (enough ? '' : ' disabled') + '>开始游戏</button>' +
+          '</div>' +
         '</div>' +
         (g.log && g.log.length ? '<div class="ww__log">' + g.log.slice(-4).map(function (l) {
           return '<div class="ww__log-item">' + esc(l.text) + '</div>';
@@ -623,14 +741,16 @@
           + '<span>' + r.icon + r.name + '</span>'
           + '<span>' + (s.alive ? '存活' : '出局') + '</span></div>';
       }).join('');
-      return '<div class="ww" id="ww-panel">' + head +
-        '<div class="ww__over">' +
-          '<div class="ww__over-title">' + winText + '</div>' +
-          '<div class="ww__result-list">' + allRoles + '</div>' +
-        '</div>' +
-        '<div class="ww__actions">' +
-          '<button type="button" class="ww__btn ww__btn--main" data-ww-act="start">再来一局</button>' +
-          '<button type="button" class="ww__btn" data-ww-act="reset">清空记录</button>' +
+      return '<div class="ww" id="ww-panel">' + head + ctxTip +
+        '<div class="ww__scroll">' +
+          '<div class="ww__over">' +
+            '<div class="ww__over-title">' + winText + '</div>' +
+            '<div class="ww__result-list">' + allRoles + '</div>' +
+          '</div>' +
+          '<div class="ww__actions">' +
+            '<button type="button" class="ww__btn ww__btn--main" data-ww-act="start">再来一局</button>' +
+            '<button type="button" class="ww__btn" data-ww-act="reset">清空记录</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
     }
@@ -747,10 +867,12 @@
       return '<div class="ww__log-item">' + esc(l.text) + '</div>';
     }).join('');
 
-    return '<div class="ww" id="ww-panel">' + head +
-      myRoleBar + phaseHtml +
-      '<div class="ww__seats">' + seatsHtml + '</div>' +
-      stageHtml +
+    return '<div class="ww" id="ww-panel">' + head + ctxTip +
+      '<div class="ww__scroll">' +
+        myRoleBar + phaseHtml +
+        '<div class="ww__seats">' + seatsHtml + '</div>' +
+        stageHtml +
+      '</div>' +
       (logTail ? '<div class="ww__log">' + logTail + '</div>' : '') +
       '</div>';
   }
@@ -979,6 +1101,8 @@
     roleOf: roleOf,
     renderPanel: renderPanel,
     openPanel: openPanel,
-    handlePanelClick: handlePanelClick
+    handlePanelClick: handlePanelClick,
+    buildWorldContext: buildWorldContext,
+    getCtxStats: getCtxStats
   };
 })(window);
