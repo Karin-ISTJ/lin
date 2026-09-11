@@ -141,7 +141,6 @@
             global.miyaContactsApp,
             global.miyaMusicApp,
             global.miyaMemoryApp,
-            global.miyaCstoreApp,
             global.miyaItineraryApp,
             global.miyaCoupleApp,
             global.miyaTypewriterApp,
@@ -152,7 +151,7 @@
     var OVERLAY_APP_SELECTOR =
         '.miya-beautify-app.is-open, .miya-settings-app.is-open, .miya-worldbook-app.is-open, ' +
         '.miya-contacts-app.is-open, #miya-music-app.is-open, #miya-memory-app.is-open, ' +
-        '#miya-cstore-app.is-open, #miya-itinerary-app.is-open, ' +
+        '#miya-itinerary-app.is-open, ' +
         '#miya-couple-app.is-open, ' +
         '#miya-typewriter-app.is-open, #miya-offline-app.is-open';
 

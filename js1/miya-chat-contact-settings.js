@@ -1111,7 +1111,6 @@
          API 四项各自独立成栏（与其它折叠栏同外观），仍排在最上方。 */
       renderApiNavBar('api-chat', '对话 API', '对话模型服务端点与密钥', 'miya-st-panel-chat') +
       renderApiNavBar('api-voice', '语音合成', '语音合成服务端点与密钥', 'miya-st-panel-voice') +
-      renderApiNavBar('api-cstore', '便利店 API', '便利店相关服务端点与密钥', 'miya-st-panel-cstore') +
       renderApiNavBar('api-imagegen', '生图 API', '生图服务端点与密钥', 'miya-st-panel-imagegen') +
 
       renderZone('basic', '基础', '身份、头像、通知与主动消息',

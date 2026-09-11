@@ -492,21 +492,15 @@
     var settings = ctx.settings || {};
     var cts = global.miyaContactsStore;
     var aw = global.MiyaChatAwareness;
-    var cstore = global.miyaCstoreBridge;
     var parts = [];
-    var usedCstore = false;
 
-    if (cstore && typeof cstore.buildContactContext === 'function') {
-      parts.push(cstore.buildContactContext(contact, profile));
-      usedCstore = true;
-    } else {
-      parts.push('【目标角色】' + String(contact && contact.name || '未知'));
-      if (contact && contact.persona) parts.push('人设：' + truncateStr(contact.persona, 600));
-      var roleId = String((contact && contact.characterId) || (contact && contact.chronicleId) || '').trim();
-      if (roleId && cts && typeof cts.renderChronicleBlock === 'function') {
-        var ch = String(cts.renderChronicleBlock(roleId) || '').trim();
-        if (ch) parts.push(ch);
-      }
+    /* 目标角色上下文：直接走联系人档案 + 编年史 */
+    parts.push('【目标角色】' + String(contact && contact.name || '未知'));
+    if (contact && contact.persona) parts.push('人设：' + truncateStr(contact.persona, 600));
+    var roleId = String((contact && contact.characterId) || (contact && contact.chronicleId) || '').trim();
+    if (roleId && cts && typeof cts.renderChronicleBlock === 'function') {
+      var ch = String(cts.renderChronicleBlock(roleId) || '').trim();
+      if (ch) parts.push(ch);
     }
 
     var wb = buildWorldbookBlock(contact);
@@ -517,20 +511,18 @@
       if (sumBlock) parts.push('【上下文记忆·分镜合卷】\n' + truncateStr(sumBlock, 2000));
     }
 
-    if (!usedCstore && settings.charMemoryList && settings.charMemoryList.length) {
+    if (settings.charMemoryList && settings.charMemoryList.length) {
       var mems = settings.charMemoryList.slice(-8).map(function (m) {
         return String(m && m.content ? m.content : m).trim();
       }).filter(Boolean);
       if (mems.length) parts.push('【角色视角记忆】\n' + mems.join('\n\n'));
     }
 
-    if (profile && !usedCstore) {
+    if (profile) {
       parts.push('【用户面具（与角色对话时的身份）】');
       parts.push('名称：' + String(profile.name || '用户'));
       if (profile.persona) parts.push('人设：' + truncateStr(profile.persona, 400));
       if (profile.gender) parts.push('性别：' + profile.gender);
-    } else if (profile && profile.gender) {
-      parts.push('用户性别：' + profile.gender);
     }
 
     return parts.filter(Boolean).join('\n\n');

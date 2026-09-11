@@ -1193,10 +1193,6 @@
     return slice;
   }
 
-  function readCstoreApiForm() {
-    return { cstoreApi: readScopedApiForm('cstore') };
-  }
-
   function readChatApiSavePayload() {
     var fb = $('miya-st-chat-fallback');
     return Object.assign({}, readChatApiForm(), {
@@ -1273,11 +1269,9 @@
     var cfg = getApiConfig();
     var mm = cfg.minimaxTts && typeof cfg.minimaxTts === 'object' ? cfg.minimaxTts : {};
     var forum = cfg.forumApi && typeof cfg.forumApi === 'object' ? cfg.forumApi : {};
-    var cstore = cfg.cstoreApi && typeof cfg.cstoreApi === 'object' ? cfg.cstoreApi : {};
     var chatTemp = cfg.temperature != null ? cfg.temperature : 1;
     syncChatApiPanelForms();
     syncScopedApiForm('forum', forum, chatTemp);
-    syncScopedApiForm('cstore', cstore, chatTemp);
     if ($('miya-st-mm-key')) $('miya-st-mm-key').value = mm.apiKey || '';
     if ($('miya-st-mm-group')) $('miya-st-mm-group').value = mm.groupId || '';
     var mmSpeed = mm.speed != null ? Number(mm.speed) : 1;
@@ -1383,7 +1377,6 @@
      面板本身是滚动容器，原来保存按钮在表单最末尾，得一路滚到底才能点。 */
   var TOPBAR_SAVE_PANELS = {
     'miya-st-panel-chat': 1,
-    'miya-st-panel-cstore': 1,
     'miya-st-panel-imagegen': 1,
     'miya-st-panel-voice': 1
   };
@@ -2129,15 +2122,10 @@
     if (el) el.addEventListener('click', fn);
   }
 
-  /* ── 三个 API 面板的保存动作（顶栏保存按钮与原底部按钮共用） ── */
+  /* ── API 面板的保存动作（顶栏保存按钮与原底部按钮共用） ── */
   function saveChatApiPanel() {
     setApiConfig(Object.assign({}, getApiConfig(), readChatApiSavePayload()));
     toast('已保存');
-  }
-
-  function saveCstoreApiPanel() {
-    setApiConfig(Object.assign({}, getApiConfig(), readCstoreApiForm()));
-    toast('已保存便利店 API');
   }
 
   function saveVoiceApiPanel() {
@@ -2178,7 +2166,7 @@
     onClick('miya-st-panel-header-back', function () {
       var active = app.querySelector('.ins-vault-panel.is-active');
       if (returnToChatContactSettings && active &&
-          ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-cstore', 'miya-st-panel-imagegen'].indexOf(active.id) !== -1) {
+          ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-imagegen'].indexOf(active.id) !== -1) {
         // 与原“对话 API”返回方式一致：直接关闭全局设置层，回到仍保持打开的角色聊天设置页。
         returnToChatContactSettings = false;
         closeSettingsApp();
@@ -2324,7 +2312,7 @@
       });
     }
 
-    ['forum', 'cstore'].forEach(function (prefix) {
+    ['forum'].forEach(function (prefix) {
       var tempIn = $('miya-st-' + prefix + '-temp');
       var tempLbl = $('miya-st-' + prefix + '-temp-lbl');
       if (tempIn) {
@@ -2353,8 +2341,6 @@
         }).catch(function () { toast('连接失败'); });
       });
     }
-
-    bindScopedFetch('cstore', '请填写便利店 API 或对话 API 的地址与密钥');
 
     var mmSpeedIn = $('miya-st-mm-speed');
     var mmSpeedLbl = $('miya-st-mm-speed-lbl');
@@ -2385,7 +2371,6 @@
     });
 
     onClick('miya-st-chat-save', saveChatApiPanel);
-    onClick('miya-st-cstore-save', saveCstoreApiPanel);
     onClick('miya-st-mm-save', saveVoiceApiPanel);
 
     /* 顶栏常驻保存：按当前激活的 API 面板分发到对应保存逻辑。
@@ -2395,7 +2380,6 @@
       var active = app.querySelector('.ins-vault-panel.is-active');
       var panelId = active ? active.id : '';
       if (panelId === 'miya-st-panel-chat') { saveChatApiPanel(); return; }
-      if (panelId === 'miya-st-panel-cstore') { saveCstoreApiPanel(); return; }
       if (panelId === 'miya-st-panel-voice') { saveVoiceApiPanel(); return; }
       if (panelId === 'miya-st-panel-imagegen') {
         var proxy = $('miya-st-ig-save');
@@ -2416,7 +2400,7 @@
     onClick('miya-st-preset-save', function () {
       var name = ($('miya-st-preset-name') || {}).value ? $('miya-st-preset-name').value.trim() : '';
       if (!name) { toast('请输入预设名称'); return; }
-      var cfg = Object.assign({}, getApiConfig(), readChatApiSavePayload(), readCstoreApiForm(), { minimaxTts: readMinimaxForm() });
+      var cfg = Object.assign({}, getApiConfig(), readChatApiSavePayload(), { minimaxTts: readMinimaxForm() });
       var baseList = apiPresetsCache != null ? apiPresetsCache.slice() : null;
       var loadPromise = baseList ? Promise.resolve(baseList) : loadApiPresetsArr();
       loadPromise.then(function (list) {
@@ -2499,7 +2483,7 @@
     // API 子页从角色聊天设置进入时，必须沿用“对话 API”之前已经验证过的返回链路。
     // 不再依赖聊天设置 DOM / miya-chat-app 状态去猜测来源，而由调用方明确标记来源。
     options = options || {};
-    var chatApiPanelIds = ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-cstore', 'miya-st-panel-imagegen'];
+    var chatApiPanelIds = ['miya-st-panel-chat', 'miya-st-panel-voice', 'miya-st-panel-imagegen'];
     var fromChatContactSettings = !!options.fromChatContactSettings;
     if (!fromChatContactSettings && panelId === 'miya-st-panel-chat') {
       // 保留旧版“对话 API”入口的兼容判断。

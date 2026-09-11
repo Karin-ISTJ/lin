@@ -765,39 +765,6 @@
   color: var(--ink-faint);
 }
 
-.desk--p2 .tile--cstore {
-  padding: 10px;
-  background: linear-gradient(145deg, rgba(28, 30, 36, 0.94), rgba(16, 18, 22, 0.97));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-  text-align: center;
-  box-shadow: 0 4px 14px rgba(30, 32, 38, 0.18);
-}
-
-.desk--p2 .tile--cstore .tile__neon {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.24em;
-  color: rgba(255, 220, 180, 0.88);
-  text-shadow: 0 0 6px rgba(255, 200, 140, 0.45);
-}
-
-.desk--p2 .tile--cstore .tile__name {
-  display: block;
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: rgba(255, 255, 255, 0.76);
-}
-
-.desk--p2 .tile--cstore .tile__hint {
-  display: block;
-  margin-top: 2px;
-  font-size: 7px;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.38);
-}
 
 .desk--p2 .tile--rift {
   display: flex;

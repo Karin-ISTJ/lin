@@ -146,10 +146,6 @@
         'js2/miya-weather-app.js?v=12'
       ]
     },
-    cstoreUi: {
-      css: ['css/miya-cstore.css?v=3'],
-      js: ['js1/miya-cstore-app.js?v=4']
-    },
     memoryUi: {
       css: ['css/miya-memory.css?v=9'],
       js: ['js2/miya-memory-app.js?v=9']
@@ -183,7 +179,6 @@
     theater: ['theaterUi', 'apiCore'],
     itinerary: ['itineraryUi', 'apiCore'],
     weather: ['weatherUi', 'apiCore'],
-    cstore: ['cstoreUi', 'apiCore'],
     memory: ['memoryUi'],
     match: ['matchUi', 'apiCore'],
     fun: ['funUi', 'apiCore']

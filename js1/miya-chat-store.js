@@ -165,7 +165,6 @@
             chats: [],
             messagesByChat: {},
             shopCatalog: null,
-            cstoreMystical: null,
             chatWallpapers: []
         };
     }
@@ -558,7 +557,6 @@
         m.chats = Array.isArray(m.chats) ? m.chats : [];
         m.messagesByChat = m.messagesByChat && typeof m.messagesByChat === 'object' ? m.messagesByChat : {};
         m.shopCatalog = normalizeShopCatalog(m.shopCatalog);
-        m.cstoreMystical = normalizeCstoreMystical(m.cstoreMystical);
         m.chatWallpapers = Array.isArray(m.chatWallpapers)
             ? m.chatWallpapers.map(normalizeChatWallpaper).filter(Boolean)
             : [];
@@ -570,38 +568,6 @@
         return m;
     }
 
-    var CSTORE_MYSTICAL_CATS = { timeline: true, wish: true, antique: true, intel: true };
-
-    function normalizeCstoreMysticalItem(raw) {
-        if (!raw || typeof raw !== 'object') return null;
-        var name = String(raw.name || '').trim();
-        if (!name) return null;
-        var cat = String(raw.category || '').trim();
-        if (!CSTORE_MYSTICAL_CATS[cat]) cat = 'antique';
-        var rarity = String(raw.rarity || '').trim();
-        if (rarity !== 'rare' && rarity !== 'legendary') rarity = 'common';
-        return {
-            id: String(raw.id || uid('cst')).trim(),
-            name: name.slice(0, 80),
-            category: cat,
-            tag: String(raw.tag || '').trim().slice(0, 4).toUpperCase() || (
-                cat === 'timeline' ? 'CHR' : cat === 'wish' ? 'WSH' : cat === 'intel' ? 'INT' : 'REL'
-            ),
-            emoji: String(raw.emoji || '').trim().slice(0, 4) || '✦',
-            desc: String(raw.desc || '').trim().slice(0, 200),
-            exchangeHint: String(raw.exchangeHint || raw.exchange || '').trim().slice(0, 120),
-            rarity: rarity
-        };
-    }
-
-    function normalizeCstoreMystical(raw) {
-        var d = { refreshedAt: 0, items: [] };
-        if (!raw || typeof raw !== 'object') return d;
-        var items = Array.isArray(raw.items)
-            ? raw.items.map(normalizeCstoreMysticalItem).filter(Boolean)
-            : [];
-        return { refreshedAt: Number(raw.refreshedAt) || 0, items: items };
-    }
 
     function inventoryContentRaw(raw) {
         if (raw == null) return null;
@@ -616,11 +582,9 @@
     }
 
     function inventoryContentText(raw) {
-        var fn = global.miyaCstoreBridge && global.miyaCstoreBridge.normalizeContent;
         var val = inventoryContentRaw(raw);
         if (val == null) return '';
         if (typeof val === 'object') {
-            if (fn) return fn(val).slice(0, 4000);
             try { return JSON.stringify(val, null, 2).slice(0, 4000); } catch (e2) { return ''; }
         }
         return String(val).slice(0, 4000);
@@ -3256,18 +3220,6 @@
             metaCache.shopCatalog = normalizeShopCatalog(catalog);
             return saveMeta().then(function () {
                 return metaCache.shopCatalog;
-            });
-        },
-
-        getCstoreMystical: function () {
-            var m = metaCache || defaultMeta();
-            return normalizeCstoreMystical(m.cstoreMystical);
-        },
-
-        saveCstoreMystical: function (catalog) {
-            metaCache.cstoreMystical = normalizeCstoreMystical(catalog);
-            return saveMeta().then(function () {
-                return metaCache.cstoreMystical;
             });
         },
 

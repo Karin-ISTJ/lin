@@ -1289,7 +1289,6 @@
       !document.querySelector('#miya-memory-app.is-open') &&
       !document.querySelector('#miya-offline-app.is-open') &&
       !document.querySelector('#miya-typewriter-app.is-open') &&
-      !document.querySelector('.miya-cstore-app.is-open') &&
       !document.querySelector('.miya-itinerary-app.is-open') &&
       !document.querySelector('.miya-couple-app.is-open') &&
       !document.querySelector('.miya-weather-app.is-open') &&

@@ -9,7 +9,7 @@
   var MAX_FONT_PRESETS = 12;
 
   var APP_KEYS = ['music', 'memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pet', 'pen'];
-  var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop', 'tile_cstore', 'tile_rift'];
+  var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop', 'tile_rift'];
   var POLAROID_KEYS = ['polaroid_1', 'polaroid_2', 'polaroid_3'];
   var P2_WIDGET_KEYS = [
     'p2_scrap_base',
@@ -34,7 +34,6 @@
   var P2_TILE_SELECTORS = {
     tile_couple: '.desk--p2 .tile--couple',
     tile_themeshop: '.desk--p2 .tile--itinerary',
-    tile_cstore: '.desk--p2 .tile--cstore',
     tile_rift: '.desk--p2 .tile--rift'
   };
 
@@ -199,7 +198,6 @@
     { key: 'pen', label: '模拟器', selectors: ['.miya-simulator-app'] },
     { key: 'couple', label: '情侣空间', selectors: ['.miya-couple-app'] },
     { key: 'itinerary', label: '行程轨迹', selectors: ['.miya-itinerary-app'] },
-    { key: 'cstore', label: '便利店', selectors: ['.miya-cstore-app'] },
     { key: 'notes', label: '日记', selectors: ['.miya-diary-app'] },
     { key: 'theater', label: '剧场', selectors: ['.miya-theater-app'] },
     { key: 'deep', label: '深入', selectors: ['.miya-deep-app'] },

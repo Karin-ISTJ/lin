@@ -69,10 +69,6 @@
     };
   }
 
-  function resolveCstoreApiConfig(cfg) {
-    return resolveScopedApiConfig(cfg, 'cstoreApi');
-  }
-
   function resolveItineraryApiConfig(cfg) {
     return resolveScopedApiConfig(cfg, 'itineraryApi');
   }
@@ -422,10 +418,6 @@
     return callCompletionsWithConfig(systemHint, userContent, imageParts, resolveChatApiConfig(getApiCfg()), reqOpts);
   }
 
-  function callCstoreCompletionsRaw(systemHint, userContent, imageParts) {
-    return callCompletionsWithConfig(systemHint, userContent, imageParts, resolveCstoreApiConfig(getApiCfg()));
-  }
-
   function callItineraryCompletionsRaw(systemHint, userContent, imageParts, reqOpts) {
     var callOpts = Object.assign({
       skipUniversalWorldbook: true,
@@ -459,9 +451,7 @@
   global.miyaApiBridge = {
     callChatCompletionsRaw: callChatCompletionsRaw,
     callMainChatCompletionsRaw: callMainChatCompletionsRaw,
-    callCstoreCompletionsRaw: callCstoreCompletionsRaw,
     callItineraryCompletionsRaw: callItineraryCompletionsRaw,
-    resolveCstoreApiConfig: resolveCstoreApiConfig,
     resolveItineraryApiConfig: resolveItineraryApiConfig,
     resolveChatApiConfig: resolveChatApiConfig,
     resolveSecondaryApiConfig: resolveSecondaryApiConfig,
