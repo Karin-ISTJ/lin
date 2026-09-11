@@ -1,0 +1,395 @@
+/* miya-chat-group-werewolf.css — 群聊狼人杀面板 */
+
+.ww-sheet__panel {
+  max-height: 86vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ww {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---------- 头部 ---------- */
+.ww__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.ww__title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.ww__close {
+  appearance: none;
+  border: 0;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---------- 开局介绍 ---------- */
+.ww__intro {
+  padding: 16px 16px 14px;
+  border-radius: 16px;
+  background: linear-gradient(150deg, rgba(76, 60, 120, 0.09), rgba(140, 110, 200, 0.05));
+  border: 1px solid rgba(90, 70, 140, 0.16);
+}
+
+.ww__intro-lead {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #4a3a78;
+}
+
+.ww__intro-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.72;
+}
+
+.ww__intro-warn {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #b3261e;
+  font-weight: 600;
+}
+
+/* ---------- 我的身份 ---------- */
+.ww__myrole {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(90, 70, 140, 0.16);
+  font-size: 13px;
+}
+
+.ww__myrole b {
+  font-size: 15px;
+}
+
+.ww__myrole-desc {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* ---------- 阶段指示 ---------- */
+.ww__phase {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.ww-step {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 11px;
+}
+
+.ww-step.is-on {
+  background: #4a3a78;
+  color: #fff;
+}
+
+.ww-step-arrow {
+  opacity: 0.35;
+  font-size: 11px;
+}
+
+/* ---------- 座位区 ---------- */
+.ww__seats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ww-seat {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  font-size: 12.5px;
+  min-width: 0;
+}
+
+.ww-seat.is-me {
+  border-color: rgba(74, 58, 120, 0.4);
+  background: rgba(74, 58, 120, 0.06);
+  font-weight: 600;
+}
+
+.ww-seat.is-dead {
+  opacity: 0.42;
+  text-decoration: line-through;
+}
+
+.ww-seat.is-pickable {
+  cursor: pointer;
+}
+
+.ww-seat.is-selected {
+  border-color: #4a3a78;
+  background: rgba(74, 58, 120, 0.14);
+}
+
+.ww-seat-no {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.07);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ww-seat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ww-seat-role {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(74, 58, 120, 0.12);
+  color: #4a3a78;
+  font-weight: 600;
+}
+
+.ww-seat-role--hidden {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.ww-seat-dead {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: #b3261e;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* ---------- 阶段操作区 ---------- */
+.ww__stage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ww__stage-title {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.ww__stage-sub {
+  font-size: 11.5px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.ww__hint {
+  font-size: 11.5px;
+  opacity: 0.66;
+  line-height: 1.5;
+}
+
+.ww__hint--ok {
+  color: #1b5e20;
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* ---------- 选择按钮组 ---------- */
+.ww__pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ww__pick-btn {
+  appearance: none;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s;
+}
+
+.ww__pick-btn.is-selected {
+  border-color: #4a3a78;
+  background: rgba(74, 58, 120, 0.12);
+  color: #4a3a78;
+  font-weight: 600;
+}
+
+.ww__pick-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ---------- 女巫 ---------- */
+.ww__witch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ww__witch-row input {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- 发言记录 ---------- */
+.ww__speeches {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 218px;
+  overflow-y: auto;
+}
+
+.ww-say {
+  display: flex;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.ww-say-name {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #4a3a78;
+  max-width: 5.4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ww-say-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ---------- 结算 ---------- */
+.ww__over {
+  padding: 20px 16px;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(160deg, rgba(76, 60, 120, 0.12), rgba(140, 110, 200, 0.06));
+  border: 1px solid rgba(90, 70, 140, 0.18);
+}
+
+.ww__over-title {
+  font-size: 19px;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+
+.ww__result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.ww-result-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 12.5px;
+}
+
+.ww-result-row > span:last-child {
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+/* ---------- 操作按钮 ---------- */
+.ww__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ww__btn {
+  appearance: none;
+  flex: 1 1 auto;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ww__btn--main {
+  border-color: transparent;
+  background: #4a3a78;
+  color: #fff;
+}
+
+.ww__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- 日志 ---------- */
+.ww__log {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 4px;
+}
+
+.ww__log-item {
+  font-size: 11px;
+  opacity: 0.55;
+  line-height: 1.45;
+}

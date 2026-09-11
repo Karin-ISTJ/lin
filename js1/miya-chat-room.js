@@ -313,7 +313,7 @@
   }
 
   var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'memory', 'backup'];
-  var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
+  var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket', 'werewolf'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -367,6 +367,13 @@
       '<path d="M3 10h18" stroke="currentColor" stroke-width="1.5"/>' +
       '<circle cx="12" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
       '</svg>',
+    werewolf:
+      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      '<path d="M4 4l3 3 5-3 5 3 3-3v7c0 4.5-3.6 8-8 8s-8-3.5-8-8V4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>' +
+      '<circle cx="9.2" cy="10.6" r="1.15" fill="currentColor"/>' +
+      '<circle cx="14.8" cy="10.6" r="1.15" fill="currentColor"/>' +
+      '<path d="M9.5 15.2c.7.9 1.6 1.35 2.5 1.35s1.8-.45 2.5-1.35" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+      '</svg>',
     backup:
       '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
     memory:
@@ -387,6 +394,7 @@
     narration: '旁白模式',
     thinking: '思维链',
     groupRedPacket: '红包',
+    werewolf: '狼人杀',
     memory: '记忆表',
     backup: '备份'
   };
@@ -4222,6 +4230,20 @@
     openEmojiPanel();
   }
 
+  function openWerewolfSheet() {
+    if (!isGroupRoom()) {
+      toast('狼人杀仅支持群聊');
+      return;
+    }
+    var ww = global.MiyaChatGroupWerewolf;
+    if (!ww || typeof ww.openPanel !== 'function') {
+      toast('狼人杀模块未加载');
+      return;
+    }
+    closeToolbarPanel();
+    ww.openPanel(store, state.chatId, openOverlay);
+  }
+
   function openGroupRedPacketSheet() {
     if (!isGroupRoom()) return;
     var grpRp = global.MiyaChatGroupRedPacket;
@@ -4496,6 +4518,7 @@
     else if (key === 'redo' || key === 'camera') toolRegenerate();
     else if (key === 'emoji') toolEmoji();
     else if (key === 'groupRedPacket') openGroupRedPacketSheet();
+    else if (key === 'werewolf') openWerewolfSheet();
     else if (key === 'transfer') openTransferSheet();
     else if (key === 'takeout') openTakeoutSheet();
     else if (key === 'gift') openGiftSheet();
@@ -5219,6 +5242,16 @@
           e.preventDefault();
           e.stopPropagation();
           farmApiClick.handlePanelClick(store, state.chatId, t, toast, openOverlay);
+          return;
+        }
+      }
+      // 狼人杀面板
+      if (t.closest && t.closest('[data-ww-act]')) {
+        var wwApiClick = global.MiyaChatGroupWerewolf;
+        if (wwApiClick && state.chatId && typeof wwApiClick.handlePanelClick === 'function') {
+          e.preventDefault();
+          e.stopPropagation();
+          wwApiClick.handlePanelClick(store, state.chatId, t, toast, openOverlay, global.miyaChatEngine);
           return;
         }
       }
