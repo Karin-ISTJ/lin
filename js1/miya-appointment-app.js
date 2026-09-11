@@ -795,6 +795,23 @@
                 ICON_STYLE + '</button>';
         }
 
+        /*
+         * 楼层范围隐藏：填 3-8 就把第 3~8 层一次切换（隐藏的显示、显示的隐藏）。
+         * 只在正片页出现——卷宗/回顾页不该改动已封存的内容。
+         */
+        var floorScopeHtml = (ui.view === 'story' && !ui.viewingArchive)
+            ? (
+                '<div class="xw-floor-scope">' +
+                '<input type="text" class="xw-floor-scope__input" id="xw-floor-scope-input"' +
+                ' inputmode="numeric" autocomplete="off" spellcheck="false"' +
+                ' placeholder="3-8" title="输入楼层范围后回车隐藏/显示，如 3-8 或 5"' +
+                ' aria-label="楼层范围隐藏">' +
+                '<button type="button" class="xw-floor-scope__go" id="xw-floor-scope-go"' +
+                ' title="应用楼层范围" aria-label="应用楼层范围">' + ICON_EYE + '</button>' +
+                '</div>'
+            )
+            : '';
+
         // 卷宗页的返回键改为与「聊天设置」一致的「← 返回」样式，放在左上角。
         var backHtml = isVault
             ? renderVaultBackBtn('xw-journal-bar__back')
@@ -807,7 +824,17 @@
             '<header class="xw-journal-bar' + (isVault ? ' xw-journal-bar--vault' : '') + '">' +
             backHtml +
             whoHtml +
-            (toolHtml ? '<div class="xw-journal-bar__tools">' + toolHtml + '</div>' : '') +
+            /*
+             * 右侧区域：楼层范围输入框 + 原有功能按钮。
+             * 包一层 __right 让它整体贴右上角；输入框排在按钮左侧，
+             * 这样按钮组位置不变，不会因为多一个输入框把「样式/卷宗」挤走。
+             */
+            ((floorScopeHtml || toolHtml)
+                ? '<div class="xw-journal-bar__right">' +
+                  (toolHtml ? '<div class="xw-journal-bar__tools">' + toolHtml + '</div>' : '') +
+                  floorScopeHtml +
+                  '</div>'
+                : '') +
             '</header>'
         );
     }
@@ -1169,7 +1196,7 @@
             '</time>' +
             tools;
         var attrs =
-            (canEdit ? ' data-ap-msg-id="' + esc(m.id) + '" data-ap-msg-role="' + esc(m.role) + '"' : '') +
+            ' data-ap-msg-id="' + esc(m.id) + '" data-ap-msg-role="' + esc(m.role) + '"' +
             (canEdit ? ' tabindex="0"' : '');
         if (isUser) {
             return (
@@ -1247,8 +1274,16 @@
         if (!lines) return '';
         var swipeBar = offlineSwipeBarHtml(m);
         if (!canEdit) {
+            /*
+             * locked 态也要带 data-ap-msg-id：隐藏楼层的 CSS 是按 id 精确命中的，
+             * 原来这里没有 id，导致锁定/归档视图下「隐藏」只显示占位符、正文照旧露出来。
+             */
             return (
-                '<div class="xw-block xw-block--locked">' +
+                '<div class="xw-block xw-block--locked" data-ap-msg-id="' +
+                esc(m.id) +
+                '" data-ap-msg-role="' +
+                esc(m.role) +
+                '">' +
                 thinkingHtml +
                 lines +
                 swipeBar +
@@ -3123,6 +3158,73 @@ function renderWriter() {
         var m = (sess.messages || []).find(function (x) { return x && x.id === messageId; }); if (!m) return;
         apStore().updateMessage(ui.chatId, ui.sessionId, messageId, { hidden: !m.hidden }); patchStoryBody();
     }
+
+    /*
+     * 范围批量切换隐藏：楼层号即用户在界面上看到的席号。
+     * 编号口径必须与 renderStoryLines 完全一致（跳过 deleted 后按序 i+1），
+     * 否则删过楼之后输入的范围就会和界面显示的对不上。
+     */
+    function floorNumbersOf(sess) {
+        var map = {};
+        var msgs = (sess && sess.messages) || [];
+        for (var i = 0; i < msgs.length; i++) {
+            var m = msgs[i];
+            if (!m || m.deleted) continue;
+            map[i + 1] = m;
+        }
+        return map;
+    }
+
+    /** 解析 "3-8" / "5" / "3-8,11" → [[3,8],[11,11]]；非法返回 null */
+    function parseFloorRange(text) {
+        var raw = String(text || '').trim();
+        if (!raw) return null;
+        var chunks = raw.split(/[,，、\s]+/).filter(Boolean);
+        if (!chunks.length) return null;
+        var ranges = [];
+        for (var i = 0; i < chunks.length; i++) {
+            var c = chunks[i].replace(/[第层楼\s]/g, '');
+            var mt = c.match(/^(\d+)(?:\s*[-~－—到至]\s*(\d+))?$/);
+            if (!mt) return null;
+            var a = parseInt(mt[1], 10);
+            var b = mt[2] != null ? parseInt(mt[2], 10) : a;
+            if (!isFinite(a) || !isFinite(b) || a < 1 || b < 1) return null;
+            if (a > b) { var t = a; a = b; b = t; }
+            ranges.push([a, b]);
+        }
+        return ranges;
+    }
+
+    /** 范围内每层隐藏状态各自取反 */
+    function toggleFloorRange(text) {
+        var sess = apStore().getSession(ui.chatId, ui.sessionId);
+        if (!sess) { toast('当前没有打开的场次'); return false; }
+        var ranges = parseFloorRange(text);
+        if (!ranges) { toast('格式不对，示例：3-8 或 5'); return false; }
+        var byNo = floorNumbersOf(sess);
+        var maxNo = 0;
+        Object.keys(byNo).forEach(function (k) { maxNo = Math.max(maxNo, parseInt(k, 10)); });
+        if (!maxNo) { toast('本场还没有楼层'); return false; }
+
+        var hit = 0, hid = 0, shown = 0;
+        var touched = {};
+        ranges.forEach(function (r) {
+            for (var n = r[0]; n <= r[1]; n++) {
+                if (n > maxNo) break;
+                var m = byNo[n];
+                if (!m || touched[m.id]) continue;
+                touched[m.id] = 1;
+                hit += 1;
+                var next = !m.hidden;
+                apStore().updateMessage(ui.chatId, ui.sessionId, m.id, { hidden: next });
+                if (next) hid += 1; else shown += 1;
+            }
+        });
+        if (!hit) { toast('范围内没有楼层（本场共 ' + maxNo + ' 层）'); return false; }
+        patchStoryBody();
+        toast('已隐藏 ' + hid + ' 层，恢复 ' + shown + ' 层');
+        return true;
+    }
     function newOfflineChat() {
         var st = chatStore(); var chat = st && st.findChat(ui.chatId); if (!chat) { toast('请先选择角色'); return; }
         var sess = apStore().startNewSession(ui.chatId, chat.contactId, activeSessionCast()); if (!sess) return;
@@ -3144,6 +3246,34 @@ function renderWriter() {
     function bindEvents() {
         document.querySelectorAll('[data-ap-floor-branch]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); branchFromFloor(btn.getAttribute('data-ap-floor-branch')); }); });
         document.querySelectorAll('[data-ap-floor-hide]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); toggleFloor(btn.getAttribute('data-ap-floor-hide')); }); });
+
+        /*
+         * 顶栏楼层范围输入框：回车 / 点眼睛按钮 都会把 "3-8" 里每层状态翻一遍。
+         * 输入框本身不需要重新渲染，切换完 patchStoryBody() 会就地刷新楼层，
+         * 所以焦点和已输入的文本都能保住——连续微调范围不用重新点输入框。
+         */
+        var scopeInput = $('xw-floor-scope-input');
+        if (scopeInput) {
+            scopeInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.keyCode === 13) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFloorRange(scopeInput.value);
+                }
+            });
+            /* 数字/范围之外的字符直接挡掉，省得用户打完才发现格式不对 */
+            scopeInput.addEventListener('input', function () {
+                var cleaned = String(scopeInput.value || '').replace(/[^\d\-~\s,，、]/g, '');
+                if (cleaned !== scopeInput.value) scopeInput.value = cleaned;
+            });
+        }
+        var scopeGo = $('xw-floor-scope-go');
+        if (scopeGo) {
+            scopeGo.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toggleFloorRange(scopeInput ? scopeInput.value : '');
+            });
+        }
         document.querySelectorAll('[data-ap-swipe-prev]').forEach(function (btn) {
             btn.addEventListener('click', function (e) { e.stopPropagation(); applyOfflineSwipe(btn.getAttribute('data-ap-swipe-prev'), -1); });
         });

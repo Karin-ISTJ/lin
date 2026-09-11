@@ -599,7 +599,8 @@
         var kind = String(raw.kind || '').trim() === 'mystical' ? 'mystical' : 'normal';
         var cat = String(raw.category || '').trim().slice(0, 40) || '物品';
         var mysticalType = String(raw.mysticalType || '').trim();
-        if (kind === 'mystical' && !CSTORE_MYSTICAL_CATS[mysticalType]) mysticalType = 'antique';
+        /* 原便利店专属分类表已随功能移除：保留 mysticalType 原值，不再强制归到古董 */
+        if (kind !== 'mystical') mysticalType = '';
         return {
             id: String(raw.id || uid('inv')).trim(),
             name: name.slice(0, 80),

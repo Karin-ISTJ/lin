@@ -184,8 +184,9 @@
     }
 
     function liveSessionMessages(session) {
+        /* hidden 层同样排除：隐藏楼层不该被总结/提取进记忆，否则又绕回上下文里 */
         return (session && session.messages ? session.messages : []).filter(function (m) {
-            return m && !m.deleted && String(m.content || '').trim();
+            return m && !m.deleted && !m.hidden && String(m.content || '').trim();
         });
     }
 

@@ -495,7 +495,14 @@
             buf = [];
         }
         (messages || []).forEach(function (m, i) {
-            if (!m || m.deleted) return;
+            /*
+             * 隐藏楼层不进 API：hidden 是用户手动标记的「不参与生成」层。
+             * 此前只做了 CSS 隐藏，内容照样整段塞进请求里，等于白烧 token。
+             * 这里直接跳过，隐藏层对模型完全不存在——不占上下文、不计费。
+             * 注意要在开头就 return，避免落到下面的 flushUser() 把已攒的
+             * user 缓冲合并错位。
+             */
+            if (!m || m.deleted || m.hidden) return;
             if (m.role === 'system' && m.type === 'opening') {
                 flushUser();
                 var openingBody = String(m.content || '').trim();
