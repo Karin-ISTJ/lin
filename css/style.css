@@ -1249,3 +1249,113 @@ html.no-js .miya-bootcover { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .miya-bootcover__dot { animation: none; }
 }
+
+/* ── 统一图标按钮（世界书 / ST 预设等） ── */
+.mi-ico-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.mi-ico-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  background: #fff;
+  color: #1a1a1a;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+}
+.mi-ico-btn img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  pointer-events: none;
+  opacity: 0.88;
+}
+.mi-ico-btn:active {
+  transform: scale(0.94);
+}
+.mi-ico-btn:hover {
+  border-color: rgba(0, 0, 0, 0.22);
+  background: #f7f7f5;
+}
+.mi-ico-btn--solid {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+.mi-ico-btn--solid img {
+  filter: invert(1);
+  opacity: 1;
+}
+.mi-ico-btn--danger {
+  color: #c0392b;
+  border-color: rgba(192, 57, 43, 0.28);
+}
+.mi-ico-btn--danger:hover {
+  background: rgba(192, 57, 43, 0.06);
+}
+
+/* ST 预设工具栏：图标按钮与文字按钮兼容 */
+.stp-toolbar .mi-ico-btn.stp-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 0;
+}
+.stp-toolbar .mi-ico-btn.stp-btn--primary {
+  background: #111;
+  border-color: #111;
+}
+.stp-toolbar .mi-ico-btn.stp-btn--primary img {
+  filter: invert(1);
+}
+
+/* 世界书分组操作图标 */
+.miya-worldbook-app .ins-wb-group-op.mi-ico-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 10px;
+}
+.miya-worldbook-app .ins-wb-group-op.mi-ico-btn img {
+  width: 15px;
+  height: 15px;
+}
+
+/* 图标包替换后的 img 图标 */
+.mi-ico-img {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  object-fit: contain;
+  pointer-events: none;
+}
+button .mi-ico-img,
+a .mi-ico-img,
+.st-card-icon .mi-ico-img {
+  width: 1.15em;
+  height: 1.15em;
+  min-width: 16px;
+  min-height: 16px;
+}
+.st-card-icon .mi-ico-img,
+.st-io-icon .mi-ico-img {
+  width: 22px;
+  height: 22px;
+}
+/* 深色底上的白图标 */
+.mi-ico-btn--solid .mi-ico-img,
+.stp-btn--primary .mi-ico-img,
+.st-wb-add-btn.mi-ico-btn--solid .mi-ico-img {
+  filter: invert(1);
+}

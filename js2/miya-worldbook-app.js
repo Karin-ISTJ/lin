@@ -212,7 +212,7 @@
       '<p class="ins-wb-card-keys">' + esc(keywordPreview(entry)) + '</p>' +
       '<footer class="ins-wb-card-foot">' +
       '<span>' + esc(roleHint) + '</span>' +
-      '<button type="button" class="ins-wb-link" data-wb-edit="' + esc(entry.id) + '">编辑</button>' +
+      '<button type="button" class="ins-wb-link mi-ico-btn" data-wb-edit="' + esc(entry.id) + '" title="编辑" aria-label="编辑"><img src="img/icons/edit-03.svg" alt="" width="15" height="15"></button>' +
       '</footer>' +
       '</article>'
     );
@@ -259,8 +259,8 @@
       var collapsed = !!collapsedGroups[g.id];
       var actions = g.fixed ? '' : (
         '<span class="ins-wb-group-head-ops">' +
-        '<button type="button" class="ins-wb-group-op" data-wb-group-edit="' + esc(g.id) + '" aria-label="重命名">改名</button>' +
-        '<button type="button" class="ins-wb-group-op ins-wb-group-op--del" data-wb-group-del="' + esc(g.id) + '" aria-label="删除世界书">删</button>' +
+        '<button type="button" class="ins-wb-group-op mi-ico-btn" data-wb-group-edit="' + esc(g.id) + '" title="重命名" aria-label="重命名"><img src="img/icons/edit-03.svg" alt="" width="16" height="16"></button>' +
+        '<button type="button" class="ins-wb-group-op ins-wb-group-op--del mi-ico-btn mi-ico-btn--danger" data-wb-group-del="' + esc(g.id) + '" title="删除世界书" aria-label="删除世界书"><img src="img/icons/trash-01.svg" alt="" width="16" height="16"></button>' +
         '</span>'
       );
       html += '<section class="ins-wb-book' + (collapsed ? ' is-collapsed' : ' is-open') + '" data-wb-book="' + esc(g.id) + '">' +

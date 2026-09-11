@@ -84,7 +84,7 @@
           '<span class="stp-row__meta">' + esc(e.role || 'system') + ' · ' + (Number(e.injection_position) === 1 ? 'In-chat' : 'Relative') + '</span>' +
         '</button>' +
         '<button type="button" class="stp-row__del" data-act="del" aria-label="删除" title="删除">' +
-          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8v10m4-10v10m4-10v10M5 6h14M10 6V4h4v2m-8 0 1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+          '<img src="img/icons/trash-01.svg" alt="" width="16" height="16">' +
         '</button>' +
         '</div>'
       );

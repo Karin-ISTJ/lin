@@ -111,7 +111,7 @@
           '<strong class="mi-set-zone__title">' + esc(title) + '</strong>' +
           (hint ? '<span class="mi-set-zone__hint">' + esc(hint) + '</span>' : '') +
         '</div>' +
-        '<svg class="st-chevron mi-set-zone__chev" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>' +
+        '<img class="mi-ico-img" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
       '</button>' +
       '<div class="mi-set-zone__body"' + (open ? '' : ' hidden') + '>' + content + '</div>' +
     '</section>';
@@ -125,7 +125,7 @@
           '<strong class="mi-set-zone__title">' + esc(title) + '</strong>' +
           (hint ? '<span class="mi-set-zone__hint">' + esc(hint) + '</span>' : '') +
         '</div>' +
-        '<svg class="st-chevron mi-set-zone__chev" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>' +
+        '<img class="mi-ico-img" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
       '</button>' +
     '</section>';
   }
@@ -265,7 +265,7 @@
         '<button type="button" class="mi-wb-sort-toggle" data-mq-set-wb-sort-toggle aria-expanded="' + (open ? 'true' : 'false') + '">' +
           '<strong class="mi-wb-sort-toggle__title">世界书排序</strong>' +
           '<span class="mi-wb-sort-toggle__meta">' + esc(formatNum(rows.length)) + '</span>' +
-          '<svg class="st-chevron mi-wb-sort-toggle__chev" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '<img class="mi-ico-img" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
         '</button>' +
         '<div class="mi-wb-sort-body"' + (open ? '' : ' hidden') + ' data-mq-set-wb-sort-body>' +
           renderWorldbookSortListRows(rows) +
@@ -1319,15 +1319,15 @@
           '<div class="st-card mi-set-action-card">' +
             '<button type="button" class="st-card-row" data-mq-set-export>' +
               '<div class="st-card-row-left"><div><div class="st-card-label">导出 JSON</div></div></div>' +
-              '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+              '<img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
             '</button>' +
             '<button type="button" class="st-card-row" data-mq-set-import>' +
               '<div class="st-card-row-left"><div><div class="st-card-label">导入 JSON</div></div></div>' +
-              '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+              '<img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
             '</button>' +
             '<button type="button" class="st-card-row mi-set-action-row--warn" data-mq-set-clear>' +
               '<div class="st-card-row-left"><div><div class="st-card-label">清空全部消息</div></div></div>' +
-              '<svg class="st-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+              '<img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
             '</button>' +
           '</div>' +
           '<input type="file" accept="application/json,.json" hidden data-mq-set-import-file>'

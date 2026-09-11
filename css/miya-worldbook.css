@@ -1237,3 +1237,30 @@
 .miya-worldbook-app .ins-wb-body-head {
   margin-top: 2px !important;
 }
+
+/* 图标化操作按钮 */
+.miya-worldbook-app .st-wb-add-btn.mi-ico-btn {
+  font-size: 0;
+  padding: 0;
+}
+.miya-worldbook-app .st-wb-add-btn.mi-ico-btn img {
+  width: 18px;
+  height: 18px;
+  filter: invert(1);
+  opacity: 1;
+}
+.miya-worldbook-app .ins-wb-link.mi-ico-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--st-border);
+  border-radius: 10px;
+  background: var(--st-card-bg);
+  color: var(--st-text-secondary);
+  text-decoration: none;
+  font-size: 0;
+}
+.miya-worldbook-app .ins-wb-link.mi-ico-btn img {
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
+}
