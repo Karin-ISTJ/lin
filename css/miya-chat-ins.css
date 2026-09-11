@@ -1099,54 +1099,103 @@
   height: var(--soft-tabbar-h);
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  padding: 0 8px;
+  justify-content: space-between;
+  gap: 0;
+  padding: 0 6px;
   background: #FFFFFF;
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--soft-r-pill);
   box-shadow: var(--soft-shadow-float);
+  box-sizing: border-box;
 }
 
 .soft-tabbar__pendant { display: none !important; }
 
+/* 头像回桌面按钮：与四个 tab 同高对齐，不挤占布局 */
+.soft-tabbar > .fg-tabbar-ava {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin: 0 2px 0 4px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  align-self: center;
+}
+.soft-tabbar > .fg-tabbar-ava .fg-tabbar-ava__img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
 .soft-tabbar__item {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 7px 2px;
+  padding: 6px 2px;
   color: var(--soft-ink-3);
   position: relative;
+  box-sizing: border-box;
 }
 
-.soft-tabbar__item svg {
-  width: 21px;
-  height: 21px;
-  stroke-width: 1.4;
+/* 统一图标槽：四栏同尺寸、同基线 */
+.soft-tabbar__ico {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.soft-tabbar__ico svg,
+.soft-tabbar__item > svg,
+.soft-tabbar__item > .mi-ico-img {
+  width: 22px !important;
+  height: 22px !important;
+  display: block;
+  flex-shrink: 0;
 }
 
-.soft-tabbar__item span {
-  font-size: 9px;
-  font-weight: 300;
+.soft-tabbar__item > span:not(.soft-tabbar__ico) {
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .soft-tabbar__item.is-active {
   color: var(--soft-ink);
 }
 
+.soft-tabbar__item.is-active .soft-tabbar__ico,
 .soft-tabbar__item.is-active svg {
   color: var(--soft-coral);
   stroke: var(--soft-coral);
 }
 
-.soft-tabbar__item.is-active span { font-weight: 500; }
+.soft-tabbar__item.is-active > span:not(.soft-tabbar__ico) {
+  font-weight: 600;
+  color: var(--soft-ink);
+}
 
 .theme-soft.qq-room-open .soft-tabbar {
   opacity: 0;
