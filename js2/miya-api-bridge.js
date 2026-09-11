@@ -177,6 +177,143 @@
     });
   }
 
+  /**
+   * 把「响应体」解析成最终文本。
+   * 关键：服务端可能无视 stream:false，仍然返回 SSE（data: {...}）。
+   * 这时 res.json() 会抛 `Unexpected token 'd', "data: {...}" is not valid JSON`。
+   * 所以这里统一按「先看 content-type、再嗅探正文」来决定走哪条路。
+   */
+  function parseCompletionResponse(res, reqOpts) {
+    var eng = global.miyaChatEngine;
+    var contentType = '';
+    try { contentType = String((res.headers && res.headers.get && res.headers.get('content-type')) || ''); } catch (e) {}
+
+    /* 从非流式 JSON 里抠文本 */
+    function fromJson(j) {
+      var choice = j && j.choices && j.choices[0];
+      var text = '';
+      if (reqOpts.useEngineExtract && eng && typeof eng.extractReplyContent === 'function') {
+        text = eng.extractReplyContent(j);
+      } else {
+        var msg = choice && choice.message;
+        var raw = msg && msg.content;
+        if (typeof raw === 'string') text = raw.trim();
+        else if (Array.isArray(raw)) {
+          text = raw.map(function (p) { return p && p.text ? String(p.text) : ''; }).join('').trim();
+        }
+      }
+      if (!text && choice && choice.message && !reqOpts.contentOnly) {
+        text = extractReasoningText(choice.message);
+      }
+      if (reqOpts.preferJsonPayload && !reqOpts.contentOnly && choice && choice.message) {
+        text = pickJsonLikeApiText(text, choice.message);
+      }
+      if (reqOpts.contentOnly && text) {
+        if (eng && typeof eng.stripThinkingForApi === 'function') {
+          text = eng.stripThinkingForApi(text);
+        }
+      }
+      if (!text && choice && choice.finish_reason === 'length' && !reqOpts.skipLengthCheck) {
+        return Promise.reject(new Error('输出被截断'));
+      }
+      return text;
+    }
+
+    /* 把一整段 SSE 正文解析成文本（复用流式分支的语义） */
+    function fromSseText(raw) {
+      var contentAcc = '';
+      var reasoningAcc = '';
+      var finishReason = '';
+      String(raw || '').split('\n').forEach(function (line) {
+        var trimmed = String(line || '').trim();
+        if (!trimmed || trimmed === 'data: [DONE]' || trimmed === '[DONE]') return;
+        if (trimmed.indexOf('data:') === 0) trimmed = trimmed.slice(5).trim();
+        if (!trimmed || trimmed === '[DONE]') return;
+        try {
+          var obj = JSON.parse(trimmed);
+          if (obj && obj.choices && obj.choices[0] && obj.choices[0].finish_reason) {
+            finishReason = obj.choices[0].finish_reason;
+          }
+          var delta = extractStreamDelta(obj);
+          if (delta.content) contentAcc += delta.content;
+          if (delta.reasoning) reasoningAcc += delta.reasoning;
+        } catch (e) { /* 跳过半截行 */ }
+      });
+      var text = String(contentAcc || '').trim();
+      var reasoning = String(reasoningAcc || '').trim();
+      if (!text && reasoning) text = reqOpts.contentOnly ? '' : reasoning;
+      if (reqOpts.contentOnly && text && eng && typeof eng.stripThinkingForApi === 'function') {
+        text = eng.stripThinkingForApi(text);
+      }
+      if (!text && finishReason === 'length' && !reqOpts.skipLengthCheck) {
+        return Promise.reject(new Error('输出被截断'));
+      }
+      return text;
+    }
+
+    /* 有 body reader 且像 SSE → 流式读 */
+    var looksSse = contentType.indexOf('text/event-stream') >= 0;
+    if (res.body && typeof res.body.getReader === 'function' && looksSse) {
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder('utf-8');
+      var buf = '';
+      var acc = '';
+      var racc = '';
+      var fr = '';
+      function consume(line) {
+        var t = String(line || '').trim();
+        if (!t || t === 'data: [DONE]' || t === '[DONE]') return;
+        if (t.indexOf('data:') === 0) t = t.slice(5).trim();
+        if (!t || t === '[DONE]') return;
+        try {
+          var o = JSON.parse(t);
+          if (o && o.choices && o.choices[0] && o.choices[0].finish_reason) fr = o.choices[0].finish_reason;
+          var d = extractStreamDelta(o);
+          if (d.content) acc += d.content;
+          if (d.reasoning) racc += d.reasoning;
+        } catch (e) {}
+      }
+      return (function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) {
+            if (buf.trim()) consume(buf);
+            var text = String(acc || '').trim();
+            var reasoning = String(racc || '').trim();
+            if (!text && reasoning) text = reqOpts.contentOnly ? '' : reasoning;
+            if (reqOpts.contentOnly && text && eng && typeof eng.stripThinkingForApi === 'function') {
+              text = eng.stripThinkingForApi(text);
+            }
+            if (!text && fr === 'length' && !reqOpts.skipLengthCheck) {
+              throw new Error('输出被截断');
+            }
+            return text;
+          }
+          buf += decoder.decode(r.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop() || '';
+          lines.forEach(consume);
+          return pump();
+        });
+      })();
+    }
+
+    /* 没有 reader（或不是 SSE）：先取正文，嗅探是不是 data: 开头的 SSE */
+    return res.text().then(function (raw) {
+      var head = String(raw || '').trim();
+      if (head.indexOf('data:') === 0 || head.indexOf('data: ') === 0) {
+        return fromSseText(head);
+      }
+      if (!head) throw new Error('API 返回为空');
+      try {
+        return fromJson(JSON.parse(head));
+      } catch (e) {
+        /* 还有一些服务端把 JSON 包在事件流里但没有 data: 前缀 */
+        if (head.indexOf('event:') >= 0) return fromSseText(head);
+        throw new Error('API 返回格式无法解析：' + head.slice(0, 160));
+      }
+    });
+  }
+
   function callCompletionsWithConfig(systemHint, userContent, imageParts, resolved, reqOpts) {
     var cfg = resolved || resolveChatApiConfig(getApiCfg());
     var base = normalizeBaseUrl(cfg.baseUrl);
@@ -237,37 +374,8 @@
           throw new Error('HTTP ' + r.status + (t ? ': ' + t.slice(0, 200) : ''));
         });
       }
-      return r.json();
-    }).then(function (j) {
-      var choice = j && j.choices && j.choices[0];
-      var text = '';
-      var eng = global.miyaChatEngine;
-      if (reqOpts.useEngineExtract && eng && typeof eng.extractReplyContent === 'function') {
-        text = eng.extractReplyContent(j);
-      } else {
-        var msg = choice && choice.message;
-        var raw = msg && msg.content;
-        if (typeof raw === 'string') text = raw.trim();
-        else if (Array.isArray(raw)) {
-          text = raw.map(function (p) { return p && p.text ? String(p.text) : ''; }).join('').trim();
-        }
-      }
-      if (!text && choice && choice.message && !reqOpts.contentOnly) {
-        text = extractReasoningText(choice.message);
-      }
-      if (reqOpts.preferJsonPayload && !reqOpts.contentOnly && choice && choice.message) {
-        text = pickJsonLikeApiText(text, choice.message);
-      }
-      if (reqOpts.contentOnly && text) {
-        var stripEng = global.miyaChatEngine;
-        if (stripEng && typeof stripEng.stripThinkingForApi === 'function') {
-          text = stripEng.stripThinkingForApi(text);
-        }
-      }
-      if (!text && choice && choice.finish_reason === 'length' && !reqOpts.skipLengthCheck) {
-        return Promise.reject(new Error('输出被截断'));
-      }
-      return text;
+      /* 服务端可能无视 stream:false 仍返回 SSE，统一交给解析器兼容 */
+      return parseCompletionResponse(r, reqOpts);
     });
   }
 

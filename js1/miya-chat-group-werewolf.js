@@ -498,8 +498,14 @@
     var welcome = '你正在参与一场群聊里的狼人杀游戏。'
       + '本局在你的世界观里真实发生了：你会用你一贯的语气、称呼和判断方式参与讨论，'
       + '不会突然变成一个「只会打牌的陌生人」。'
-      + '不解释规则、不加旁白括号、不重复系统提示、不输出「某某说：」这类前缀。'
-      + '需要输出 JSON 时只输出 JSON。';
+      + '不解释规则、不加旁白括号、不重复系统提示、不输出「某某说：」这类前缀。';
+
+  /* 只有需要结构化结果的任务（投票/猎杀/查验/女巫）才允许出现 JSON。
+     发言任务绝不能吐 JSON —— 提示词里必须说死，否则模型会把上一轮的格式惯性带过来。 */
+  var JSON_RULE = '\n【格式要求·务必遵守】这一轮**只输出一个 JSON 对象**，不要有任何解释、寒暄、标点包裹或代码块标记。';
+  var SAY_RULE = '\n【格式要求·务必遵守】这一轮**只输出角色说的话本身**：纯自然语言，'
+    + '**绝对不要**输出 JSON、花括号、字段名（如 vote/reason）、引号包裹的键值对，也不要输出「某某说：」这类前缀。'
+    + '想象你就是这个角色，正在群里打字发出这句话。';
 
   /**
    * 让某个 AI 完成一个任务
@@ -523,9 +529,10 @@
 
     if (task === 'speech') {
       lead += '\n\n现在轮到你发言。请用 1~2 句话说出你的判断：可以怀疑某个人、为自己辩解、或分析局势。'
-        + '\n要求：保持你一贯的说话风格和语气，像平时在群里聊天一样自然，不要机械套话，不要输出旁白。';
+        + '\n要求：保持你一贯的说话风格和语气，像平时在群里聊天一样自然，不要机械套话，不要输出旁白。'
+        + SAY_RULE;
       return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 500).then(function (res) {
-        var text = extractText(res);
+        var text = cleanSpeech(extractText(res));
         return { text: text || '（沉默）' };
       });
     }
@@ -533,7 +540,8 @@
     if (task === 'vote') {
       lead += '\n\n现在进入投票阶段，你要投出你认为最像狼人的一个玩家（不能投自己）。'
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
-        + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}';
+        + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
+        + JSON_RULE;
       return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
         return parseVote(extractText(res), others);
       });
@@ -543,7 +551,8 @@
       var targets = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
       lead += '\n\n现在是夜晚，你要和同伴一起选一个好人猎杀（不能猎杀狼人同伴）。'
         + '\n可选目标：' + targets.map(function (s) { return s.name; }).join('、')
-        + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}';
+        + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
+        + JSON_RULE;
       return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
         return parseVote(extractText(res), targets);
       });
@@ -552,7 +561,8 @@
     if (task === 'seer_check') {
       lead += '\n\n你是预言家，今晚要查验一个人的身份（不能查验自己）。'
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
-        + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}';
+        + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
+        + JSON_RULE;
       return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
         return parseVote(extractText(res), others);
       });
@@ -572,7 +582,8 @@
       } else {
         lead += '\n你的毒药已经用过了。';
       }
-      lead += '\n只输出 JSON：{"save":true或false,"poison":"玩家名字或空字符串","reason":"简短理由"}';
+      lead += '\n只输出 JSON：{"save":true或false,"poison":"玩家名字或空字符串","reason":"简短理由"}'
+        + JSON_RULE;
       return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 250).then(function (res) {
         var text = extractText(res);
         var obj = extractJson(text);
@@ -594,6 +605,49 @@
     }
 
     return Promise.reject(new Error('unknown_task'));
+  }
+
+  /**
+   * 发言兜底清洗：模型偶尔会把「JSON 格式惯性」带到发言里，
+   * 吐出 {"vote":"陆衍","reason":"..."} 这种。这里把它翻译回人话。
+   */
+  function cleanSpeech(text) {
+    var t = trim(text);
+    if (!t) return '';
+    /* 去掉 markdown 代码块包裹 */
+    t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+    /* 只有「整段就是一个 JSON 对象」才走翻译；否则视为夹带碎片的正文 */
+    var obj = (t.charAt(0) === '{' && t.charAt(t.length - 1) === '}') ? extractJson(t) : null;
+    if (obj && typeof obj === 'object') {
+      /* 整段就是一个 JSON：取可读字段拼成人话 */
+      var said = trim(obj.say || obj.speech || obj.text || obj.content || '');
+      var vote = trim(obj.vote || obj.target || '');
+      var reason = trim(obj.reason || '');
+      if (said) return said;
+      if (vote || reason) {
+        /* 收尾统一补句号，读起来才像人说的话 */
+        if (reason && !/[。！？.!?]$/.test(reason)) reason += '。';
+        if (vote && reason) return '我投' + vote + '。' + reason;
+        if (vote) return '我投' + vote + '。';
+        return reason;
+      }
+    }
+    /* 只是前后粘了 JSON 碎片：先看能否翻译成一句人话，否则剥掉裸 JSON 留正文 */
+    var frag = t.match(/\{[\s\S]*?\}/);
+    if (frag) {
+      var fo = extractJson(frag[0]);
+      if (fo && typeof fo === 'object') {
+        var fv = trim(fo.vote || fo.target || '');
+        var fr = trim(fo.reason || '');
+        var rest = trim(t.replace(/\{[\s\S]*?\}/g, ' ').replace(/\s+/g, ' '));
+        if (fr && !/[。！？.!?]$/.test(fr)) fr += '。';
+        if (rest) return rest;                 /* 正文优先 */
+        if (fv) return '我投' + fv + '。' + fr;
+        if (fr) return fr;
+      }
+    }
+    return t;
   }
 
   function extractJson(text) {
@@ -1103,6 +1157,7 @@
     openPanel: openPanel,
     handlePanelClick: handlePanelClick,
     buildWorldContext: buildWorldContext,
-    getCtxStats: getCtxStats
+    getCtxStats: getCtxStats,
+    cleanSpeech: cleanSpeech
   };
 })(window);
