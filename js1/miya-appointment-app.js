@@ -700,6 +700,33 @@
         return '<button type="button" class="xw-exit" id="xw-exit" aria-label="离开现场">收起</button>';
     }
 
+    /*
+     * 楼层范围输入框本体。手帐主题塞进顶栏，素纸/自定义主题没有顶栏，
+     * 所以单独渲染成右上角悬浮胶囊（见 renderFloatFloorScope）。
+     * 只在正片页出现：卷宗/回顾页不该改动已封存的内容。
+     */
+    function renderFloorScopeHtml() {
+        if (!(ui.view === 'story' && !ui.viewingArchive)) return '';
+        return (
+            '<div class="xw-floor-scope">' +
+            '<input type="text" class="xw-floor-scope__input" id="xw-floor-scope-input"' +
+            ' inputmode="numeric" autocomplete="off" spellcheck="false"' +
+            ' placeholder="3-8" title="输入楼层范围后回车隐藏/显示，如 3-8 或 5"' +
+            ' aria-label="楼层范围隐藏">' +
+            '<button type="button" class="xw-floor-scope__go" id="xw-floor-scope-go"' +
+            ' title="应用楼层范围" aria-label="应用楼层范围">' + ICON_EYE + '</button>' +
+            '</div>'
+        );
+    }
+
+    /** 非手帐主题：右上角悬浮的范围输入框 */
+    function renderFloatFloorScope() {
+        if (isJournalTheme()) return '';
+        var inner = renderFloorScopeHtml();
+        if (!inner) return '';
+        return '<div class="xw-floor-scope-float">' + inner + '</div>';
+    }
+
     function renderDockBeautifyBtn() {
         return (
             '<button type="button" class="xw-dock__btn" id="xw-dock-beautify" title="现场样式">' +
@@ -799,18 +826,7 @@
          * 楼层范围隐藏：填 3-8 就把第 3~8 层一次切换（隐藏的显示、显示的隐藏）。
          * 只在正片页出现——卷宗/回顾页不该改动已封存的内容。
          */
-        var floorScopeHtml = (ui.view === 'story' && !ui.viewingArchive)
-            ? (
-                '<div class="xw-floor-scope">' +
-                '<input type="text" class="xw-floor-scope__input" id="xw-floor-scope-input"' +
-                ' inputmode="numeric" autocomplete="off" spellcheck="false"' +
-                ' placeholder="3-8" title="输入楼层范围后回车隐藏/显示，如 3-8 或 5"' +
-                ' aria-label="楼层范围隐藏">' +
-                '<button type="button" class="xw-floor-scope__go" id="xw-floor-scope-go"' +
-                ' title="应用楼层范围" aria-label="应用楼层范围">' + ICON_EYE + '</button>' +
-                '</div>'
-            )
-            : '';
+        var floorScopeHtml = renderFloorScopeHtml();
 
         // 卷宗页的返回键改为与「聊天设置」一致的「← 返回」样式，放在左上角。
         var backHtml = isVault
@@ -1877,6 +1893,7 @@
             '<div class="xw-shell' + (isJournalTheme() ? ' xw-shell--journal' : '') + '">' +
             (isJournalTheme() ? renderJournalChrome() : renderExitBtn()) +
             (isJournalTheme() ? '' : renderDock()) +
+            renderFloatFloorScope() +
             '<main class="' + mainCls + '" id="xw-main">' + body + '</main>' +
             (ui.view === 'story' && !ui.viewingArchive
                 ? isJournalTheme()
