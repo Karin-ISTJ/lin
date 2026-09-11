@@ -3,7 +3,7 @@
   (function resetOverlayApps() {
     document.body.classList.remove('miya-app-open');
     document.querySelectorAll(
-      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-itinerary-app, #miya-couple-app, #miya-deep-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
+      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
     ).forEach(function (el) {
       if (!el.classList.contains('is-open')) {
         el.setAttribute('hidden', '');
@@ -34,7 +34,6 @@
     couple: '<svg viewBox="0 0 24 24" fill="none"><circle cx="5.5" cy="7" r="1.8" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><circle cx="18.5" cy="7" r="1.8" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M3.5 10.5h4v7.5H3.5a1 1 0 01-1-1v-5.5a1 1 0 011-1z" stroke="rgba(70,74,80,0.82)" stroke-width="1.1" stroke-linejoin="round"/><path d="M16.5 10.5H21v6.5a1 1 0 01-1 1h-3.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.1" stroke-linejoin="round"/><path d="M12 11.5c-.7-.7-1.8-.7-2.5 0-.7.7-.7 1.8 0 2.5L12 15.5l2.5-2.5c.7-.7.7-1.8 0-2.5-.7-.7-1.8-.7-2.5 0z" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linejoin="round"/></svg>',
     itinerary: '<svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h14" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linecap="round"/><circle cx="18" cy="12" r="2" stroke="rgba(130,136,145,0.65)" stroke-width="1.1"/><path d="M18 6v2M18 16v2" stroke="rgba(130,136,145,0.65)" stroke-width="1" stroke-linecap="round"/></svg>',
     rift: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M12 5v14M5 12h14" stroke="rgba(130,136,145,0.65)" stroke-width="1" opacity="0.5"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/></svg>',
-    deep: '<svg viewBox="0 0 24 24" fill="none"><path d="M8 4v16M8 4h7a2 2 0 012 2v12H8" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/><path d="M11 9h4M11 12h3M11 15h2" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/></svg>',
     notes: '<svg viewBox="0 0 24 24" fill="none"><path d="M4.5 19.5l3.8-1 8.8-8.8-2.8-2.8-8.8 8.8-1 3.8z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/><path d="M13.8 6.5l2.8 2.8" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/><path d="M4.5 21.5h.15" stroke="rgba(130,136,145,0.65)" stroke-width="1.4" stroke-linecap="round"/><path d="M16 4.5l2 2-1.4 1.4-2-2 1.4-1.4z" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linejoin="round"/></svg>',
     match: '<svg viewBox="0 0 24 24" fill="none"><path d="M5 8h14a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1V9a1 1 0 011-1z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 8v8" stroke="rgba(130,136,145,0.65)" stroke-width="1" stroke-dasharray="2 2"/><circle cx="8.5" cy="12" r="1" fill="rgba(130,136,145,0.65)"/></svg>',
     fun: '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="10" rx="1.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M3 9.5h18M3 14.5h18" stroke="rgba(130,136,145,0.65)" stroke-width="0.9" opacity="0.55"/><path d="M10 10.5l4.5 2.5-4.5 2.5v-5z" fill="rgba(130,136,145,0.65)"/></svg>',
@@ -67,7 +66,6 @@
     couple: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5a2 2 0 1 0 0 4 2 2 0 1 0 0-4m14.5 5h-.7c-.84 0-1.61.42-2.08 1.11L13.46 16h-2.93l-3.26-4.89C6.81 10.41 6.03 10 5.19 10h-.7a2.5 2.5 0 0 0-2.5 2.5V18h5v-3.7l1.87 2.81c.37.56.99.89 1.66.89h2.93c.67 0 1.29-.33 1.66-.89l1.87-2.81V18h5v-5.5a2.5 2.5 0 0 0-2.5-2.5ZM19 5a2 2 0 1 0 0 4 2 2 0 1 0 0-4"></path><path d="M14.51 10.17c.65-.67.65-1.74 0-2.41-.66-.67-1.69-.67-2.34 0l-.17.17-.17-.17c-.65-.67-1.69-.67-2.34 0-.65.68-.65 1.74 0 2.41L12 12.75z"></path></svg>',
     itinerary: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.17 5.11A2 2 0 0 0 17.38 4H4c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2 0 1.65 1.35 3 3 3s3-1.35 3-3h4c0 1.65 1.35 3 3 3s3-1.35 3-3c1.1 0 2-.9 2-2v-3.76c0-.31-.07-.62-.21-.89zM17.38 6l.89.45L20 10h-4.13V6zm-4.13 0v4h-3.5V6zm-5.5 0v4H4V6zM7 18a1.003 1.003 0 0 1-.87-1.5c.36-.62 1.33-.63 1.72-.02A.95.95 0 0 1 8 17c0 .55-.45 1-1 1m10 0a1.003 1.003 0 0 1-.87-1.5c.36-.62 1.33-.63 1.72-.02A.95.95 0 0 1 18 17c0 .55-.45 1-1 1"></path></svg>',
     rift: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.22 3s-5 0-7.22 7.82C9.78 3 4.78 3 4.78 3 3.25 3 2 4.25 2 5.79v4.47c0 2.81 1.88 5.17 4.44 5.91-.67.61-1.1 1.49-1.1 2.48C5.34 20.5 6.83 22 8.67 22S12 19 12 16c0 3 1.49 6 3.33 6s3.33-1.5 3.33-3.35c0-.98-.43-1.86-1.1-2.48 2.56-.73 4.44-3.1 4.44-5.91V5.79C22 4.25 20.76 3 19.22 3"></path></svg>',
-    deep: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 22h10c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2M7 4h10v16H7z"></path><path d="M9 8a1 1 0 1 0 0 2 1 1 0 1 0 0-2m2.32-1.57a1 1 0 1 0 0 2 1 1 0 1 0 0-2M9 5a1 1 0 1 0 0 2 1 1 0 1 0 0-2"></path></svg>',
     notes: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 21c.08 0 .16 0 .24-.03l4-1c.18-.04.34-.13.46-.26L20.99 7.42c.78-.78.78-2.05 0-2.83L19.4 3c-.78-.78-2.05-.78-2.83 0l-2.09 2.09-1.79-1.79a.996.996 0 0 0-1.41 0l-6 6 1.41 1.41 5.29-5.29 1.09 1.09-8.78 8.78c-.13.13-.22.29-.26.46l-1 4c-.09.34.01.7.26.95.19.19.45.29.71.29ZM18 4.41l1.59 1.58-2.09 2.09-1.59-1.59L18 4.4Z"></path></svg>',
     match: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 11h-11a2.5 2.5 0 0 1 0-5H10v2l4-3-4-3v2H6.5C4.02 4 2 6.02 2 8.5S4.02 13 6.5 13h11a2.5 2.5 0 0 1 0 5H7.82A2.99 2.99 0 0 0 5 16c-1.65 0-3 1.35-3 3s1.35 3 3 3c1.3 0 2.4-.84 2.82-2h9.68c2.48 0 4.5-2.02 4.5-4.5S19.98 11 17.5 11M19 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6"></path></svg>',
     fun: SVG_ENT,
@@ -88,7 +86,7 @@
     memory: '记忆', stpreset: 'ST预设', chat: '聊天', play: '游戏',
     beauty: '美化', store: '线下', photo: '多相', world: '世界',
     phone: '电话', contacts: '联系人', pet: '打字机', pen: '模拟器',
-    deep: '深入', notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',
+    notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',
     couple: '情侣空间', itinerary: '行程轨迹', rift: '错位时空',
     weather: '天气', map: '地图', apps: '应用', theater: '剧场'
   };
@@ -411,9 +409,6 @@
     fun: function () {
       if (window.miyaFunApp && window.miyaFunApp.open) window.miyaFunApp.open();
     },
-    deep: function () {
-      if (window.miyaDeepApp && window.miyaDeepApp.open) window.miyaDeepApp.open();
-    }
   };
 
   /* 安卓：打开全屏应用后，同一次触摸的 ghost click 会落到新页面按钮上（如设置→运转规则） */

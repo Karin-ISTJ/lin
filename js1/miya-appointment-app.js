@@ -3271,6 +3271,8 @@ function renderWriter() {
 
         var hit = 0, changed = 0, same = 0;
         var touched = {};
+        var changedNos = [];   // 本次真正改动的楼层
+        var sameNos = [];      // 已经是目标状态、无需改动的楼层
         ranges.forEach(function (r) {
             for (var n = r[0]; n <= r[1]; n++) {
                 if (n > maxNo) break;
@@ -3278,29 +3280,36 @@ function renderWriter() {
                 if (!m || touched[m.id]) continue;
                 touched[m.id] = 1;
                 hit += 1;
-                if (!!m.hidden === wantHidden) { same += 1; continue; }
+                if (!!m.hidden === wantHidden) { same += 1; sameNos.push(n); continue; }
                 apStore().updateMessage(ui.chatId, ui.sessionId, m.id, { hidden: wantHidden });
                 changed += 1;
+                changedNos.push(n);
             }
         });
         if (!hit) { toast('范围内没有楼层（本场共 ' + maxNo + ' 层）'); return false; }
         patchStoryBody();
+        changedNos.sort(function (a, b) { return a - b; });
+        sameNos.sort(function (a, b) { return a - b; });
+        var fmt = function (arr) {
+            return arr.length > 12
+                ? arr.slice(0, 12).join('、') + ' 等 ' + String(arr.length) + ' 层'
+                : arr.join('、');
+        };
+        /*
+         * 提示必须以「本次实际改变的楼层」为主语。
+         * 之前的写法把范围内所有楼层都列进去，导致「先隐藏 1-3、再隐藏 1-4」
+         * 会提示「已隐藏第 1、2、3、4 层（另 3 层已是该状态）」——
+         * 真正新增的第 4 层被淹没，看起来像重复劳动。
+         */
         if (!changed) {
             toast(wantHidden
-                ? '这 ' + String(hit) + ' 层本来就是隐藏的'
-                : '这 ' + String(hit) + ' 层本来就是显示的');
+                ? '第 ' + fmt(sameNos) + ' 层已经是隐藏的，无需重复操作'
+                : '第 ' + fmt(sameNos) + ' 层已经是显示的，无需重复操作');
             return true;
         }
-        /* 提示里点名具体楼层，用户不用回去数 */
-        var nums = Object.keys(touched).map(function (id) {
-            var n = 0;
-            Object.keys(byNo).forEach(function (k) { if (byNo[k].id === id) n = parseInt(k, 10); });
-            return n;
-        }).filter(Boolean).sort(function (a, b) { return a - b; });
-        var list = nums.length > 12
-            ? nums.slice(0, 12).join('、') + ' 等 ' + String(nums.length) + ' 层'
-            : nums.join('、');
-        toast((wantHidden ? '已隐藏第 ' : '已显示第 ') + list + ' 层' + (same ? '（另 ' + String(same) + ' 层已是该状态）' : ''));
+        var msg = (wantHidden ? '已隐藏第 ' : '已显示第 ') + fmt(changedNos) + ' 层';
+        if (same) msg += '（第 ' + fmt(sameNos) + ' 层原本就是该状态）';
+        toast(msg);
         return true;
     }
     function newOfflineChat() {

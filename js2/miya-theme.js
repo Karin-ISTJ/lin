@@ -17,7 +17,7 @@
     'p2_film_1', 'p2_film_2', 'p2_film_3', 'p2_film_4',
     'p2_canister', 'p2_memo_img', 'p2_tape_deco', 'p2_stamp_img', 'p2_ticket_bg'
   ];
-  var P3_TILE_KEYS = ['tile_deep', 'tile_notes', 'tile_match', 'tile_fun', 'tile_echo', 'tile_log'];
+  var P3_TILE_KEYS = ['tile_notes', 'tile_match', 'tile_fun', 'tile_echo', 'tile_log'];
   var P3_WIDGET_KEYS = ['folio_art', 'reel_a', 'reel_b', 'reel_c', 'lunar_bg'];
   var P3_WIDGET_LEGACY = P3_WIDGET_KEYS.slice();
   var P4_TILE_KEYS = ['tile_weather', 'tile_map', 'tile_apps', 'tile_theater'];
@@ -38,7 +38,6 @@
   };
 
   var P3_TILE_SELECTORS = {
-    tile_deep: '.desk--p3 .tile--deep',
     tile_notes: '.desk--p3 .tile--note',
     tile_match: '.desk--p3 .tile--match',
     tile_fun: '.desk--p3 .tile--fun .tile__film',
@@ -200,7 +199,6 @@
     { key: 'itinerary', label: '行程轨迹', selectors: ['.miya-itinerary-app'] },
     { key: 'notes', label: '日记', selectors: ['.miya-diary-app'] },
     { key: 'theater', label: '剧场', selectors: ['.miya-theater-app'] },
-    { key: 'deep', label: '深入', selectors: ['.miya-deep-app'] },
     { key: 'beauty', label: '美化', selectors: ['.miya-beautify-app'] },
     { key: 'lockscreen', label: '锁屏', selectors: ['.miya-lockscreen'] },
     { key: 'system', label: '系统弹窗', selectors: ['.miya-dialog-root', '.miya-upd-overlay', '.modal'] },

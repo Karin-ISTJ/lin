@@ -132,7 +132,7 @@
   color: rgba(45, 48, 52, 0.88);
 }
 
-/* 刊物与深入之间的空白 · 花字锚区 */
+/* 刊物区域的留白 · 花字锚区 */
 .p2-gap {
   position: absolute;
   z-index: 3;
@@ -820,58 +820,6 @@
   opacity: 0.82;
 }
 
-/* 深入 · 书脊签 */
-.tile--deep {
-  top: calc(env(safe-area-inset-top, 0px) + 96px);
-  right: 22px;
-  width: 42px;
-  height: 118px;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(240,244,248,0.78));
-  border: 1px solid rgba(255,255,255,0.95);
-  box-shadow: 8px 12px 24px rgba(100, 110, 125, 0.14);
-  transform: rotate(4deg);
-}
-
-.tile--deep .tile__spine {
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  background: linear-gradient(180deg, rgba(130,136,145,0.55), rgba(180,188,198,0.25));
-}
-
-.tile--deep .tile__glyph {
-  font-family: "Noto Serif SC", serif;
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  color: rgba(50, 54, 58, 0.82);
-  line-height: 1;
-}
-
-.tile--deep .tile__name {
-  writing-mode: vertical-rl;
-  font-size: 11px;
-  letter-spacing: 0.28em;
-  color: var(--ink-soft);
-}
-
-.tile--deep .tile__hint {
-  position: absolute;
-  bottom: 8px;
-  font-size: 6px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  transform: rotate(90deg);
-}
 
 /* 日记 · 便签 */
 .tile--note {
@@ -1171,7 +1119,6 @@
 
   .wg-reel { top: calc(env(safe-area-inset-top, 0px) + 218px); }
 
-  .tile--deep { top: calc(env(safe-area-inset-top, 0px) + 82px); height: 102px; }
   .tile--note { top: calc(env(safe-area-inset-top, 0px) + 198px); }
   .tile--match { top: calc(env(safe-area-inset-top, 0px) + 278px); }
   .tile--fun { top: calc(env(safe-area-inset-top, 0px) + 288px); }

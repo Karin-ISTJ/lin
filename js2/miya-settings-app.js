@@ -10,8 +10,6 @@
   var THEME_META_KEY = 'miya-theme-meta';
   var THEME_PRESETS_KEY = 'miya-theme-presets';
   var BACKUP_VERSION = 4;
-  var DEEP_PHONE_DB = 'miya-deep-phone-v1';
-  var DEEP_PHONE_STORE = 'phones';
   var LS_PLACEHOLDER_JSON = '{"__storedInIdb":true}';
   var LS_SPILL_BYTES = global.miyaLsSpillBytes || 49152;
 
@@ -118,13 +116,11 @@
     { id: 'couple', title: '情侣空间', lsKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY], widgetKvKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY] },
     { id: 'theater', title: '小剧场', lsKeys: [THEATER_KEY], widgetKvKeys: [THEATER_KEY] },
     { id: 'match', title: '赛事', lsKeys: [MATCH_SESSIONS_KEY, MATCH_PRIZE_PRESETS_KEY, MATCH_CUSTOM_ITEMS_KEY] },
-    { id: 'simulator', title: '人生分镜馆', lsKeys: [SIMULATOR_KEY, SIMULATOR_KEY_LEGACY, SIMULATOR_BACKUP_KEY], widgetKvKeys: [SIMULATOR_KEY, SIMULATOR_BACKUP_KEY] },
-    { id: 'deep', title: '深入角色手机', deepPhoneIdb: true }
+    { id: 'simulator', title: '人生分镜馆', lsKeys: [SIMULATOR_KEY, SIMULATOR_KEY_LEGACY, SIMULATOR_BACKUP_KEY], widgetKvKeys: [SIMULATOR_KEY, SIMULATOR_BACKUP_KEY] }
   ];
 
   var BACKUP_IDB_STORES_BASE = [
-    { file: 'idb/miya-theme-media_blobs.json', db: 'miya-theme-media', store: 'blobs', label: '主题素材', blob: true },
-    { file: 'idb/miya-deep-phone-v1_phones.json', db: DEEP_PHONE_DB, store: DEEP_PHONE_STORE, label: '深入角色手机', blob: false }
+    { file: 'idb/miya-theme-media_blobs.json', db: 'miya-theme-media', store: 'blobs', label: '主题素材', blob: true }
   ];
 
   var BACKUP_IDB_STORES_HEAVY = [
@@ -513,14 +509,6 @@
       });
     } catch (eMsgSound) {}
 
-    var deepPhoneBytes = 0;
-    try {
-      var dp = await global.miyaKvExportNamedDbKv(DEEP_PHONE_DB, DEEP_PHONE_STORE);
-      Object.keys(dp || {}).forEach(function (key) {
-        deepPhoneBytes += estimateValueBytes(dp[key]);
-      });
-    } catch (eDeep) {}
-
     var groupLs = {};
     STORAGE_CATALOG.forEach(function (c) { groupLs[c.id] = 0; });
     STORAGE_CATALOG.forEach(function (c) {
@@ -534,7 +522,6 @@
       if (c.chatMediaIdb) groupLs[c.id] += chatMediaBytes;
       if (c.musicLocalAudioIdb) groupLs[c.id] += musicLocalAudioBytes;
       if (c.msgSoundIdb) groupLs[c.id] += msgSoundBytes;
-      if (c.deepPhoneIdb) groupLs[c.id] += deepPhoneBytes;
     });
 
     var stableTotal = 0;
@@ -1002,9 +989,6 @@
         global.MiyaMsgSound.invalidateCache();
       }
     }
-    if (cat.deepPhoneIdb && global.miyaKvReplaceNamedDbKv) {
-      await global.miyaKvReplaceNamedDbKv(DEEP_PHONE_DB, DEEP_PHONE_STORE, {}).catch(function () {});
-    }
     if (cat.id === 'api') {
       global.miyaInvalidateApiConfigCache && global.miyaInvalidateApiConfigCache();
       invalidateApiPresetsCache();
@@ -1065,7 +1049,6 @@
     await global.miyaKvReplaceNamedDbKv('miya-chat-media', 'blobs', {}).catch(function () {});
     await global.miyaKvReplaceNamedDbKv('miya-music-local-audio-v1', 'blobs', {}).catch(function () {});
     await global.miyaKvReplaceNamedDbKv('miya-msg-sound-v1', 'blobs', {}).catch(function () {});
-    await global.miyaKvReplaceNamedDbKv(DEEP_PHONE_DB, DEEP_PHONE_STORE, {}).catch(function () {});
     global.miyaInvalidateApiConfigCache && global.miyaInvalidateApiConfigCache();
     if (global.miyaWorldbookStore && global.miyaWorldbookStore.invalidateCache) global.miyaWorldbookStore.invalidateCache();
     if (global.miyaContactsStore && global.miyaContactsStore.invalidateCache) global.miyaContactsStore.invalidateCache();
@@ -1844,7 +1827,6 @@
     var idbSpecs = getBackupIdbSpecs(true);
     var legacyMap = {
       'idb/miya-theme-media_blobs.json': raw.indexedDB_miya_theme_media,
-      'idb/miya-deep-phone-v1_phones.json': raw.indexedDB_miya_deep_phone,
       'idb/miya-chat-media_blobs.json': raw.indexedDB_miya_chat_media,
       'idb/miya-music-local-audio-v1_blobs.json': raw.indexedDB_miya_music_local_audio,
       'idb/miya-msg-sound-v1_blobs.json': raw.indexedDB_miya_msg_sound

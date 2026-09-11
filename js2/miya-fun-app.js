@@ -101,8 +101,7 @@
       !document.querySelector('.miya-weather-app.is-open') &&
       !document.querySelector('.miya-match-app.is-open') &&
       !document.querySelector('#miya-fun-app.is-open') &&
-      !document.querySelector('#miya-fun-sayguess.is-open') &&
-      !document.querySelector('#miya-deep-app.is-open')
+      !document.querySelector('#miya-fun-sayguess.is-open')
     ) {
       document.body.classList.remove('miya-app-open');
     }
