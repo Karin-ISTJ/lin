@@ -554,6 +554,17 @@
     return run();
   }
 
+  /**
+   * 轻量裸调用：只要一段自然语言返回，不套人设、不带世界书。
+   * 用于「帮玩家拟草稿」这类只借用模型语言能力的场景。
+   */
+  function askRaw(userContent) {
+    var sys = '你是一个中文狼人杀游戏助手。只输出玩家要说的话本身，'
+      + '不要任何解释、前缀、引号、括号旁白或 JSON。';
+    return callApi(sys, userContent, Math.max(600, resolveMaxTokens(null, SPEECH_FLOOR)), null)
+      .then(function (res) { return cleanSpeech(extractText(res)); });
+  }
+
   /* 上一次组装上下文时的诊断快照（供 UI 展示） */
   var ctxStats = null;
 
@@ -671,11 +682,25 @@
     var dropped = 0;
     var droppedChars = 0;
 
-    function pushMsg(m) {
-      if (!m || !m.content) return;
-      var text = typeof m.content === 'string' ? m.content : '';
-      if (!trim(text)) return;
-      lines.push(trim(text));
+    /*
+     * 分项字数：光看总数没法定位膨胀源（152.5k → 133k 折腾了两轮），
+     * 这里按「ST 前置 / 群 system / ST 后置」三路分别累计，并记下最大块。
+     */
+    var stFrontChars = 0, stBackChars = 0, groupChars = 0, biggest = null;
+    function tally(piece, bucket) {
+      if (bucket === 'stfront') stFrontChars += piece.length;
+      else if (bucket === 'stback') stBackChars += piece.length;
+      else groupChars += piece.length;
+      if (!biggest || piece.length > biggest.len) {
+        biggest = { len: piece.length, title: (piece.match(/^【[^】]{1,40}】/) || ['(无标题)'])[0] };
+      }
+    }
+
+    function pushPiece(piece, bucket) {
+      var t = trim(piece);
+      if (!t) return;
+      tally(t, bucket);
+      lines.push(t);
     }
 
     /*
@@ -685,7 +710,6 @@
      */
     function pushSystemBody(body) {
       var pieces = splitCtxBlocks(body);
-      if (!pieces.length) return;
       for (var i = 0; i < pieces.length; i++) {
         var piece = trim(pieces[i]);
         if (!piece) continue;
@@ -694,20 +718,25 @@
           droppedChars += piece.length;
           continue;
         }
-        lines.push(piece);
+        pushPiece(piece, 'group');
       }
     }
 
+    function pushMsg(m, bucket) {
+      if (!m || !m.content) return;
+      pushPiece(typeof m.content === 'string' ? m.content : '', bucket);
+    }
+
     var groupSystemCount = 0;
-    (stFront || []).forEach(pushMsg);
+
+    (stFront || []).forEach(function (m) { pushMsg(m, 'stfront'); });
     built.messages.forEach(function (m) {
       /* 只取 system：user/assistant 历史与狼人杀无关，避免把聊天记录带进对局 */
       if (!m || m.role !== 'system') return;
       groupSystemCount += 1;
-      var body = typeof m.content === 'string' ? m.content : '';
-      pushSystemBody(body);
+      pushSystemBody(typeof m.content === 'string' ? m.content : '');
     });
-    (stBack || []).forEach(pushMsg);
+    (stBack || []).forEach(function (m) { pushMsg(m, 'stback'); });
 
     var text = lines.join('\n\n');
     var wbMeta = built.worldbookMeta || {};
@@ -721,6 +750,11 @@
       chars: text.length,
       stFront: (stFront || []).length,
       stBack: (stBack || []).length,
+      /* 分项字数：定位「到底是谁把上下文撑大的」 */
+      stFrontChars: stFrontChars,
+      stBackChars: stBackChars,
+      groupChars: groupChars,
+      biggest: biggest,
       groupSystem: groupSystemCount,
       dropped: dropped,
       droppedChars: droppedChars,
@@ -988,7 +1022,11 @@
   }
 
   /* ---------------- UI ---------------- */
-  var state = { chatId: '', busy: false, busyText: '', ctxOpen: false, maxOpen: false };
+  var state = {
+    chatId: '', busy: false, busyText: '', ctxOpen: false, maxOpen: false,
+    /* 玩家发言草稿：draft 是内容，drafting 表示正在让 AI 拟稿 */
+    draft: '', drafting: false
+  };
 
   function phaseStepHtml(g) {
     var order = [
@@ -1128,6 +1166,51 @@
       row('命中的世界书', st.worldbook + ' 条');
       row('群成员', st.members + ' 人');
 
+      /*
+       * ST 预设逐条明细：条目开关只有「启用/停用」两个状态，
+       * 但真正决定体积的是「每条有多长」。63 条里可能就 2~3 条特别长，
+       * 不列出来根本没法定位，只能靠猜。这里按字数从大到小排。
+       */
+      var stEntries = [];
+      try {
+        var stp = global.miyaStPromptPresetsStore;
+        if (stp && typeof stp.listEntries === 'function') {
+          stEntries = (stp.listEntries() || []).filter(function (e) {
+            return e && e.enabled && !e.marker && String(e.content || '').trim();
+          });
+        }
+      } catch (e) { stEntries = []; }
+      var stRows = stEntries.map(function (e) {
+        return { name: e.name || '未命名', len: String(e.content || '').length };
+      }).sort(function (a, b) { return b.len - a.len; });
+
+      var stListDiag = '';
+      if (stRows.length) {
+        var stSum = stRows.reduce(function (a, r) { return a + r.len; }, 0);
+        stListDiag = '<div class="ww-ctx-wbmeta"><b>ST 预设条目（' + stRows.length
+          + ' 条启用，合计 ' + (stSum / 1000).toFixed(1) + 'k 字）</b>'
+          + stRows.slice(0, 8).map(function (r) {
+              return '<div class="ww-ctx-part">'
+                + '<span class="ww-ctx-part__name">' + esc(r.name) + '</span>'
+                + '<span class="ww-ctx-part__bar"><i style="width:'
+                + (stSum ? (r.len / stRows[0].len * 100).toFixed(0) : 0) + '%"></i></span>'
+                + '<span class="ww-ctx-part__num">'
+                + (r.len >= 1000 ? (r.len / 1000).toFixed(1) + 'k' : r.len) + '</span></div>';
+            }).join('')
+          + (stRows.length > 8 ? '<div style="margin-top:4px">…其余 ' + (stRows.length - 8) + ' 条</div>' : '')
+          /*
+           * 光看到哪条长还不够，得能动手。预设条目本身带开关，
+           * 但直接改会破坏用户原有配置 —— 所以给一个「另存为新预设」，
+           * 复制一份后再关掉多余条目，原预设不动。
+           */
+          + '<button type="button" class="ww__btn ww-ctx-dup" data-ww-act="st_dup">'
+          +   '另存为新预设（复制一份再关掉多余条目）</button>'
+          + '<div class="ww-ctx-dup-hint">'
+          +   '点「知道了」关闭面板后，到「设置 → ST 预设」里切换到这个新预设，'
+          +   '把用不着的条目关掉即可。原预设不会被改动。</div>'
+          + '</div>';
+      }
+
       /* 世界书诊断：解释「为什么是这个条数」，而不是只甩一个数字 */
       var wbRows = [];
       if (st.worldbook > 0) {
@@ -1160,6 +1243,34 @@
           + '</div>';
       }
 
+      /*
+       * 分项占比：总字数只是一个结果，真正有用的是「谁占的」。
+       * ST 预设是用户自己启用的全部条目，属于用户配置，狼人杀不会擅自删减，
+       * 但如果它占了大头，用户需要看到这个事实才能自己去关掉不用的条目。
+       */
+      var parts = [
+        { k: '群聊 system（人设/世界书等）', v: st.groupChars || 0 },
+        { k: 'ST 预设·前置', v: st.stFrontChars || 0 },
+        { k: 'ST 预设·后置', v: st.stBackChars || 0 }
+      ].filter(function (p) { return p.v > 0; });
+      var partSum = parts.reduce(function (a, p) { return a + p.v; }, 0);
+      var partsDiag = '';
+      if (partSum > 0) {
+        var bars = parts.map(function (p) {
+          var pct = (p.v / partSum * 100).toFixed(0);
+          return '<div class="ww-ctx-part">'
+            + '<span class="ww-ctx-part__name">' + esc(p.k) + '</span>'
+            + '<span class="ww-ctx-part__bar"><i style="width:' + pct + '%"></i></span>'
+            + '<span class="ww-ctx-part__num">' + (p.v >= 1000 ? (p.v / 1000).toFixed(1) + 'k' : p.v) + '</span>'
+            + '</div>';
+        }).join('');
+        partsDiag = '<div class="ww-ctx-wbmeta"><b>字数构成</b>' + bars
+          + (st.biggest && st.biggest.len > 2000
+            ? '<br>最大单块：' + esc(st.biggest.title) + '（' + (st.biggest.len / 1000).toFixed(1) + 'k 字）'
+            : '')
+          + '</div>';
+      }
+
       var wbTip;
       if (st.worldbook > 0) {
         wbTip = '✅ 世界书已命中并注入提示词。';
@@ -1173,6 +1284,8 @@
 
       var health = st.systemBlocks >= 2 && st.chars > 200;
       body = '<div class="ww-ctx-list">' + rows.join('') + '</div>'
+        + partsDiag
+        + stListDiag
         + (wbRows.length ? '<div class="ww-ctx-wblist">' + wbRows.join('') + '</div>' : '')
         + wbDiag + growDiag + '<div class="ww-ctx-tip">' + wbTip + '</div>'
         + '<div class="ww-ctx-tip">'
@@ -1345,11 +1458,22 @@
         turnHtml = '<div class="ww__myturn">'
           + '<div class="ww__myturn-title">🎤 轮到你发言了</div>'
           + '<textarea class="ww__input" data-ww-input="speech" rows="3" maxlength="600"'
-          +   ' placeholder="说出你的判断：可以怀疑某个人、为自己辩解，或分析局势…"></textarea>'
+          +   ' placeholder="说出你的判断：可以怀疑某个人、为自己辩解，或分析局势…">'
+          +   esc(state.draft || '') + '</textarea>'
           + '<div class="ww__actions">'
           +   '<button type="button" class="ww__btn ww__btn--main" data-ww-act="user_speak">发送发言</button>'
-          +   '<button type="button" class="ww__btn" data-ww-act="skip_speak">这轮跳过</button>'
+          /*
+           * 这里原本是「这轮跳过」。但狼人杀里玩家不该有「不发言」的权利 ——
+           * 沉默本身就是一种信息（装死/划水会被当成狼），给它一个按钮等于
+           * 开了个不公平的缺口，也破坏了「每人都要表态」的规则。
+           * 改成让 AI 依据你的身份和当前局势拟一段草稿，你改完再发。
+           */
+          +   '<button type="button" class="ww__btn" data-ww-act="draft_speak"'
+          +     (state.drafting ? ' disabled' : '') + '>'
+          +     (state.drafting ? '正在拟稿…' : '帮我起个草稿') + '</button>'
           + '</div>'
+          + '<div class="ww__myturn-hint">每人每轮都必须表态，所以没有「跳过」——'
+          +   '不知道怎么接就点「帮我起个草稿」，改完再发。</div>'
           + '</div>';
       }
 
@@ -1433,6 +1557,25 @@
 
     if (act === 'ctx') {
       state.ctxOpen = true;
+      rerender();
+      return true;
+    }
+
+    /*
+     * 把当前 ST 预设另存为新预设，供用户在新副本上关掉多余条目。
+     * 直接改用户现有预设是不行的：那会破坏他在别处（普通聊天）的配置。
+     */
+    if (act === 'st_dup') {
+      var stp = global.miyaStPromptPresetsStore;
+      if (!stp || typeof stp.duplicatePack !== 'function') {
+        fail('预设模块未就绪，无法另存');
+        return true;
+      }
+      var cur = stp.getActivePack ? stp.getActivePack() : null;
+      var baseName = (cur && cur.name) ? cur.name : '预设';
+      var copy = stp.duplicatePack(cur ? cur.id : '', baseName + '（狼人杀精简版）');
+      if (!copy) { fail('另存失败：没找到当前预设'); return true; }
+      if (toast) toast('已另存为「' + copy.name + '」，去设置里关掉多余条目吧');
       rerender();
       return true;
     }
@@ -1572,7 +1715,16 @@
 
     /* ---- 玩家发言 ---- */
     if (act === 'user_speak') {
-      var box = panel ? panel.querySelector('[data-ww-input="speech"]') : null;
+      /*
+       * 从被点的按钮往上找输入区。
+       * 之前这里写的是面板级的 `panel` 变量，但它在 handlePanelClick 作用域里
+       * 根本不存在 —— 点击会直接抛 ReferenceError，表现就是「按钮点了没反应」。
+       * 改为就近用 closest 定位，不依赖外部作用域。
+       */
+      var wrap = (btn.closest && btn.closest('.ww__myturn')) || null;
+      var box = wrap
+        ? wrap.querySelector('[data-ww-input="speech"]')
+        : (document.querySelector ? document.querySelector('#ww-panel [data-ww-input="speech"]') : null);
       var say = box ? trim(box.value) : '';
       if (!say) {
         if (toast) toast('先写点什么再发送吧');
@@ -1584,20 +1736,48 @@
       recordSpeech(g, USER_OWNER_ID, say, false);
       pushLog(g, '你完成了发言');
       advanceSpeechCursor(g, USER_OWNER_ID);
+      /* 草稿已用完，清掉，免得下一轮输入框里还留着上一轮的话 */
+      state.draft = '';
+      state.drafting = false;
       save(store, chatId, g);
       rerender();
       return true;
     }
 
-    /* 玩家跳过本轮发言：直接推进游标，不写入 speeches */
-    if (act === 'skip_speak') {
-      var cur = nextSpeaker(g);
-      if (!cur || !cur.isUser) { rerender(); return true; }
-      recordSpeech(g, USER_OWNER_ID, '（这轮我先不发言，听你们说。）', false);
-      pushLog(g, '你选择了本轮跳过发言');
-      advanceSpeechCursor(g, USER_OWNER_ID);
-      save(store, chatId, g);
+    /*
+     * 让 AI 以「玩家本人」的身份和视角拟一段发言草稿。
+     * 注意 task 用 speech 会让 AI 以自己席位发言，这里要的是「玩家会怎么说」，
+     * 所以用一个独立分支拼提示词，而不是复用 askAi 的 speech。
+     */
+    if (act === 'draft_speak') {
+      var dcur = nextSpeaker(g);
+      if (!dcur || !dcur.isUser) { rerender(); return true; }
+      state.drafting = true;
       rerender();
+      var myRole = roleOf(g.roles[USER_OWNER_ID]);
+      var dSituation = buildSituation(g, {});
+      var aliveOthers = aliveSeats(g).filter(function (s) { return s.whoId !== USER_OWNER_ID; });
+      var dLead = dSituation
+        + '\n\n现在轮到你（真人玩家）发言。请站在这个玩家的立场，替他写一段发言草稿。'
+        + '\n他这一轮的身份是：' + myRole.icon + myRole.name + '。'
+        + '\n草稿要求：'
+        + '\n- 用第一人称，像在群里打字一样自然，2~3 句话。'
+        + '\n- 给出明确立场：怀疑谁、为谁说话、或者自证身份，必须指向具体的人。'
+        + '\n- 如果你是狼人，就写一段「像好人在推理」的发言，不要露馅。'
+        + '\n- 如果你是好人阵营，可以报身份、给逻辑、点可疑的人。'
+        + '\n只输出这段话本身，不要任何前缀、引号或解释。'
+        + '\n可选提及的玩家：' + aliveOthers.map(function (s) { return s.name; }).join('、')
+        + SAY_RULE;
+      askRaw(dLead).then(function (txt) {
+        state.drafting = false;
+        state.draft = txt || '';
+        rerender();
+        if (toast && !txt) toast('草稿生成失败，请手动输入');
+      }).catch(function (err) {
+        state.drafting = false;
+        rerender();
+        fail('拟稿失败：' + ((err && err.message) || '未知错误'));
+      });
       return true;
     }
 

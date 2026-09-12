@@ -381,6 +381,60 @@
   color: rgba(0, 0, 0, 0.55);
 }
 
+/* 字数构成：横向占比条，一眼看出谁把上下文撑大了 */
+.ww-ctx-part {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ww-ctx-part__name {
+  flex: 0 0 auto;
+  max-width: 11em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ww-ctx-part__bar {
+  flex: 1 1 auto;
+  min-width: 24px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.ww-ctx-part__bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #6a56a8, #9b86d0);
+}
+
+.ww-ctx-part__num {
+  flex: 0 0 auto;
+  min-width: 3.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+/* 体检弹窗里的「另存为新预设」入口 */
+.ww-ctx-dup {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 12px;
+}
+
+.ww-ctx-dup-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.45);
+}
+
 .ww-ctx-ok {
   margin-top: 14px;
   width: 100%;
@@ -721,6 +775,12 @@
   outline: none;
   border-color: rgba(74, 58, 120, 0.5);
   box-shadow: 0 0 0 3px rgba(74, 58, 120, 0.1);
+}
+
+.ww__myturn-hint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.45);
 }
 
 /* ---------- 结算 ---------- */

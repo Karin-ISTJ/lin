@@ -184,6 +184,37 @@
     });
   }
 
+  /**
+   * 把现有预设另存为一个新预设（深拷贝，含生成参数与全部条目）。
+   * 新预设会成为当前激活项，原预设原样保留 —— 方便用户复制一份，
+   * 在新副本上关掉用不着的条目，而不影响原来的配置。
+   */
+  function duplicatePack(sourceId, name) {
+    var state = load();
+    var src = null;
+    if (sourceId) {
+      for (var i = 0; i < state.packs.length; i++) {
+        if (state.packs[i].id === sourceId) { src = state.packs[i]; break; }
+      }
+    }
+    if (!src) src = getActivePack();
+    if (!src) return null;
+
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.id = uid('pack');
+    copy.name = String(name || '').trim() || (src.name + ' 副本');
+    copy.createdAt = Date.now();
+    /* 条目要重新发 id，否则两个预设的条目 id 会撞车 */
+    (copy.entries || []).forEach(function (e) {
+      e.id = uid('entry');
+    });
+
+    state.packs.push(copy);
+    state.activeId = copy.id;
+    save(state);
+    return copy;
+  }
+
   function getEntry(id) {
     var entries = listEntries();
     for (var i = 0; i < entries.length; i++) {
@@ -407,6 +438,7 @@
     save: save,
     listPacks: listPacks,
     createPack: createPack,
+    duplicatePack: duplicatePack,
     getActivePack: getActivePack,
     setActivePack: setActivePack,
     renamePack: renamePack,
