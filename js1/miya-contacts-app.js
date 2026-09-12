@@ -21,6 +21,8 @@
   }
   var pendingImportTags = null;
   var pendingWorldbookImport = null;
+  /* 打开应用后短时间内忽略点击，避免桌面图标的 touch 穿透到「建档/导入」 */
+  var openGuardUntil = 0;
 
   function $(id) { return document.getElementById(id); }
 
@@ -669,8 +671,13 @@
     });
 
     $('miya-ct-back').addEventListener('click', closeContactsApp);
-    $('miya-ct-add').addEventListener('click', function () { clearPendingImport(); fillEditor(null); });
+    $('miya-ct-add').addEventListener('click', function () {
+      if (Date.now() < openGuardUntil) return;
+      clearPendingImport();
+      fillEditor(null);
+    });
     $('miya-ct-card-import').addEventListener('click', function () {
+      if (Date.now() < openGuardUntil) return;
       // 酒馆卡导入不再要求激活码，直接打开文件选择器。
       $('miya-ct-card-file').click();
     });
@@ -790,6 +797,7 @@
       }
       var panel = e.target.closest('[data-ct-id]');
       if (panel) {
+        if (Date.now() < openGuardUntil) return;
         var row = store.findCharacter(panel.getAttribute('data-ct-id'));
         if (row) { clearPendingImport(); fillEditor(row); }
       }
@@ -799,12 +807,14 @@
   function openContactsApp() {
     var app = $('miya-contacts-app');
     if (!app || !store) return;
+    openGuardUntil = Date.now() + 450;
     Promise.all([
       store.whenReady(),
       relStore ? relStore.whenReady() : Promise.resolve()
     ]).then(function () {
       bindEvents();
       closeEditor();
+      app.classList.remove('has-editor');
       app.classList.add('is-open');
       app.setAttribute('aria-hidden', 'false');
       document.body.classList.add('miya-app-open');
