@@ -1071,12 +1071,8 @@
       el.classList.add('is-open');
       el.setAttribute('aria-hidden', 'false');
       document.body.classList.add('miya-app-open');
-      if (!ui.bootDone) {
-        runBootAnimation();
-      } else {
-        var boot = $('tw-boot');
-        if (boot) boot.classList.add('is-done');
-      }
+      /* 取消进场动画，直接进入界面 */
+      finishBootAnimation();
     });
   }
 
