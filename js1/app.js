@@ -85,7 +85,7 @@
     music: '音乐', set: '设置', book: '世界书',
     memory: '记忆', stpreset: 'ST预设', chat: '聊天', play: '游戏',
     beauty: '美化', store: '线下', photo: '多相', world: '世界',
-    phone: '电话', contacts: '联系人', pet: '打字机', pen: '模拟器',
+    phone: '电话', contacts: '联系人', pet: '书架', pen: '模拟器',
     notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',
     couple: '情侣空间', itinerary: '行程轨迹', rift: '错位时空',
     weather: '天气', map: '地图', apps: '应用', theater: '剧场'

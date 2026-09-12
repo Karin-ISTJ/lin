@@ -989,7 +989,6 @@
       var active = lobbyState.contactId === c.id ? ' is-selected' : '';
       return (
         '<button type="button" class="tw-salon__pick' + active + '" data-tw-rt-contact="' + esc(c.id) + '">' +
-        '<span class="tw-salon__pick-av">' + esc(contactInitial(c)) + '</span>' +
         '<span class="tw-salon__pick-name">' + esc(contactDisplayName(c)) + '</span></button>'
       );
     }).join('');
@@ -1001,7 +1000,7 @@
     if (!el) return;
     var books = bookStore.getBooks();
     if (!books.length) {
-      el.innerHTML = '<p class="tw-salon__empty">尚无典籍 · 请先在编纂室导入</p>';
+      el.innerHTML = '<p class="tw-salon__empty">尚无典籍 · 请先在书架导入</p>';
       return;
     }
     if (!lobbyState.bookId && books[0]) lobbyState.bookId = books[0].id;

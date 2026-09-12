@@ -2965,3 +2965,54 @@
     0 2px 8px rgba(0, 0, 0, 0.04),
     0 16px 40px rgba(0, 0, 0, 0.06) !important;
 }
+
+/* 共读角色：只显示名字，隐藏头像圆标 */
+.miya-typewriter-app .tw-salon__pick-av {
+  display: none !important;
+}
+.miya-typewriter-app .tw-salon__pick {
+  gap: 0 !important;
+  padding: 10px 16px !important;
+  justify-content: center !important;
+}
+.miya-typewriter-app .tw-salon__pick-name {
+  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #1c1c1e !important;
+}
+
+/* 消除共读室底栏下方灰色条：footer 不再额外吃安全区，并收紧底部留白 */
+.miya-typewriter-app .tw-salon {
+  padding-bottom: 0 !important;
+  background: transparent !important;
+}
+.miya-typewriter-app .tw-salon__footer {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 8px 18px 12px !important;
+  margin: 0 !important;
+}
+.miya-typewriter-app .tw-pages {
+  /* 只留给悬浮 dock，避免底部再露出一条灰底 */
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  background: transparent !important;
+}
+.miya-typewriter-app .tw-page {
+  background: transparent !important;
+}
+/* 原底栏若仍占位，强制不占文档流高度以外的灰底 */
+.miya-typewriter-app .tw-tabbar {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border: none !important;
+  border-top: none !important;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.04) !important;
+}
+.miya-typewriter-app .tw-tabbar::before,
+.miya-typewriter-app .tw-tabbar::after {
+  display: none !important;
+  content: none !important;
+}
