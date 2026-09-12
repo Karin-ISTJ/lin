@@ -152,16 +152,9 @@
   function renderVolumes() {
     var rail = $('miya-ct-volumes');
     if (!rail) return;
-    var groups = store.listGroups();
+    /* 仅保留「全卷」，其它分卷标签与「＋」已按需求移除；导入/建档按钮移至同一行右侧 */
     var html = '<button type="button" class="mn-vol' + (filterGroupId === 'all' ? ' is-active' : '') +
       '" data-ct-group="all">全卷</button>';
-    groups.forEach(function (g) {
-      var cnt = store.listCharacters(g.id).length;
-      html += '<button type="button" class="mn-vol' + (filterGroupId === g.id ? ' is-active' : '') +
-        '" data-ct-group="' + esc(g.id) + '" title="' + esc(g.name) + '">' +
-        esc(g.name) + (cnt ? ' ·' + cnt : '') + '</button>';
-    });
-    html += '<button type="button" class="mn-vol mn-vol-add" data-ct-group-add aria-label="新建卷">＋</button>';
     rail.innerHTML = html;
   }
 
@@ -229,7 +222,7 @@
       grid.innerHTML =
         '<div class="mn-empty">' +
         '<strong>空白分镜</strong>' +
-        '<span>点右上角「建档」创建角色<br>或「导入」酒馆卡（PNG / JSON）<br>编辑时可从 docx/txt 填入人设 · 与世界书典籍联动</span>' +
+        '<span>点「建档」创建角色<br>或「导入」酒馆卡（PNG / JSON）<br>编辑时可从 docx/txt 填入人设 · 与世界书典籍联动</span>' +
         '</div>';
       renderVolumeFooter();
       return;
@@ -686,10 +679,13 @@
     $('miya-ct-save').addEventListener('click', saveEditor);
     $('miya-ct-delete').addEventListener('click', deleteEditing);
 
-    $('miya-ct-search').addEventListener('input', function () {
-      searchQuery = this.value || '';
-      renderGrid();
-    });
+    var searchEl = $('miya-ct-search');
+    if (searchEl) {
+      searchEl.addEventListener('input', function () {
+        searchQuery = this.value || '';
+        renderGrid();
+      });
+    }
 
     $('miya-ct-portrait').addEventListener('click', function () {
       $('miya-ct-avatar-file').click();

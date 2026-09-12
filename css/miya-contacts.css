@@ -72,15 +72,20 @@
   z-index: 2;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   padding: calc(env(safe-area-inset-top, 0) + 8px) 16px 0;
   border-bottom: none;
   flex-shrink: 0;
+  min-height: 46px;
 }
 
 .mn-top::after { content: none; }
 
 .mn-back {
+  position: absolute;
+  left: 16px;
+  top: calc(env(safe-area-inset-top, 0) + 8px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -106,9 +111,11 @@
 .mn-back:active { transform: scale(0.97); }
 
 .mn-title-block {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: calc(100% - 100px);
   text-align: center;
+  pointer-events: none;
 }
 
 .mn-kicker { display: none; }
@@ -131,6 +138,7 @@
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .mn-btn {
@@ -177,15 +185,23 @@
   flex-direction: column;
 }
 
-/* 分卷改为顶部横向胶囊标签，和全站筛选条一致 */
-.mn-volumes {
+/* 分卷 + 操作按钮 同一行，位于返回键下方 */
+.mn-volumes-row {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 4px;
+}
+
+.mn-volumes {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 12px 16px 4px;
+  padding: 0;
   border-right: none;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
