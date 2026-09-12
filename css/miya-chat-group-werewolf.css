@@ -45,6 +45,8 @@
   flex-direction: column;
   padding: var(--mc-safe-t, 0px) 0 var(--mc-safe-b, 0px);
   overflow: hidden;
+  /* 上下文弹窗以它为定位参照，铺满整个面板 */
+  position: relative;
 }
 
 /* 中间滚动区：内容长了只滚这里，头尾固定 */
@@ -104,25 +106,167 @@
   cursor: pointer;
 }
 
-/* ---------- 上下文体检条 ---------- */
+/* ---------- 上下文体检条（一行可点，点开弹窗） ---------- */
 .ww__ctx {
   flex: 0 0 auto;
-  padding: 5px 14px;
-  font-size: 10.5px;
-  line-height: 1.45;
-  color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+  color: rgba(0, 0, 0, 0.62);
   background: rgba(74, 58, 120, 0.05);
+  border: none;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.ww__ctx b {
+.ww__ctx:active {
+  background: rgba(74, 58, 120, 0.1);
+}
+
+.ww__ctx-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.ww__ctx-dot.is-ok {
+  background: #2e9e5b;
+}
+
+.ww__ctx-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.ww__ctx-more {
+  flex: 0 0 auto;
   color: #4a3a78;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .ww__ctx--bad {
   color: #b3261e;
   background: rgba(179, 38, 30, 0.07);
+}
+
+.ww__ctx--bad .ww__ctx-dot {
+  background: #b3261e;
+}
+
+/* ---------- 上下文详情弹窗 ---------- */
+.ww-ctx-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.42);
+  animation: ww-ctx-fade 0.16s ease-out;
+}
+
+@keyframes ww-ctx-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ww-ctx-card {
+  width: 100%;
+  max-width: 320px;
+  max-height: 80%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 18px 18px 14px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.ww-ctx-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2b2438;
+  margin-bottom: 12px;
+}
+
+.ww-ctx-list {
+  border-radius: 12px;
+  background: rgba(74, 58, 120, 0.045);
+  padding: 4px 12px;
+}
+
+.ww-ctx-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.045);
+}
+
+.ww-ctx-row:last-child {
+  border-bottom: none;
+}
+
+.ww-ctx-k {
+  flex: 0 0 auto;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.ww-ctx-v {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  color: #2b2438;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.ww-ctx-row.is-warn .ww-ctx-v {
+  color: #b3261e;
+}
+
+.ww-ctx-tip {
+  margin-top: 12px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.ww-ctx-empty {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.ww-ctx-ok {
+  margin-top: 14px;
+  width: 100%;
+}
+
+/* 发言被模型截断时的标记 */
+.ww-say-cut {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: #c77700;
 }
 
 /* ---------- 开局介绍 ---------- */

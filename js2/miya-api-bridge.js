@@ -188,6 +188,16 @@
     var contentType = '';
     try { contentType = String((res.headers && res.headers.get && res.headers.get('content-type')) || ''); } catch (e) {}
 
+    /* 输出撞到 max_tokens 上限时通知调用方（reqOpts.onTruncated），
+       这样上层可以提示用户「这话没说完」，而不是把半句当正常发言。 */
+    function notifyTruncated() {
+      if (typeof reqOpts.onTruncated === 'function') {
+        try { reqOpts.onTruncated(); } catch (e) {}
+      }
+      if (reqOpts.throwOnTruncate) return Promise.reject(new Error('输出被截断'));
+      return null;
+    }
+
     /* 从非流式 JSON 里抠文本 */
     function fromJson(j) {
       var choice = j && j.choices && j.choices[0];
@@ -216,6 +226,8 @@
       if (!text && choice && choice.finish_reason === 'length' && !reqOpts.skipLengthCheck) {
         return Promise.reject(new Error('输出被截断'));
       }
+      /* 截断了但有内容：调用方可以据此提示「这话没说完」，而不是当成功静默返回半句 */
+      if (text && choice && choice.finish_reason === 'length') notifyTruncated();
       return text;
     }
 
@@ -248,6 +260,7 @@
       if (!text && finishReason === 'length' && !reqOpts.skipLengthCheck) {
         return Promise.reject(new Error('输出被截断'));
       }
+      if (text && finishReason === 'length') notifyTruncated();
       return text;
     }
 
@@ -286,6 +299,7 @@
             if (!text && fr === 'length' && !reqOpts.skipLengthCheck) {
               throw new Error('输出被截断');
             }
+            if (text && fr === 'length') notifyTruncated();
             return text;
           }
           buf += decoder.decode(r.value, { stream: true });

@@ -91,7 +91,7 @@
     g.dawnDeaths = Array.isArray(raw.dawnDeaths) ? raw.dawnDeaths.slice() : [];
     g.speeches = Array.isArray(raw.speeches) ? raw.speeches.map(function (sp) {
       if (!sp || typeof sp !== 'object') return null;
-      return { whoId: clean(sp.whoId, 60), name: clean(sp.name, 40), text: clean(sp.text, 600), at: num(sp.at) };
+      return { whoId: clean(sp.whoId, 60), name: clean(sp.name, 40), text: clean(sp.text, 1200), truncated: !!sp.truncated, at: num(sp.at) };
     }).filter(Boolean) : [];
     g.speechCursor = Math.max(0, Math.floor(num(raw.speechCursor)));
     g.votes = raw.votes && typeof raw.votes === 'object' ? raw.votes : {};
@@ -325,9 +325,15 @@
     return null;
   }
 
-  function recordSpeech(g, whoId, text) {
+  function recordSpeech(g, whoId, text, truncated) {
     var s = seatOf(g, whoId);
-    g.speeches.push({ whoId: whoId, name: s ? s.name : '某人', text: clean(text, 600), at: now() });
+    g.speeches.push({
+      whoId: whoId,
+      name: s ? s.name : '某人',
+      text: clean(text, 1200),
+      truncated: !!truncated,
+      at: now()
+    });
   }
 
   /* ---------------- AI 调用 ---------------- */
@@ -397,8 +403,31 @@
     });
   }
 
-  /** 裸调大模型：不落库、不进群聊历史 */
-  function callApi(systemHint, userContent, maxTokens) {
+  /** 判断是否值得重试：网络抖动 / 超时 / 限流 这类一次性错误 */
+  function isRetryable(err) {
+    var m = String((err && err.message) || err || '').toLowerCase();
+    if (!m) return false;
+    if (m.indexOf('http 4') === 0) return false;          /* 客户端错误，重试没用 */
+    return m.indexOf('超时') >= 0 ||
+      m.indexOf('timeout') >= 0 ||
+      m.indexOf('abort') >= 0 ||
+      m.indexOf('failed to fetch') >= 0 ||
+      m.indexOf('load failed') >= 0 ||
+      m.indexOf('network') >= 0 ||
+      m.indexOf('http 429') >= 0 ||
+      m.indexOf('http 5') >= 0;
+  }
+
+  /**
+   * 裸调大模型：不落库、不进群聊历史。
+   * 关键参数（与行程模块对齐，否则会踩三个坑）：
+   *   contentOnly    —— 只用正文，绝不拿 reasoning 兜底当发言（否则 <thinking> 泄漏到聊天里）
+   *   disableThinking—— 尽量让服务端关掉思维链，把 token 全留给正文
+   *   onTruncated    —— 撞到 max_tokens 时通知上层，提示「这话没说完」
+   * 另外自带重试：网络抖动/超时/限流这类一次性失败最多重试 2 次，
+   * 避免「前两句好好的，第三句突然失败」。
+   */
+  function callApiOnce(systemHint, userContent, maxTokens, onTruncated) {
     return ensureApiBridge().then(function (ready) {
       var br = global.miyaApiBridge;
       if (!ready || !br || typeof br.callMainChatCompletionsRaw !== 'function') {
@@ -407,11 +436,31 @@
       return br.callMainChatCompletionsRaw(systemHint, userContent, null, {
         /* 不用 skipUniversalWorldbook：让通用世界书也参与，角色才有设定感 */
         disableThinking: true,
-        max_tokens: maxTokens || 400,
-        timeoutMs: 60000
+        contentOnly: true,
+        max_tokens: maxTokens || 1200,
+        timeoutMs: 120000,
+        onTruncated: onTruncated
       });
     });
   }
+
+  function callApi(systemHint, userContent, maxTokens, onTruncated) {
+    var attempt = 0;
+    function run() {
+      attempt += 1;
+      return callApiOnce(systemHint, userContent, maxTokens, onTruncated).catch(function (err) {
+        if (attempt < 3 && isRetryable(err)) {
+          /* 退避：1.2s → 2.4s，给服务端喘口气 */
+          return new Promise(function (res) { setTimeout(res, 1200 * attempt); }).then(run);
+        }
+        throw err;
+      });
+    }
+    return run();
+  }
+
+  /* 上一次组装上下文时的诊断快照（供 UI 展示） */
+  var ctxStats = null;
 
   /**
    * 组装「群聊原生的完整上下文」。
@@ -423,14 +472,23 @@
   function buildWorldContext(store, chatId) {
     var lines = [];
     var group = global.MiyaChatGroup;
-    if (!group || typeof group.buildApiMessages !== 'function') return '';
+    if (!group || typeof group.buildApiMessages !== 'function') {
+      /* 早期返回也要留痕，否则体检条永远显示「开局后可见」，反而掩盖问题 */
+      ctxStats = { systemBlocks: 0, chars: 0, stFront: 0, stBack: 0, groupSystem: 0,
+        worldbook: 0, members: 0, error: '群聊模块未就绪' };
+      return '';
+    }
 
     /* 传一个空 userText，只为拿系统上下文，不产生用户消息 */
     var built = null;
     try {
       built = group.buildApiMessages(chatId, '', {});
     } catch (e) { built = null; }
-    if (!built || !Array.isArray(built.messages) || !built.messages.length) return '';
+    if (!built || !Array.isArray(built.messages) || !built.messages.length) {
+      ctxStats = { systemBlocks: 0, chars: 0, stFront: 0, stBack: 0, groupSystem: 0,
+        worldbook: 0, members: 0, error: (built && built.error) || '该群暂无可用的角色上下文' };
+      return '';
+    }
 
     /* ST 预设：前置换放最前，后置换放最后 */
     var eng = global.miyaChatEngine;
@@ -473,8 +531,6 @@
     return text;
   }
 
-  /* 上一次组装上下文时的诊断快照（供 UI 展示） */
-  var ctxStats = null;
   function getCtxStats() { return ctxStats; }
 
   /** 从各种返回结构里抠出文本 */
@@ -528,12 +584,17 @@
     var others = aliveSeats(g).filter(function (s) { return s.whoId !== whoId; });
 
     if (task === 'speech') {
-      lead += '\n\n现在轮到你发言。请用 1~2 句话说出你的判断：可以怀疑某个人、为自己辩解、或分析局势。'
+      lead += '\n\n现在轮到你发言。请用 2~3 句话说出你的判断：可以怀疑某个人、为自己辩解、或分析局势。'
         + '\n要求：保持你一贯的说话风格和语气，像平时在群里聊天一样自然，不要机械套话，不要输出旁白。'
         + SAY_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 500).then(function (res) {
+      /* 1500 token 是从「模型先吐一段思维链再说话」的实测里定的：
+         预算太小会被思考吃光，正文断在半句。 */
+      var wasTruncated = false;
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 1500, function () {
+        wasTruncated = true;
+      }).then(function (res) {
         var text = cleanSpeech(extractText(res));
-        return { text: text || '（沉默）' };
+        return { text: text || '（沉默）', truncated: wasTruncated };
       });
     }
 
@@ -542,7 +603,7 @@
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
         return parseVote(extractText(res), others);
       });
     }
@@ -553,7 +614,7 @@
         + '\n可选目标：' + targets.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
         return parseVote(extractText(res), targets);
       });
     }
@@ -563,7 +624,7 @@
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 200).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
         return parseVote(extractText(res), others);
       });
     }
@@ -584,7 +645,7 @@
       }
       lead += '\n只输出 JSON：{"save":true或false,"poison":"玩家名字或空字符串","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 250).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
         var text = extractText(res);
         var obj = extractJson(text);
         var out = { save: false, poison: '', poisonId: '', reason: '', text: text };
@@ -689,7 +750,7 @@
   }
 
   /* ---------------- UI ---------------- */
-  var state = { chatId: '', busy: false, busyText: '' };
+  var state = { chatId: '', busy: false, busyText: '', ctxOpen: false };
 
   function phaseStepHtml(g) {
     var order = [
@@ -731,6 +792,88 @@
       '</div>';
   }
 
+  /**
+   * 上下文体检条：一行可点，点开看完整详情。
+   * 原来这行直接铺在顶部，窄屏会被裁掉看不见 —— 现在收成按钮 + 弹窗。
+   */
+  function ctxBarHtml() {
+    var st = getCtxStats();
+    var eng = global.miyaChatEngine;
+    var stCount = 0;
+    if (eng && typeof eng.buildStPresetMessages === 'function') {
+      try {
+        stCount = (eng.buildStPresetMessages('front') || []).length
+          + (eng.buildStPresetMessages('back') || []).length;
+      } catch (e) {}
+    }
+    if (!st) {
+      return '<button type="button" class="ww__ctx ww__ctx--idle" data-ww-act="ctx">'
+        + '<span class="ww__ctx-dot"></span>上下文'
+        + '<span class="ww__ctx-sub">发言后可见</span>'
+        + '<span class="ww__ctx-more">详情 ›</span></button>';
+    }
+    if (st.error) {
+      return '<button type="button" class="ww__ctx ww__ctx--bad" data-ww-act="ctx">'
+        + '<span class="ww__ctx-dot"></span>上下文未读到'
+        + '<span class="ww__ctx-sub">' + esc(st.error) + '</span>'
+        + '<span class="ww__ctx-more">详情 ›</span></button>';
+    }
+    var size = st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k' : st.chars;
+    return '<button type="button" class="ww__ctx" data-ww-act="ctx">'
+      + '<span class="ww__ctx-dot is-ok"></span>上下文已载入'
+      + '<span class="ww__ctx-sub">' + st.systemBlocks + ' 段 · ' + size + ' 字 · 世界书 ' + st.worldbook + ' 条</span>'
+      + '<span class="ww__ctx-more">详情 ›</span></button>';
+  }
+
+  /** 上下文详情弹窗：把「角色到底读到了什么」摊开给用户看 */
+  function ctxModalHtml() {
+    var st = getCtxStats();
+    var eng = global.miyaChatEngine;
+    var rows = [];
+    var stFront = 0, stBack = 0;
+    if (eng && typeof eng.buildStPresetMessages === 'function') {
+      try { stFront = (eng.buildStPresetMessages('front') || []).length; } catch (e) {}
+      try { stBack = (eng.buildStPresetMessages('back') || []).length; } catch (e) {}
+    }
+
+    function row(k, v, warn) {
+      rows.push('<div class="ww-ctx-row' + (warn ? ' is-warn' : '') + '">'
+        + '<span class="ww-ctx-k">' + esc(k) + '</span>'
+        + '<span class="ww-ctx-v">' + esc(String(v)) + '</span></div>');
+    }
+
+    var body = '';
+    if (!st) {
+      body = '<div class="ww-ctx-empty">还没有加载过上下文。<br>点「让下一位发言」后，这里会显示角色实际读到的设定。</div>';
+    } else if (st.error) {
+      row('状态', '读取异常', true);
+      row('错误', st.error, true);
+      body = '<div class="ww-ctx-list">' + rows.join('') + '</div>'
+        + '<div class="ww-ctx-tip">请检查该群的角色卡、世界书与 API 配置是否正常。</div>';
+    } else {
+      row('提示词段数', st.systemBlocks + ' 段');
+      row('总字数', st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k 字' : st.chars + ' 字');
+      row('ST 预设', '前置 ' + stFront + ' 条 / 后置 ' + stBack + ' 条');
+      row('群聊 system 块', st.groupSystem + ' 条');
+      row('命中的世界书', st.worldbook + ' 条');
+      row('群成员', st.members + ' 人');
+      var health = st.systemBlocks >= 2 && st.chars > 200;
+      body = '<div class="ww-ctx-list">' + rows.join('') + '</div>'
+        + '<div class="ww-ctx-tip">'
+        + (health
+          ? '✅ 角色发言时会带上以上设定，说话风格贴近你在群里的那个角色。'
+          : '⚠️ 读到的内容偏少，AI 可能「不像本人」。建议给该群补上角色卡或世界书。')
+        + '</div>';
+    }
+
+    return '<div class="ww-ctx-modal" data-ww-act="ctx-close">'
+      + '<div class="ww-ctx-card">'
+      + '<div class="ww-ctx-title">📋 上下文体检</div>'
+      + body
+      + '<button type="button" class="ww__btn ww__btn--main ww-ctx-ok" data-ww-act="ctx-close">知道了</button>'
+      + '</div></div>';
+  }
+
   function renderPanel(store, chatId) {
     var g = load(store, chatId);
     var head =
@@ -739,32 +882,10 @@
         '<button type="button" class="ww__close" data-sheet-close aria-label="关闭">关闭</button>' +
       '</div>';
 
-    /* 上下文体检：告诉用户「角色到底读没读世界书 / ST 预设」 */
-    var ctxTip = '';
-    (function () {
-      var st = getCtxStats();
-      var eng = global.miyaChatEngine;
-      var stCount = 0;
-      if (eng && typeof eng.buildStPresetMessages === 'function') {
-        try {
-          stCount = (eng.buildStPresetMessages('front') || []).length
-            + (eng.buildStPresetMessages('back') || []).length;
-        } catch (e) {}
-      }
-      if (!st) {
-        ctxTip = '<div class="ww__ctx ww__ctx--idle">发言时自动读取：角色人设 · 世界书 · ST 预设 · 群记忆</div>';
-        return;
-      }
-      if (st.error) {
-        ctxTip = '<div class="ww__ctx ww__ctx--bad">⚠️ 上下文读取异常（' + esc(st.error) + '），请检查该群的角色与 API 配置</div>';
-        return;
-      }
-      ctxTip = '<div class="ww__ctx">已载入上下文：'
-        + '<b>' + st.systemBlocks + '</b> 段 / <b>' + (st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k' : st.chars) + '</b> 字'
-        + ' · 世界书 <b>' + st.worldbook + '</b> 条'
-        + ' · ST预设 <b>' + stCount + '</b> 条'
-        + ' · 群成员 <b>' + st.members + '</b> 人</div>';
-    })();
+    var ctxTip = ctxBarHtml();
+
+    var html = '';
+    var modal = state.ctxOpen ? ctxModalHtml() : '';
 
     if (g.status === 'idle') {
       var cands = collectCandidates(store, chatId);
@@ -784,7 +905,7 @@
         (g.log && g.log.length ? '<div class="ww__log">' + g.log.slice(-4).map(function (l) {
           return '<div class="ww__log-item">' + esc(l.text) + '</div>';
         }).join('') + '</div>' : '') +
-      '</div>';
+      '</div>' + modal;
     }
 
     if (g.status === 'over') {
@@ -806,7 +927,7 @@
             '<button type="button" class="ww__btn" data-ww-act="reset">清空记录</button>' +
           '</div>' +
         '</div>' +
-      '</div>';
+      '</div>' + modal;
     }
 
     /* 进行中 */
@@ -887,7 +1008,9 @@
     if (g.phase === PHASE.SPEECH) {
       var spoken = g.speeches.map(function (sp) {
         return '<div class="ww-say"><span class="ww-say-name">' + esc(sp.name) + '</span>' +
-          '<span class="ww-say-text">' + esc(sp.text) + '</span></div>';
+          '<span class="ww-say-text">' + esc(sp.text) + '</span>' +
+          (sp.truncated ? '<span class="ww-say-cut">⚠️ 输出被截断</span>' : '') +
+          '</div>';
       }).join('');
       stageHtml = '<div class="ww__stage">' +
         '<div class="ww__stage-title">💬 白天讨论</div>' +
@@ -928,7 +1051,7 @@
         stageHtml +
       '</div>' +
       (logTail ? '<div class="ww__log">' + logTail + '</div>' : '') +
-      '</div>';
+      '</div>' + modal;
   }
 
   function openPanel(store, chatId, openOverlay) {
@@ -958,6 +1081,22 @@
       var res = startGame(store, chatId);
       if (!res.ok) { fail(res.error); return true; }
       if (toast) toast('游戏开始！天黑请闭眼');
+      rerender();
+      return true;
+    }
+
+    if (act === 'ctx') {
+      state.ctxOpen = true;
+      rerender();
+      return true;
+    }
+
+    if (act === 'ctx-close') {
+      /* 点卡片内部不关闭，只有点遮罩或「知道了」按钮才关 */
+      var inCard = el.closest && el.closest('.ww-ctx-card');
+      var isOkBtn = el.closest && el.closest('.ww-ctx-ok');
+      if (inCard && !isOkBtn) return true;
+      state.ctxOpen = false;
       rerender();
       return true;
     }
@@ -1028,14 +1167,17 @@
       rerender();
       askAi(g, nxt.seat.whoId, 'speech').then(function (out) {
         var fresh2 = load(store, chatId);
-        recordSpeech(fresh2, nxt.seat.whoId, out.text);
+        recordSpeech(fresh2, nxt.seat.whoId, out.text, out.truncated);
         /* 游标推进到该座位之后 */
         var aliveNow = aliveSeats(fresh2);
         for (var i = 0; i < aliveNow.length; i++) {
           if (aliveNow[i].whoId === nxt.seat.whoId) { fresh2.speechCursor = i + 1; break; }
         }
         state.busy = false;
-        save(store, chatId, fresh2).then(function () { rerender(); });
+        save(store, chatId, fresh2).then(function () {
+          rerender();
+          if (out.truncated && toast) toast('这条发言被模型截断了，可在设置里调大输出上限');
+        });
       }).catch(function (err) {
         state.busy = false;
         fail('AI 发言失败：' + ((err && err.message) || '未知错误'));
