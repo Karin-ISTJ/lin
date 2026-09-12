@@ -1,5 +1,5 @@
-var CACHE = 'miya-v64-karin';
-var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './css/miya-music.css', './js1/app.js', './js2/miya-music-engine.js', './js2/miya-music-app.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
+var CACHE = 'miya-v66-karin';
+var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './js1/app.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */
 var STATIC_LIVE = /\.(?:html|css|js|webmanifest|json)$|\/$|miya-icon(?:-\d+)?\.png/;
 

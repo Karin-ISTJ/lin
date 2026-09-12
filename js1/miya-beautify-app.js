@@ -2,7 +2,6 @@
   'use strict';
 
   var ICON_LABELS = {
-    music: '音乐',
     set: '设置',
     book: '世界书',
     memory: '记忆',
@@ -133,7 +132,7 @@
   function defaultIconGlyph(key) {
     if (global.miyaAppSvg && global.miyaAppSvg[key]) return global.miyaAppSvg[key];
     var map = {
-      music: '♪', memo: 'M', set: '⚙', book: '书', memory: '忆', chat: '聊',
+      memo: 'M', set: '⚙', book: '书', memory: '忆', chat: '聊',
       beauty: '美', store: '店', contacts: '人', pet: '打', pen: '模',
       tile_notes: '日', tile_match: '赛', tile_fun: '娱',
       tile_echo: '鸣', tile_log: '录',
@@ -1685,8 +1684,7 @@
     app.setAttribute('hidden', '');
     app.setAttribute('aria-hidden', 'true');
     if (!document.querySelector('.miya-settings-app.is-open') &&
-        !document.querySelector('.miya-worldbook-app.is-open') &&
-        !document.querySelector('.miya-music-app.is-open')) {
+        !document.querySelector('.miya-worldbook-app.is-open')) {
       document.body.classList.remove('miya-app-open');
     }
   }

@@ -31,7 +31,6 @@
     { id: 'health', label: '健康', page: 0 },
     { id: 'xhs', label: '小红书', page: 0 },
     { id: 'novel', label: '小说', page: 0 },
-    { id: 'music', label: 'Music', page: 0 },
     { id: 'notepad', label: '记事本', page: 0 },
     { id: 'todo', label: '待办', page: 1 },
     { id: 'couple', label: '情侣手册', page: 1 },
@@ -56,7 +55,6 @@
     health: '<path d="M8.76 7.95c-.19.19-.19.51 0 .71l.1.1c.76.76 2.07.76 2.83 0l3.04-3.04.71.71-.9.9 5.78 5.78c2.29-2.36 2.27-6.01-.07-8.35-2.16-2.15-5.42-2.31-7.77-.54L8.77 7.96Z"/><path d="m9.59 15.81.71-.71 4 4 1.19-1.19-4.01-4.01.71-.71 4.01 4.01 1.19-1.19L13.38 12l.71-.71 4.01 4.01 1.51-1.5-5.79-5.78-1.43 1.43c-.57.57-1.32.88-2.12.88s-1.55-.31-2.12-.88l-.1-.1c-.58-.58-.58-1.53 0-2.12l3.21-3.24c-2.33-1.55-5.42-1.31-7.5.75-2.36 2.37-2.36 6.07 0 8.43l7.53 7.52c.19.19.45.29.71.29s.51-.1.71-.29l.89-.89-4-4Z"/>',
     xhs: '<path d="M12 6c-.64 0-1.26.1-1.84.29C12.46 4.07 15.79 4 16 4V2c-.1 0-10 .11-10 10 0 .64.1 1.26.29 1.84C4.07 11.54 4 8.21 4 8H2c0 .1.11 10 10 10 .64 0 1.26-.1 1.84-.29C11.54 19.93 8.21 20 8 20v2c.1 0 10-.11 10-10 0-.64-.1-1.26-.29-1.84C19.93 12.46 20 15.79 20 16h2c0-.1-.11-10-10-10m-2.5 6a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 1-5 0"/>',
     novel: '<path d="M19 2H5c-.55 0-1 .45-1 1v4H2v2h2v2H2v2h2v2H2v2h2v4c0 .55.45 1 1 1h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 18h-3v-2.5h3zm0-4.5h-3V13h3zm0-4.5h-3V8.5h3zm0-4.5h-3V4h3z"/>',
-    music: '<path d="M21 3H9c-.55 0-1 .45-1 1v9.56c-.59-.34-1.27-.56-2-.56-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V5h10v8.56c-.59-.34-1.27-.56-2-.56-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V4c0-.55-.45-1-1-1"/>',
     notepad: '<path d="M19 2H5c-.55 0-1 .45-1 1v4H2v2h2v2H2v2h2v2H2v2h2v4c0 .55.45 1 1 1h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-6.5 5C13.93 7 15 8.07 15 9.5S13.93 12 12.5 12 10 10.93 10 9.5 11.07 7 12.5 7M17 17H8v-1c0-1.66 1.34-3 3-3h3c1.66 0 3 1.34 3 3z"/>',
     todo: '<path d="M19 9.09V6c0-.55-.45-1-1-1h-3.09L12.7 2.79a.996.996 0 0 0-1.41 0L9.08 5H5.99c-.55 0-1 .45-1 1v3.09L2.78 11.3a.996.996 0 0 0 0 1.41l2.21 2.21v3.09c0 .55.45 1 1 1h3.09l2.21 2.21c.2.2.45.29.71.29s.51-.1.71-.29l2.21-2.21h3.09c.55 0 1-.45 1-1v-3.09l2.21-2.21a.996.996 0 0 0 0-1.41l-2.21-2.21Zm-8 6.33-2.71-2.71L9.7 11.3l1.29 1.29 3.29-3.29 1.41 1.41-4.71 4.71Z"/>',
     couple: '<path d="M20.24 4.76c-2.31-2.29-5.87-2.35-8.24-.19-2.37-2.16-5.93-2.09-8.24.2-2.36 2.37-2.36 6.07 0 8.43l7.53 7.52c.19.19.45.29.71.29s.51-.1.71-.29l7.53-7.52c2.36-2.36 2.36-6.06 0-8.43ZM5.18 11.78a3.92 3.92 0 0 1 0-5.6C5.97 5.39 6.98 5 7.99 5s2.02.39 2.8 1.18l.5.5c.12.12.26.19.4.23L9.99 12h4l-1.97 6.55-.03.03-6.82-6.81ZM20 8.99v-.02z"/>',
@@ -155,12 +153,10 @@
   }
 
   function buildGlassdeckConfig(w, avatarUrl) {
-    var music = w.music || {};
     var quoteLine = String(w.quote || '').split('\n').filter(Boolean)[0] || '';
     var base = {
       tag: 'soft mood',
       quote: quoteLine || '把日常过成可以收藏的样子',
-      sticker: String(music.title || 'daily archive'),
       photo: avatarUrl || null
     };
     return mergeSlotConfig('p2a', base);
@@ -176,10 +172,9 @@
   }
 
   function buildMiniplayerConfig(w, avatarUrl) {
-    var music = w.music || {};
     var base = {
-      title: String(music.title || 'Dream It Possible'),
-      artist: String(music.artist || 'Delacey'),
+      title: 'Dream It Possible',
+      artist: 'Delacey',
       cover: avatarUrl || null,
       thumb: avatarUrl || null
     };
@@ -699,19 +694,6 @@
     }
     if (appId === 'deco') {
       openDecoPanel();
-      return;
-    }
-    if (appId === 'music') {
-      var dm = global.miyaDeepMusic;
-      if (!state.contactId) {
-        toast('请先进入角色手机');
-        return;
-      }
-      if (dm && typeof dm.open === 'function') {
-        dm.open(state.contactId, state.phoneData, state.contactName);
-      } else {
-        toast('Music 模块加载中');
-      }
       return;
     }
     if (appId === 'novel') {
@@ -1244,8 +1226,6 @@
     savePageIndex();
     closeSettings();
     closeDecoPanel();
-    var dm = global.miyaDeepMusic;
-    if (dm && typeof dm.close === 'function') dm.close();
     var dn = global.miyaDeepNovel;
     if (dn && typeof dn.close === 'function') dn.close();
     var dnp = global.miyaDeepNotepad;
@@ -1286,7 +1266,6 @@
         !document.querySelector('.miya-settings-app.is-open') &&
         !document.querySelector('.miya-worldbook-app.is-open') &&
         !document.querySelector('.miya-contacts-app.is-open') &&
-        !document.querySelector('#miya-music-app.is-open') &&
         !document.querySelector('#miya-chat-app.is-open') &&
         !document.querySelector('#miya-memory-app.is-open') &&
         !document.querySelector('#miya-diary-app.is-open') &&

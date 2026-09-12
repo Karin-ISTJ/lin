@@ -3,7 +3,7 @@
   (function resetOverlayApps() {
     document.body.classList.remove('miya-app-open');
     document.querySelectorAll(
-      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-music-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
+      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
     ).forEach(function (el) {
       if (!el.classList.contains('is-open')) {
         el.setAttribute('hidden', '');
@@ -16,7 +16,6 @@
   var L = 'rgba(130,136,145,0.65)';
 
   var SVG_CLASSIC = {
-    music: '<svg viewBox="0 0 24 24" fill="none"><path d="M9 17V5l11-2v12" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="17" r="2" stroke="rgba(130,136,145,0.65)" stroke-width="1.2"/><circle cx="18" cy="15" r="2" stroke="rgba(130,136,145,0.65)" stroke-width="1.2"/></svg>',
     set: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="rgba(130,136,145,0.65)" stroke-width="1.2"/><path d="M12.22 4h-.44a1.4 1.4 0 00-1.4 1.4v.12a1.4 1.4 0 01-.7 1.22l-.1.06a1.4 1.4 0 01-1.54-.26l-.08-.08a1.4 1.4 0 00-1.98.61l-.14.24a1.4 1.4 0 00.51 1.92l.1.06a1.4 1.4 0 01.7 1.22v.12a1.4 1.4 0 01-.7 1.22l-.1.06a1.4 1.4 0 00-.51 1.92l.14.24a1.4 1.4 0 001.98.61l.08-.08a1.4 1.4 0 011.54-.26l.1.06a1.4 1.4 0 01.7 1.22V18.6a1.4 1.4 0 001.4 1.4h.44a1.4 1.4 0 001.4-1.4v-.12a1.4 1.4 0 01.7-1.22l.1-.06a1.4 1.4 0 011.54.26l.08.08a1.4 1.4 0 001.98-.61l.14-.24a1.4 1.4 0 00-.51-1.92l-.1-.06a1.4 1.4 0 01-.7-1.22v-.12a1.4 1.4 0 01.7-1.22l.1-.06a1.4 1.4 0 00.51-1.92l-.14-.24a1.4 1.4 0 00-1.98-.61l-.08.08a1.4 1.4 0 01-1.54.26l-.1-.06a1.4 1.4 0 01-.7-1.22V5.4a1.4 1.4 0 00-1.4-1.4z" stroke="rgba(70,74,80,0.82)" stroke-width="1.05" stroke-linejoin="round"/></svg>',
     book: '<svg viewBox="0 0 24 24" fill="none"><path d="M5 5h7v14H6a1 1 0 01-1-1V5zM12 5h7a1 1 0 011 1v12h-8V5z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/></svg>',
     memory: '<svg viewBox="0 0 24 24" fill="none"><path d="M9 18h6M10 22h4M12 2a6 6 0 00-4 10.5V16h8v-3.5A6 6 0 0012 2z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -48,8 +47,6 @@
   var SVG_ENT = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 4H7C4.24 4 2 6.24 2 9v7.88a3.124 3.124 0 0 0 5.33 2.21l1.96-1.96c.71-.71 1.7-1.12 2.71-1.12s1.99.41 2.71 1.12l1.96 1.96A3.124 3.124 0 0 0 22 16.88V9c0-2.76-2.24-5-5-5M7 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2m9.5-5c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1m-2 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m2 2c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m2-2c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1"></path></svg>';
 
   var SVG_ALT = {
-    music: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h12v2H3zm0-5h12v2H3zm0 10h9v2H3zm14-9v8.05a2.5 2.5 0 1 0-.5 4.95 2.5 2.5 0 0 0 2.5-2.5V8h2V6h-3c-.55 0-1 .45-1 1"></path></svg>',
-    set: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m21.16 7.86-1-1.73a1.997 1.997 0 0 0-2.73-.73l-.53.31c-.58-.46-1.22-.83-1.9-1.11V4c0-1.1-.9-2-2-2h-2c-1.1 0-2 .9-2 2v.6c-.67.28-1.31.66-1.9 1.11l-.53-.31c-.96-.55-2.18-.22-2.73.73l-1 1.73c-.55.96-.22 2.18.73 2.73l.5.29c-.05.37-.08.74-.08 1.11s.03.74.08 1.11l-.5.29c-.96.55-1.28 1.78-.73 2.73l1 1.73c.55.95 1.78 1.28 2.73.73l.53-.31c.58.46 1.22.83 1.9 1.11v.6c0 1.1.9 2 2 2h2c1.1 0 2-.9 2-2v-.6a8.7 8.7 0 0 0 1.9-1.11l.53.31c.96.55 2.18.22 2.73-.73l1-1.73c.55-.96.22-2.18-.73-2.73l-.5-.29c.05-.37.08-.74.08-1.11s-.03-.74-.08-1.11l.5-.29c.96-.55 1.28-1.78.73-2.73M12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4"></path></svg>',
     book: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H6C4.35 2 3 3.35 3 5v14c0 1.65 1.35 3 3 3h15v-2H6c-.55 0-1-.45-1-1s.45-1 1-1h14c.55 0 1-.45 1-1V3c0-.55-.45-1-1-1m-3 6H8V6h9z"></path></svg>',
     memory: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 22h12c1.1 0 2-.9 2-2V6c0-.27-.11-.52-.29-.71l-3-3A1 1 0 0 0 16 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2m7-17h2v4h-2zm-3 0h2v4h-2zM7 5h2v4H7z"></path></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 3H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3v2c0 .36.19.69.51.87.15.09.32.13.49.13s.36-.05.51-.14L13.27 19h6.72c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2Zm-4.65 8.21L12 14.5l-3.35-3.29-.06-.06c-.82-.85-.79-2.2.06-3.01.87-.86 2.26-.86 3.12 0l.22.22.22-.22c.87-.86 2.26-.86 3.12 0l.06.06c.82.85.79 2.2-.06 3.01Z"></path></svg>',
@@ -82,8 +79,7 @@
   if (SVG_ALT && SVG_ALT.book) SVG_ALT.stpreset = SVG_ALT.book;
 
   var NAMES = {
-    music: '音乐', set: '设置', book: '世界书',
-    memory: '记忆', stpreset: 'ST预设', chat: '聊天', play: '游戏',
+    set: '设置', book: '世界书',
     beauty: '美化', store: '线下', photo: '多相', world: '世界',
     phone: '电话', contacts: '联系人', pet: '书架', pen: '模拟器',
     notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',
@@ -353,9 +349,6 @@
   })();
 
   var APP_HANDLERS = {
-    music: function () {
-      if (window.miyaMusicApp && window.miyaMusicApp.open) window.miyaMusicApp.open();
-    },
     set: function () {
       if (window.miyaSettingsApp && window.miyaSettingsApp.open) window.miyaSettingsApp.open();
     },

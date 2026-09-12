@@ -2052,29 +2052,6 @@
                 createdAt: Number(sg.createdAt) || 0
             };
         }
-        if (raw && raw.listenTogetherCapsule && typeof raw.listenTogetherCapsule === 'object') {
-            out.listenTogetherCapsule = {
-                sessionId: String(raw.listenTogetherCapsule.sessionId || raw.sessionId || ''),
-                status: String(raw.listenTogetherCapsule.status || 'ended'),
-                durationSec: Number(raw.listenTogetherCapsule.durationSec) || 0,
-                startedAt: Number(raw.listenTogetherCapsule.startedAt) || 0,
-                endedAt: Number(raw.listenTogetherCapsule.endedAt) || 0,
-                trackTitle: String(raw.listenTogetherCapsule.trackTitle || '').trim(),
-                trackArtist: String(raw.listenTogetherCapsule.trackArtist || '').trim(),
-                items: Array.isArray(raw.listenTogetherCapsule.items)
-                    ? raw.listenTogetherCapsule.items
-                          .map(function (it) {
-                              if (!it || typeof it !== 'object') return null;
-                              var t = String(it.text || '').trim();
-                              if (!t) return null;
-                              var role = String(it.role || '');
-                              if (role !== 'user' && role !== 'assistant' && role !== 'system') role = 'assistant';
-                              return { role: role, text: t, type: String(it.type || 'text') };
-                          })
-                          .filter(Boolean)
-                    : []
-            };
-        }
         if (raw && raw.sessionId) out.sessionId = String(raw.sessionId).trim();
         if (raw && raw.voiceTtsIdbKey) out.voiceTtsIdbKey = String(raw.voiceTtsIdbKey);
         if (raw && raw.voiceTtsVoiceId != null) out.voiceTtsVoiceId = String(raw.voiceTtsVoiceId);
@@ -2207,22 +2184,6 @@
         );
     }
 
-    function listenTogetherCapsulePreviewText(m) {
-        if (!m || m.type !== 'listen_together_capsule') return '';
-        var cap = m.listenTogetherCapsule || {};
-        var sec = Number(cap.durationSec) || 0;
-        var lt = global.MiyaMusicListenTogether;
-        var dur = lt && typeof lt.formatDuration === 'function'
-            ? lt.formatDuration(sec)
-            : (sec
-                ? String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0')
-                : '');
-        if (!dur && !cap.trackTitle) return String(m.content || '').trim();
-        var out = dur ? '[一起听] ' + dur : '[一起听]';
-        if (cap.trackTitle) out += ' · ' + cap.trackTitle;
-        return out;
-    }
-
     function messagePreview(m) {
         if (!m || m.deleted) return '';
         if (m.recalled && m.recallMeta) {
@@ -2230,7 +2191,6 @@
             return (String(m.recallMeta.byName || '').trim() || 'TA') + '撤回了一条消息';
         }
         if (m.type === 'call_capsule') return callCapsulePreviewText(m);
-        if (m.type === 'listen_together_capsule') return listenTogetherCapsulePreviewText(m);
         if (m.type === 'couple_space_invite' && m.coupleSpaceInvite) {
             var csp = m.coupleSpaceInvite;
             if (csp.status === 'accepted') return '[情侣空间] 已同意开通';

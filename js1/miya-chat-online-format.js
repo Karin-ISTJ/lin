@@ -1584,89 +1584,6 @@
         return { type: 'text', content: raw };
     }
 
-    /** 一起听场景：仅允许多行气泡 + 切歌指令，禁止其它线上专属前缀 */
-    function buildListenTogetherFormatRules(opts) {
-        opts = opts && typeof opts === 'object' ? opts : {};
-        var roleName = trim(opts.roleName) || '角色';
-        var bubbleMin = Math.max(1, Number(opts.bubbleMin) || 2);
-        var bubbleMax = Math.max(bubbleMin, Number(opts.bubbleMax) || 5);
-        var countHint =
-            bubbleMin === bubbleMax
-                ? '本轮正文建议约 ' + bubbleMin + ' 行'
-                : '本轮正文建议 ' + bubbleMin + ' 至 ' + bubbleMax + ' 行';
-
-        return [
-            '【一起听·输出格式·' + roleName + '】',
-            '你正与用户并肩听歌，对话区是一起听专属聊天，不是微信/QQ 线上聊天。',
-            countHint + '（每行一条气泡，仅供参考，系统不会截断）。',
-            '正文段每一行就是一条独立气泡；禁止把多条气泡挤在同一行。',
-            '禁止在正文输出 ⧗、› 或任何 API 时间戳标记。',
-            '',
-            '【允许】',
-            '· 普通文字：直接写对白，一行一条。',
-            '· 换歌：单独一行「切歌-歌名或序号」（仅当自然需要时；不要频繁切歌）。',
-            '',
-            '【禁止·线上专属格式】',
-            '一起听场景禁止输出以下前缀行：',
-            '引用- / 语音- / 表情包- / 图片- / 位置- / 转账- / 旁白- / 发起语音通话 / 发起视频通话 / 【发朋友圈…】',
-            '',
-            '【禁止·思维链与心声】',
-            '禁止输出 <thinking>、<miyavoice>、好感度-/欲望值-/行为动作-/角色心声- 等；本轮回复只能是正文气泡。',
-            '',
-            '【输出要求】',
-            '直接输出正文，每行一条气泡，无需任何包裹标签。',
-            '',
-            '【格式示例·' + roleName + '】',
-            '这首歌的前奏好好听',
-            '歌词这句也太戳了',
-            '切歌-下一首想听的歌名'
-        ].join('\n');
-    }
-
-    function buildListenTogetherPerTurnReminder(opts) {
-        opts = opts && typeof opts === 'object' ? opts : {};
-        var roleName = trim(opts.roleName) || '角色';
-        var bubbleMin = Math.max(1, Number(opts.bubbleMin) || 2);
-        var bubbleMax = Math.max(bubbleMin, Number(opts.bubbleMax) || 5);
-        var countHint =
-            bubbleMin === bubbleMax
-                ? '正文建议约 ' + bubbleMin + ' 行'
-                : '正文建议 ' + bubbleMin + '–' + bubbleMax + ' 行';
-        return [
-            '【本轮输出格式·一起听·' + roleName + '】',
-            '本轮仅输出正文气泡，每行一条；' + countHint + '。',
-            '禁止输出 <thinking>、<miyavoice> 或任何思维链/心声段。',
-            '正文仅允许：普通文字、切歌-歌名或序号；禁止引用-/语音-/表情包-/图片-/位置-/转账-/旁白-等线上专属前缀。',
-            '发出前自检：是否误用了线上聊天格式或心声/思维链标签。'
-        ].join('\n');
-    }
-
-    var RE_LT_SWITCH = /^切歌[-－—]\s*(.+)$/;
-
-    function parseListenTogetherOutputLine(line) {
-        var raw = stripApiTimelinePrefix(trim(line)).replace(/\s*⧗\s*$/g, '').trim();
-        if (!raw || RE_LT_SWITCH.test(raw)) return null;
-        if (RE_RT_META_TAG.test(raw) || RE_RT_HEART_VOICE.test(raw)) return null;
-        if (RE_ROLE_CALL_VOICE.test(raw) || RE_ROLE_CALL_VIDEO.test(raw) ||
-            RE_LEGACY_CALL_VOICE.test(raw) || RE_LEGACY_CALL_VIDEO.test(raw) ||
-            RE_ROLE_MOMENTS_POST.test(raw) || RE_NARRATION.test(raw) ||
-            RE_RECALL.test(raw) || RE_TRANSFER_RECEIPT.test(raw)) {
-            return null;
-        }
-        if (RE_STICKER.test(raw) || RE_QUOTE.test(raw) || RE_RT_FORBIDDEN.test(raw)) return null;
-        return { type: 'text', content: raw };
-    }
-
-    function parseListenTogetherOutputLinesMeta(lines) {
-        var arr = expandCollapsedOutputLines(lines);
-        var out = [];
-        arr.forEach(function (line) {
-            var fields = parseListenTogetherOutputLine(line);
-            if (fields) out.push(fields);
-        });
-        return { bubbles: out };
-    }
-
     function buildHeartVoiceRulesBlock(roleName, preset) {
         var rn = trim(roleName) || '角色';
         var tplMod = global.MiyaChatHeartVoiceTemplates;
@@ -2629,9 +2546,6 @@
         if (m.type === 'call_capsule') {
             return { kind: 'call_capsule', msg: m };
         }
-        if (m.type === 'listen_together_capsule') {
-            return { kind: 'listen_together_capsule', msg: m };
-        }
         if (m.type === 'couple_space_invite' && m.coupleSpaceInvite) {
             return { kind: 'couple_space_invite', msg: m };
         }
@@ -2979,27 +2893,6 @@
         return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
     }
 
-    function formatListenTogetherCapsuleForApi(m) {
-        if (!m || m.type !== 'listen_together_capsule' || !m.listenTogetherCapsule) return '';
-        var cap = m.listenTogetherCapsule;
-        var dur = formatCallDurationSec(cap.durationSec);
-        var song = trim(cap.trackTitle) || '未记录歌曲';
-        var artist = trim(cap.trackArtist);
-        var head = '〔一起听·记录·时长' + dur + '·《' + song + '》' + (artist ? '— ' + artist : '') + '〕';
-        var items = Array.isArray(cap.items) ? cap.items : [];
-        if (!items.length) {
-            return head + '（本次一起听无文字聊天）';
-        }
-        var lines = [head, '【以下为该次一起听中的聊天，不是微信文字聊天】'];
-        items.forEach(function (it) {
-            var who = it.role === 'user' ? '用户' : (it.role === 'system' ? '系统' : '角色');
-            var t = trim(it.text);
-            if (t) lines.push(who + '：' + t);
-        });
-        lines.push('〔一起听·记录结束〕');
-        return lines.join('\n');
-    }
-
     function formatCallCapsuleForApi(m) {
         if (!m || m.type !== 'call_capsule' || !m.callCapsule) return '';
         var cap = m.callCapsule;
@@ -3095,7 +2988,6 @@
         if (m.type === 'diary_peek_context') return formatDiaryPeekContextForApi(m);
         if (m.type === 'diary_peek_notice') return '';
         if (m.type === 'call_capsule') return formatCallCapsuleForApi(m);
-        if (m.type === 'listen_together_capsule') return formatListenTogetherCapsuleForApi(m);
         if (isAlbumAvatarChangeMessage(m)) return formatAlbumAvatarChangeForApi(m);
         if (m.type === 'html' || m.renderAsHtml) return '〔HTML 交互页〕';
         if (shouldOmitMessage(m)) return '';
@@ -3431,9 +3323,6 @@
         buildReadTogetherPerTurnReminder: buildReadTogetherPerTurnReminder,
         parseReadTogetherOutputLinesMeta: parseReadTogetherOutputLinesMeta,
         parseReadTogetherUserInput: parseReadTogetherUserInput,
-        buildListenTogetherFormatRules: buildListenTogetherFormatRules,
-        buildListenTogetherPerTurnReminder: buildListenTogetherPerTurnReminder,
-        parseListenTogetherOutputLinesMeta: parseListenTogetherOutputLinesMeta,
         splitCollapsedOnlineTypeLines: splitCollapsedOnlineTypeLines,
         stripOrphanMarkdownEmphasis: stripOrphanMarkdownEmphasis,
         sanitizeRoleOutputLines: sanitizeRoleOutputLines,
@@ -3456,7 +3345,6 @@
         normalizeRecallTarget: normalizeRecallTarget,
         formatDiaryPeekContextForApi: formatDiaryPeekContextForApi,
         formatCallCapsuleForApi: formatCallCapsuleForApi,
-        formatListenTogetherCapsuleForApi: formatListenTogetherCapsuleForApi,
         formatMessageBodyOnly: formatMessageBodyOnly,
         isTransferReceiptText: isTransferReceiptText,
         stripTransferReceiptLines: stripTransferReceiptLines,

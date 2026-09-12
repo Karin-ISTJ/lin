@@ -8,7 +8,7 @@
   var FONT_PRESETS_KEY = 'miya-font-presets-v1';
   var MAX_FONT_PRESETS = 12;
 
-  var APP_KEYS = ['music', 'memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pet', 'pen'];
+  var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pet', 'pen'];
   var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop', 'tile_rift'];
   var POLAROID_KEYS = ['polaroid_1', 'polaroid_2', 'polaroid_3'];
   var P2_WIDGET_KEYS = [
@@ -188,7 +188,6 @@
     { key: 'chat', label: '聊天', selectors: ['.miya-chat-app'] },
     { key: 'chat-timestamp', label: '聊天时间戳' },
     { key: 'set', label: '设置', selectors: ['.miya-settings-app'] },
-    { key: 'music', label: '音乐', selectors: ['.miya-music-app'] },
     { key: 'book', label: '世界书', selectors: ['.miya-worldbook-app'] },
     { key: 'memory', label: '记忆', selectors: ['.miya-memory-app'] },
     { key: 'store', label: '线下', selectors: ['.miya-offline-app'] },
@@ -1095,7 +1094,7 @@
   }
 
   function onHomeCopyPointer(e) {
-    if (e.target.closest('.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-music-app, .modal, #modal')) return;
+    if (e.target.closest('.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .modal, #modal')) return;
     if (activeCopyInput) {
       if (activeCopyInput.el.contains(e.target)) return;
       closeCopyInput(true);

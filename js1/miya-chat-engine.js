@@ -1085,19 +1085,6 @@
         return blocks.join('\n\n');
     }
 
-    function buildListenTogetherRulesBundle(contact) {
-        var fmt = getOnlineFormatApi();
-        var roleName = (contact && contact.name) || '角色';
-        if (fmt && typeof fmt.buildListenTogetherFormatRules === 'function') {
-            return fmt.buildListenTogetherFormatRules({
-                roleName: roleName,
-                bubbleMin: 2,
-                bubbleMax: 5
-            });
-        }
-        return '';
-    }
-
     /**
      * 共读专用系统提示：不注入线上单聊模式/运转/格式规则
      */
@@ -1143,83 +1130,6 @@
 
         parts.push(buildReadTogetherOperationRules(contact, profile));
         parts.push(buildReadTogetherRulesBundle(contact, chatSettings));
-
-        return parts.filter(Boolean).join('\n\n');
-    }
-
-    function buildListenTogetherModeBlock(contact, profile) {
-        return (
-            '【对话模式·一起听】\n' +
-            '你正在以「' +
-            String((contact && contact.name) || '对方') +
-            '」的身份，与「' +
-            String((profile && profile.name) || '用户') +
-            '」进行网易云音乐「一起听」。\n' +
-            '- 这是一起听专属对话，不是微信/QQ 线上聊天；禁止引用-/语音-/表情包-/图片-/位置-/转账-/旁白-等线上专属格式。\n' +
-            '- 正文仅允许：普通文字（每行一条气泡）；换歌时单独一行「切歌-歌名或序号」。\n' +
-            '- 一起听只需直接输出正文气泡，禁止输出 <thinking>、<miyavoice> 或任何思维链/心声段。\n' +
-            '- 须遵守下文「一起听·输出格式」；提示词顺序：全局 → 联系人档案 → 用户身份 → 关系 → 世界书。'
-        );
-    }
-
-    function buildListenTogetherOperationRules(contact, profile) {
-        var roleName = String((contact && contact.name) || '对方');
-        var userName = String((profile && profile.name) || '用户');
-        return (
-            '【运转规则·一起听】\n' +
-            '1、你是' + roleName + '，正与用户并肩听歌；须消化人设与世界书，作出符合当下音乐情境的对话。\n' +
-            '2、你知道' + userName + '是谁，须符合你们的关系；禁止辱骂或控制型表达。\n' +
-            '3、每轮仅输出正文：每行一条气泡，直接写对白；禁止输出 <thinking>、<miyavoice> 或任何思维链/心声。\n' +
-            '4、正文仅允许普通文字与「切歌-歌名或序号」；禁止语音-/引用-/表情包-/图片-/位置-/转账-/旁白-等线上专属前缀。\n' +
-            '5、禁止输出 ⧗、› 或 API 时间戳；禁止复读相同句式。'
-        );
-    }
-
-    /**
-     * 一起听专用系统提示：不注入线上单聊模式/运转/格式规则
-     */
-    function buildListenTogetherSystemPrompt(input) {
-        var cfg = input && typeof input === 'object' ? input : {};
-        var contact = cfg.contact;
-        var profile = cfg.profile;
-        var chatSettings = cfg.chatSettings || null;
-        var contextText = String(cfg.contextText || '').trim();
-        var parts = [];
-        var aw = global.MiyaChatAwareness;
-
-        appendLayerList(parts, cfg.worldbookFrontLayers);
-
-        var globalP = getGlobalPrompt();
-        if (globalP) parts.push('【全局提示词】\n' + globalP);
-
-        parts.push(buildListenTogetherModeBlock(contact, profile));
-
-        var chronicle = renderChronicleBlock(contact);
-        if (chronicle) parts.push(chronicle);
-
-        var userBlock = renderProfileBlock(profile);
-        if (userBlock) parts.push(userBlock);
-
-        var avatarBlock = buildAvatarRecognitionBlock(chatSettings, contact, profile);
-        if (avatarBlock) parts.push(avatarBlock);
-        appendDynamicAvatarContextBlock(parts, chatSettings, contact, profile);
-        appendAlbumContextBlock(parts, profile, contact, chatSettings);
-
-        if (aw) {
-            var relLine = aw.buildRelationshipLine(chatSettings, contact);
-            if (relLine) parts.push(relLine);
-            var netBlock = aw.buildChronicleRelationshipBlock(contact);
-            if (netBlock) parts.push(netBlock);
-        }
-
-        var wbLayers = Array.isArray(cfg.worldbookLayers)
-            ? cfg.worldbookLayers
-            : buildWorldbookLayers(contact, contextText);
-        appendLayerList(parts, wbLayers);
-        appendLayerList(parts, cfg.worldbookBackLayers);
-
-        parts.push(buildListenTogetherOperationRules(contact, profile));
-        parts.push(buildListenTogetherRulesBundle(contact));
 
         return parts.filter(Boolean).join('\n\n');
     }
@@ -2388,13 +2298,6 @@
                 return String(fmtHist.formatCallCapsuleForApi(m) || '').trim();
             }
             if (
-                m.type === 'listen_together_capsule' &&
-                fmtHist &&
-                typeof fmtHist.formatListenTogetherCapsuleForApi === 'function'
-            ) {
-                return String(fmtHist.formatListenTogetherCapsuleForApi(m) || '').trim();
-            }
-            if (
                 fmtHist &&
                 typeof fmtHist.isAlbumAvatarChangeMessage === 'function' &&
                 fmtHist.isAlbumAvatarChangeMessage(m)
@@ -2529,12 +2432,6 @@
                 }
                 if (m.type === 'call_capsule' && fmtHist && typeof fmtHist.formatCallCapsuleForApi === 'function') {
                     pushSystemBlock(fmtHist.formatCallCapsuleForApi(m));
-                } else if (
-                    m.type === 'listen_together_capsule' &&
-                    fmtHist &&
-                    typeof fmtHist.formatListenTogetherCapsuleForApi === 'function'
-                ) {
-                    pushSystemBlock(fmtHist.formatListenTogetherCapsuleForApi(m));
                 } else if (
                     fmtHist &&
                     typeof fmtHist.isAlbumAvatarChangeMessage === 'function' &&
@@ -5018,7 +4915,6 @@
         buildOnlineRulesBundle: buildOnlineRulesBundle,
         buildCallSystemPrompt: buildCallSystemPrompt,
         buildReadTogetherSystemPrompt: buildReadTogetherSystemPrompt,
-        buildListenTogetherSystemPrompt: buildListenTogetherSystemPrompt,
         buildCallRingRules: buildCallRingRules
     };
 })(window);

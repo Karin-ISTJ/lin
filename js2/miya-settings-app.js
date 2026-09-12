@@ -27,11 +27,6 @@
   var CHAT_THINKING_RULES_KEY = 'miya-chat-thinking-rules-presets-v1';
   var CHAT_UI_THEME_KEY = 'miya-chat-ui-theme';
   var CHAT_TIMESTAMPS_KEY = 'miya-chat-show-timestamps-v1';
-  var MUSIC_DATA_KEY = 'miya-music-data-v1';
-  var MUSIC_SESSION_KEY = 'miya-netease-session-v1';
-  var MUSIC_LISTEN_KEY = 'miya-music-listen-together-v1';
-  var MUSIC_APPEARANCE_PRESETS_KEY = 'miya-music-appearance-presets-v1';
-  var MUSIC_APPEARANCE_BACKUP_KEY = 'miya-music-appearance-backup-v1';
   var DIARY_KEY = 'miya-diary-v1';
   var TYPEWRITER_KEY = 'miya-typewriter-v1';
   var TYPEWRITER_SETTINGS_KEY = 'miya-typewriter-settings-v1';
@@ -91,13 +86,6 @@
       widgetKvKeys: [CHAT_META_KEY, CHAT_META_BACKUP_KEY, CHAT_GLOBAL_SETTINGS_KEY, CHAT_MOMENTS_KEY, CHAT_BEAUTIFY_KEY, CHAT_APP_BEAUTIFY_KEY, CHAT_APP_BEAUTIFY_PRESETS_KEY, CHAT_OPERATION_RULES_KEY, CHAT_THINKING_RULES_KEY, CHAT_TIMESTAMPS_KEY, ALBUM_KEY],
       chatMediaIdb: true
     },
-    {
-      id: 'music',
-      title: '网易云音乐',
-      lsKeys: [MUSIC_DATA_KEY, MUSIC_SESSION_KEY, MUSIC_LISTEN_KEY, MUSIC_APPEARANCE_PRESETS_KEY, MUSIC_APPEARANCE_BACKUP_KEY],
-      widgetKvKeys: [MUSIC_DATA_KEY, MUSIC_SESSION_KEY, MUSIC_LISTEN_KEY, MUSIC_APPEARANCE_PRESETS_KEY],
-      musicLocalAudioIdb: true
-    },
     { id: 'diary', title: '日记', lsKeys: [DIARY_KEY], widgetKvKeys: [DIARY_KEY] },
     {
       id: 'typewriter',
@@ -125,7 +113,6 @@
 
   var BACKUP_IDB_STORES_HEAVY = [
     { file: 'idb/miya-chat-media_blobs.json', db: 'miya-chat-media', store: 'blobs', label: '聊天图片', blob: true },
-    { file: 'idb/miya-music-local-audio-v1_blobs.json', db: 'miya-music-local-audio-v1', store: 'blobs', label: '本地音乐', blob: true },
     { file: 'idb/miya-msg-sound-v1_blobs.json', db: 'miya-msg-sound-v1', store: 'blobs', label: '提示音', blob: true }
   ];
 
@@ -493,14 +480,6 @@
       });
     } catch (eChat) {}
 
-    var musicLocalAudioBytes = 0;
-    try {
-      var ma = await global.miyaKvExportNamedDbKv('miya-music-local-audio-v1', 'blobs');
-      Object.keys(ma || {}).forEach(function (key) {
-        musicLocalAudioBytes += estimateValueBytes(ma[key]);
-      });
-    } catch (eMusic) {}
-
     var msgSoundBytes = 0;
     try {
       var ms = await global.miyaKvExportNamedDbKv('miya-msg-sound-v1', 'blobs');
@@ -520,7 +499,6 @@
       });
       if (c.themeMediaIdb) groupLs[c.id] += themeMediaBytes;
       if (c.chatMediaIdb) groupLs[c.id] += chatMediaBytes;
-      if (c.musicLocalAudioIdb) groupLs[c.id] += musicLocalAudioBytes;
       if (c.msgSoundIdb) groupLs[c.id] += msgSoundBytes;
     });
 
@@ -980,9 +958,6 @@
     if (cat.chatMediaIdb && global.miyaKvReplaceNamedDbKv) {
       await global.miyaKvReplaceNamedDbKv('miya-chat-media', 'blobs', {}).catch(function () {});
     }
-    if (cat.musicLocalAudioIdb && global.miyaKvReplaceNamedDbKv) {
-      await global.miyaKvReplaceNamedDbKv('miya-music-local-audio-v1', 'blobs', {}).catch(function () {});
-    }
     if (cat.msgSoundIdb && global.miyaKvReplaceNamedDbKv) {
       await global.miyaKvReplaceNamedDbKv('miya-msg-sound-v1', 'blobs', {}).catch(function () {});
       if (global.MiyaMsgSound && typeof global.MiyaMsgSound.invalidateCache === 'function') {
@@ -1008,12 +983,6 @@
       if (global.miyaTypewriterSettings && global.miyaTypewriterSettings.invalidateCache) global.miyaTypewriterSettings.invalidateCache();
       if (global.miyaTypewriterReadTogetherStore && global.miyaTypewriterReadTogetherStore.invalidateCache) {
         global.miyaTypewriterReadTogetherStore.invalidateCache();
-      }
-    }
-    if (cat.id === 'music') {
-      if (global.miyaMusicEngine && global.miyaMusicEngine.invalidateCache) global.miyaMusicEngine.invalidateCache();
-      if (global.MiyaMusicListenTogether && global.MiyaMusicListenTogether.invalidateCache) {
-        global.MiyaMusicListenTogether.invalidateCache();
       }
     }
     if (cat.id === 'diary' && global.miyaDiaryStore && global.miyaDiaryStore.invalidateCache) {
@@ -1047,7 +1016,6 @@
     await global.miyaKvIdbReplaceAllEntries({}).catch(function () {});
     await global.miyaKvReplaceNamedDbKv('miya-theme-media', 'blobs', {}).catch(function () {});
     await global.miyaKvReplaceNamedDbKv('miya-chat-media', 'blobs', {}).catch(function () {});
-    await global.miyaKvReplaceNamedDbKv('miya-music-local-audio-v1', 'blobs', {}).catch(function () {});
     await global.miyaKvReplaceNamedDbKv('miya-msg-sound-v1', 'blobs', {}).catch(function () {});
     global.miyaInvalidateApiConfigCache && global.miyaInvalidateApiConfigCache();
     if (global.miyaWorldbookStore && global.miyaWorldbookStore.invalidateCache) global.miyaWorldbookStore.invalidateCache();
@@ -1059,10 +1027,6 @@
     if (global.miyaTypewriterSettings && global.miyaTypewriterSettings.invalidateCache) global.miyaTypewriterSettings.invalidateCache();
     if (global.miyaTypewriterReadTogetherStore && global.miyaTypewriterReadTogetherStore.invalidateCache) {
       global.miyaTypewriterReadTogetherStore.invalidateCache();
-    }
-    if (global.miyaMusicEngine && global.miyaMusicEngine.invalidateCache) global.miyaMusicEngine.invalidateCache();
-    if (global.MiyaMusicListenTogether && global.MiyaMusicListenTogether.invalidateCache) {
-      global.MiyaMusicListenTogether.invalidateCache();
     }
     if (global.miyaDiaryStore && global.miyaDiaryStore.invalidateCache) global.miyaDiaryStore.invalidateCache();
     if (global.miyaWeatherStore && global.miyaWeatherStore.invalidateCache) global.miyaWeatherStore.invalidateCache();
@@ -1620,12 +1584,6 @@
     if (global.miyaTypewriterReadTogetherStore && typeof global.miyaTypewriterReadTogetherStore.invalidateCache === 'function') {
       global.miyaTypewriterReadTogetherStore.invalidateCache();
     }
-    if (global.miyaMusicEngine && typeof global.miyaMusicEngine.invalidateCache === 'function') {
-      global.miyaMusicEngine.invalidateCache();
-    }
-    if (global.MiyaMusicListenTogether && typeof global.MiyaMusicListenTogether.invalidateCache === 'function') {
-      global.MiyaMusicListenTogether.invalidateCache();
-    }
     if (global.miyaDiaryStore && typeof global.miyaDiaryStore.invalidateCache === 'function') {
       global.miyaDiaryStore.invalidateCache();
     }
@@ -1830,7 +1788,6 @@
     var legacyMap = {
       'idb/miya-theme-media_blobs.json': raw.indexedDB_miya_theme_media,
       'idb/miya-chat-media_blobs.json': raw.indexedDB_miya_chat_media,
-      'idb/miya-music-local-audio-v1_blobs.json': raw.indexedDB_miya_music_local_audio,
       'idb/miya-msg-sound-v1_blobs.json': raw.indexedDB_miya_msg_sound
     };
     var idbRange = 72;
@@ -2546,8 +2503,7 @@
     if (chatPanel) delete chatPanel.dataset.primed;
     if (!document.querySelector('.miya-beautify-app.is-open') &&
         !document.querySelector('.miya-worldbook-app.is-open') &&
-        !document.querySelector('.miya-contacts-app.is-open') &&
-        !document.querySelector('.miya-music-app.is-open')) {
+        !document.querySelector('.miya-contacts-app.is-open')) {
       document.body.classList.remove('miya-app-open');
     }
   }

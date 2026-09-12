@@ -826,7 +826,7 @@
     if (global.miyaChatApp && global.miyaChatApp.invalidateStore) {
       global.miyaChatApp.invalidateStore();
     }
-    if (!document.querySelector('.miya-beautify-app.is-open, .miya-settings-app.is-open, .miya-worldbook-app.is-open, .miya-music-app.is-open, .miya-chat-app.is-open')) {
+    if (!document.querySelector('.miya-beautify-app.is-open, .miya-settings-app.is-open, .miya-worldbook-app.is-open, .miya-chat-app.is-open')) {
       document.body.classList.remove('miya-app-open');
     }
   }

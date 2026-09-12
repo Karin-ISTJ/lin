@@ -223,8 +223,6 @@
       api: defaultApiConfig(),
       decor: defaultDecor(),
       widgets: {
-        quote: 'The sunlight clings to you,\nand I cling to the light\nthat falls on you.',
-        music: { title: 'Dream It Possible', artist: 'Delacey', progress: 0.38 },
         steps: { current: 3214, goal: 6000, bars: [30, 50, 80, 100, 70, 40, 20] },
         countdown: { days: 200, label: '距离我们的纪念日 还有' },
         moodLine: '把寻常日子，过成慢镜头。',
@@ -246,7 +244,7 @@
     var base = defaultPhoneData(contactId, displayName);
     if (!raw || typeof raw !== 'object') return base;
     var w = raw.widgets && typeof raw.widgets === 'object' ? raw.widgets : {};
-    var music = w.music && typeof w.music === 'object' ? w.music : {};
+    var quote = w.quote && typeof w.quote === 'object' ? w.quote : {};
     var steps = w.steps && typeof w.steps === 'object' ? w.steps : {};
     var countdown = w.countdown && typeof w.countdown === 'object' ? w.countdown : {};
     var todo = Array.isArray(w.todo) ? w.todo.map(function (row, i) {
@@ -266,12 +264,6 @@
       api: normalizeApiConfig(raw.api),
       decor: normalizeDecor(raw.decor),
       widgets: {
-        quote: String(w.quote || base.widgets.quote),
-        music: {
-          title: String(music.title || base.widgets.music.title),
-          artist: String(music.artist || base.widgets.music.artist),
-          progress: Math.max(0, Math.min(1, Number(music.progress) || base.widgets.music.progress))
-        },
         steps: {
           current: Number(steps.current) || base.widgets.steps.current,
           goal: Number(steps.goal) || base.widgets.steps.goal,

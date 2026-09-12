@@ -11,7 +11,7 @@
   var DOCK_SLOT_COUNT = 4;
 
   var CUSTOM_GRID_APPS = [
-    'music', 'set', 'book', 'memory', 'chat', 'beauty', 'stpreset',
+    'set', 'book', 'memory', 'chat', 'beauty', 'stpreset',
     'couple', 'itinerary',
     'notes', 'fun',
     'theater'
@@ -40,7 +40,7 @@
   var pageEdgeSide = null;
 
   var APP_LABELS = {
-    music: '音乐', set: '设置', book: '世界书',
+    set: '设置', book: '世界书',
     memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设', store: '线下',
     couple: '情侣空间', itinerary: '行程轨迹', rift: '错位时空',
     notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣',

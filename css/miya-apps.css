@@ -23,8 +23,7 @@
 /* ── 壳层 ── */
 .miya-beautify-app,
 .miya-settings-app,
-.miya-worldbook-app,
-.miya-music-app {
+.miya-worldbook-app {
   position: fixed;
   inset: 0;
   z-index: 500;
@@ -125,7 +124,6 @@
 .miya-settings-app:not(.is-open),
 .miya-worldbook-app:not(.is-open),
 .miya-contacts-app:not(.is-open),
-.miya-music-app:not(.is-open),
 .miya-chat-app:not(.is-open) {
   display: none !important;
   pointer-events: none !important;
@@ -136,7 +134,6 @@
 .miya-settings-app.is-open,
 .miya-worldbook-app.is-open,
 .miya-contacts-app.is-open,
-.miya-music-app.is-open,
 .miya-chat-app.is-open {
   opacity: 1;
   visibility: visible;
@@ -154,7 +151,6 @@
 
 .miya-worldbook-app.is-open,
 .miya-contacts-app.is-open,
-.miya-music-app.is-open,
 .miya-chat-app.is-open {
   display: flex !important;
 }

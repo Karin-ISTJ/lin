@@ -94,20 +94,6 @@
                     ':' +
                     String(sec % 60).padStart(2, '0');
             }
-        } else if (m.type === 'listen_together_capsule') {
-            var ltCap = m.listenTogetherCapsule || {};
-            var ltSec = Number(ltCap.durationSec) || 0;
-            var lt = global.MiyaMusicListenTogether;
-            if (lt && typeof lt.formatDuration === 'function' && ltSec) {
-                t = '[一起听] ' + lt.formatDuration(ltSec);
-            } else if (ltSec) {
-                t =
-                    '[一起听] ' +
-                    String(Math.floor(ltSec / 60)).padStart(2, '0') +
-                    ':' +
-                    String(ltSec % 60).padStart(2, '0');
-            }
-            if (ltCap.trackTitle) t += ' · ' + ltCap.trackTitle;
         } else if (m.type === 'couple_space_invite' && m.coupleSpaceInvite) {
             var cpn = m.coupleSpaceInvite;
             if (cpn.status === 'accepted') t = '[情侣空间] 已同意';
@@ -139,7 +125,6 @@
             global.miyaSettingsApp,
             global.miyaWorldbookApp,
             global.miyaContactsApp,
-            global.miyaMusicApp,
             global.miyaMemoryApp,
             global.miyaItineraryApp,
             global.miyaCoupleApp,
@@ -150,7 +135,7 @@
 
     var OVERLAY_APP_SELECTOR =
         '.miya-beautify-app.is-open, .miya-settings-app.is-open, .miya-worldbook-app.is-open, ' +
-        '.miya-contacts-app.is-open, #miya-music-app.is-open, #miya-memory-app.is-open, ' +
+        '.miya-contacts-app.is-open, #miya-memory-app.is-open, ' +
         '#miya-itinerary-app.is-open, ' +
         '#miya-couple-app.is-open, ' +
         '#miya-typewriter-app.is-open, #miya-offline-app.is-open';

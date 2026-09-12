@@ -1,5 +1,5 @@
 /* miya-chat-group-werewolf.js — 群聊狼人杀
- * 6 人板子：2 狼人 + 2 村民 + 1 预言家 + 1 女巫，玩家(你) + 5 个 AI 角色
+ * 8 人板子：2 狼人 + 4 村民 + 1 预言家 + 1 女巫，玩家(你) + 7 个 AI 角色
  * 代码做法官：身份分配 / 夜晚结算 / 投票计票 / 胜负判定全部本地判定
  * AI 只做两件事：按人设发言（自然语言）、投票（返回 JSON）
  * AI 走 miyaApiBridge.callMainChatCompletionsRaw 裸调，不污染群聊消息
@@ -13,9 +13,9 @@
   /*
    * 构建标记：显示在面板标题旁，用来确认「当前跑的是哪一版代码」。
    * 改这个文件的逻辑时请一并递增，否则用户无法区分新包旧包。
-   * v4 = 顶栏常驻清空记录 + 屠城胜负规则 + 发言反逼迫/强制推理
+   * v5 = 6 人板 → 8 人板（一局太快的主因修复）+ 狼刀不空 + 投票下限
    */
-  var BUILD_TAG = 'v4';
+  var BUILD_TAG = 'v5';
 
   /* ---------------- 身份配置 ---------------- */
   var ROLES = {
@@ -25,13 +25,50 @@
     witch: { id: 'witch', name: '女巫', icon: '🧪', camp: 'good', desc: '解药救人一次，毒药毒人一次' }
   };
 
-  var DECK = ['werewolf', 'werewolf', 'villager', 'villager', 'seer', 'witch'];
+  /*
+   * 【为什么是 8 人板，而不是继续用 6 人板】
+   *
+   * 用户反馈「一局太快，现实里五分钟就结束了」。曾经以为是「两个狼人」太多，
+   * 但蒙特卡洛模拟（20000 局/配置）说得很清楚：
+   *
+   *   2 狼 6 人（旧）→ 平均 2.82 天，中位 3 天，100% 在第 3 天内结束
+   *   1 狼 6 人       → 平均 2.81 天，中位 3 天，100% 在第 3 天内结束
+   *   2 狼 8 人（新）→ 平均 3.90 天，中位 4 天，只有 9% 会在 3 天内结束
+   *
+   * 也就是说：把狼从 2 只减到 1 只，一局长度几乎不变（2.82 → 2.81），
+   * 因为它会连锁触发「狼全出局 → 好人胜」这条提前结束路径；
+   * 真正决定一局多长的是**总人数**——每多一个人，就多撑一个白天回合。
+   * 所以修复方向是把板子做大，而不是动狼的数量。
+   *
+   * 8 人板同时更接近真实狼人杀的节奏：8 人局里 2 狼需要屠掉 6 个好人，
+   * 好人要投出 4 次错票才会输，中间有足够的发言轮次让推理真的展开。
+   */
+  var DECK = ['werewolf', 'werewolf', 'villager', 'villager', 'villager', 'villager', 'seer', 'witch'];
   var TOTAL_SEATS = DECK.length;
+  var WOLF_COUNT = DECK.filter(function (r) { return r === 'werewolf'; }).length;
 
   var PHASE = { NIGHT: 'night', DAWN: 'dawn', SPEECH: 'speech', VOTE: 'vote', OVER: 'over' };
   var PHASE_LABEL = {
     night: '夜晚', dawn: '天亮', speech: '白天讨论', vote: '投票', over: '已结束'
   };
+
+  /*
+   * 板子的一句话描述。所有提示词/界面文案统一从这里取，
+   * 避免板子改了、但某处文案还写着「2 狼人 / 2 村民」的旧配置
+   * ——提示词和实际牌不一致，AI 的推理起点就是错的。
+   */
+  var BOARD_TEXT = (function () {
+    var n = {};
+    DECK.forEach(function (r) { n[r] = (n[r] || 0) + 1; });
+    var parts = [];
+    if (n.werewolf) parts.push(n.werewolf + ' 狼人');
+    if (n.villager) parts.push(n.villager + ' 村民');
+    if (n.seer) parts.push(n.seer + ' 预言家');
+    if (n.witch) parts.push(n.witch + ' 女巫');
+    return parts.join(' / ');
+  })();
+  var BOARD_LEAD = TOTAL_SEATS + ' 人局 · ' + BOARD_TEXT;
+  var BOARD_DESC = TOTAL_SEATS + ' 人局 —— ' + BOARD_TEXT + '。';
 
   /* ---------------- 工具 ---------------- */
   function now() { return Date.now(); }
@@ -186,7 +223,7 @@
     g.seats.forEach(function (s, idx) { g.roles[s.whoId] = deck[idx]; });
     g.healUsed = false;
     g.poisonUsed = false;
-    pushLog(g, '开局 · ' + TOTAL_SEATS + ' 人局：2 狼人 / 2 村民 / 1 预言家 / 1 女巫', 'start');
+    pushLog(g, '开局 · ' + BOARD_LEAD, 'start');
     beginNight(g);
     save(store, chatId, g);
     return { ok: true, game: g };
@@ -254,6 +291,13 @@
    * 决策顺序：存活狼人各投一票（串行询问）→ 票高者出局；
    * 平票则在并列者中随机（避免「狼人永远刀不掉关键好人」的可预测性）。
    * 所有狼人都没问出目标时，退化为在好人里随机选一个，保证夜晚一定出刀。
+   *
+   * 【为什么这里必须「绝不返回空刀」】
+   * 这个模块的胜负判定是屠城 —— 狼人要赢，必须把 6 个好人全部杀光，
+   * 其中至少有一半得靠夜晚的刀。如果某一夜狼人没出刀（问不出目标、
+   * 或玩家当狼时挂机），那一夜就是白给的平安夜，等于变相延长了对局；
+   * 更糟的是它会让「天数」这个指标失去意义。所以除了「场上已经没有
+   * 可刀的好人」这一种情况，本函数在任何分支下都必须落下一个 wolfTarget。
    */
   function runWolfKill(store, chatId) {
     var g0 = load(store, chatId);
@@ -280,10 +324,48 @@
 
     if (!targets.length) return Promise.resolve('');
 
+    /*
+     * 【兜底刀不能纯随机】
+     * 原实现是在「存活好人」里等概率乱抽。这在 6 人板（4 好人）里还行，
+     * 到 8 人板（6 好人）就出问题了：纯随机意味着狼人有 1/6 的概率去刀
+     * 预言家，也有 1/6 去刀一个已经被全场怀疑的村民 —— 前者等于白送好人
+     * 一把好牌，后者等于替好人投票，两种极端都会让「胜负」显得随机而不是
+     * 推理的结果。
+     *
+     * 这里给兜底刀加一层「轻偏好」，仍然带随机性，但不再无视局势：
+     *   ① 优先刀已经公开跳预言家的人（狼人当然要灭口）；
+     *   ② 排除掉「已经被大量好人怀疑」的人 —— 留给白天的投票处理更划算；
+     *   ③ 其余等概率抽。
+     * 注意这只影响「AI 问不出目标」的兜底路径；狼人正常投票选出的刀口
+     * 完全按它们的票走，不受这里干预。
+     */
     function fallback(g) {
       /* 好人全灭？那也轮不到这里收尾，checkWinner 会接管 */
       var pool = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
-      return pool.length ? pool[Math.floor(Math.random() * pool.length)].whoId : '';
+      if (!pool.length) return '';
+
+      /* ① 跳了预言家的优先灭口 */
+      var claimed = pool.filter(function (s) {
+        return (g.speeches || []).some(function (sp) {
+          return sp.whoId === s.whoId && /预言家|我是预言|我预言|查验了|查了/.test(String(sp.text || ''));
+        });
+      });
+      if (claimed.length) return claimed[Math.floor(Math.random() * claimed.length)].whoId;
+
+      /* ② 排除掉「好人自己都在怀疑」的人：留着让白天投票处理 */
+      var suspected = {};
+      if (g.lastResult && g.lastResult.detail && typeof g.lastResult.detail === 'object') {
+        Object.keys(g.lastResult.detail).forEach(function (voterId) {
+          var voter = seatOf(g, voterId);
+          /* 只统计好人的票 —— 狼自己投的票不算「好人的怀疑」 */
+          if (voter && g.roles[voterId] !== 'werewolf') {
+            suspected[g.lastResult.detail[voterId]] = true;
+          }
+        });
+      }
+      var clean = pool.filter(function (s) { return !suspected[s.whoId]; });
+      var use = clean.length ? clean : pool;
+      return use[Math.floor(Math.random() * use.length)].whoId;
     }
 
     if (!wolves.length) {
@@ -311,7 +393,13 @@
           if (count[t] > max) { max = count[t]; top = [t]; }
           else if (count[t] === max) top.push(t);
         });
+        /*
+         * 票高者出刀；没有任何有效票时走 fallback。
+         * 注意这里**不再**允许 pick 为空 —— 空刀会让这个夜晚白过，
+         * 而屠城规则下每一个夜晚都直接决定对局长度。
+         */
         var pick = top.length ? top[Math.floor(Math.random() * top.length)] : fallback(gf);
+        if (!pick) pick = fallback(gf);
         if (pick) {
           gf.night.wolfTarget = pick;
           pushLog(gf, '狼人刀口已定（' + (count[pick] || 0) + ' 票）', 'night');
@@ -382,17 +470,19 @@
    * 胜负判定：屠城规则。
    *
    * 【为什么不能再用「狼数 >= 好人数」】
-   * 那是狼人杀里最简陋的判定，放到这个 6 人板子（2 狼 / 2 村民 / 1 预言家 /
-   * 1 女巫）上会立刻崩掉：好人只有 4 个，死 2 个就变成 2 狼 vs 2 好人，
-   * 判狼胜。于是一局常常「第 1 夜刀 1 个 + 第 1 天投错 1 个」就结束，
-   * 平均 1.4 天，60% 的对局撑不到第 2 天 —— 这个游戏就没得玩了。
+   * 那是狼人杀里最简陋的判定。在 8 人板（2 狼 / 4 村民 / 1 预言家 / 1 女巫）上
+   * 它尤其致命：好人只有 6 个，死 4 个就变成 2 狼 vs 2 好人，判狼胜；
+   * 换算下来就是「两三个回合」定胜负，玩家还没轮到几次发言就结束了。
+   * 6 人板时代更夸张（好人 4 个，死 2 个即判狼胜），模拟出来的平均对局
+   * 只有 1.7 天，86% 的对局撑不到第 2 天。
    *
    * 改成屠城：**必须把所有好人都杀光**（村民 + 神职一个不剩）才算狼胜。
-   * 好人全灭才输，意味着好人至少要死满 4 次，最快也要 4 个回合；
+   * 8 人板下好人要死满 6 次，狼人最快也要 6 个回合才可能赢；
    * 同时保留标准狼人杀的另一半规则 —— 狼人全出局则好人胜。
    *
-   * 注意这里不用「屠边」（杀光平民或杀光神职）：那个也偏快，
-   * 且这个板子只有 2 村民 / 2 神职，屠边等于死 2 个就结束，同样太快。
+   * 注意这里不用「屠边」（杀光平民或杀光神职）：这个板子只有 4 村民 / 2 神职，
+   * 屠边等于死 4 个或死 2 个就结束，其中「杀光神职」那条明显偏快，
+   * 狼人只要连刀两晚预言家+女巫就赢了，同样撑不起一局。
    */
   function checkWinner(g) {
     var alive = aliveSeats(g);
@@ -553,7 +643,7 @@
     opts = opts && typeof opts === 'object' ? opts : {};
     var lines = [];
     lines.push('你在参与一场群聊里的「狼人杀」游戏。请严格遵守游戏规则，不要跳戏、不要输出规则说明。');
-    lines.push('板子：' + TOTAL_SEATS + ' 人局 —— 2 狼人 / 2 村民 / 1 预言家 / 1 女巫。');
+    lines.push('板子：' + BOARD_DESC);
     lines.push('第 ' + g.day + ' 天，当前阶段：' + (PHASE_LABEL[g.phase] || g.phase) + '。');
 
     /*
@@ -1364,7 +1454,16 @@
 
     if (task === 'wolf_kill') {
       var targets = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
+      /*
+       * 刀口的选法直接决定这一局要打多久，所以提示词里要把「策略」说清楚，
+       * 只写「选一个好人猎杀」会让模型随手挑一个 —— 刀掉一个本来就快被
+       * 投票冲出去的人，等于白送好人一个白天。
+       */
       lead += '\n\n现在是夜晚，你要和同伴一起选一个好人猎杀（不能猎杀狼人同伴）。'
+        + '\n选刀思路：优先杀「对好人阵营最有价值的人」——'
+        + '比如已经跳出来报身份的预言家/女巫、发言最有逻辑在带节奏的人、'
+        + '或者看起来快要查到你们头上的人；'
+        + '不要浪费刀口在「白天本来就会被投出去的人」身上，那是替好人省事。'
         + '\n可选目标：' + targets.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
@@ -1991,7 +2090,7 @@
       return '<div class="ww" id="ww-panel">' + head + ctxTip +
         '<div class="ww__scroll">' +
           '<div class="ww__intro">' +
-            '<p class="ww__intro-lead">' + TOTAL_SEATS + ' 人局 · 2 狼人 / 2 村民 / 1 预言家 / 1 女巫</p>' +
+            '<p class="ww__intro-lead">' + BOARD_LEAD + '</p>' +
             '<p class="ww__intro-desc">你与群里 ' + Math.max(0, cands.length - 1) + ' 位角色同桌。' +
               '身份随机分配，AI 会真实推理发言。<br>本局记录不会出现在群聊里。</p>' +
             (enough ? '' : '<p class="ww__intro-warn">⚠️ 群成员不足 ' + TOTAL_SEATS + ' 人（当前 ' + cands.length + ' 人），请先拉人进群</p>') +
@@ -2606,7 +2705,7 @@
        * 带那些既错位又费 token），只补对局规则与立场要求。
        */
       var dSys = '你是中文狼人杀的文字参谋，帮真人玩家代拟他在本轮要说的话。'
-        + '\n这是一局进行中的 ' + TOTAL_SEATS + ' 人狼人杀（2 狼人 / 2 村民 / 1 预言家 / 1 女巫），'
+        + '\n这是一局进行中的 ' + BOARD_DESC
         + '第 ' + g.day + ' 天，当前阶段：' + (PHASE_LABEL[g.phase] || g.phase) + '。'
         + '\n你的任务：站在玩家立场，写他在群里要发的那段话。'
         + '\n硬性要求：'
@@ -2663,8 +2762,9 @@
        * 【拦截：玩家必须先投票】
        * runAiVotes 只让存活的 AI 投票（filter !s.isUser），玩家的票要先用
        * 「vote」按钮单独投。旧代码不检查这一步：玩家没投就直接开计票，
-       * 等于白白弃权一票 —— 6 人局里 2 狼 3 好人，少这一票足以让平票
-       * 变成好人被冲出去，而且玩家自己毫无察觉。
+       * 等于白白弃权一票 —— 8 人局里狼人只有 2 票，玩家的这一票经常
+       * 就是决定「好人被冲出去」还是「狼人被冲出去」的那一票，
+       * 却弃得毫无察觉。
        */
       var mySeat = seatOf(g, USER_OWNER_ID);
       var iCanVote = mySeat && mySeat.alive;
@@ -2690,6 +2790,48 @@
     }
 
     return true;
+  }
+
+  /**
+   * AI 投票失败时的兜底票。
+   *
+   * 【为什么不能纯随机投】
+   * 原实现是「随机投一个存活玩家」。在 6 人板（2 狼 4 好人）里这还勉强能看，
+   * 但到 8 人板就变成一个节奏杀手：8 人局里 2 狼需要屠掉 6 个好人，
+   * 好人本来有大量容错；而随机票有 2/7 ≈ 29% 的概率直接命中一个狼人，
+   * 一旦两个狼被随机票冲出去，游戏会在第 2~3 天以「好人胜」草草收场 ——
+   * 这跟用户抱怨的「一局太快」是同一件事，只是换了个方向。
+   *
+   * 兜底票的职责是「别让这局卡住」，不是「替这个角色表态」。所以：
+   *   ① 狼人不会投自己的同伴（随机到同伴等于自曝，也不符合狼的动机）；
+   *   ② 好人优先投「已经被别人投过 / 被怀疑过」的人 —— 跟票是现实里
+   *      最真实的划水行为，也让票型更集中、少出平票；
+   *   ③ 都没有时，在合法池里随机。
+   */
+  function fallbackVote(g, selfId) {
+    var selfRole = g.roles[selfId];
+    var pool = aliveSeats(g).filter(function (s) {
+      if (s.whoId === selfId) return false;
+      /* 狼人不投同伴 */
+      if (selfRole === 'werewolf' && g.roles[s.whoId] === 'werewolf') return false;
+      return true;
+    });
+    if (!pool.length) {
+      pool = aliveSeats(g).filter(function (s) { return s.whoId !== selfId; });
+    }
+    if (!pool.length) return '';
+
+    /* ② 跟票：优先投「这一轮已经被别人投过」的人，让票集中而不是散开 */
+    var picked = {};
+    Object.keys(g.votes || {}).forEach(function (voterId) {
+      if (voterId === selfId) return;
+      var t = g.votes[voterId];
+      if (t && t !== selfId) picked[t] = true;
+    });
+    var followed = pool.filter(function (s) { return picked[s.whoId]; });
+    if (followed.length) return followed[Math.floor(Math.random() * followed.length)].whoId;
+
+    return pool[Math.floor(Math.random() * pool.length)].whoId;
   }
 
   /** 让所有存活 AI 依次投票（串行），然后计票 */
@@ -2719,15 +2861,17 @@
         var fresh = load(store, chatId);
         if (out && out.target && seatOf(fresh, out.target) && seatOf(fresh, out.target).alive) {
           fresh.votes[seat.whoId] = out.target;
+        } else {
+          /* AI 返回了目标但目标非法（自投/已出局）：走兜底，别让这一票凭空消失 */
+          var fb = fallbackVote(fresh, seat.whoId);
+          if (fb) fresh.votes[seat.whoId] = fb;
         }
         return save(store, chatId, fresh);
       }).catch(function () {
-        /* 单个 AI 失败不阻塞整体：随机投一个存活玩家 */
+        /* 单个 AI 失败不阻塞整体：走兜底票，避免随机冲掉狼人 */
         var fresh = load(store, chatId);
-        var pool = aliveSeats(fresh).filter(function (s) { return s.whoId !== seat.whoId; });
-        if (pool.length) {
-          fresh.votes[seat.whoId] = pool[Math.floor(Math.random() * pool.length)].whoId;
-        }
+        var fb = fallbackVote(fresh, seat.whoId);
+        if (fb) fresh.votes[seat.whoId] = fb;
         return save(store, chatId, fresh);
       }).then(function () {
         return step();

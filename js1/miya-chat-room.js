@@ -2711,24 +2711,6 @@
     );
   }
 
-  function renderListenTogetherCapsule(m) {
-    var cap = m.listenTogetherCapsule || {};
-    var lt = global.MiyaMusicListenTogether;
-    var dur = lt && typeof lt.formatDuration === 'function'
-      ? lt.formatDuration(cap.durationSec)
-      : '00:00';
-    var text = dur;
-    if (cap.trackTitle) text += ' · ' + cap.trackTitle;
-    var sessionId = String(cap.sessionId || m.sessionId || '');
-    return '<div class="mc-call-record-wrap qq-room__sys qq-room__sys--call" data-msg-id="' + esc(m.id) + '">' +
-      '<button type="button" class="mc-call-record" data-qq-lt-capsule data-chat-id="' +
-      esc(state.chatId || '') + '" data-session-id="' + esc(sessionId) + '">' +
-      '<svg class="mc-call-record-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' +
-      '<path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>' +
-      '<span class="mc-call-record-text">' + esc(text) + '</span>' +
-      '</button></div>';
-  }
-
   function renderCallCapsule(m, msgIdx) {
     var cap = m.callCapsule || {};
     var calls = global.MiyaChatCalls;
@@ -2890,9 +2872,6 @@
     var isSys = m.role === 'system';
     if (isSys && m.type === 'call_capsule') {
       return renderCallCapsule(m, msgIdx);
-    }
-    if (isSys && m.type === 'listen_together_capsule') {
-      return renderListenTogetherCapsule(m);
     }
     if (isSys && m.type === 'diary_peek_notice') {
       return renderDiaryPeekNotice(m);
@@ -5534,9 +5513,6 @@
       }
       if (global.MiyaChatCalls && typeof global.MiyaChatCalls.handleClick === 'function') {
         if (global.MiyaChatCalls.handleClick(e)) return;
-      }
-      if (global.MiyaMusicListenTogether && typeof global.MiyaMusicListenTogether.handleClick === 'function') {
-        if (global.MiyaMusicListenTogether.handleClick(e)) return;
       }
       if (t.closest('[data-plus="clock"]')) { e.preventDefault(); toggleTimestamps(); return; }
       if (t.closest('[data-plus="narration"]')) { e.preventDefault(); toggleNarrationMode(); return; }
