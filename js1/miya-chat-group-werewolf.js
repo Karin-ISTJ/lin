@@ -201,12 +201,137 @@
     g.night = {
       wolfTarget: '', seerTarget: '', seerResult: '',
       witchSave: false, witchPoison: '', resolved: false,
-      wolfVotes: {}
+      /* 狼人 AI 的选刀票；玩家当狼时给一个等刀窗口，超时由 AI 接管 */
+      wolfVotes: {}, wolfDeadline: 0
     };
+    markWolfPickTimeout(g);
     g.dawnDeaths = [];
     g.votes = {};
     g.voteCursor = 0;
     pushLog(g, '第 ' + g.day + ' 夜 · 天黑请闭眼');
+  }
+
+  /** 夜晚是否还需要 AI 狼人选刀 */
+  function wolvesNeedAiPick(g) {
+    if (!g || !g.night || g.night.wolfTarget) return false;
+    /*
+     * 玩家是场上唯一狼人时：给他一个「等你选刀」的窗口。
+     * 窗口判据不能只看时间 —— 面板里没有定时器，挂机的玩家会让
+     * 这局永远停在夜晚。所以同时记一个「天亮被点了几次」，
+     * 只要玩家第二次点天亮，就视为放弃选择、交给 AI 兜底。
+     */
+    var t = g.night.wolfDeadline || 0;
+    if (t && now() > t) return true;
+    return (g.night.dawnTries || 0) >= 1;
+  }
+
+  function markWolfPickTimeout(g) {
+    if (!g || !g.night) return;
+    g.night.wolfDeadline = now() + WOLF_PICK_WAIT_MS;
+  }
+
+  function clearWolfPickTimeout(g) {
+    if (g && g.night) g.night.wolfDeadline = 0;
+  }
+
+  /**
+   * 狼人 AI 选刀。
+   *
+   * 【为什么必须补这一段】
+   * 原实现里 g.night.wolfTarget 全文件只在一处被写入 —— `wolf_pick` 处理器，
+   * 而那个按钮只在「玩家自己是狼人」时才渲染。于是玩家拿好人牌时，
+   * 狼人 AI 整局都不会出刀，每晚都是平安夜，游戏只能靠白天投票推进，
+   * 一旦平票就无限循环。beginNight 里预留的 `wolfVotes: {}` 是当初
+   * 规划过、但从没落地的痕迹。
+   *
+   * 决策顺序：存活狼人各投一票（串行询问）→ 票高者出局；
+   * 平票则在并列者中随机（避免「狼人永远刀不掉关键好人」的可预测性）。
+   * 所有狼人都没问出目标时，退化为在好人里随机选一个，保证夜晚一定出刀。
+   */
+  function runWolfKill(store, chatId) {
+    var g0 = load(store, chatId);
+    if (!g0.night || g0.night.wolfTarget) return Promise.resolve('');
+
+    var userSeat = seatOf(g0, USER_OWNER_ID);
+    /* 玩家是狼人且还活着 —— 只有等他不想选/超时，才由 AI 接管 */
+    var userIsWolf = g0.roles[USER_OWNER_ID] === 'werewolf'
+      && userSeat && userSeat.alive;
+
+    /*
+     * 玩家当狼且还没选：先让着玩家，不抢他的刀。
+     * 但「让」必须有终点 —— 否则挂机的玩家会把对局永久卡在夜晚
+     * （面板里没有定时器，没有任何东西会来推这一步）。
+     * 终点有两个：① 等刀窗口到点；② 玩家自己点了「天亮」又没选。
+     * 任一满足即由 AI 兜底出刀，保证夜晚一定能结算。
+     */
+    if (userIsWolf && !wolvesNeedAiPick(g0)) return Promise.resolve('');
+
+    var wolves = aliveSeats(g0).filter(function (s) {
+      return !s.isUser && g0.roles[s.whoId] === 'werewolf';
+    });
+    var targets = aliveSeats(g0).filter(function (s) { return g0.roles[s.whoId] !== 'werewolf'; });
+
+    if (!targets.length) return Promise.resolve('');
+
+    function fallback(g) {
+      /* 好人全灭？那也轮不到这里收尾，checkWinner 会接管 */
+      var pool = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
+      return pool.length ? pool[Math.floor(Math.random() * pool.length)].whoId : '';
+    }
+
+    if (!wolves.length) {
+      /* 只剩玩家这一个狼人，且他已放弃 → 兜底出一刀，别让夜晚空过 */
+      var gNone = load(store, chatId);
+      if (!gNone.night) return Promise.resolve('');
+      gNone.night.wolfTarget = fallback(gNone);
+      return save(store, chatId, gNone).then(function () {
+        return gNone.night ? gNone.night.wolfTarget : '';
+      });
+    }
+
+    var idx = 0;
+    function step() {
+      if (idx >= wolves.length) {
+        var gf = load(store, chatId);
+        if (!gf.night) return Promise.resolve('');
+        var votes = gf.night.wolfVotes || {};
+        var count = {}, top = [], max = 0;
+        Object.keys(votes).forEach(function (wid) {
+          var t = votes[wid];
+          var tgt = seatOf(gf, t);
+          if (!tgt || !tgt.alive || gf.roles[t] === 'werewolf') return;
+          count[t] = (count[t] || 0) + 1;
+          if (count[t] > max) { max = count[t]; top = [t]; }
+          else if (count[t] === max) top.push(t);
+        });
+        var pick = top.length ? top[Math.floor(Math.random() * top.length)] : fallback(gf);
+        if (pick) {
+          gf.night.wolfTarget = pick;
+          pushLog(gf, '狼人刀口已定（' + (count[pick] || 0) + ' 票）', 'night');
+        }
+        return save(store, chatId, gf).then(function () {
+          return gf.night ? gf.night.wolfTarget : '';
+        });
+      }
+      var wolf = wolves[idx++];
+      var cur = load(store, chatId);
+      if (!cur.night) return Promise.resolve('');
+      return askAi(cur, wolf.whoId, 'wolf_kill').then(function (out) {
+        var fresh = load(store, chatId);
+        if (!fresh.night) return '';
+        fresh.night.wolfVotes = fresh.night.wolfVotes || {};
+        if (out && out.target && seatOf(fresh, out.target) && seatOf(fresh, out.target).alive) {
+          fresh.night.wolfVotes[wolf.whoId] = out.target;
+        }
+        return save(store, chatId, fresh);
+      }).catch(function () {
+        return '';
+      }).then(function () {
+        return step();
+      });
+    }
+
+    return Promise.resolve().then(step);
   }
 
   /** 夜晚结算 */
@@ -226,11 +351,21 @@
     }
     deaths.forEach(function (id) { var s = seatOf(g, id); if (s) s.alive = false; });
     g.dawnDeaths = deaths.slice();
+    clearWolfPickTimeout(g);
     g.night = null;
     g.phase = PHASE.DAWN;
     pushLog(g, deaths.length
       ? '天亮 · 昨晚倒牌：' + deaths.map(function (id) { return nameOf(g, id); }).join('、')
       : '天亮 · 昨晚是平安夜', 'dawn');
+    /*
+     * 【内置胜负判定】
+     * resolveNight 是对外导出的（global.MiyaChatGroupWerewolf.resolveNight），
+     * 但旧实现结完账就走人，不判胜负 —— 外部直接调用会拿到一个「狼人已满场
+     * 却仍在 playing」的状态。这里把判定收进来，内部流程不受影响
+     * （advanceFromNight 再判一次是幂等的）。
+     */
+    var winner = checkWinner(g);
+    if (winner && g.status === 'playing') finish(g, winner);
     if (store && chatId) save(store, chatId, g);
     return g;
   }
@@ -301,8 +436,21 @@
       pushLog(g, g.lastResult.text, 'vote');
     }
     var winner = checkWinner(g);
-    if (winner) finish(g, winner);
-    else { g.phase = PHASE.SPEECH; g.speechCursor = 0; }
+    if (winner) { finish(g, winner); }
+    else {
+      g.phase = PHASE.SPEECH;
+      g.speechCursor = 0;
+      /*
+       * 【状态清理：平票是「重来一轮」，不是「继续上一轮」】
+       * 旧实现只把游标归零，speeches / votes 原样留着：于是下一轮讨论
+       * 一上来就摆着上一轮的原话，AI 还会照着上一轮的票型复读，
+       * 玩家那边「你已投给 XX」也是脏的。这里把两者一起清掉，
+       * g.lastResult 保留下来给 UI 显示「上轮平票」的结果条。
+       */
+      g.speeches = [];
+      g.votes = {};
+      g.voteCursor = 0;
+    }
     save(store, chatId, g);
     return g.lastResult;
   }
@@ -484,6 +632,7 @@
    */
   var SPEECH_FLOOR = 800;   /* 发言低于这个数，思维链会把正文吃光 */
   var ACTION_FLOOR = 400;   /* 投票/查验/毒杀这类短 JSON 任务 */
+  var WOLF_PICK_WAIT_MS = 300000;  /* 玩家当狼时的等刀窗口；超过则 AI 接管，避免卡死 */
 
   function readGlobalMaxTokens() {
     try {
@@ -1583,14 +1732,20 @@
 
       if (myRoleId === 'werewolf') {
         var wolfTargets = aliveOthers.filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
+        var mates = aliveSeats(g).filter(function (s) {
+          return s.whoId !== USER_OWNER_ID && g.roles[s.whoId] === 'werewolf';
+        });
         stageHtml = '<div class="ww__stage">' +
           '<div class="ww__stage-title">🌙 你是狼人，选择今晚的猎杀目标</div>' +
+          (mates.length
+            ? '<div class="ww__hint">同伴：' + mates.map(function (s) { return esc(s.name); }).join('、') + '</div>'
+            : '<div class="ww__hint">场上只剩你一个狼人</div>') +
           '<div class="ww__pick">' + wolfTargets.map(function (s) {
             return '<button type="button" class="ww__pick-btn' +
               (g.night && g.night.wolfTarget === s.whoId ? ' is-selected' : '') +
               '" data-ww-act="wolf_pick" data-ww-target="' + esc(s.whoId) + '">' + esc(s.name) + '</button>';
           }).join('') + '</div>' +
-          '<div class="ww__hint">' + (deadList ? '已选择：' + esc(deadList) : '尚未选择') + '</div>' +
+          '<div class="ww__hint">' + (deadList ? '已选择：' + esc(deadList) : '尚未选择（可由同伴决定）') + '</div>' +
           '</div>';
       } else if (myRoleId === 'seer') {
         stageHtml = '<div class="ww__stage">' +
@@ -1700,8 +1855,15 @@
     if (g.phase === PHASE.VOTE) {
       var voteOthers = aliveSeats(g).filter(function (s) { return s.whoId !== USER_OWNER_ID; });
       var voted = g.votes[USER_OWNER_ID];
+      var myVoteSeat = seatOf(g, USER_OWNER_ID);
+      var mustVote = !!(myVoteSeat && myVoteSeat.alive);
       stageHtml = '<div class="ww__stage">' +
         '<div class="ww__stage-title">🗳️ 投票</div>' +
+        (mustVote
+          ? '<div class="ww__hint' + (voted ? ' ww__hint--ok' : '') + '">'
+            + (voted ? '你已投给：<b>' + esc(nameOf(g, voted)) + '</b>（可改投）'
+                      : '请先选择你要投的人，未投票无法开始计票') + '</div>'
+          : '<div class="ww__hint">你已出局，本轮由场上的玩家投票</div>') +
         '<div class="ww__pick">' + voteOthers.map(function (s) {
           return '<button type="button" class="ww__pick-btn' + (voted === s.whoId ? ' is-selected' : '') +
             '" data-ww-act="vote" data-ww-target="' + esc(s.whoId) + '">' + esc(s.name) + '</button>';
@@ -1709,7 +1871,10 @@
         (g.lastResult ? '<div class="ww__hint ww__hint--ok">' + esc(g.lastResult.text) + '</div>' : '') +
         '<div class="ww__actions">' +
           '<button type="button" class="ww__btn ww__btn--main" data-ww-act="do_vote"' +
-            (state.busy ? ' disabled' : '') + '>' + (state.busy ? esc(state.busyText || 'AI 投票中…') : '让 AI 投票并计票') + '</button>' +
+            (state.busy ? ' disabled' : '') + '>' +
+            (state.busy
+              ? esc(state.busyText || 'AI 投票中…')
+              : (mustVote && !voted ? '请先投出你的一票' : '让 AI 投票并计票')) + '</button>' +
         '</div>' +
       '</div>';
     }
@@ -1840,6 +2005,8 @@
     if (act === 'wolf_pick') {
       if (!g.night) return true;
       g.night.wolfTarget = target;
+      /* 玩家已经选刀，作废等刀窗口，AI 不再接管 */
+      clearWolfPickTimeout(g);
       pushLog(g, '你选择了猎杀目标');
       save(store, chatId, g);
       rerender();
@@ -1876,6 +2043,45 @@
     }
 
     if (act === 'dawn') {
+      /*
+       * 天亮之前先让 AI 狼人把刀口定下来。
+       * 不补这一步，玩家拿好人牌时永远没有刀口（狼人 AI 从不选刀）。
+       * 玩家自己是狼人时给他优先权：第一次点天亮若还没选刀，先提醒；
+       * 再点一次就视为放弃，由 AI 兜底出刀，避免卡在夜晚。
+       */
+      if (g.night && !g.night.wolfTarget) {
+        var userIsWolfNow = g.roles[USER_OWNER_ID] === 'werewolf'
+          && seatOf(g, USER_OWNER_ID) && seatOf(g, USER_OWNER_ID).alive;
+        var tries = g.night.dawnTries || 0;
+        if (userIsWolfNow && tries === 0 && !wolvesNeedAiPick(g)) {
+          g.night.dawnTries = 1;
+          save(store, chatId, g);
+          var poolN = aliveSeats(g).filter(function (s) { return g.roles[s.whoId] !== 'werewolf'; });
+          if (toast) toast(poolN.length
+            ? '你还没选猎杀目标 —— 再点一次「天亮」就由同伴代刀'
+            : '场上没有可猎杀的目标了');
+          rerender();
+          return true;
+        }
+        state.busy = true;
+        state.busyText = '狼人正在行动…';
+        rerender();
+        runWolfKill(store, chatId).then(function () {
+          state.busy = false;
+          var fresh = load(store, chatId);
+          advanceFromNight(store, chatId, fresh);
+          if (toast) toast(fresh.dawnDeaths && fresh.dawnDeaths.length
+            ? '天亮了，昨晚有人出局' : '天亮了，昨晚是平安夜');
+          rerender();
+        }).catch(function (err) {
+          state.busy = false;
+          var fresh = load(store, chatId);
+          advanceFromNight(store, chatId, fresh);
+          if (toast) toast('狼人行动出错，按平安夜结算：' + ((err && err.message) || '未知错误'));
+          rerender();
+        });
+        return true;
+      }
       advanceFromNight(store, chatId, g);
       if (toast) toast(g.dawnDeaths && g.dawnDeaths.length
         ? '天亮了，昨晚有人出局' : '天亮了，昨晚是平安夜');
@@ -2003,6 +2209,20 @@
     }
 
     if (act === 'do_vote') {
+      /*
+       * 【拦截：玩家必须先投票】
+       * runAiVotes 只让存活的 AI 投票（filter !s.isUser），玩家的票要先用
+       * 「vote」按钮单独投。旧代码不检查这一步：玩家没投就直接开计票，
+       * 等于白白弃权一票 —— 6 人局里 2 狼 3 好人，少这一票足以让平票
+       * 变成好人被冲出去，而且玩家自己毫无察觉。
+       */
+      var mySeat = seatOf(g, USER_OWNER_ID);
+      var iCanVote = mySeat && mySeat.alive;
+      if (iCanVote && !g.votes[USER_OWNER_ID]) {
+        fail('请先选择你要投的人，再开始计票');
+        rerender();
+        return true;
+      }
       state.busy = true;
       state.busyText = 'AI 投票中…';
       rerender();
@@ -2090,6 +2310,7 @@
     nextSpeaker: nextSpeaker,
     recordSpeech: recordSpeech,
     runAiVotes: runAiVotes,
+    runWolfKill: runWolfKill,
     seatOf: seatOf,
     aliveSeats: aliveSeats,
     nameOf: nameOf,
