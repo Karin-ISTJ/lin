@@ -623,6 +623,11 @@
       wbMiddle: wbMeta.middleCount || 0,
       wbBack: wbMeta.backCount || 0,
       scanChars: scanText.length,
+      /* 发言回顾占了多少字：这部分随对局推进而增长，不是静态开销 */
+      speechChars: scanText.length ? (function () {
+        var m = scanText.match(/本轮已有发言：\n([\s\S]*)$/);
+        return m ? m[1].length : 0;
+      })() : 0,
       members: (built.members || []).length,
       error: built.error || ''
     };
@@ -1013,6 +1018,18 @@
         + ((st.wbDropped || 0) > 0 ? ' · 超预算丢弃 ' + st.wbDropped + ' 条' : '')
         + '<br>扫描文本 ' + (st.scanChars || 0) + ' 字</div>';
 
+      /* 字数会随对局推进增长：发言回顾（最近 8 条）是唯一的动态项，
+         把它单独标出来，避免误以为有个固定的巨大开销。 */
+      var speechChars = st.speechChars || 0;
+      var growDiag = '';
+      if (speechChars > 0) {
+        growDiag = '<div class="ww-ctx-wbmeta">'
+          + '字数会随对局增长：其中<b>发言回顾约 ' + speechChars + ' 字</b>'
+          + '（最近 8 条发言，每条约 1200 字上限）。<br>'
+          + '这部分每轮都在变，不是静态开销；人设、世界书与预设是相对固定的部分。'
+          + '</div>';
+      }
+
       var wbTip;
       if (st.worldbook > 0) {
         wbTip = '✅ 世界书已命中并注入提示词。';
@@ -1027,7 +1044,7 @@
       var health = st.systemBlocks >= 2 && st.chars > 200;
       body = '<div class="ww-ctx-list">' + rows.join('') + '</div>'
         + (wbRows.length ? '<div class="ww-ctx-wblist">' + wbRows.join('') + '</div>' : '')
-        + wbDiag + '<div class="ww-ctx-tip">' + wbTip + '</div>'
+        + wbDiag + growDiag + '<div class="ww-ctx-tip">' + wbTip + '</div>'
         + '<div class="ww-ctx-tip">'
         + (health
           ? '✅ 角色发言时会带上以上设定，说话风格贴近你在群里的那个角色。'
