@@ -371,12 +371,28 @@
   }
 
   /* ---------------- 胜负 ---------------- */
+  /**
+   * 胜负判定：屠城规则。
+   *
+   * 【为什么不能再用「狼数 >= 好人数」】
+   * 那是狼人杀里最简陋的判定，放到这个 6 人板子（2 狼 / 2 村民 / 1 预言家 /
+   * 1 女巫）上会立刻崩掉：好人只有 4 个，死 2 个就变成 2 狼 vs 2 好人，
+   * 判狼胜。于是一局常常「第 1 夜刀 1 个 + 第 1 天投错 1 个」就结束，
+   * 平均 1.4 天，60% 的对局撑不到第 2 天 —— 这个游戏就没得玩了。
+   *
+   * 改成屠城：**必须把所有好人都杀光**（村民 + 神职一个不剩）才算狼胜。
+   * 好人全灭才输，意味着好人至少要死满 4 次，最快也要 4 个回合；
+   * 同时保留标准狼人杀的另一半规则 —— 狼人全出局则好人胜。
+   *
+   * 注意这里不用「屠边」（杀光平民或杀光神职）：那个也偏快，
+   * 且这个板子只有 2 村民 / 2 神职，屠边等于死 2 个就结束，同样太快。
+   */
   function checkWinner(g) {
     var alive = aliveSeats(g);
     var wolfAlive = alive.filter(function (s) { return g.roles[s.whoId] === 'werewolf'; }).length;
     var goodAlive = alive.length - wolfAlive;
-    if (wolfAlive === 0) return 'good';
-    if (wolfAlive >= goodAlive) return 'wolf';
+    if (wolfAlive === 0) return 'good';   /* 狼人全部出局 → 好人胜 */
+    if (goodAlive === 0) return 'wolf';   /* 好人全部出局 → 屠城成功 */
     return '';
   }
 
@@ -1949,11 +1965,12 @@
           (state.busy ? ' disabled' : '') + '>' +
           (state.busy ? esc(busyLabel('狼人正在行动…')) : '天亮（结算夜晚）') + '</button>' +
         '</div>' +
-        /* 忙碌时给一行进度说明：秒数在涨就说明 AI 在工作，不是卡死 */
-        (state.busy
-          ? '<div class="ww__hint ww__hint--busy">⏳ ' + esc(busyLabel('AI 正在处理…'))
-            + '　—— 期间重复点击不会生效，请稍候</div>'
-          : '') +
+        /*
+         * 这里原本还有一条黄色的「⏳ AI 正在处理… 期间重复点击不会生效」。
+         * 计时信息已经做在按钮文案里（「狼人正在行动… 2s」），再挂一条
+         * 黄条属于重复提示，而且它占的高度会把下面的操作区顶下去，
+         * 手机上尤其挤。故删掉，只保留按钮上的秒表。
+         */
         '</div>';
     }
 
@@ -2016,10 +2033,6 @@
       stageHtml = '<div class="ww__stage">' +
         '<div class="ww__stage-title">💬 白天讨论</div>' +
         '<div class="ww__speeches">' + (spoken || errHtml ? spoken + errHtml : '<div class="ww__hint">还没有人发言</div>') + '</div>' +
-        (state.busy
-          ? '<div class="ww__hint ww__hint--busy">⏳ ' + esc(busyLabel('AI 正在处理…'))
-            + '　—— 期间重复点击不会生效，请稍候</div>'
-          : '') +
         turnHtml +
         '<div class="ww__actions">' +
           (myTurn ? '' : '<button type="button" class="ww__btn ww__btn--main" data-ww-act="next_speech"'
