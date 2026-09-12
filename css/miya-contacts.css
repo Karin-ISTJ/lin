@@ -637,6 +637,65 @@
   color: var(--mn-ink);
 }
 
+/* 开场白编辑区 */
+.mn-greeting {
+  margin-top: 10px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--mn-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.mn-greeting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.mn-greeting-tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--mn-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--mn-line);
+}
+
+/* 第 1 条是「首条消息」，给它一点视觉权重区分于备选 */
+.mn-greeting-tag.is-first {
+  color: var(--mn-accent);
+  border-color: var(--mn-accent);
+  background: var(--mn-accent-soft);
+}
+
+.mn-greeting-del {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--mn-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mn-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mn-greeting-del:active { transform: scale(0.94); }
+
+/* 开场白条目里的 textarea 比正文人设矮一些，避免一屏只放得下一条 */
+.mn-greeting textarea.mn-textarea {
+  min-height: 60px;
+  height: 60px;
+  margin-top: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 9px 11px;
+}
+
 /* 人际矩阵 */
 .mn-matrix {
   display: flex;

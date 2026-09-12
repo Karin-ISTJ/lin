@@ -314,13 +314,40 @@
     addSection(sections, '场景', data.scenario);
     addSection(sections, '系统提示', data.system_prompt);
     addSection(sections, '历史后指令', data.post_history_instructions);
-    addSection(sections, '首条消息', data.first_mes);
+    /*
+     * 【首条消息】与【备选开场】不再进 persona，改由 buildGreetingsFromCard
+     * 输出成独立的 greetings 数组。
+     *
+     * 原因：它们是「对话第一楼」的素材，塞进 persona 就会被当作人设的一部分
+     * 反复注入每一轮提示词。实测一张卡开场白能到 26.8k（5 个成员累加），
+     * 属于纯浪费，而且模型看到【备选开场】里的多段场景描述容易串场。
+     */
     addSection(sections, '对话示例', data.mes_example);
-    if (Array.isArray(data.alternate_greetings) && data.alternate_greetings.length) {
-      addSection(sections, '备选开场', data.alternate_greetings.filter(Boolean).join('\n---\n'));
-    }
     addSection(sections, '创作者备注', data.creator_notes);
     return sections.join('\n\n');
+  }
+
+  /**
+   * 把角色卡里的开场白拆成数组。
+   *
+   * 约定 greetings[0] = 首条消息（first_mes），默认展示、可直接编辑；
+   *      greetings[1..] = 备选开场（alternate_greetings）。
+   *
+   * 之所以把 first_mes 放在 [0]：用户希望「默认就看到首条消息，点切换才
+   * 看得到其他的」，这个顺序天然满足，不需要额外标记哪条是默认。
+   */
+  function buildGreetingsFromCard(data) {
+    var out = [];
+    if (data && String(data.first_mes || '').trim()) {
+      out.push(String(data.first_mes).trim());
+    }
+    if (data && Array.isArray(data.alternate_greetings)) {
+      data.alternate_greetings.forEach(function (g) {
+        var s = String(g == null ? '' : g).trim();
+        if (s) out.push(s);
+      });
+    }
+    return out;
   }
 
   function extractWorldbook(data) {
@@ -340,6 +367,7 @@
     return {
       name: String(data.name || '').trim().slice(0, 32),
       persona: persona,
+      greetings: buildGreetingsFromCard(data),
       avatar: avatar || '',
       tags: tags,
       gender: String(data.gender || (data.extensions && data.extensions.gender) || '').trim().slice(0, 16),

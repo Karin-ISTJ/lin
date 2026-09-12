@@ -56,10 +56,113 @@
     return parts.join('\n\n');
   }
 
+  /*
+   * 开场白（greetings）：
+   * 这是「对话第一楼」用的素材，原本被 Tavern 卡导入时塞进了 persona 字符串里
+   * （【首条消息】【备选开场】两段），导致它跟着人设一起被反复注入每一轮提示词。
+   * 拆成独立字段后，只有「第一楼」（对话还没有消息时）才需要它。
+   *
+   * 约定：greetings[0] 是「首条消息」（默认展示、可直接编辑），
+   *       greetings[1..] 是备选开场，要用「切换」才看得到。
+   *
+   * 注意这里【不过滤空串】：用户会故意留一个空位，再把它编辑成首条消息。
+   * 过滤掉的话，那个空位在保存后就消失了，等于每次都得多点一次「添加」。
+   */
+  function normalizeGreetings(raw) {
+    var arr = raw && raw.greetings;
+    if (!Array.isArray(arr)) return [];
+    return arr.map(function (x) {
+      return String(x == null ? '' : x).replace(/\r\n/g, '\n').trim();
+    });
+  }
+
+  /* 「备选开场」段落标题：Tavern 卡导入时用的是这个 */
+  var GREETING_SECTION_TITLES = ['【备选开场】', '【开场白】', '【开场】'];
+
+  /**
+   * 从老数据的 persona 里把开场白拆出来。
+   *
+   * 背景：旧版导入把 alternate_greetings 用 '\n---\n' 拼成一个段落塞进 persona：
+   *
+   *     【备选开场】
+   *     开场白甲…
+   *     ---
+   *     开场白乙…
+   *
+   * 这里按同样的规则反向切开。找不到就返回空数组（不抛错）。
+   */
+  function extractGreetingsFromPersona(persona) {
+    var text = String(persona == null ? '' : persona);
+    if (!text) return [];
+    var hit = null;
+    for (var i = 0; i < GREETING_SECTION_TITLES.length; i++) {
+      var at = text.indexOf(GREETING_SECTION_TITLES[i]);
+      if (at >= 0) { hit = { at: at, tag: GREETING_SECTION_TITLES[i] }; break; }
+    }
+    if (!hit) return [];
+
+    /* 从标题行之后开始，一直取到下一个顶层【标题】之前 */
+    var rest = text.slice(hit.at + hit.tag.length);
+    var lines = rest.split('\n');
+    var body = [];
+    for (var j = 0; j < lines.length; j++) {
+      var ln = lines[j];
+      if (j > 0 && /^\s*【[^】]{1,40}】/.test(ln)) break;
+      body.push(ln);
+    }
+    var joined = body.join('\n').trim();
+    if (!joined) return [];
+
+    return joined.split(/\n\s*---\s*\n/)
+      .map(function (s) { return String(s || '').replace(/\r\n/g, '\n').trim(); })
+      .filter(Boolean);
+  }
+
+  /**
+   * 把 persona 里的开场白段落剥掉，避免「独立字段 + persona 内嵌」两处重复占 token。
+   * 与 extractGreetingsFromPersona 用同一套边界判据，保证拆出来的和剥掉的是同一段。
+   */
+  function stripGreetingSections(persona) {
+    var text = String(persona == null ? '' : persona);
+    if (!text) return text;
+    var out = text;
+    for (var i = 0; i < GREETING_SECTION_TITLES.length; i++) {
+      var tag = GREETING_SECTION_TITLES[i];
+      var at = out.indexOf(tag);
+      if (at < 0) continue;
+      var head = out.slice(0, at);
+      var rest = out.slice(at + tag.length);
+      var lines = rest.split('\n');
+      var tail = [];
+      var k = 0;
+      for (; k < lines.length; k++) {
+        if (k > 0 && /^\s*【[^】]{1,40}】/.test(lines[k])) break;
+      }
+      tail = lines.slice(k);
+      out = (head.replace(/\s+$/, '') + (tail.length ? '\n\n' + tail.join('\n').replace(/^\s+/, '') : ''));
+      break;
+    }
+    return out.trim();
+  }
+
   function normalizeCharacter(raw, groupsById) {
     var gid = String((raw && raw.groupId) || '').trim();
     if (!gid || !groupsById[gid]) gid = DEFAULT_GROUP_ID;
     var id = String(raw && raw.id ? raw.id : nowId('ct'));
+    var persona = buildPersona(raw);
+    var greetings = normalizeGreetings(raw);
+    /*
+     * 老档案迁移（惰性）：greetings 还没有，但 persona 里内嵌着【备选开场】。
+     * 就地拆出来 + 剥掉原件，这样老用户不必重新导入角色卡也能用上开场白功能。
+     * 只做一次 —— 迁移后 greetings 非空，下次读就不会再走这条路。
+     */
+    if (!greetings.length && persona) {
+      var legacy = extractGreetingsFromPersona(persona);
+      if (legacy.length) {
+        greetings = legacy;
+        persona = stripGreetingSections(persona);
+      }
+    }
     return {
       id: id,
       characterId: String((raw && raw.characterId) || id).trim() || id,
@@ -69,7 +172,8 @@
       age: String((raw && raw.age) != null ? raw.age : '').trim(),
       gender: String((raw && raw.gender) || '').trim(),
       birthday: String((raw && raw.birthday) || '').trim(),
-      persona: buildPersona(raw),
+      persona: persona,
+      greetings: greetings,
       tags: Array.isArray(raw && raw.tags) ? raw.tags.map(String).filter(Boolean) : [],
       updatedAt: Number(raw && raw.updatedAt) || Date.now()
     };
@@ -264,7 +368,16 @@
     return out;
   }
 
-  function renderChronicleBlock(roleId) {
+  /**
+   * 渲染角色档案块。
+   *
+   * opts.includeGreetings：是否带上开场白。
+   *   **默认 false** —— 这是刻意的。开场白只在「对话第一楼」有意义，而本函数
+   *   被 deep 桥、couple-whisper、朋友圈等 9 处调用，它们都不是第一楼场景。
+   *   默认不带，才能保证这些调用方的输出与加此功能之前【逐字节一致】。
+   */
+  function renderChronicleBlock(roleId, opts) {
+    opts = opts && typeof opts === 'object' ? opts : {};
     var row = findCharacter(roleId);
     if (!row || !row.name) return '';
     var lines = ['【角色·档案·' + String(row.name) + '】'];
@@ -272,6 +385,15 @@
     if (row.age) lines.push('- 年龄: ' + row.age);
     if (row.birthday) lines.push('- 生日: ' + row.birthday);
     if (row.persona) lines.push('- 人设与背景: ' + row.persona);
+    /*
+     * 开场白：只取第 1 条（首条消息）。
+     * 备选开场不注入 —— 模型看到多条开场白时容易把它们当成「多轮对话」或
+     * 在正文里重复场景，反而干扰。选哪条开场是用户在第一楼卡片上决定的事。
+     */
+    if (opts.includeGreetings) {
+      var g = (row.greetings || []).filter(function (x) { return String(x || '').trim(); });
+      if (g.length) lines.push('- 开场白（本次对话的开场，供你把握语气与场景）: ' + g[0]);
+    }
     return lines.length > 1 ? lines.join('\n') : '';
   }
 
@@ -293,6 +415,9 @@
     invalidateWbCountMap: invalidateWbCountMap,
     resolveRolesForWorldbook: resolveRolesForWorldbook,
     renderChronicleBlock: renderChronicleBlock,
+    extractGreetingsFromPersona: extractGreetingsFromPersona,
+    stripGreetingSections: stripGreetingSections,
+    normalizeGreetings: normalizeGreetings,
     invalidateCache: function () { _cache = null; _ready = null; invalidateWbCountMap(); }
   };
 

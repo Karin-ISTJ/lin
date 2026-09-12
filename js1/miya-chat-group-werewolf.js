@@ -593,7 +593,15 @@
     '【群聊上下文·必读】',
     '【紧挨上文·群聊末条状态】',
     '【地点运转】',
-    '【本群身份·群主与管理员】'
+    '【本群身份·群主与管理员】',
+    /*
+     * 开场白在狼人杀里是纯浪费：对局已经开局了，不需要再「选开场」，
+     * 而角色卡的开场白动辄几 k（实测 5 个成员累加 26.8k）。
+     * 这里对局全程都剔掉，不区分第几楼。
+     */
+    '【备选开场】',
+    '【开场白】',
+    '【开场】'
   ];
 
   function shouldDropCtxBlock(text) {
@@ -637,75 +645,142 @@
     return blocks;
   }
 
-  /**
-   * 裁剪「本群成员人设」块：只保留当前发言者的详细人设。
-   *
-   * 群聊的这块是把【每个】成员的完整人设拼在一起的。狼人杀里每个 AI 只演自己，
-   * 拿全员的详细人设既白烧 token（实测这块能到 90k+），又容易让它串味、
-   * 用别人的口吻说话。其他成员只留「名字 + 本群身份」，足够推理用。
-   *
-   * 人设块内部结构（buildAllPersonasBlock 产出）：
-   *   【本群成员人设】
-   *   · 小明
-   *     性别 男
-   *     年龄 24
-   *     人设 <长文本>
-   *   · 小红
-   *     ...
-   * 成员以小圆点「· 」开头分段，据此切。
+  /*
+   * 酒馆角色卡导入时，buildPersonaFromCard 会把卡的各个字段拼成
+   * 【描述】【性格】【场景】… 这些 section。它们是「成员段内部」的内容，
+   * 不能被误判成「人设区域结束了」。
+   * 人设区域之后若出现这些之外的标题（如【群聊规则】【输出要求】），才收尾。
    */
-  function trimPersonaBlock(piece, speakerId) {
-    if (!speakerId) return piece;
-    if (piece.indexOf('【本群成员人设】') !== 0) return piece;
+  var CARD_SECTION_TITLES = [
+    '【描述】', '【性格】', '【场景】', '【系统提示】', '【历史后指令】',
+    '【首条消息】', '【对话示例】', '【备选开场】', '【创作者备注】',
+    /* 兼容其它导入路径/常见中英标签 */
+    '【人物描述】', '【人物性格】', '【背景】', '【外貌】', '【说话风格】',
+    '【示例对话】', '【开场白】', '【世界书】', '【角色备注】', '【备注】'
+  ];
 
-    var lines = piece.split('\n');
-    var head = lines.shift();               /* 【本群成员人设】 */
+  function isCardSectionTitle(line) {
+    var t = trim(line);
+    if (!t) return false;
+    for (var i = 0; i < CARD_SECTION_TITLES.length; i++) {
+      if (t === CARD_SECTION_TITLES[i] || t.indexOf(CARD_SECTION_TITLES[i]) === 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * 裁剪「本群成员人设」区域：只保留当前发言者的详细人设。
+   *
+   * 【为什么不能在切好的块上裁（上一版失败的教训）】
+   * 角色卡的 persona 是把【描述】【性格】【场景】【系统提示】【历史后指令】
+   * 【首条消息】【对话示例】【备选开场】【创作者备注】等多个 section 用 \n\n
+   * 拼起来的，而 splitCtxBlocks 正是按【标题】+\n\n 切块 —— 于是一个成员的
+   * 人设会被切成 9 块。结果是【备选开场】26.8k、【对话示例】4k 等等全都
+   * 脱离了【本群成员人设】这个标题，独立成块，按块裁剪根本够不着它们。
+   * （实测 19 块里有 16 块是这样游离出来的，总计 86k 一个字都没裁掉。）
+   *
+   * 正确做法：在【切块之前】处理整段字符串 —— 按「· 成员名」把区域切成
+   * 若干个成员段，只保留目标成员，其余压成一行。
+   *
+   * 【成员段何时结束（这一版修掉的坑）】
+   * 不能简单地「一直收到下一个 · 名字」。人设区域之后紧跟的
+   * 【群聊规则】【输出要求】等块，会被最后一名成员的段吞进去 ——
+   * 于是它们既躲过了 splitCtxBlocks 的逐块过滤，又在裁剪时被当成
+   * 「别的成员的 section」而删掉。判据必须更严：
+   *   ① 遇到「· 名字」→ 新成员段
+   *   ② 段内遇到 CARD_SECTION_TITLES 里的标题 → 仍属于该成员（继续收）
+   *   ③ 段内遇到白名单之外的标题 → 人设区域结束，余下交给 tail
+   */
+  function trimPersonaRegion(text, speakerId) {
+    var want = trim(speakerId);
+    var raw = String(text == null ? '' : text);
+    if (!want || !raw) return raw;
+
+    var headTag = '【本群成员人设】';
+    var at = raw.indexOf(headTag);
+    if (at < 0) return raw;
+
+    /*
+     * 区域终点：人设块之后的下一个「顶层块标题」。
+     * 但卡片 section 也是【标题】，不能一律当终点 —— 判据是「它们出现在
+     * 成员段内部」。所以这里先切到字符串末尾，靠成员边界来界定范围，
+     * 遇到一个「没有归属到任何成员」的标题时才收尾。
+     */
+    var before = raw.slice(0, at);
+    var rest = raw.slice(at);
+
+    var lines = rest.split('\n');
+    var head = lines.shift();            /* 【本群成员人设】 */
     var intro = [];
-    /* 收集成员段：以「· 」开头为新成员起点 */
     var segs = [];
     var cur = null;
+    var tail = [];                       /* 人设区域之后的内容 */
+    var inTail = false;
+
     lines.forEach(function (ln) {
-      if (/^\s*[·•]\s*/.test(ln)) {
+      if (inTail) { tail.push(ln); return; }
+      /* 「· 名字」= 新成员段起点 */
+      if (/^\s*[·•]\s*\S/.test(ln)) {
         if (cur) segs.push(cur);
         cur = { name: trim(ln.replace(/^\s*[·•]\s*/, '')), body: [ln] };
-      } else if (cur) {
-        cur.body.push(ln);
-      } else {
-        intro.push(ln);
+        return;
       }
+      if (cur) {
+        /*
+         * 已在成员段里：卡片 section（【性格】等）属于该成员，继续收集。
+         * 出现白名单之外的标题 → 这不是成员的 section，人设区域到此为止。
+         * （不这样判的话，人设区之后的【群聊规则】会被最后一名成员吞掉。）
+         */
+        if (/^\s*【/.test(ln) && !isCardSectionTitle(ln)) {
+          inTail = true;
+          tail.push(ln);
+          return;
+        }
+        cur.body.push(ln);
+        return;
+      }
+      /* 还没进入任何成员段 */
+      if (/^\s*【/.test(ln)) {
+        /* 标题还没归属到成员 —— 可能是人设块之后的块，收尾 */
+        inTail = true;
+        tail.push(ln);
+        return;
+      }
+      intro.push(ln);
     });
     if (cur) segs.push(cur);
-    if (!segs.length) return piece;
 
-    /* 找出当前发言者：姓名要匹配（发言者 id 是群成员 id，人设块里是显示名） */
-    var want = trim(speakerId);
+    if (!segs.length) return raw;
+
+    /* 找发言者：先精确匹配，再包含匹配（群昵称常带后缀） */
     var keep = null;
     for (var i = 0; i < segs.length; i++) {
       if (segs[i].name === want) { keep = i; break; }
     }
-    /* 精确匹配不上就退一步做包含匹配（群昵称常带后缀，如「小明(课代表)」） */
-    if (keep === null && want) {
+    if (keep === null) {
       for (var j = 0; j < segs.length; j++) {
         var nm = segs[j].name;
-        if (nm && want && (nm.indexOf(want) >= 0 || want.indexOf(nm) >= 0)) { keep = j; break; }
+        if (nm && (nm.indexOf(want) >= 0 || want.indexOf(nm) >= 0)) { keep = j; break; }
       }
     }
     /*
-     * 还是对不上就不动它。宁可多花点 token，也不能因为昵称差异
+     * 认不出是谁就原样返回。宁可多花 token，也不能因为昵称差异
      * 把当前角色的人设整段删掉 —— 那会让 AI 直接失去人格。
      */
-    if (keep === null) return piece;
+    if (keep === null) return raw;
 
     var out = [head].concat(intro.filter(function (t) { return trim(t); }));
     segs.forEach(function (s, idx) {
       if (idx === keep) {
         out.push(s.body.join('\n'));
       } else {
-        /* 非发言者：只留名字，去掉性别/年龄/人设正文 */
         out.push('· ' + s.name + '（本局其他玩家，无需扮演）');
       }
     });
-    return trim(out.join('\n'));
+
+    var rebuilt = out.join('\n');
+    if (tail.length) rebuilt += '\n' + tail.join('\n');
+    return before + rebuilt;
   }
 
   /**
@@ -791,7 +866,16 @@
      * 上一版改完字数还是 152.5k 的原因。
      */
     function pushSystemBody(body) {
-      var pieces = splitCtxBlocks(body);
+      /*
+       * 人设裁剪必须发生在【切块之前】。
+       * 角色卡的 persona 由多个【section】拼成，会被 splitCtxBlocks 切碎，
+       * 切完再裁就够不着那些游离出来的块（上一版就栽在这里）。
+       */
+      var raw0 = String(body == null ? '' : body);
+      var raw1 = trimPersonaRegion(raw0, speakerId);
+      if (raw1.length < raw0.length) personaTrimmed += (raw0.length - raw1.length);
+
+      var pieces = splitCtxBlocks(raw1);
       for (var i = 0; i < pieces.length; i++) {
         var piece = trim(pieces[i]);
         if (!piece) continue;
@@ -800,13 +884,6 @@
           droppedChars += piece.length;
           continue;
         }
-        /* 人设块单独裁剪：只留当前发言者的详细人设 */
-        var before = piece.length;
-        piece = trimPersonaBlock(piece, speakerId);
-        if (piece.length < before) {
-          personaTrimmed += (before - piece.length);
-        }
-        if (!piece) { dropped += 1; droppedChars += before; continue; }
         /* 逐块留痕：99.4k 这种量级必须能看出是哪一块撑起来的 */
         groupBlocks.push({
           title: (piece.match(/^【[^】]{1,40}】/) || ['(无标题)'])[0],

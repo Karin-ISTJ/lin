@@ -725,6 +725,65 @@
   color: var(--mc-ink-faint); padding: 6px 12px;
 }
 
+/* ── 第一楼 · 开场白卡片 ── */
+.qq-room__greet {
+  margin: 14px 16px 6px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--mc-line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+.qq-room__greet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.qq-room__greet-kicker {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--mc-ink-dim);
+}
+.qq-room__greet-switch {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--mc-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mc-ink);
+  cursor: pointer;
+}
+.qq-room__greet-switch:active { transform: scale(0.96); }
+.qq-room__greet-body {
+  font-size: 13px;
+  line-height: 1.72;
+  color: var(--mc-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* 开场白可能很长，给个上限避免第一楼把整屏占满 */
+  max-height: 34vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.qq-room__greet-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.qq-room__greet-go {
+  font-size: 12px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--mc-ink);
+  color: #fff;
+  cursor: pointer;
+}
+.qq-room__greet-go:active { transform: scale(0.97); }
+
 /* ── 输入区 ── */
 .qq-room__foot {
   flex-shrink: 0;

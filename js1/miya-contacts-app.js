@@ -295,6 +295,69 @@
     }).join('') + '</div>';
   }
 
+  /**
+   * 渲染「开场白」编辑区。
+   *
+   * 每一条是一个可编辑 textarea + 删除按钮。第 1 条带「首条消息」角标，
+   * 因为它是默认展示项（用户约定：greetings[0] = 首条消息）。
+   *
+   * 空串是合法值：用户会故意留一条空的再把它编辑成首条消息，所以这里
+   * 不因为内容为空就跳过渲染。
+   */
+  function renderGreetingEditors(list) {
+    var wrap = $('miya-ct-greetings');
+    if (!wrap) return;
+    var items = Array.isArray(list) ? list : [];
+    if (!items.length) items = [''];
+
+    wrap.innerHTML = items.map(function (text, idx) {
+      var isFirst = idx === 0;
+      return '<div class="mn-greeting" data-greeting-idx="' + idx + '">' +
+        '<div class="mn-greeting-head">' +
+          '<span class="mn-greeting-tag' + (isFirst ? ' is-first' : '') + '">' +
+            (isFirst ? '首条消息' : '备选 ' + idx) +
+          '</span>' +
+          '<button type="button" class="mn-greeting-del" data-greeting-del="' + idx + '"' +
+            (items.length <= 1 ? ' hidden' : '') + ' aria-label="删除这条开场白">×</button>' +
+        '</div>' +
+        '<textarea class="mn-textarea mn-greeting-text" data-greeting-text rows="3" spellcheck="false"' +
+          ' placeholder="' + (isFirst ? '角色在对话里说的第一句话…' : '另一套开场…') + '">' +
+          esc(text) + '</textarea>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* 读取编辑区里所有开场白（原样保留空串，交给 store 决定怎么存） */
+  function readGreetingsFromEditor() {
+    var wrap = $('miya-ct-greetings');
+    if (!wrap) return [];
+    var boxes = wrap.querySelectorAll('[data-greeting-text]');
+    var out = [];
+    for (var i = 0; i < boxes.length; i++) {
+      out.push(String(boxes[i].value == null ? '' : boxes[i].value).trim());
+    }
+    return out;
+  }
+
+  function addGreetingEditor() {
+    var cur = readGreetingsFromEditor();
+    cur.push('');
+    renderGreetingEditors(cur);
+    var wrap = $('miya-ct-greetings');
+    var boxes = wrap ? wrap.querySelectorAll('[data-greeting-text]') : null;
+    if (boxes && boxes.length) {
+      var last = boxes[boxes.length - 1];
+      if (last.focus) last.focus();
+    }
+  }
+
+  function removeGreetingEditor(idx) {
+    var cur = readGreetingsFromEditor();
+    cur.splice(idx, 1);
+    if (!cur.length) cur = [''];
+    renderGreetingEditors(cur);
+  }
+
   function fillEditor(entry) {
     var isNew = !entry;
     var data = entry || {
@@ -304,6 +367,7 @@
       gender: '',
       birthday: '',
       persona: '',
+      greetings: [],
       avatar: ''
     };
     editingId = isNew ? null : data.id;
@@ -315,6 +379,7 @@
     $('miya-ct-field-gender').value = data.gender || '';
     $('miya-ct-field-birthday').value = data.birthday || '';
     $('miya-ct-field-persona').value = data.persona || '';
+    renderGreetingEditors(data.greetings || []);
     fillGroupSelect(data.groupId || store.DEFAULT_GROUP_ID);
 
     var img = $('miya-ct-portrait-img');
@@ -351,6 +416,7 @@
       gender: ($('miya-ct-field-gender').value || '').trim(),
       birthday: ($('miya-ct-field-birthday').value || '').trim(),
       persona: ($('miya-ct-field-persona').value || '').trim(),
+      greetings: readGreetingsFromEditor(),
       avatar: draftAvatar || ''
     };
     if (groupVal === '__new__') {
@@ -472,6 +538,7 @@
           gender: ch.gender || '',
           birthday: ch.birthday || '',
           persona: ch.persona || '',
+          greetings: ch.greetings || [],
           avatar: ch.avatar || ''
         });
         toast('已解析角色卡，确认后可封存');
@@ -677,6 +744,20 @@
       var wrap = $('miya-ct-new-group-wrap');
       if (wrap) wrap.hidden = this.value !== '__new__';
     });
+
+    /* 开场白：添加 / 删除走事件代理，因为条目是动态渲染的 */
+    var greetingAdd = $('miya-ct-greeting-add');
+    if (greetingAdd) greetingAdd.addEventListener('click', function () { addGreetingEditor(); });
+
+    var greetingWrap = $('miya-ct-greetings');
+    if (greetingWrap) {
+      greetingWrap.addEventListener('click', function (e) {
+        var del = e.target.closest ? e.target.closest('[data-greeting-del]') : null;
+        if (!del) return;
+        var idx = parseInt(del.getAttribute('data-greeting-del'), 10);
+        if (!isNaN(idx)) removeGreetingEditor(idx);
+      });
+    }
 
     $('miya-ct-wb-jump').addEventListener('click', function () {
       if (global.miyaWorldbookApp && global.miyaWorldbookApp.open) {

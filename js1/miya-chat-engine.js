@@ -73,23 +73,29 @@
         }
     }
 
-    function renderChronicleBlock(contact) {
-        var cs = global.miyaContactsStore;
-        if (!cs || !contact) return '';
-        var rid = String(contact.characterId || contact.id || contact.chronicleId || '').trim();
-        if (rid && typeof cs.renderChronicleBlock === 'function') {
-            var fromStore = String(cs.renderChronicleBlock(rid) || '').trim();
-            if (fromStore) return fromStore;
-        }
-        var row = cs.findCharacter ? cs.findCharacter(rid) : null;
-        if (!row) return '';
-        var lines = ['【角色·档案·' + String(row.name || contact.name) + '】'];
-        if (row.gender) lines.push('- 性别: ' + row.gender);
-        if (row.age) lines.push('- 年龄: ' + row.age);
-        if (row.birthday) lines.push('- 生日: ' + row.birthday);
-        if (row.persona) lines.push('- 人设与背景: ' + row.persona);
-        return lines.length > 1 ? lines.join('\n') : '';
+  function renderChronicleBlock(contact, opts) {
+    opts = opts && typeof opts === 'object' ? opts : {};
+    var cs = global.miyaContactsStore;
+    if (!cs || !contact) return '';
+    var rid = String(contact.characterId || contact.id || contact.chronicleId || '').trim();
+    if (rid && typeof cs.renderChronicleBlock === 'function') {
+      var fromStore = String(cs.renderChronicleBlock(rid, opts) || '').trim();
+      if (fromStore) return fromStore;
     }
+    var row = cs.findCharacter ? cs.findCharacter(rid) : null;
+    if (!row) return '';
+    var lines = ['【角色·档案·' + String(row.name || contact.name) + '】'];
+    if (row.gender) lines.push('- 性别: ' + row.gender);
+    if (row.age) lines.push('- 年龄: ' + row.age);
+    if (row.birthday) lines.push('- 生日: ' + row.birthday);
+    if (row.persona) lines.push('- 人设与背景: ' + row.persona);
+    /* 开场白只在第一楼注入，兜底分支要与 store 版保持一致 */
+    if (opts.includeGreetings) {
+      var g = (row.greetings || []).filter(function (x) { return String(x || '').trim(); });
+      if (g.length) lines.push('- 开场白（本次对话的开场，供你把握语气与场景）: ' + g[0]);
+    }
+    return lines.length > 1 ? lines.join('\n') : '';
+  }
 
     function renderProfileBlock(profile) {
         if (!profile) return '';
@@ -1287,15 +1293,42 @@
         return parts.filter(Boolean).join('\n\n');
     }
 
-    /** 线上单聊：联系人档案（含人设与背景）置末注入，紧挨运转规则之前 */
-    function appendChronicleBeforeOperationRulesMessage(apiMessages, contact, opts) {
-        opts = opts && typeof opts === 'object' ? opts : {};
-        if (!Array.isArray(apiMessages)) return;
-        if (opts.callMode || opts.appointmentMode) return;
-        var chronicle = renderChronicleBlock(contact);
-        if (!chronicle) return;
-        apiMessages.push({ role: 'system', content: chronicle });
+  /**
+   * 线上单聊：联系人档案（含人设与背景）置末注入，紧挨运转规则之前。
+   *
+   * 开场白只在「第一楼」注入 —— 也就是这段对话还没有任何消息的时候。
+   * 道理很简单：开场白是用来决定「这场对话从哪开始」的，一旦已经聊起来，
+   * 它既没有指导意义，又会白白占上下文（实测一张卡的开场白能到几 k）。
+   */
+  function appendChronicleBeforeOperationRulesMessage(apiMessages, contact, opts) {
+    opts = opts && typeof opts === 'object' ? opts : {};
+    if (!Array.isArray(apiMessages)) return;
+    if (opts.callMode || opts.appointmentMode) return;
+    var chronicleOpts = { includeGreetings: isFirstFloorChat(opts.chatId) };
+    var chronicle = renderChronicleBlock(contact, chronicleOpts);
+    if (!chronicle) return;
+    apiMessages.push({ role: 'system', content: chronicle });
+  }
+
+  /**
+   * 是否「第一楼」：这段对话还没有任何可见消息。
+   *
+   * 拿不到 chatId 时返回 false（保守：宁可不注入开场白，也不要重复塞）。
+   * 用 getMessages 而不是直接读数组，是因为它已经过滤了 deleted /
+   * offlineMeet / 朋友圈留痕，计数与用户看到的楼层一致。
+   */
+  function isFirstFloorChat(chatId) {
+    var store = global.miyaChatStore;
+    var id = String(chatId || '').trim();
+    if (!store || !id) return false;
+    if (typeof store.getMessages !== 'function') return false;
+    try {
+      var msgs = store.getMessages(id) || [];
+      return msgs.length === 0;
+    } catch (e) {
+      return false;
     }
+  }
 
     /**
      * ST 预设：正常聊天的唯一可编辑规则入口。
@@ -3161,7 +3194,13 @@
         if (!opts.callMode && !opts.appointmentMode) {
             appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
         }
-        appendChronicleBeforeOperationRulesMessage(apiMessages, contact, opts);
+        /*
+         * chatId 显式带上：appendChronicle 要靠它判断是不是「第一楼」，
+         * 而 opts 是上游传进来的，不保证一定含 chatId。
+         */
+        appendChronicleBeforeOperationRulesMessage(
+          apiMessages, contact, Object.assign({}, opts, { chatId: chatId })
+        );
         /*
          * ST 最终执行层（线上）：把启用中的 ST 预设条目原文送到生成前最近位置。
          *

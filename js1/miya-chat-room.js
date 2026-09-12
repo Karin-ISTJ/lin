@@ -78,6 +78,21 @@
     showTimestamps: readShowTimestampsPref(),
     narrationMode: false
   };
+  /*
+   * 第一楼开场白：当前选中的下标，按 chatId 记。
+   * 只放在前端内存里 —— 它是「还没决定用哪条」的草稿状态，
+   * 不落库、不参与上下文；真正选定是在用户点「就这个，开始吧」时。
+   */
+  var greetPickByChat = {};
+
+  function greetingPickIndex(chatId) {
+    var v = greetPickByChat[String(chatId || '')];
+    return typeof v === 'number' && v >= 0 ? v : 0;
+  }
+
+  function setGreetingPickIndex(chatId, idx) {
+    greetPickByChat[String(chatId || '')] = Math.max(0, Number(idx) || 0);
+  }
   var longPressTimer = null;
   var longPressPointerId = null;
   var longPressStartX = 0;
@@ -3153,6 +3168,48 @@
     return '<div class="qq-room__mount-hint">仅显示最近 ' + pack.limit + ' 条（共 ' + packTotalCount(pack) + ' 条）</div>';
   }
 
+  /*
+   * 第一楼开场白卡片。
+   *
+   * 只在「单聊 + 对话还没有任何消息」时出现 —— 这就是「第一楼」。
+   * 一旦用户选了开场白、或自己先发了消息，可见消息数就 >= 1，
+   * 卡片自然消失（第二楼起不再显示），也符合「开场白只属于第一楼」。
+   *
+   * 选中的开场白【不写进聊天记录】，只是让模型知道这轮该以什么场景开场；
+   * 用户点「就这个，开始吧」时，它才作为角色的第一条消息落库。
+   */
+  function greetingPickerHtml(chatId, ctx) {
+    if (!ctx || ctx.isGroup) return '';
+    var contact = ctx.contact;
+    if (!contact) return '';
+    var cs = global.miyaContactsStore;
+    if (!cs || typeof cs.findCharacter !== 'function') return '';
+    var rid = String(contact.characterId || contact.id || contact.chronicleId || '').trim();
+    var row = cs.findCharacter(rid);
+    if (!row) return '';
+    var list = (row.greetings || []).filter(function (g) { return String(g || '').trim(); });
+    if (!list.length) return '';
+
+    var idx = greetingPickIndex(chatId);
+    if (idx >= list.length) idx = 0;
+    var multi = list.length > 1;
+
+    return '<div class="qq-room__greet" data-greet-card data-chat-id="' + esc(chatId) + '">' +
+      '<div class="qq-room__greet-head">' +
+        '<span class="qq-room__greet-kicker">' + esc(row.name || contact.name || '对方') + ' · 开场</span>' +
+        (multi
+          ? '<button type="button" class="qq-room__greet-switch" data-greet-switch>' +
+              '切换 (' + (idx + 1) + '/' + list.length + ')' +
+            '</button>'
+          : '') +
+      '</div>' +
+      '<div class="qq-room__greet-body">' + esc(list[idx]) + '</div>' +
+      '<div class="qq-room__greet-foot">' +
+        '<button type="button" class="qq-room__greet-go" data-greet-go>就这个，开始吧</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function paintMessagesShell(sc, html, chatId, opts, anchor) {
     sc.innerHTML = html || '<div class="qq-room__empty">还没有消息，发一条试试吧</div>';
     if (opts.deferMedia) {
@@ -3244,6 +3301,11 @@
       ? timeEvents.renderCards(store, chatId, Date.now())
       : '';
     html += mountHintHtml(pack);
+    /*
+     * 第一楼开场白卡片：只在还没有任何可见消息时出现。
+     * 放在消息列表【之前】，作为「这一场对话从哪里开始」的入口。
+     */
+    if (!msgs.length) html += greetingPickerHtml(chatId, ctx);
     html += msgs.map(function (m, i) {
       return bubbleHtml(m, ctx, computeRoundPos(roles, i), i, hvIndex);
     }).join('');
@@ -4983,6 +5045,76 @@
     }, true);
   }
 
+  /*
+   * 第一楼开场白卡片：切换 / 开始。
+   *
+   * 用捕获阶段监听，避免被消息列表那一堆点击处理抢走。
+   * 「切换」只改前端下标并重绘；「开始」才把选中的开场白写成角色的第一条消息。
+   */
+  function bindGreetingPicker() {
+    if (document.documentElement.getAttribute('data-miya-greet-pick') === '1') return;
+    document.documentElement.setAttribute('data-miya-greet-pick', '1');
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var card = t.closest('[data-greet-card]');
+      if (!card) return;
+      var chatId = card.getAttribute('data-chat-id') || state.chatId;
+      if (!chatId) return;
+
+      /* 切换下一条开场白 */
+      if (t.closest('[data-greet-switch]')) {
+        e.preventDefault();
+        var list = greetingListFor(chatId);
+        if (list.length <= 1) return;
+        setGreetingPickIndex(chatId, (greetingPickIndex(chatId) + 1) % list.length);
+        renderMessages(chatId, { preserveScroll: true });
+        return;
+      }
+
+      /* 选定：把开场白作为角色的第一条消息落库 */
+      if (t.closest('[data-greet-go]')) {
+        e.preventDefault();
+        var items = greetingListFor(chatId);
+        var idx = greetingPickIndex(chatId);
+        var text = items[idx];
+        if (!text) return;
+        startWithGreeting(chatId, text);
+      }
+    }, true);
+  }
+
+  /* 取该会话对应角色的开场白列表（过滤空串） */
+  function greetingListFor(chatId) {
+    var cs = global.miyaContactsStore;
+    var chat = store && store.findChat ? store.findChat(chatId) : null;
+    if (!cs || !chat) return [];
+    var contact = store.findContact(chat.contactId);
+    if (!contact) return [];
+    var rid = String(contact.characterId || contact.id || contact.chronicleId || '').trim();
+    var row = cs.findCharacter(rid);
+    if (!row) return [];
+    return (row.greetings || []).filter(function (g) { return String(g || '').trim(); });
+  }
+
+  /**
+   * 用选中的开场白开始这场对话。
+   *
+   * 开场白是「角色说的话」，所以落成 assistant 消息 —— 这样它天然就是
+   * 第一楼，后续上下文照常带上它，不需要任何特殊处理。
+   */
+  function startWithGreeting(chatId, text) {
+    var body = String(text || '').trim();
+    if (!body || !store) return;
+    var entry = typeof store.addMessageImmediate === 'function'
+      ? store.addMessageImmediate(chatId, { role: 'assistant', type: 'text', content: body })
+      : null;
+    if (!entry) { toast('开场白写入失败'); return; }
+    delete greetPickByChat[String(chatId || '')];
+    renderMessages(chatId, { toBottom: true });
+    scheduleRefreshLists();
+  }
+
   var imageLightboxState = { blobKey: '', url: '', filename: 'miya-chat-image.png' };
 
   function ensureImageLightbox() {
@@ -5141,6 +5273,7 @@
     bindCharacterReplyDelegate();
     bindGlobalCallClicks();
     bindMatchCardExpand();
+    bindGreetingPicker();
     bindGlobalHtmlClicks();
     bindGlobalImageClicks();
     if (global.MiyaChatCalls && typeof global.MiyaChatCalls.ensureCallHost === 'function') {
