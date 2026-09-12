@@ -1371,14 +1371,65 @@
     draft: '', drafting: false,
     /* 上一次 AI 发言失败（空返回）的留痕，避免只弹 toast 一闪而过 */
     speechError: null,
-    /* 局中重开的二次确认状态 */
-    confirmReset: false,
+    /*
+     * 「确认清空」二次确认：只影响 confirmResetFor 记的那个群，见 isConfirming()。
+     */
+    confirmResetFor: '',
     /* busy 开始时刻：用于显示「已等待 N 秒」，让用户知道 AI 在工作而非卡死 */
     busySince: 0,
     busyTimer: 0,
     /* 计时重绘所需的上下文（store / chatId / openOverlay） */
-    busyCtx: null
+    busyCtx: null,
+    /*
+     * 对局世代号：每次「清空记录」自增一次。
+     * 所有异步回调（AI 发言 / 拟稿 / 投票 / 狼人出刀）在发起时记住
+     * 当时的世代号，回来时对不上就直接丢弃 —— 否则一个在途请求会把
+     * 上一局的内容写进刚开的新局。
+     */
+    epoch: 0
   };
+
+  /** 清空记录时调用：作废所有在途的 AI 回调 */
+  function invalidateInflight() {
+    state.epoch += 1;
+  }
+
+  /** 当前世代令牌（异步流程发起时取一份，回调里比对） */
+  function epochToken() { return state.epoch; }
+
+  /**
+   * 某个群当前是否处于「确认清空」态。
+   *
+   * 【为什么必须按群存】
+   * confirmReset 原来是模块级的一个布尔值，而面板是关掉再打开的：
+   * 用户在 A 群点了一下「清空记录」（进入确认态）却直接关掉面板，
+   * 之后无论在 A 群还是切到 B 群重新打开，那个 true 还在 ——
+   * 顶栏直接显示成「确认清空」，看上去像上一局的东西没清干净。
+   * 按 chatId 记，切群/重开面板都不会串。
+   */
+  function isConfirming() { return state.confirmResetFor === state.chatId; }
+
+  function setConfirming(chatId, on) {
+    state.confirmResetFor = on ? (chatId || '') : '';
+  }
+
+  /**
+   * 复位「本局临时状态」。
+   *
+   * 这些字段不属于对局数据，不会随 emptyGame() 一起清掉，
+   * 但它们是上一局的残留：不清就会串味 ——
+   * 比如新局刚开还停在「AI 还在处理中」的忙碌态、或输入框里
+   * 还留着上一局的草稿、或顶上挂着上一局的报错条。
+   */
+  function resetTransientState() {
+    endBusy();
+    state.ctxOpen = false;
+    state.maxOpen = false;
+    state.draft = '';
+    state.drafting = false;
+    state.speechError = null;
+    state.confirmResetFor = '';
+  }
 
   /**
    * 进入忙碌态并启动计时。
@@ -1736,17 +1787,32 @@
   function renderPanel(store, chatId) {
     var g = load(store, chatId);
     /*
-     * 顶栏常驻「重开一局」：对局进行中也必须能重开。
-     * 之前「清空记录」只在结束态出现，玩到一半发现这局进行不下去
-     * （比如被屠城、或想换个身份）就只能先打到底，很别扭。
-     * 放在顶栏是因为它要全程可达 —— 底部操作区每个阶段都不一样。
+     * 顶栏常驻「清空记录」：从头到尾都必须可点。
+     *
+     * 【为什么必须有】
+     * 旧实现里「清空记录」只渲染在结束态（over）—— 只有一局打完才出现。
+     * 中途想重开（被屠城、选错目标、想换个身份、或者上一局记录还留着）
+     * 只能先把这局打到底，非常别扭；重开面板（关掉再打开）也没用，
+     * 因为对局状态存在 chatSettings 里，不会自己消失。
+     *
+     * 【为什么要先停掉进行中的 AI 请求】
+     * 重开只写数据是不够的：如果此刻正有一个 AI 发言/拟稿请求在飞行中，
+     * 它回来后会 load 到「已经被清空」的新对局，把上一局的发言、票
+     * 记进新局 —— 表现就是「重开后莫名冒出一条发言」。所以这里先
+     * 作废飞行中的请求（epoch 世代令牌），再清数据、再复位 UI 状态。
+     *
+     * 【二次确认的可达性】
+     * 进入确认态后，确认/取消两个按钮必须一直都在，且不能因为对局状态
+     * 变化而被顶掉。之前只有 playing 才渲染，玩家一进确认态就点不到
+     * 「取消」，只能靠重开面板逃出来。
      */
-    var restartBtn = (g.status === 'playing')
-      ? (state.confirmReset
-          ? '<button type="button" class="ww__head-btn ww__head-btn--danger" data-ww-act="reset">确认重开</button>'
-            + '<button type="button" class="ww__head-btn" data-ww-act="reset-cancel">取消</button>'
-          : '<button type="button" class="ww__head-btn" data-ww-act="reset">重开一局</button>')
-      : '';
+    var confirmBtns = '<button type="button" class="ww__head-btn ww__head-btn--danger" data-ww-act="reset">确认清空</button>'
+      + '<button type="button" class="ww__head-btn" data-ww-act="reset-cancel">取消</button>';
+    var restartBtn = isConfirming()
+      ? confirmBtns
+      : '<button type="button" class="ww__head-btn" data-ww-act="reset"'
+        + (g.status === 'idle' ? ' disabled title="当前没有对局记录"' : '')
+        + '>清空记录</button>';
     var head =
       '<div class="ww__head">' +
         '<div class="ww__title">🐺 狼人杀</div>' +
@@ -1797,7 +1863,6 @@
           '</div>' +
           '<div class="ww__actions">' +
             '<button type="button" class="ww__btn ww__btn--main" data-ww-act="start">再来一局</button>' +
-            '<button type="button" class="ww__btn" data-ww-act="reset">清空记录</button>' +
           '</div>' +
         '</div>' +
       '</div>' + modal;
@@ -2007,9 +2072,26 @@
 
   function openPanel(store, chatId, openOverlay) {
     if (!store || !chatId || !openOverlay) return;
+    /*
+     * 只有「从别的群切过来」才算重新打开，要清掉确认态。
+     * 注意不能无条件清：rerender 走的就是 refresh → openPanel，
+     * 无条件清会让「点一下清空记录」刚进确认态就被自己重绘抹掉，
+     * 表现为按钮点了没反应。
+     */
+    if (state.chatId && state.chatId !== chatId) setConfirming(chatId, false);
     state.chatId = chatId;
     openOverlay('<div class="qq-sheet qq-sheet--ww"><div class="qq-sheet__panel ww-sheet__panel">' +
       renderPanel(store, chatId) + '</div></div>');
+  }
+
+  /**
+   * 面板被关闭时由外部（closeOverlay）调用。
+   * 「确认清空」是一次性的中间态，关掉面板就作废，避免下次打开
+   * 看到按钮还停在「确认清空」上，让人误以为记录没清掉。
+   */
+  function onPanelClose() {
+    setConfirming('', false);
+    state.chatId = '';
   }
 
   function refresh(store, chatId, openOverlay) {
@@ -2021,6 +2103,13 @@
     if (!el || !store || !chatId) return false;
     var btn = el.closest ? el.closest('[data-ww-act]') : null;
     if (!btn) return false;
+    /*
+     * 置灰的按钮不该响应。
+     * 点击是委托到容器上的（roomEl 监听 + closest 匹配），而 disabled 的按钮
+     * 本身不派发 click，事件仍可能从祖先冒泡上来被这里捕获 ——
+     * 光靠 disabled 属性拦不住，必须在这里补一道。
+     */
+    if (btn.disabled) return true;
     var act = btn.getAttribute('data-ww-act');
     var target = btn.getAttribute('data-ww-target') || '';
     var g = load(store, chatId);
@@ -2107,26 +2196,45 @@
 
     if (act === 'reset') {
       /*
-       * 局中重开要有二次确认：顶栏按钮就在「关闭」旁边，
-       * 误触一下就把整局清掉太伤。结束态（over）不需要确认 ——
-       * 那时本来就没有对局可保护。
+       * 二次确认：按钮就在「关闭」旁边，误触一下就把整局清掉太伤。
+       * 判断依据从「必须是 playing」改成「有没有东西可清」——
+       * over 态有结算记录、idle 态可能有上一局残留的日志，同样该保护。
+       * 真的空局（idle 且无日志/无座位）直接清，不让用户白点两次。
        */
-      if (g.status === 'playing' && !state.confirmReset) {
-        state.confirmReset = true;
+      var hasGame = g.status !== 'idle' || (g.seats && g.seats.length) || (g.log && g.log.length);
+      if (hasGame && !isConfirming()) {
+        setConfirming(chatId, true);
         rerender();
-        if (toast) toast('再点一次「确认重开」才会清空当前对局');
+        if (toast) {
+          toast(g.status === 'playing'
+            ? '再点一次「确认清空」才会作废当前对局'
+            : '再点一次「确认清空」才会抹掉这局的记录');
+        }
         return true;
       }
-      state.confirmReset = false;
+      var wasPlaying = g.status === 'playing';
+      /*
+       * 作废飞行中的请求：清空之后任何在途的 AI 回调都不该再落盘。
+       * 令牌一变，回调里 generation 对不上就直接丢弃。
+       */
+      invalidateInflight();
+      setConfirming(chatId, false);
+      /* 上一局的运行态残留一并复位，否则新局会带着旧的忙碌/草稿/报错 */
+      resetTransientState();
       var fresh = emptyGame();
+      fresh.chatId = chatId ? String(chatId) : '';
       save(store, chatId, fresh);
       rerender();
-      if (toast) toast('已清空，可以重新开局');
+      if (toast) {
+        toast(wasPlaying
+          ? '已清空记录，可以重新开局'
+          : (hasGame ? '记录已清空' : '当前没有记录可清'));
+      }
       return true;
     }
 
     if (act === 'reset-cancel') {
-      state.confirmReset = false;
+      setConfirming(chatId, false);
       rerender();
       return true;
     }
@@ -2198,7 +2306,10 @@
         }
         beginBusy(store, chatId, openOverlay, '狼人正在行动…');
         rerender();
+        /* 记住世代：清空记录后这次结算不能再往新局里写 */
+        var killEpoch = epochToken();
         runWolfKill(store, chatId).then(function () {
+          if (killEpoch !== state.epoch) return;
           endBusy();
           var fresh = load(store, chatId);
           advanceFromNight(store, chatId, fresh);
@@ -2206,6 +2317,7 @@
             ? '天亮了，昨晚有人出局' : '天亮了，昨晚是平安夜');
           rerender();
         }).catch(function (err) {
+          if (killEpoch !== state.epoch) return;
           endBusy();
           var fresh = load(store, chatId);
           advanceFromNight(store, chatId, fresh);
@@ -2239,7 +2351,10 @@
       if (nxt.isUser) { rerender(); return true; }
       beginBusy(store, chatId, openOverlay, nxt.seat.name + ' 正在思考…');
       rerender();
+      var spEpoch = epochToken();
       askAi(g, nxt.seat.whoId, 'speech').then(function (out) {
+        /* 清空记录后，这次回答属于上一局：整段丢弃，不写盘也不重绘 */
+        if (spEpoch !== state.epoch) return;
         /*
          * 空返回：不记发言、不推进游标 —— 这一轮停在这个座位，
          * 玩家再点一次「让下一位发言」就是重试同一个人。
@@ -2273,6 +2388,7 @@
           }
         });
       }).catch(function (err) {
+        if (spEpoch !== state.epoch) return;
         endBusy();
         fail('AI 发言失败：' + ((err && err.message) || '未知错误'));
         rerender();
@@ -2321,6 +2437,7 @@
       var dcur = nextSpeaker(g);
       if (!dcur || !dcur.isUser) { rerender(); return true; }
       state.drafting = true;
+      var dEpoch = epochToken();
       rerender();
       var myRole = roleOf(g.roles[USER_OWNER_ID]);
       var dSituation = buildSituation(g, {});
@@ -2348,11 +2465,13 @@
         + '\n【可选提及的玩家】' + aliveOthers.map(function (s) { return s.name; }).join('、')
         + '\n\n请写出玩家这一轮要发的发言：';
       askRaw(dSys, dLead).then(function (txt) {
+        if (dEpoch !== state.epoch) return;   /* 这局已被清空，草稿丢掉 */
         state.drafting = false;
         state.draft = txt || '';
         rerender();
         if (toast && !txt) toast('草稿生成失败（API 没返回内容），请手动输入');
       }).catch(function (err) {
+        if (dEpoch !== state.epoch) return;
         state.drafting = false;
         rerender();
         fail('拟稿失败：' + ((err && err.message) || '未知错误'));
@@ -2396,10 +2515,13 @@
       }
       beginBusy(store, chatId, openOverlay, 'AI 投票中…');
       rerender();
+      var voteEpoch = epochToken();
       runAiVotes(store, chatId).then(function () {
+        if (voteEpoch !== state.epoch) return;
         endBusy();
         rerender();
       }).catch(function (err) {
+        if (voteEpoch !== state.epoch) return;
         endBusy();
         fail('投票出错：' + ((err && err.message) || '未知错误'));
         rerender();
@@ -2487,6 +2609,7 @@
     roleOf: roleOf,
     renderPanel: renderPanel,
     openPanel: openPanel,
+    onPanelClose: onPanelClose,
     handlePanelClick: handlePanelClick,
     buildWorldContext: buildWorldContext,
     getCtxStats: getCtxStats,

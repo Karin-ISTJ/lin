@@ -3795,6 +3795,14 @@
     if (global.MiyaChatVoiceRecord && typeof global.MiyaChatVoiceRecord.destroyActive === 'function') {
       global.MiyaChatVoiceRecord.destroyActive();
     }
+    /*
+     * 通知狼人杀面板：它被关掉了。
+     * 面板里的「确认清空」是个一次性的中间态，关掉面板就该作废 ——
+     * 否则用户点过一次「清空记录」又直接关掉，下次打开会看到按钮
+     * 还停在「确认清空」，像是没清干净。切群时 openPanel 也会重置。
+     */
+    var wwPanel = global.MiyaChatGroupWerewolf;
+    if (wwPanel && typeof wwPanel.onPanelClose === 'function') wwPanel.onPanelClose();
     var ov = $('qq-room-overlay');
     if (ov) { ov.hidden = true; ov.innerHTML = ''; }
     restoreComposeAfterOverlay();

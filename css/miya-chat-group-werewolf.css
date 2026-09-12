@@ -127,6 +127,16 @@
   background: rgba(214, 69, 69, 0.22);
 }
 
+/* 无记录可清时置灰：按钮仍可见（保持位置稳定），但不再响应点击 */
+.ww__head-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ww__head-btn:disabled:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 .ww__close {
   appearance: none;
   border: 0;
