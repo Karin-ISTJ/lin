@@ -10,6 +10,13 @@
 
   var USER_OWNER_ID = '__user__';
 
+  /*
+   * 构建标记：显示在面板标题旁，用来确认「当前跑的是哪一版代码」。
+   * 改这个文件的逻辑时请一并递增，否则用户无法区分新包旧包。
+   * v4 = 顶栏常驻清空记录 + 屠城胜负规则 + 发言反逼迫/强制推理
+   */
+  var BUILD_TAG = 'v4';
+
   /* ---------------- 身份配置 ---------------- */
   var ROLES = {
     werewolf: { id: 'werewolf', name: '狼人', icon: '🐺', camp: 'wolf', desc: '每晚与同伴共同猎杀一人' },
@@ -404,6 +411,7 @@
     if (g.lastResult && g.lastResult.type === 'out') {
       g.finalVotes = {
         votes: Object.assign({}, g.votes || {}),
+        detail: Object.assign({}, g.lastResult.detail || {}),
         text: g.lastResult.text,
         outId: g.lastResult.outId
       };
@@ -433,11 +441,23 @@
 
   function applyVoteResult(store, chatId, g) {
     var t = tallyVotes(g);
+    /*
+     * 【票型快照：必须在清票前抓下来】
+     * 下面（以及 finish/推进分支里）会把 g.votes 清空，但票型是下一轮
+     * AI 推理最硬的证据 —— 谁跟票、谁反咬、狼有没有互踩，全靠它。
+     * 旧实现丢完就无法复盘，AI 只能空喊结论。这里先把「谁→谁」记进
+     * lastResult.detail，让 buildSituation 能把它喂回给模型。
+     */
+    var detail = {};
+    Object.keys(g.votes || {}).forEach(function (voterId) {
+      var target = g.votes[voterId];
+      if (target) detail[voterId] = target;
+    });
     if (!t.max) {
-      g.lastResult = { type: 'no_vote', text: '本轮无人投票，无人出局' };
+      g.lastResult = { type: 'no_vote', detail: detail, text: '本轮无人投票，无人出局' };
     } else if (t.tie) {
       var names = t.top.map(function (id) { return nameOf(g, id); }).join('、');
-      g.lastResult = { type: 'tie', text: '平票（' + names + '），本轮无人出局', top: t.top.slice() };
+      g.lastResult = { type: 'tie', detail: detail, text: '平票（' + names + '），本轮无人出局', top: t.top.slice() };
       pushLog(g, '平票：' + names + '，无人出局', 'vote');
     } else {
       var outId = t.top[0];
@@ -445,7 +465,7 @@
       if (s) s.alive = false;
       var role = roleOf(g.roles[outId]);
       g.lastResult = {
-        type: 'out', outId: outId, name: nameOf(g, outId),
+        type: 'out', detail: detail, outId: outId, name: nameOf(g, outId),
         roleId: g.roles[outId], roleName: role.name, count: t.max,
         text: nameOf(g, outId) + ' 被投出局（' + t.max + ' 票），身份是 ' + role.icon + role.name
       };
@@ -557,6 +577,13 @@
     lines.push('3. 禁止因为私交、好感、亲密度、关系设定而回避怀疑或放弃投票。该怀疑就怀疑，该投就投。');
     lines.push('4. 不要因为某人是「最熟悉的人」就无条件相信他；也不要刻意针对他。所有人一视同仁。');
     lines.push('5. 投票必须给出由发言/行为推出的理由，不允许「不想投他」「相信他就好」这类无信息理由。');
+    /*
+     * 第 6 条：禁止逼迫式表达。
+     * 用户实测反馈「角色发言经常说逼迫的话、不推理」。只写「要推理」不够，
+     * 必须同时写明「不许怎样」——模型对禁令的遵守度明显高于对倡导的遵守度。
+     */
+    lines.push('6. 表达上禁止逼迫与定罪：不许断言「你就是狼」、不许命令别人表态或闭嘴、'
+      + '不许用威胁或「跑不掉」这类施压话术。有怀疑就摆出你看到的事实，让判断自己站住。');
 
     if (opts.selfId) {
       var selfRole = roleOf(g.roles[opts.selfId]);
@@ -579,12 +606,66 @@
         lines.push('  ' + (sp.whoId === USER_OWNER_ID ? '用户' : sp.name) + '：' + sp.text);
       });
     }
+    /*
+     * 【补上历史与票型，否则「推理」无据可依】
+     * 旧版本只喂「本轮已有发言」+昨夜出局。结果是：
+     *   - AI 看不到前几轮谁说过什么，无法指出「前后矛盾」；
+     *   - AI 看不到谁投了谁，无法引用「投票行为」这条它被要求使用的依据；
+     *   - AI 不知道第一天谁被投出去，无从复盘。
+     * 提示词反复要求「依据发言逻辑/投票行为/身份声明」，但证据没进上下文，
+     * 模型只能空喊结论 —— 这就是「不推理」的直接来源。
+     * 这里把历次出局记录与上一轮票型补进来，让「引用证据」有料可用。
+     */
+    if (g.log && g.log.length) {
+      var recentLog = g.log.slice(-6).map(function (it) {
+        return typeof it === 'string' ? it : (it && it.text) || '';
+      }).filter(Boolean);
+      if (recentLog.length) lines.push('历史进程：\n  ' + recentLog.join('\n  '));
+    }
+    var voteLog = lastVoteSummary(g);
+    if (voteLog) lines.push('上一轮投票情况：' + voteLog + '。');
+    /*
+     * 把上一轮被投出局者的**身份**单独点出来。
+     * 身份是复盘里最硬的证据：投出去一个好人 → 那批跟票的人都可疑；
+     * 投出去一个狼 → 说明有人可能在弃狼保人。旧版本只把结果写进 log
+     * （「大熊 被投出局（3 票），身份是 🐺狼人」），模型要自己从流水里
+     * 抠出这条再反推，实测经常漏读。这里单列一行，强制进入它的视野。
+     */
+    if (g.lastResult && g.lastResult.type === 'out' && g.lastResult.roleName) {
+      lines.push('上一轮被投出局的是「' + g.lastResult.name + '」，身份是 '
+        + g.lastResult.roleName + '（' + g.lastResult.count + ' 票出局）。');
+    }
     if (g.dawnDeaths && g.dawnDeaths.length) {
       lines.push('昨夜出局：' + g.dawnDeaths.map(function (id) { return nameOf(g, id); }).join('、') + '。');
     } else if (g.phase !== PHASE.NIGHT && g.day > 1) {
       lines.push('昨夜是平安夜。');
     }
     return lines.join('\n');
+  }
+
+  /**
+   * 把上一轮票型压成一行「谁投了谁」，供 AI 引用。
+   *
+   * 【为什么单独抽函数】
+   * 票型是狼人杀里最硬的推理材料（跟风票、反咬票、狼踩狼都能看出来），
+   * 但它散在 g.lastResult 的多个字段里。统一在这里做一次「人话化」，
+   * 避免每个调用点各写一遍导致口径不一致。
+   */
+  function lastVoteSummary(g) {
+    var r = g.lastResult;
+    if (!r || typeof r !== 'object') return '';
+    var parts = [];
+    if (r.detail && typeof r.detail === 'object') {
+      Object.keys(r.detail).forEach(function (voterId) {
+        var targetId = r.detail[voterId];
+        if (!targetId) return;
+        parts.push(nameOf(g, voterId) + '→' + nameOf(g, targetId));
+      });
+    }
+    if (parts.length) return parts.join('，');
+    if (r.text) return String(r.text);
+    if (r.outName) return '出局：' + r.outName;
+    return '';
   }
 
   /** 确保 API 桥就绪：它是懒加载的，首次用狼人杀时可能还没到 */
@@ -1198,13 +1279,47 @@
     head.push('- 不因私交放过可疑者，也不因私交针对无辜者；所有人用同一套标准衡量。');
     head.push('- 投票理由必须指向具体发言或行为，禁止「相信他」「不想投他」这类空泛理由。');
     head.push('');
+    /*
+     * 【为什么要有下面这段「禁逼迫」】
+     * 实测反馈：角色发言经常是逼迫口吻而不推理（「你别装了」「最好老实交代」
+     * 「赶紧表态」）。根因是上面的纪律全是**正面要求**（保持风格 + 认真推理），
+     * 模型在强势人设的驱动下，走施压话术是最省力的路 —— 喊结论不用证据。
+     * 所以必须补一段**负面禁令**，把「定罪式断言」「命令他人」「威胁后果」
+     * 明确划出禁区，并把「像人一样当场推理」点成唯一合格的发言形态。
+     */
+    head.push('【表达红线·违反即视为失败发言】');
+    head.push('你的发言要像**一个在认真复盘的人在牌桌上分析**，不是审问、不是喊话、不是拉票。');
+    head.push('禁止以下四类说法：');
+    head.push('1. 定罪式断言：不许说「你就是狼」「别装了」「你跑不掉」这类没有证据支撑的断定。');
+    head.push('2. 命令与施压：不许命令别人表态、认罪、闭嘴，不设「不照做就如何」的威胁或期限。');
+    head.push('3. 情绪压迫：不许用「大家都看清楚了」「你洗不清了」这类群体施压话术。');
+    head.push('4. 空洞站边：不许只说结论不给出处（「我觉得X是狼」而说不出X哪句话有问题）。');
+    head.push('合格发言必须能看出**你为什么这么想**：引到具体的某句话、某个投票动作或某个矛盾点。');
+    head.push('');
 
     var lead = situation;
     var others = aliveSeats(g).filter(function (s) { return s.whoId !== whoId; });
 
     if (task === 'speech') {
-      lead += '\n\n现在轮到你发言。请用 2~3 句话说出你的判断：可以怀疑某个人、为自己辩解、或分析局势。'
-        + '\n要求：保持你一贯的说话风格和语气，像平时在群里聊天一样自然，不要机械套话，不要输出旁白。'
+      /*
+       * 【为什么给「结构模板」而不是笼统说「认真推理」】
+       * 旧提示词只有一句「用 2~3 句话说出你的判断」+「保持风格」。
+       * 问题有三：
+       *   1. 2~3 句实际只能写 1~2 句，推理（引用证据 → 推断）塞不进去，
+       *      模型只能丢掉推理、保留结论 —— 于是发言退化成喊立场。
+       *   2. 没有结构约束时，「保持人设风格」会被理解成「要有气势」，
+       *      强势角色就自动滑向逼迫口吻。
+       *   3. 模型不知道「好发言长什么样」，缺一个可模仿的骨架。
+       * 所以这里给出显式的三段式（引用事实 → 推断 → 落点），并明确
+       * 「哪句话让你怀疑」这个必答项；字数放到 3~5 句给它推理空间。
+       */
+      lead += '\n\n现在轮到你发言。请按下面的骨架说 3~5 句话，其中**必须至少引用一条别人说过的原话或具体行为**：'
+        + '\n① 摆事实：指名提到某个人的某句话/某个投票动作/某次出局（例如「刚才X说他没看到关键局」）。'
+        + '\n② 做推断：说明这个事实为什么可疑（例如「可他全程都在跟票，前后对不上」）。'
+        + '\n③ 给落点：说出你的倾向或行为（例如「所以我这票投X」/「我先记着他，再看看」）。'
+        + '\n若还没有足够信息，就明确说你最需要谁解释什么，以及你暂时把谁放进观察名单 —— '
+        + '不要用气势代替分析，也不要为了凑长度重复别人说过的话。'
+        + '\n语气、称呼保持你原本的说话风格，像在群里自然聊天，不要机械套模板的序号，也不要输出旁白。'
         + SAY_RULE;
       /* 发言预算取「本局设置 → ST 预设最大回复长度 → 1500」的最大值。
          1500 是「模型先吐一段思维链再说话」的实测下限：再小会被思考吃光、
@@ -1228,9 +1343,17 @@
     }
 
     if (task === 'vote') {
+      /*
+       * 投票理由的写法约束：与发言同一套标准。
+       * 旧提示词只要求「写出让你起疑的具体言行」方向是对的，但没禁掉
+       * 定罪式措辞，模型很容易写成「他就是狼，别装了」这种判决书口吻。
+       * 投票理由会被展示给玩家看，措辞等于角色的思考质量，所以一并收紧。
+       */
       lead += '\n\n现在进入投票阶段，你要投出你认为最像狼人的一个玩家（不能投自己）。'
         + '\n先回想每个人的发言：谁在带节奏、谁的逻辑站不住、谁在含糊其辞，然后据此下判断。'
-        + '\n不许因为与该玩家关系好就改投别人；理由里必须写出他让你起疑的具体言行。'
+        + '\n不许因为与该玩家关系好就改投别人。'
+        + '\n理由必须写成「引用具体事实 + 因此怀疑」的形式，例如「他一直跟票又说没看懂，像是在躲」，'
+        + '而不是「他就是狼」「看他不顺眼」这类没有出处的判断，也不要用命令或威胁口吻。'
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
@@ -1423,7 +1546,20 @@
    * 顶栏直接显示成「确认清空」，看上去像上一局的东西没清干净。
    * 按 chatId 记，切群/重开面板都不会串。
    */
-  function isConfirming() { return state.confirmResetFor === state.chatId; }
+  /*
+   * 「是否处于二次确认态」。
+   *
+   * 【必须同时排除空 chatId】
+   * 朴素写法 `state.confirmResetFor === state.chatId` 在两者都是空串时
+   * 会判定为 true —— 也就是「面板还没绑定任何群」时按钮会直接显示成
+   * 「确认清空」。生产路径下 openPanel 一定会先写入 state.chatId，所以
+   * 表面看不出来；但只要有人绕过 openPanel 直接 renderPanel（测试、
+   * 或将来新增的入口），就会误进确认态，点一下就真把记录清了。
+   * 这里显式要求 chatId 非空，把契约写死在函数里，不依赖调用顺序。
+   */
+  function isConfirming() {
+    return !!state.chatId && state.confirmResetFor === state.chatId;
+  }
 
   function setConfirming(chatId, on) {
     state.confirmResetFor = on ? (chatId || '') : '';
@@ -1831,7 +1967,14 @@
         + '>清空记录</button>';
     var head =
       '<div class="ww__head">' +
-        '<div class="ww__title">🐺 狼人杀</div>' +
+        /*
+         * 标题后面挂一个版本号。
+         * 用途是「让用户当场确认自己加载的是哪一版」——之前反复出现
+         * 「明明改了但我这没变化」的情况，根因是旧包/旧缓存仍在生效，
+         * 而从界面上完全看不出来。有了这个标记，一眼即可判断是否需要
+         * 强刷或换包，不用再靠猜。
+         */
+        '<div class="ww__title">🐺 狼人杀<span class="ww__ver">' + BUILD_TAG + '</span></div>' +
         restartBtn +
         '<button type="button" class="ww__close" data-sheet-close aria-label="关闭">关闭</button>' +
       '</div>';
@@ -2467,12 +2610,16 @@
         + '第 ' + g.day + ' 天，当前阶段：' + (PHASE_LABEL[g.phase] || g.phase) + '。'
         + '\n你的任务：站在玩家立场，写他在群里要发的那段话。'
         + '\n硬性要求：'
-        + '\n1. 第一人称，像在群里打字一样自然，2~3 句话，不要旁白和括号。'
+        + '\n1. 第一人称，像在群里打字一样自然，3~5 句话，不要旁白和括号。'
         + '\n2. 必须给出明确立场并指向具体的人：怀疑谁、为谁说话、或自证身份。'
-        + '\n3. 只能依据局势里已给出的发言与出局信息推理，不要编造没发生过的情节。'
-        + '\n4. 玩家是狼人时，就写一段「像好人在推理」的发言，不能露馅自曝。'
-        + '\n5. 玩家是好人时，可以报身份、给逻辑、点最可疑的人。'
-        + '\n6. 只输出这段话本身，不要解释、引号、前缀或 JSON。';
+        + '\n3. 必须引用场上已发生的事实作为依据（某人说过的某句话、某次投票、某次出局），'
+        + '按「摆事实 → 说推断 → 给落点」的顺序写，不能只甩结论。'
+        + '\n4. 不要用逼迫、命令、威胁口吻（如「你别装了」「赶紧表态」「你跑不掉」），'
+        + '也不要凭空断言「他就是狼」；怀疑要落在具体言行上。'
+        + '\n5. 只能依据局势里已给出的发言与出局信息推理，不要编造没发生过的情节。'
+        + '\n6. 玩家是狼人时，就写一段「像好人在推理」的发言，不能露馅自曝。'
+        + '\n7. 玩家是好人时，可以报身份、给逻辑、点最可疑的人。'
+        + '\n8. 只输出这段话本身，不要解释、引号、前缀或 JSON。';
       var dLead = dSituation
         + '\n\n【你的身份】' + myRole.icon + myRole.name + '——' + myRole.desc
         + '\n【可选提及的玩家】' + aliveOthers.map(function (s) { return s.name; }).join('、')

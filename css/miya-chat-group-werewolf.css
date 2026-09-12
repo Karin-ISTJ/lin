@@ -98,6 +98,24 @@
   min-width: 0;
 }
 
+/*
+ * 标题旁的构建标记：小号、低对比，只为「确认加载了哪一版」，不抢视觉。
+ * 用 inline-block + 垂直居中，避免和标题文字基线错位。
+ */
+.ww__ver {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #8a8a8e;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  vertical-align: 1px;
+  letter-spacing: 0.2px;
+}
+
 /* 顶栏常驻小按钮（重开一局 / 取消）：与「关闭」同款胶囊 */
 .ww__head-btn {
   appearance: none;
