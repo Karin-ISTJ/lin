@@ -738,6 +738,22 @@
   color: #2f2456;
 }
 
+/* AI 发言失败（API 空返回）：用警示色标出来，别让用户以为角色在装死 */
+.ww-say--err {
+  background: rgba(214, 69, 69, 0.07);
+  border-color: rgba(214, 69, 69, 0.28);
+  border-left: 3px solid #d64545;
+}
+
+.ww-say--err .ww-say-name {
+  color: #b03030;
+}
+
+.ww-say--err .ww-say-text {
+  color: #8a3a3a;
+  font-size: 12.5px;
+}
+
 /* ---------- 轮到自己发言：输入区 ---------- */
 .ww__myturn {
   flex: 0 0 auto;

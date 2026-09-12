@@ -479,10 +479,10 @@
    */
   function nextSpeaker(g) {
     var alive = aliveSeats(g);
-    for (var i = g.speechCursor; i < alive.length; i++) {
-      return { seat: alive[i], index: i, isUser: alive[i].isUser === true || alive[i].whoId === USER_OWNER_ID };
-    }
-    return null;
+    var start = Math.max(0, Math.floor(g.speechCursor || 0));
+    if (start >= alive.length) return null;
+    var seat = alive[start];
+    return { seat: seat, index: start, isUser: seat.isUser === true || seat.whoId === USER_OWNER_ID };
   }
 
   /** 玩家是否已在本轮发过言 */
@@ -704,12 +704,22 @@
   }
 
   /**
-   * 轻量裸调用：只要一段自然语言返回，不套人设、不带世界书。
-   * 用于「帮玩家拟草稿」这类只借用模型语言能力的场景。
+   * 轻量裸调用：只要一段自然语言返回。
+   *
+   * 【为什么不带角色人设，但必须带对局规则】
+   * 「帮我起个草稿」生成的是**玩家自己**要说的话，玩家不是群里的 AI 角色，
+   * 所以带上某个角色的角色卡/世界书是错位的 —— 那是演「别人」用的，
+   * 而且会白烧一大坨 token。
+   *
+   * 但旧实现的 system 只有一句「你是一个中文狼人杀游戏助手」，太泛：
+   * 模型不知道这是一局进行中的牌、不知道要报身份/指认/自证，
+   * 于是吐出和局势八竿子打不着的话，读起来像局外人套模板。
+   *
+   * 正确做法：保持轻量（不加载人设/世界书），但把**本局规则 + 立场要求**
+   * 写进 system，并把当前局势作为 user 内容喂进去。
    */
-  function askRaw(userContent) {
-    var sys = '你是一个中文狼人杀游戏助手。只输出玩家要说的话本身，'
-      + '不要任何解释、前缀、引号、括号旁白或 JSON。';
+  function askRaw(sysHint, userContent) {
+    var sys = trim(sysHint) || '你是一个中文狼人杀游戏助手。';
     return callApi(sys, userContent, Math.max(600, resolveMaxTokens(null, SPEECH_FLOOR)), null)
       .then(function (res) { return cleanSpeech(extractText(res)); });
   }
@@ -1189,7 +1199,15 @@
         wasTruncated = true;
       }).then(function (res) {
         var text = cleanSpeech(extractText(res));
-        return { text: text || '（沉默）', truncated: wasTruncated };
+        /*
+         * 【空返回不再伪装成「（沉默）」】
+         * 旧代码 `text || '（沉默）'`：模型返回空正文时，界面会显示成
+         * 角色「选择沉默」—— 玩家以为这是 AI 的策略，实际是请求异常
+         * （上下文过长被截、思考占满 token、或服务端空响应）。
+         * 这里把「空」如实标出来，交给 UI 提示原因，不再误导。
+         */
+        if (!text) return { text: '', empty: true, truncated: wasTruncated };
+        return { text: text, empty: false, truncated: wasTruncated };
       });
     }
 
@@ -1350,7 +1368,9 @@
   var state = {
     chatId: '', busy: false, busyText: '', ctxOpen: false, maxOpen: false,
     /* 玩家发言草稿：draft 是内容，drafting 表示正在让 AI 拟稿 */
-    draft: '', drafting: false
+    draft: '', drafting: false,
+    /* 上一次 AI 发言失败（空返回）的留痕，避免只弹 toast 一闪而过 */
+    speechError: null
   };
 
   function phaseStepHtml(g) {
@@ -1803,6 +1823,16 @@
           (sp.truncated ? '<span class="ww-say-cut">⚠️ 输出被截断</span>' : '') +
           '</div>';
       }).join('');
+      /*
+       * 发言失败条：上一次 AI 发言返回空时留痕。
+       * 只弹 toast 会一闪而过，用户回头只看到「轮次没动」，会以为卡住了。
+       */
+      var errHtml = state.speechError
+        ? '<div class="ww-say ww-say--err">'
+          + '<span class="ww-say-name">' + esc(state.speechError.name) + '</span>'
+          + '<span class="ww-say-text">' + esc(state.speechError.msg) + '</span>'
+          + '</div>'
+        : '';
 
       /*
        * 轮到谁了：nextSpeaker 现在会把玩家座位一起返回。
@@ -1842,7 +1872,7 @@
 
       stageHtml = '<div class="ww__stage">' +
         '<div class="ww__stage-title">💬 白天讨论</div>' +
-        '<div class="ww__speeches">' + (spoken || '<div class="ww__hint">还没有人发言</div>') + '</div>' +
+        '<div class="ww__speeches">' + (spoken || errHtml ? spoken + errHtml : '<div class="ww__hint">还没有人发言</div>') + '</div>' +
         turnHtml +
         '<div class="ww__actions">' +
           (myTurn ? '' : '<button type="button" class="ww__btn ww__btn--main" data-ww-act="next_speech"'
@@ -2043,6 +2073,8 @@
     }
 
     if (act === 'dawn') {
+      /* 并发闸门：狼人行动 + 结算也是异步流程，连点会重复结算 */
+      if (state.busy) return true;
       /*
        * 天亮之前先让 AI 狼人把刀口定下来。
        * 不补这一步，玩家拿好人牌时永远没有刀口（狼人 AI 从不选刀）。
@@ -2090,6 +2122,14 @@
     }
 
     if (act === 'next_speech') {
+      /*
+       * 【并发闸门：连点不再重复点火】
+       * speechCursor 要等 API 返回后才推进，所以两次点击之间游标没变。
+       * 旧实现不看 state.busy，连点 N 次就并发 N 个请求、同一个座位
+       * 说 N 遍 —— 表现出来就是「点一下触发两三次 API」+ 重复发言人 + 顺序乱。
+       * 这里用 busy 做互斥：第一次之后的点击直接吞掉。
+       */
+      if (state.busy) return true;
       var nxt = nextSpeaker(g);
       if (!nxt) {
         if (toast) toast('所有人都发言完了，可以进入投票');
@@ -2101,9 +2141,27 @@
       state.busyText = nxt.seat.name + ' 正在思考…';
       rerender();
       askAi(g, nxt.seat.whoId, 'speech').then(function (out) {
+        /*
+         * 空返回：不记发言、不推进游标 —— 这一轮停在这个座位，
+         * 玩家再点一次「让下一位发言」就是重试同一个人。
+         * 旧实现会把 '（沉默）' 当成一句正常发言记下来并推进游标，
+         * 于是一个座位「沉默」过去，后面的座位跟着连锁沉默。
+         */
+        if (out.empty) {
+          state.busy = false;
+          state.speechError = {
+            name: nxt.seat.name,
+            msg: '⚠️ 这一轮没有返回内容（API 空响应）。常见原因：上下文过长、'
+              + '输出上限太小、或服务端异常。再点一次可重试。'
+          };
+          rerender();
+          if (toast) toast('「' + nxt.seat.name + '」没有返回内容，再点一次可重试');
+          return;
+        }
+        state.speechError = null;
         var fresh2 = load(store, chatId);
+        /* 用「刚发言的座位」推进游标，而不是重新取 nextSpeaker */
         recordSpeech(fresh2, nxt.seat.whoId, out.text, out.truncated);
-        /* 游标推进到该座位之后 */
         advanceSpeechCursor(fresh2, nxt.seat.whoId);
         state.busy = false;
         save(store, chatId, fresh2).then(function () {
@@ -2160,6 +2218,7 @@
      * 所以用一个独立分支拼提示词，而不是复用 askAi 的 speech。
      */
     if (act === 'draft_speak') {
+      if (state.drafting) return true;   /* 并发闸门：连点不要并行拟稿 */
       var dcur = nextSpeaker(g);
       if (!dcur || !dcur.isUser) { rerender(); return true; }
       state.drafting = true;
@@ -2167,22 +2226,33 @@
       var myRole = roleOf(g.roles[USER_OWNER_ID]);
       var dSituation = buildSituation(g, {});
       var aliveOthers = aliveSeats(g).filter(function (s) { return s.whoId !== USER_OWNER_ID; });
+      /*
+       * system 承载「这是什么局、该怎么说话」：不能省。
+       * 旧实现只有一句泛泛的助手人设，模型不知道这是进行中的牌局、
+       * 不知道要报身份/指认/自证，于是草稿和局势完全脱节。
+       * 这里仍然**不加载角色人设与世界书**（玩家不是群里的 AI 角色，
+       * 带那些既错位又费 token），只补对局规则与立场要求。
+       */
+      var dSys = '你是中文狼人杀的文字参谋，帮真人玩家代拟他在本轮要说的话。'
+        + '\n这是一局进行中的 ' + TOTAL_SEATS + ' 人狼人杀（2 狼人 / 2 村民 / 1 预言家 / 1 女巫），'
+        + '第 ' + g.day + ' 天，当前阶段：' + (PHASE_LABEL[g.phase] || g.phase) + '。'
+        + '\n你的任务：站在玩家立场，写他在群里要发的那段话。'
+        + '\n硬性要求：'
+        + '\n1. 第一人称，像在群里打字一样自然，2~3 句话，不要旁白和括号。'
+        + '\n2. 必须给出明确立场并指向具体的人：怀疑谁、为谁说话、或自证身份。'
+        + '\n3. 只能依据局势里已给出的发言与出局信息推理，不要编造没发生过的情节。'
+        + '\n4. 玩家是狼人时，就写一段「像好人在推理」的发言，不能露馅自曝。'
+        + '\n5. 玩家是好人时，可以报身份、给逻辑、点最可疑的人。'
+        + '\n6. 只输出这段话本身，不要解释、引号、前缀或 JSON。';
       var dLead = dSituation
-        + '\n\n现在轮到你（真人玩家）发言。请站在这个玩家的立场，替他写一段发言草稿。'
-        + '\n他这一轮的身份是：' + myRole.icon + myRole.name + '。'
-        + '\n草稿要求：'
-        + '\n- 用第一人称，像在群里打字一样自然，2~3 句话。'
-        + '\n- 给出明确立场：怀疑谁、为谁说话、或者自证身份，必须指向具体的人。'
-        + '\n- 如果你是狼人，就写一段「像好人在推理」的发言，不要露馅。'
-        + '\n- 如果你是好人阵营，可以报身份、给逻辑、点可疑的人。'
-        + '\n只输出这段话本身，不要任何前缀、引号或解释。'
-        + '\n可选提及的玩家：' + aliveOthers.map(function (s) { return s.name; }).join('、')
-        + SAY_RULE;
-      askRaw(dLead).then(function (txt) {
+        + '\n\n【你的身份】' + myRole.icon + myRole.name + '——' + myRole.desc
+        + '\n【可选提及的玩家】' + aliveOthers.map(function (s) { return s.name; }).join('、')
+        + '\n\n请写出玩家这一轮要发的发言：';
+      askRaw(dSys, dLead).then(function (txt) {
         state.drafting = false;
         state.draft = txt || '';
         rerender();
-        if (toast && !txt) toast('草稿生成失败，请手动输入');
+        if (toast && !txt) toast('草稿生成失败（API 没返回内容），请手动输入');
       }).catch(function (err) {
         state.drafting = false;
         rerender();
@@ -2209,6 +2279,8 @@
     }
 
     if (act === 'do_vote') {
+      /* 并发闸门：AI 投票是串行长流程，连点会并行跑好几轮计票 */
+      if (state.busy) return true;
       /*
        * 【拦截：玩家必须先投票】
        * runAiVotes 只让存活的 AI 投票（filter !s.isUser），玩家的票要先用
