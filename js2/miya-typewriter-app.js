@@ -1,5 +1,5 @@
 /**
- * miya-typewriter-app.js — 复古英伦打字机 · 编纂室 & 共读室
+ * miya-typewriter-app.js — 复古英伦书架 · 编纂室 & 共读室
  */
 (function (global) {
   'use strict';
@@ -472,7 +472,7 @@
     clearBootTimers();
     boot.classList.remove('is-done');
     if (status) {
-      status.textContent = '打字机连接中…';
+      status.textContent = '书架连接中…';
       status.classList.remove('is-success');
     }
     if (bar) bar.style.width = '0%';

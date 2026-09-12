@@ -45,7 +45,7 @@
     couple: '情侣空间', itinerary: '行程轨迹', rift: '错位时空',
     notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣',
     weather: '天气', map: '地图', apps: '应用', theater: '剧场',
-    contacts: '联系人', pet: '打字机', pen: '模拟器'
+    contacts: '联系人', pet: '书架', pen: '模拟器'
   };
 
   var WIDGET_CATALOG = buildWidgetCatalog();

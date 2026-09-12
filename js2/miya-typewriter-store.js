@@ -1,5 +1,5 @@
 /**
- * miya-typewriter-store.js — 打字机书库持久化
+ * miya-typewriter-store.js — 书架书库持久化
  */
 (function (global) {
   'use strict';

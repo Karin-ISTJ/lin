@@ -1,5 +1,5 @@
 /**
- * miya-typewriter-read-together.js — 打字机「共读」：选角、选书、共读对话
+ * miya-typewriter-read-together.js — 书架「共读」：选角、选书、共读对话
  */
 (function (global) {
   'use strict';
@@ -1000,7 +1000,7 @@
     if (!el) return;
     var books = bookStore.getBooks();
     if (!books.length) {
-      el.innerHTML = '<p class="tw-salon__empty">尚无典籍 · 请先在书架导入</p>';
+      el.innerHTML = '<p class="tw-salon__empty">尚无典籍 · 请先在编纂室导入</p>';
       return;
     }
     if (!lobbyState.bookId && books[0]) lobbyState.bookId = books[0].id;

@@ -10,7 +10,7 @@
     beauty: '美化',
     store: '线下',
     contacts: '联系人',
-    pet: '打字机',
+    pet: '书架',
     pen: '模拟器',
     polaroid_1: '拍立得 · 前景',
     polaroid_2: '拍立得 · 中层',

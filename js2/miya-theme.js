@@ -193,7 +193,7 @@
     { key: 'memory', label: '记忆', selectors: ['.miya-memory-app'] },
     { key: 'store', label: '线下', selectors: ['.miya-offline-app'] },
     { key: 'contacts', label: '联系人', selectors: ['.miya-contacts-app'] },
-    { key: 'pet', label: '打字机', selectors: ['.miya-typewriter-app'] },
+    { key: 'pet', label: '书架', selectors: ['.miya-typewriter-app'] },
     { key: 'pen', label: '模拟器', selectors: ['.miya-simulator-app'] },
     { key: 'couple', label: '情侣空间', selectors: ['.miya-couple-app'] },
     { key: 'itinerary', label: '行程轨迹', selectors: ['.miya-itinerary-app'] },

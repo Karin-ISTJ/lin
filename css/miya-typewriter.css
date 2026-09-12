@@ -2611,27 +2611,29 @@
   border-color: #1c1c1e !important;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important;
 }
+/* 进入按钮 · 抬到悬浮底栏之上，避免与 tabbar 重叠形成灰色横条 */
 .miya-typewriter-app .tw-salon__footer {
   background: transparent !important;
   border: none !important;
-  padding: 8px 18px 12px !important;
+  padding: 10px 18px calc(84px + env(safe-area-inset-bottom, 0px)) !important;
 }
 .miya-typewriter-app .tw-salon__enter {
   width: 100% !important;
-  height: 48px !important;
+  height: 50px !important;
   border: none !important;
-  border-radius: 999px !important;
+  border-radius: 16px !important;
   background: #1c1c1e !important;
   color: #fff !important;
   font-family: "Outfit", "Noto Sans SC", sans-serif !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12) !important;
 }
 .miya-typewriter-app .tw-salon__enter:disabled {
-  background: rgba(60, 60, 67, 0.18) !important;
-  color: rgba(60, 60, 67, 0.5) !important;
+  background: transparent !important;
+  border: 1px solid rgba(60, 60, 67, 0.14) !important;
+  color: rgba(60, 60, 67, 0.38) !important;
   box-shadow: none !important;
 }
 
@@ -2916,14 +2918,9 @@
   outline-offset: 0 !important;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08) !important;
 }
-.miya-typewriter-app .tw-salon__footer {
-  padding: 10px 18px 16px !important;
-}
-.miya-typewriter-app .tw-salon__enter {
-  height: 50px !important;
-  font-size: 15px !important;
-  border-radius: 16px !important;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12) !important;
+/* 让可滚动区把 footer 让出来，不被按钮盖住 */
+.miya-typewriter-app .tw-salon__scroll {
+  padding-bottom: 8px !important;
 }
 
 /* 底栏更轻 */
@@ -2966,53 +2963,81 @@
     0 16px 40px rgba(0, 0, 0, 0.06) !important;
 }
 
-/* 共读角色：只显示名字，隐藏头像圆标 */
-.miya-typewriter-app .tw-salon__pick-av {
-  display: none !important;
-}
-.miya-typewriter-app .tw-salon__pick {
-  gap: 0 !important;
-  padding: 10px 16px !important;
-  justify-content: center !important;
-}
-.miya-typewriter-app .tw-salon__pick-name {
-  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
+/* ═══ 共读房间 · 浅色日记风覆盖 ═══ */
+.miya-typewriter-app .tw-rt-room {
+  background: #f2f2f7 !important;
   color: #1c1c1e !important;
 }
-
-/* 消除共读室底栏下方灰色条：footer 不再额外吃安全区，并收紧底部留白 */
-.miya-typewriter-app .tw-salon {
-  padding-bottom: 0 !important;
-  background: transparent !important;
+.miya-typewriter-app .tw-rt-head {
+  background: linear-gradient(180deg, rgba(242, 242, 247, 0.96) 0%, rgba(242, 242, 247, 0) 100%) !important;
 }
-.miya-typewriter-app .tw-salon__footer {
+.miya-typewriter-app .tw-rt-duo {
+  color: rgba(60, 60, 67, 0.55) !important;
+}
+.miya-typewriter-app .tw-rt-duo__user,
+.miya-typewriter-app .tw-rt-duo__role {
+  background: #ffffff !important;
+  border: 1px solid rgba(60, 60, 67, 0.12) !important;
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-rt-head__title {
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-rt-head__folio {
+  color: rgba(60, 60, 67, 0.42) !important;
+}
+.miya-typewriter-app .tw-rt-pause-btn,
+.miya-typewriter-app .tw-rt-settings-btn {
+  background: #ffffff !important;
+  border: 1px solid rgba(60, 60, 67, 0.12) !important;
+  color: #1c1c1e !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+/* 对话区：浅色卡片，去掉暗色块 */
+.miya-typewriter-app .tw-rt-chat-wrap {
+  background: #ffffff !important;
+  border-top: 1px solid rgba(60, 60, 67, 0.08) !important;
+  border-radius: 20px 20px 0 0 !important;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.04) !important;
+}
+.miya-typewriter-app .tw-rt-chat-toggle {
   background: transparent !important;
+  border-bottom: 1px solid rgba(60, 60, 67, 0.08) !important;
+  color: rgba(60, 60, 67, 0.4) !important;
+}
+.miya-typewriter-app .tw-rt-msg__who {
+  color: rgba(60, 60, 67, 0.42) !important;
+}
+.miya-typewriter-app .tw-rt-msg__bubble {
+  background: #f2f2f7 !important;
   border: none !important;
-  box-shadow: none !important;
-  padding: 8px 18px 12px !important;
-  margin: 0 !important;
+  border-radius: 14px !important;
 }
-.miya-typewriter-app .tw-pages {
-  /* 只留给悬浮 dock，避免底部再露出一条灰底 */
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
-  background: transparent !important;
+.miya-typewriter-app .tw-rt-msg.is-me .tw-rt-msg__bubble {
+  background: #1c1c1e !important;
 }
-.miya-typewriter-app .tw-page {
-  background: transparent !important;
+.miya-typewriter-app .tw-rt-msg.is-me .tw-rt-msg__bubble p {
+  color: #ffffff !important;
 }
-/* 原底栏若仍占位，强制不占文档流高度以外的灰底 */
-.miya-typewriter-app .tw-tabbar {
-  background: rgba(255, 255, 255, 0.94) !important;
+.miya-typewriter-app .tw-rt-msg__bubble p,
+.miya-typewriter-app .tw-rt-msg__sticker-fallback {
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-rt-dot {
+  background: rgba(60, 60, 67, 0.45) !important;
+}
+.miya-typewriter-app .tw-rt-writer {
+  border-top: 1px solid rgba(60, 60, 67, 0.08) !important;
+}
+.miya-typewriter-app .tw-rt-writer__field {
+  background: #f2f2f7 !important;
+  border: 1px solid rgba(60, 60, 67, 0.1) !important;
+  color: #1c1c1e !important;
+  border-radius: 12px !important;
+}
+.miya-typewriter-app .tw-rt-writer__go {
+  background: #1c1c1e !important;
   border: none !important;
-  border-top: none !important;
-  box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.04) !important;
-}
-.miya-typewriter-app .tw-tabbar::before,
-.miya-typewriter-app .tw-tabbar::after {
-  display: none !important;
-  content: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
 }

@@ -101,7 +101,7 @@
     { id: 'diary', title: '日记', lsKeys: [DIARY_KEY], widgetKvKeys: [DIARY_KEY] },
     {
       id: 'typewriter',
-      title: '打字机',
+      title: '书架',
       lsKeys: [TYPEWRITER_KEY, TYPEWRITER_SETTINGS_KEY, TYPEWRITER_READ_KEY],
       widgetKvKeys: [TYPEWRITER_KEY, TYPEWRITER_SETTINGS_KEY, TYPEWRITER_READ_KEY]
     },
