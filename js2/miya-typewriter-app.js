@@ -223,8 +223,8 @@
       grid.innerHTML =
         '<div class="tw-empty-shelf">' +
           '<div class="tw-empty-shelf__frame">' +
-            '<p class="tw-empty-shelf__script">Empty Folio</p>' +
-            '<p class="tw-empty-shelf__text">尚无典籍入藏<br>点击右上角导入 .txt 或 .docx<br>每部典籍将安置于八种复古器物之一</p>' +
+            '<p class="tw-empty-shelf__script">暂无典籍</p>' +
+            '<p class="tw-empty-shelf__text">点右上角「导入」加入 .txt 或 .docx<br>即可开始阅读与共读</p>' +
           '</div>' +
         '</div>';
       return;

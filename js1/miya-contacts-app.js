@@ -154,23 +154,19 @@
   function renderVolumes() {
     var rail = $('miya-ct-volumes');
     if (!rail) return;
-    /* 仅保留「全卷」，其它分卷标签与「＋」已按需求移除；导入/建档按钮移至同一行右侧 */
-    var html = '<button type="button" class="mn-vol' + (filterGroupId === 'all' ? ' is-active' : '') +
-      '" data-ct-group="all">全卷</button>';
-    rail.innerHTML = html;
+    /* 全卷 / 分卷标签已全部移除，只保留右侧导入、建档按钮 */
+    rail.innerHTML = '';
   }
 
   /*
    * 一行一个角色。
    *
-   * 只有 头像 + 名字 + 典藏数 + 行尾箭头 —— 不显示副标题。
+   * 只有 头像 + 名字 + 行尾箭头 —— 不显示副标题、不显示「典x」角标。
    * 曾试过自动从人设里抽一句摘要做副标题，但导入卡的人设常常是原始
    * JSON / XML（`{ "character": …` / `<CardIntro>…`），抽出来全是噪音，
    * 索性去掉这一行，行高更矮、一屏能看更多人。
    */
   function panelHtml(c, wbCounts) {
-    var wbCount = (wbCounts && wbCounts[c.id]) || 0;
-    var badge = wbCount ? '<span class="mn-panel__badge">典' + wbCount + '</span>' : '';
     var portrait = c.avatar
       ? '<img src="' + esc(c.avatar) + '" alt="" loading="lazy" decoding="async">'
       : '<div class="mn-panel__mono">' + esc(monogram(c.name)) + '</div>';
@@ -180,7 +176,6 @@
       '<div class="mn-panel__body">' +
       '<p class="mn-panel__name">' + esc(c.name) + '</p>' +
       '</div>' +
-      badge +
       '<i class="mn-panel__chevron" aria-hidden="true"></i>' +
       '</button>'
     );

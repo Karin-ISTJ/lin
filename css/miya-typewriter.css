@@ -2208,3 +2208,568 @@
     visibility: visible;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   打字机 · 日记同款浅色编辑风覆盖层
+   视觉对齐 miya-diary：浅灰底、白卡片、圆角、serif 标题
+   ═══════════════════════════════════════════════════════════════ */
+
+.miya-typewriter-app {
+  --tw-ink: #1c1c1e;
+  --tw-parchment: #ffffff;
+  --tw-cream: #f2f2f7;
+  --tw-paper: #ffffff;
+  --tw-walnut: #1c1c1e;
+  --tw-mahogany: #f2f2f7;
+  --tw-brass: #3a3a3c;
+  --tw-gold: #1c1c1e;
+  --tw-copper: rgba(60, 60, 67, 0.4);
+  --tw-forest: #1c1c1e;
+  --tw-burgundy: #1c1c1e;
+  --tw-frost: #1c1c1e;
+  --tw-snow: #1c1c1e;
+  --tw-muted: rgba(60, 60, 67, 0.4);
+  --tw-line: rgba(60, 60, 67, 0.1);
+  --tw-serif: "Instrument Serif", "Noto Serif SC", "Playfair Display", Georgia, serif;
+  --tw-script: "Great Vibes", "Instrument Serif", cursive;
+  --tw-display: "Instrument Serif", "Noto Serif SC", Georgia, serif;
+  --tw-ui: "Outfit", "Noto Sans SC", "DM Sans", sans-serif;
+  --tw-mono: "DM Sans", "Noto Sans SC", sans-serif;
+  --tw-read-paper: #ffffff;
+  --tw-read-chrome: #f2f2f7;
+  --tw-read-color: #1c1c1e;
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+  font-family: "Outfit", "Noto Sans SC", "DM Sans", sans-serif !important;
+}
+
+/* 隐藏暗色装饰 */
+.miya-typewriter-app .tw-veil,
+.miya-typewriter-app .tw-rule-deco {
+  display: none !important;
+}
+
+/* 开屏：浅色简约 */
+.miya-typewriter-app .tw-boot {
+  background: #f2f2f7 !important;
+}
+.miya-typewriter-app .tw-boot__frame {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.miya-typewriter-app .tw-boot__emblem,
+.miya-typewriter-app .tw-boot__flourish,
+.miya-typewriter-app .tw-boot__status {
+  color: rgba(60, 60, 67, 0.45) !important;
+  font-family: "DM Sans", "Noto Sans SC", sans-serif !important;
+  letter-spacing: 0.12em !important;
+}
+.miya-typewriter-app .tw-boot__typewriter {
+  filter: grayscale(1) opacity(0.35);
+}
+.miya-typewriter-app .tw-boot__bar {
+  background: rgba(60, 60, 67, 0.1) !important;
+  border-radius: 999px !important;
+  overflow: hidden;
+}
+.miya-typewriter-app .tw-boot__bar-fill {
+  background: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-boot__skip {
+  background: #fff !important;
+  color: #1c1c1e !important;
+  border: none !important;
+  border-radius: 999px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 顶栏 · 对齐日记 dy-mast */
+.miya-typewriter-app .tw-masthead {
+  display: grid !important;
+  grid-template-columns: 40px 1fr auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 10px !important;
+  background: transparent !important;
+}
+.miya-typewriter-app .tw-back {
+  width: 40px !important;
+  height: 40px !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  color: #1c1c1e !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05) !important;
+  font-size: 16px !important;
+}
+.miya-typewriter-app .tw-back:active {
+  background: #f2f2f7 !important;
+}
+.miya-typewriter-app .tw-masthead__center {
+  text-align: center !important;
+}
+.miya-typewriter-app .tw-masthead__script {
+  display: none !important;
+}
+.miya-typewriter-app .tw-masthead__title {
+  margin: 0 !important;
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.02em !important;
+  color: #1c1c1e !important;
+  text-shadow: none !important;
+}
+.miya-typewriter-app .tw-masthead__sub {
+  margin: 4px 0 0 !important;
+  font-family: "DM Sans", "Noto Sans SC", sans-serif !important;
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  color: rgba(60, 60, 67, 0.4) !important;
+  text-transform: uppercase !important;
+}
+.miya-typewriter-app .tw-import-btn {
+  height: 40px !important;
+  padding: 0 14px !important;
+  border: none !important;
+  border-radius: 999px !important;
+  background: #1c1c1e !important;
+  color: #fff !important;
+  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14) !important;
+  gap: 6px !important;
+}
+.miya-typewriter-app .tw-import-btn::before { display: none !important; }
+.miya-typewriter-app .tw-import-btn svg {
+  stroke: #fff !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+.miya-typewriter-app .tw-import-btn:active {
+  opacity: 0.88;
+  box-shadow: none !important;
+}
+
+/* 底栏 Tab · 对齐日记 floating dock 气质 */
+.miya-typewriter-app .tw-tabbar {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+  transform: translateX(-50%) !important;
+  z-index: 8 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px !important;
+  width: auto !important;
+  max-width: calc(100% - 32px) !important;
+  border: none !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+.miya-typewriter-app .tw-tab {
+  flex: 0 0 auto !important;
+  min-width: 96px !important;
+  height: 44px !important;
+  border: none !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: rgba(60, 60, 67, 0.55) !important;
+  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 0 16px !important;
+  box-shadow: none !important;
+}
+.miya-typewriter-app .tw-tab__glyph {
+  font-family: "Instrument Serif", "Noto Serif SC", serif !important;
+  font-size: 15px !important;
+  opacity: 0.7;
+}
+.miya-typewriter-app .tw-tab.is-active {
+  background: #1c1c1e !important;
+  color: #fff !important;
+}
+.miya-typewriter-app .tw-tab.is-active .tw-tab__glyph {
+  opacity: 1;
+  color: #fff !important;
+}
+
+/* 页面区域留出底栏 */
+.miya-typewriter-app .tw-pages {
+  padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* 书架 intro · 编辑风标题 */
+.miya-typewriter-app .tw-shelf-stage {
+  background: transparent !important;
+  padding: 4px 18px 28px !important;
+}
+.miya-typewriter-app .tw-shelf-stage::before { display: none !important; }
+.miya-typewriter-app .tw-shelf-intro {
+  padding: 8px 0 18px !important;
+  text-align: left !important;
+}
+.miya-typewriter-app .tw-shelf-intro__line {
+  justify-content: flex-start !important;
+  gap: 0 !important;
+}
+.miya-typewriter-app .tw-shelf-intro__line::before,
+.miya-typewriter-app .tw-shelf-intro__line::after {
+  display: none !important;
+}
+.miya-typewriter-app .tw-shelf-intro__vol {
+  font-family: "DM Sans", "Noto Sans SC", sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.08em !important;
+  color: rgba(60, 60, 67, 0.4) !important;
+  text-transform: uppercase !important;
+}
+.miya-typewriter-app .tw-shelf-intro__quote {
+  margin: 8px 0 0 !important;
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 28px !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  line-height: 1.25 !important;
+  color: #1c1c1e !important;
+  text-align: left !important;
+}
+.miya-typewriter-app .tw-shelf-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding: 0 !important;
+}
+
+/* 典籍卡片 · 对齐日记 dy-card */
+.miya-typewriter-app .tw-exhibit {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 16px 16px !important;
+  border: 1px solid rgba(60, 60, 67, 0.08) !important;
+  border-radius: 24px !important;
+  background: #fff !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05) !important;
+  text-align: left !important;
+  color: #1c1c1e !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+}
+.miya-typewriter-app .tw-exhibit:active {
+  transform: scale(0.985) !important;
+}
+.miya-typewriter-app .tw-exhibit__object {
+  width: 56px !important;
+  height: 56px !important;
+  flex-shrink: 0 !important;
+  border-radius: 16px !important;
+  background: #f2f2f7 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  filter: none !important;
+  transform: none !important;
+}
+.miya-typewriter-app .tw-exhibit__object svg,
+.miya-typewriter-app .tw-exhibit__object img {
+  max-width: 70% !important;
+  max-height: 70% !important;
+  opacity: 0.7;
+}
+.miya-typewriter-app .tw-exhibit__meta,
+.miya-typewriter-app .tw-exhibit__label,
+.miya-typewriter-app .tw-exhibit__title,
+.miya-typewriter-app .tw-exhibit__sub {
+  color: #1c1c1e !important;
+  text-shadow: none !important;
+}
+.miya-typewriter-app .tw-exhibit__title {
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 18px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+.miya-typewriter-app .tw-exhibit__label,
+.miya-typewriter-app .tw-exhibit__sub {
+  font-family: "DM Sans", "Noto Sans SC", sans-serif !important;
+  font-size: 11px !important;
+  color: rgba(60, 60, 67, 0.45) !important;
+  letter-spacing: 0.04em !important;
+}
+
+/* 空书架 */
+.miya-typewriter-app .tw-empty-shelf {
+  background: #fff !important;
+  border: 1px solid rgba(60, 60, 67, 0.08) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05) !important;
+  padding: 36px 24px !important;
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-empty-shelf__script {
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 22px !important;
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-empty-shelf__text {
+  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
+  font-style: normal !important;
+  font-size: 13px !important;
+  color: rgba(60, 60, 67, 0.55) !important;
+  line-height: 1.7 !important;
+}
+
+/* 共读室 · 去剧场装饰，改编辑卡片 */
+.miya-typewriter-app .tw-salon {
+  background: transparent !important;
+}
+.miya-typewriter-app .tw-salon__scene {
+  display: none !important;
+}
+.miya-typewriter-app .tw-salon__panels {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+  padding: 8px 18px 12px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+.miya-typewriter-app .tw-salon__panel {
+  background: #fff !important;
+  border: 1px solid rgba(60, 60, 67, 0.08) !important;
+  border-radius: 20px !important;
+  padding: 14px 14px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+}
+.miya-typewriter-app .tw-salon__panel-lbl {
+  font-family: "DM Sans", "Noto Sans SC", sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: rgba(60, 60, 67, 0.4) !important;
+  margin: 0 0 6px !important;
+}
+.miya-typewriter-app .tw-salon__panel-val {
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 16px !important;
+  color: #1c1c1e !important;
+  margin: 0 !important;
+}
+.miya-typewriter-app .tw-salon__scroll {
+  padding: 4px 18px 20px !important;
+  background: transparent !important;
+}
+.miya-typewriter-app .tw-salon__section {
+  margin-bottom: 18px !important;
+}
+.miya-typewriter-app .tw-salon__section-title {
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 18px !important;
+  font-weight: 400 !important;
+  color: #1c1c1e !important;
+  letter-spacing: 0 !important;
+  border: none !important;
+  padding: 0 0 10px !important;
+  margin: 0 0 4px !important;
+}
+.miya-typewriter-app .tw-salon__picks,
+.miya-typewriter-app .tw-salon__books,
+.miya-typewriter-app .tw-salon__history {
+  gap: 10px !important;
+}
+.miya-typewriter-app .tw-salon__pick,
+.miya-typewriter-app .tw-salon__book-chip,
+.miya-typewriter-app .tw-salon__hist-card {
+  background: #fff !important;
+  border: 1px solid rgba(60, 60, 67, 0.08) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-salon__pick.is-active,
+.miya-typewriter-app .tw-salon__book-chip.is-active {
+  border-color: #1c1c1e !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important;
+}
+.miya-typewriter-app .tw-salon__footer {
+  background: transparent !important;
+  border: none !important;
+  padding: 8px 18px 12px !important;
+}
+.miya-typewriter-app .tw-salon__enter {
+  width: 100% !important;
+  height: 48px !important;
+  border: none !important;
+  border-radius: 999px !important;
+  background: #1c1c1e !important;
+  color: #fff !important;
+  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14) !important;
+}
+.miya-typewriter-app .tw-salon__enter:disabled {
+  background: rgba(60, 60, 67, 0.18) !important;
+  color: rgba(60, 60, 67, 0.5) !important;
+  box-shadow: none !important;
+}
+
+/* 阅读层 · 浅色纸页 */
+.miya-typewriter-app .tw-reader {
+  background: #f2f2f7 !important;
+}
+.miya-typewriter-app .tw-reader__book {
+  background: transparent !important;
+}
+.miya-typewriter-app .tw-reader__page,
+.miya-typewriter-app .tw-reader__page-body {
+  background: #fff !important;
+  color: #1c1c1e !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06) !important;
+}
+.miya-typewriter-app .tw-reader__chrome {
+  background: rgba(242, 242, 247, 0.92) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: none !important;
+}
+.miya-typewriter-app .tw-reader__head,
+.miya-typewriter-app .tw-reader__foot {
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-reader__head button,
+.miya-typewriter-app .tw-reader__foot button {
+  background: #fff !important;
+  border: none !important;
+  border-radius: 999px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05) !important;
+  color: #1c1c1e !important;
+}
+
+/* 导入进度 / 设置 */
+.miya-typewriter-app .tw-import-progress__panel,
+.miya-typewriter-app .tw-settings__sheet {
+  background: #fff !important;
+  border: none !important;
+  border-radius: 28px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12) !important;
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-import-progress__title,
+.miya-typewriter-app .tw-settings__title {
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  color: #1c1c1e !important;
+}
+.miya-typewriter-app .tw-import-progress__bar {
+  background: rgba(60, 60, 67, 0.1) !important;
+  border-radius: 999px !important;
+}
+.miya-typewriter-app .tw-import-progress__fill {
+  background: #1c1c1e !important;
+  border-radius: 999px !important;
+}
+
+/* toast 若有 */
+.miya-typewriter-app .tw-toast {
+  background: #1c1c1e !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+}
+
+/* 典籍卡内部结构：横排卡片 */
+.miya-typewriter-app .tw-exhibit__alcove {
+  position: relative !important;
+  width: 56px !important;
+  height: 56px !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  background: #f2f2f7 !important;
+  border-radius: 16px !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+.miya-typewriter-app .tw-exhibit__beam,
+.miya-typewriter-app .tw-exhibit__haze,
+.miya-typewriter-app .tw-exhibit__pedestal,
+.miya-typewriter-app .tw-exhibit__shadow {
+  display: none !important;
+}
+.miya-typewriter-app .tw-exhibit__object {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transform: none !important;
+  filter: grayscale(0.3) !important;
+}
+.miya-typewriter-app .tw-exhibit__caption {
+  flex: 1 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  background: transparent !important;
+  border: none !important;
+}
+.miya-typewriter-app .tw-exhibit__index {
+  display: block !important;
+  font-family: "DM Sans", "Noto Sans SC", sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: rgba(60, 60, 67, 0.4) !important;
+  margin-bottom: 4px !important;
+}
+.miya-typewriter-app .tw-exhibit__title {
+  margin: 0 0 4px !important;
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif !important;
+  font-size: 18px !important;
+  font-weight: 400 !important;
+  color: #1c1c1e !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.miya-typewriter-app .tw-exhibit__specimen {
+  margin: 0 !important;
+  font-family: "Outfit", "Noto Sans SC", sans-serif !important;
+  font-size: 12px !important;
+  color: rgba(60, 60, 67, 0.5) !important;
+}
+
+/* vessels 装饰降噪 */
+.miya-typewriter-app .tw-vessel,
+.miya-typewriter-app [class*="tw-vessel"] {
+  filter: grayscale(0.25) !important;
+}
+
+.miya-typewriter-app .tw-shelf-intro__quote span {
+  color: rgba(60, 60, 67, 0.35);
+}
