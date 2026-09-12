@@ -320,12 +320,37 @@
     return g;
   }
 
+  /**
+   * 下一个该发言的座位。
+   *
+   * 【修复：玩家不再被跳过】
+   * 旧实现是 `if (!alive[i].isUser) return ...` —— 直接把玩家座位跳过去，
+   * 于是轮次从头到尾只在 AI 之间流转，玩家永远等不到自己的回合，
+   * 面板上也没有任何输入入口，看起来就是「本来该我发言，结果把我跳过了」。
+   * 现在玩家座位同样参与轮转，轮到玩家时由 UI 渲染输入框（isUser: true）。
+   */
   function nextSpeaker(g) {
     var alive = aliveSeats(g);
     for (var i = g.speechCursor; i < alive.length; i++) {
-      if (!alive[i].isUser) return { seat: alive[i], index: i };
+      return { seat: alive[i], index: i, isUser: alive[i].isUser === true || alive[i].whoId === USER_OWNER_ID };
     }
     return null;
+  }
+
+  /** 玩家是否已在本轮发过言 */
+  function userHasSpoken(g) {
+    return (g.speeches || []).some(function (sp) { return sp.whoId === USER_OWNER_ID; });
+  }
+
+  /**
+   * 把发言游标推进到「刚发完言的座位」之后。
+   * 之前这段逻辑内联在 AI 分支里，玩家发言也需要，抽出来共用。
+   */
+  function advanceSpeechCursor(g, whoId) {
+    var alive = aliveSeats(g);
+    for (var i = 0; i < alive.length; i++) {
+      if (alive[i].whoId === whoId) { g.speechCursor = i + 1; return; }
+    }
   }
 
   function recordSpeech(g, whoId, text, truncated) {
@@ -346,9 +371,29 @@
     lines.push('你在参与一场群聊里的「狼人杀」游戏。请严格遵守游戏规则，不要跳戏、不要输出规则说明。');
     lines.push('板子：' + TOTAL_SEATS + ' 人局 —— 2 狼人 / 2 村民 / 1 预言家 / 1 女巫。');
     lines.push('第 ' + g.day + ' 天，当前阶段：' + (PHASE_LABEL[g.phase] || g.phase) + '。');
+
+    /*
+     * 【修复：AI 护着玩家的根因】
+     * 旧代码这里给玩家加了一个 '(真人玩家)' 标记，等于直接告诉模型
+     * 「这位是操控者本人」。叠加人设/好感度/关系上下文后，模型自然
+     * 不肯怀疑、不肯投票——表现出来就是「角色都护着我，基本不会把我投出去」。
+     * 现在对局内所有人一律平铺为普通玩家，不暴露任何「谁是真人」的信息。
+     */
     lines.push('在场玩家：' + g.seats.map(function (s) {
-      return s.name + (s.isUser ? '(真人玩家)' : '') + (s.alive ? '' : '（已出局）');
+      return s.name + (s.alive ? '' : '（已出局）');
     }).join('、'));
+
+    /*
+     * 强制定调：人设语气要保留，但胜负判断必须只依据对局内信息。
+     * 不写这段的话，「保持角色性格」会被模型理解成「要顺着关系亲疏来站边」。
+     */
+    lines.push('【对局纪律·优先于一切人设偏好】');
+    lines.push('1. 你的性格、称呼习惯、说话语气照常保留，但这是在你「认真玩这局游戏」的前提下展现的。');
+    lines.push('2. 判断谁是狼，只能依据本轮发言逻辑、投票行为、身份声明与矛盾之处。');
+    lines.push('3. 禁止因为私交、好感、亲密度、关系设定而回避怀疑或放弃投票。该怀疑就怀疑，该投就投。');
+    lines.push('4. 不要因为某人是「最熟悉的人」就无条件相信他；也不要刻意针对他。所有人一视同仁。');
+    lines.push('5. 投票必须给出由发言/行为推出的理由，不允许「不想投他」「相信他就好」这类无信息理由。');
+
     if (opts.selfId) {
       var selfRole = roleOf(g.roles[opts.selfId]);
       lines.push('你的身份是：' + selfRole.icon + selfRole.name + '——' + selfRole.desc + '。');
@@ -361,7 +406,14 @@
     }
     if (g.speeches.length) {
       lines.push('本轮已有发言：');
-      g.speeches.slice(-8).forEach(function (sp) { lines.push('  ' + sp.name + '：' + sp.text); });
+      g.speeches.slice(-8).forEach(function (sp) {
+        /*
+         * 玩家统一署名「用户」而不是「你」：
+         * 这段文本是喂给 AI 的，用「你」会让模型以为那是它自己说过的话，
+         * 进而在后续发言里自我附和。
+         */
+        lines.push('  ' + (sp.whoId === USER_OWNER_ID ? '用户' : sp.name) + '：' + sp.text);
+      });
     }
     if (g.dawnDeaths && g.dawnDeaths.length) {
       lines.push('昨夜出局：' + g.dawnDeaths.map(function (id) { return nameOf(g, id); }).join('、') + '。');
@@ -508,8 +560,14 @@
   /**
    * 与「本局对局」无关、但会显著撑大上下文的群聊 system 块。
    * 狼人杀只需要「这个角色是谁、怎么说话」，不需要群昵称头衔、关系网、
-   * 私密记忆、天气地点、以及群聊专用的输出格式提醒 —— 这些以前全被
-   * 塞进了 bare 请求，是总字数冲到 148.7k 的主要来源之一。
+   * 私密记忆、天气地点、以及群聊专用的输出格式提醒。
+   *
+   * 【为什么上一版过滤无效（152.5k 纹丝不动的原因）】
+   * buildGroupSystemPrompt() 是把所有块 join('\n\n') 成【一个】大字符串，
+   * buildApiMessages() 再把它包成【一个】system message。旧代码在
+   * messages.forEach 里按块判定，可整条消息的开头永远是人设或【全局】，
+   * 于是 indexOf(prefix) === 0 几乎从不命中 —— 过滤形同虚设。
+   * 正确做法：先按「【标题】」把大字符串切回块，再逐块判定。
    */
   var CTX_DROP_PREFIXES = [
     '【群头衔·当前】',
@@ -533,6 +591,39 @@
       if (t.indexOf(CTX_DROP_PREFIXES[i]) === 0) return true;
     }
     return false;
+  }
+
+  /**
+   * 把群聊那个「join 成一条」的巨型 system 字符串，按【标题】边界切回独立块。
+   *
+   * 群聊的块标题统一以「【」开头、以「】」结尾，且每个块内部极少再出现
+   * 行首的「【」（偶有嵌套，例如【全局】正文里可能引用别的标题）。
+   * 因此只在「【」出现在行首、且该行能以「】」收尾时才认作新块起点，
+   * 宁可少切一刀（内容仍完整保留）也不要把正文腰斩。
+   */
+  function splitCtxBlocks(text) {
+    var raw = String(text == null ? '' : text);
+    if (!raw) return [];
+    var parts = raw.split('\n\n');
+    var blocks = [];
+    var buf = '';
+    for (var i = 0; i < parts.length; i++) {
+      var seg = parts[i];
+      if (!seg) continue;
+      var isStart = /^\s*【[^】\n]{1,40}】/.test(seg);
+      if (isStart && buf) {
+        blocks.push(buf);
+        buf = seg;
+      } else if (isStart) {
+        buf = seg;
+      } else if (buf) {
+        buf += '\n\n' + seg;
+      } else {
+        buf = seg;
+      }
+    }
+    if (buf) blocks.push(buf);
+    return blocks;
   }
 
   /**
@@ -578,12 +669,33 @@
     }
 
     var dropped = 0;
+    var droppedChars = 0;
 
     function pushMsg(m) {
       if (!m || !m.content) return;
       var text = typeof m.content === 'string' ? m.content : '';
       if (!trim(text)) return;
       lines.push(trim(text));
+    }
+
+    /*
+     * 群聊的 system 是一个「join 成一条」的巨型字符串，必须切开逐块过滤。
+     * 不切的话 shouldDropCtxBlock 只能看开头一处，等于不过滤 —— 这正是
+     * 上一版改完字数还是 152.5k 的原因。
+     */
+    function pushSystemBody(body) {
+      var pieces = splitCtxBlocks(body);
+      if (!pieces.length) return;
+      for (var i = 0; i < pieces.length; i++) {
+        var piece = trim(pieces[i]);
+        if (!piece) continue;
+        if (shouldDropCtxBlock(piece)) {
+          dropped += 1;
+          droppedChars += piece.length;
+          continue;
+        }
+        lines.push(piece);
+      }
     }
 
     var groupSystemCount = 0;
@@ -593,8 +705,7 @@
       if (!m || m.role !== 'system') return;
       groupSystemCount += 1;
       var body = typeof m.content === 'string' ? m.content : '';
-      if (shouldDropCtxBlock(body)) { dropped += 1; return; }
-      pushMsg(m);
+      pushSystemBody(body);
     });
     (stBack || []).forEach(pushMsg);
 
@@ -612,6 +723,7 @@
       stBack: (stBack || []).length,
       groupSystem: groupSystemCount,
       dropped: dropped,
+      droppedChars: droppedChars,
       worldbook: (wbMeta.matchedSummary || []).length || 0,
       /* 世界书诊断：命中 / 被预算丢弃 / 扫描池长度 / 扫描文本样例 */
       wbMatched: (wbMeta.matchedSummary || []).slice(0, 20),
@@ -655,8 +767,10 @@
   }
 
     var welcome = '你正在参与一场群聊里的狼人杀游戏。'
-      + '本局在你的世界观里真实发生了：你会用你一贯的语气、称呼和判断方式参与讨论，'
+      + '本局在你的世界观里真实发生了：你会用你一贯的语气和称呼方式参与讨论，'
       + '不会突然变成一个「只会打牌的陌生人」。'
+      /* 「一贯的判断方式」会诱导模型按亲疏站边，这里换成「只认对局逻辑」 */
+      + '但在这场游戏里你是认真想赢的：判断谁可疑只看发言和投票，不看私下关系。'
       + '不解释规则、不加旁白括号、不重复系统提示、不输出「某某说：」这类前缀。';
 
   /* 只有需要结构化结果的任务（投票/猎杀/查验/女巫）才允许出现 JSON。
@@ -687,6 +801,18 @@
     head.push('【你在这场对局中的身份】');
     head.push('你在群里的名字是「' + selfName + '」。下面所有发言和判断，都要以「' + selfName + '」这个角色的身份、性格和说话方式来表达。');
     head.push('');
+    /*
+     * 纪律条款压在「人设」正后方：人设上下文里通常带着好感度/亲密度/
+     * 关系设定，如果不紧跟一条「游戏内一律平等」的约束，模型就会把
+     * 那些社交设定当成站边依据，表现得处处护着最亲近的那个人。
+     */
+    head.push('【对局纪律·最高优先级】');
+    head.push('- 性格、语气、称呼照常，但这是一场要认真分出胜负的游戏，不是社交场合。');
+    head.push('- 判定身份只依据：本轮发言的逻辑漏洞、前后矛盾、投票行为、身份声明。');
+    head.push('- 你与任何人的好感度、亲密度、关系设定，都不得作为投票或站边的依据。');
+    head.push('- 不因私交放过可疑者，也不因私交针对无辜者；所有人用同一套标准衡量。');
+    head.push('- 投票理由必须指向具体发言或行为，禁止「相信他」「不想投他」这类空泛理由。');
+    head.push('');
 
     var lead = situation;
     var others = aliveSeats(g).filter(function (s) { return s.whoId !== whoId; });
@@ -710,6 +836,8 @@
 
     if (task === 'vote') {
       lead += '\n\n现在进入投票阶段，你要投出你认为最像狼人的一个玩家（不能投自己）。'
+        + '\n先回想每个人的发言：谁在带节奏、谁的逻辑站不住、谁在含糊其辞，然后据此下判断。'
+        + '\n不许因为与该玩家关系好就改投别人；理由里必须写出他让你起疑的具体言行。'
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
@@ -960,7 +1088,7 @@
     return '<button type="button" class="ww__ctx" data-ww-act="ctx">'
       + '<span class="ww__ctx-dot is-ok"></span>上下文已载入'
       + '<span class="ww__ctx-sub">' + st.systemBlocks + ' 段 · ' + size + ' 字 · 世界书 ' + st.worldbook + ' 条'
-      + ((st.dropped || 0) > 0 ? ' · 已精简 ' + st.dropped + ' 条' : '') + '</span>'
+      + ((st.dropped || 0) > 0 ? ' · 已精简 ' + st.dropped + ' 块' : '') + '</span>'
       + '<span class="ww__ctx-more">详情 ›</span></button>';
   }
 
@@ -994,7 +1122,9 @@
       row('总字数', st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k 字' : st.chars + ' 字');
       row('ST 预设', '前置 ' + stFront + ' 条 / 后置 ' + stBack + ' 条');
       row('群聊 system 块', st.groupSystem + ' 条');
-      row('已精简', (st.dropped || 0) + ' 条（昵称/关系/记忆等与对局无关）');
+      row('已精简', (st.dropped || 0) + ' 块'
+        + ((st.droppedChars || 0) > 0 ? ' · 约 ' + Math.round(st.droppedChars / 1000) + 'k 字' : '')
+        + '（昵称/头衔/关系/记忆/地点等与对局无关）');
       row('命中的世界书', st.worldbook + ' 条');
       row('群成员', st.members + ' 人');
 
@@ -1194,17 +1324,46 @@
 
     if (g.phase === PHASE.SPEECH) {
       var spoken = g.speeches.map(function (sp) {
-        return '<div class="ww-say"><span class="ww-say-name">' + esc(sp.name) + '</span>' +
+        var isMine = sp.whoId === USER_OWNER_ID;
+        return '<div class="ww-say' + (isMine ? ' is-mine' : '') + '">' +
+          '<span class="ww-say-name">' + esc(isMine ? '你' : sp.name) + '</span>' +
           '<span class="ww-say-text">' + esc(sp.text) + '</span>' +
           (sp.truncated ? '<span class="ww-say-cut">⚠️ 输出被截断</span>' : '') +
           '</div>';
       }).join('');
+
+      /*
+       * 轮到谁了：nextSpeaker 现在会把玩家座位一起返回。
+       * 轮到玩家 → 渲染输入框；轮到 AI → 渲染「让下一位发言」按钮。
+       */
+      var nxtSeat = nextSpeaker(g);
+      var myTurn = !!(nxtSeat && nxtSeat.isUser);
+      var allDone = !nxtSeat;
+
+      var turnHtml = '';
+      if (myTurn && !state.busy) {
+        turnHtml = '<div class="ww__myturn">'
+          + '<div class="ww__myturn-title">🎤 轮到你发言了</div>'
+          + '<textarea class="ww__input" data-ww-input="speech" rows="3" maxlength="600"'
+          +   ' placeholder="说出你的判断：可以怀疑某个人、为自己辩解，或分析局势…"></textarea>'
+          + '<div class="ww__actions">'
+          +   '<button type="button" class="ww__btn ww__btn--main" data-ww-act="user_speak">发送发言</button>'
+          +   '<button type="button" class="ww__btn" data-ww-act="skip_speak">这轮跳过</button>'
+          + '</div>'
+          + '</div>';
+      }
+
+      var nextLabel = state.busy
+        ? esc(state.busyText || '思考中…')
+        : (allDone ? '所有人都发言完了' : (nxtSeat ? '让「' + nxtSeat.seat.name + '」发言' : '让下一位发言'));
+
       stageHtml = '<div class="ww__stage">' +
         '<div class="ww__stage-title">💬 白天讨论</div>' +
         '<div class="ww__speeches">' + (spoken || '<div class="ww__hint">还没有人发言</div>') + '</div>' +
+        turnHtml +
         '<div class="ww__actions">' +
-          '<button type="button" class="ww__btn ww__btn--main" data-ww-act="next_speech"' +
-            (state.busy ? ' disabled' : '') + '>' + (state.busy ? esc(state.busyText || '思考中…') : '让下一位发言') + '</button>' +
+          (myTurn ? '' : '<button type="button" class="ww__btn ww__btn--main" data-ww-act="next_speech"'
+            + (state.busy || allDone ? ' disabled' : '') + '>' + nextLabel + '</button>') +
           '<button type="button" class="ww__btn" data-ww-act="to_vote">进入投票</button>' +
         '</div>' +
       '</div>';
@@ -1383,6 +1542,8 @@
         if (toast) toast('所有人都发言完了，可以进入投票');
         return true;
       }
+      /* 轮到玩家时不该走这条分支：那是输入框的活儿 */
+      if (nxt.isUser) { rerender(); return true; }
       state.busy = true;
       state.busyText = nxt.seat.name + ' 正在思考…';
       rerender();
@@ -1390,10 +1551,7 @@
         var fresh2 = load(store, chatId);
         recordSpeech(fresh2, nxt.seat.whoId, out.text, out.truncated);
         /* 游标推进到该座位之后 */
-        var aliveNow = aliveSeats(fresh2);
-        for (var i = 0; i < aliveNow.length; i++) {
-          if (aliveNow[i].whoId === nxt.seat.whoId) { fresh2.speechCursor = i + 1; break; }
-        }
+        advanceSpeechCursor(fresh2, nxt.seat.whoId);
         state.busy = false;
         save(store, chatId, fresh2).then(function () {
           rerender();
@@ -1409,6 +1567,37 @@
         fail('AI 发言失败：' + ((err && err.message) || '未知错误'));
         rerender();
       });
+      return true;
+    }
+
+    /* ---- 玩家发言 ---- */
+    if (act === 'user_speak') {
+      var box = panel ? panel.querySelector('[data-ww-input="speech"]') : null;
+      var say = box ? trim(box.value) : '';
+      if (!say) {
+        if (toast) toast('先写点什么再发送吧');
+        if (box && box.focus) box.focus();
+        return true;
+      }
+      var mine = nextSpeaker(g);
+      if (!mine || !mine.isUser) { rerender(); return true; }
+      recordSpeech(g, USER_OWNER_ID, say, false);
+      pushLog(g, '你完成了发言');
+      advanceSpeechCursor(g, USER_OWNER_ID);
+      save(store, chatId, g);
+      rerender();
+      return true;
+    }
+
+    /* 玩家跳过本轮发言：直接推进游标，不写入 speeches */
+    if (act === 'skip_speak') {
+      var cur = nextSpeaker(g);
+      if (!cur || !cur.isUser) { rerender(); return true; }
+      recordSpeech(g, USER_OWNER_ID, '（这轮我先不发言，听你们说。）', false);
+      pushLog(g, '你选择了本轮跳过发言');
+      advanceSpeechCursor(g, USER_OWNER_ID);
+      save(store, chatId, g);
+      rerender();
       return true;
     }
 

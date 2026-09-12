@@ -674,6 +674,55 @@
   word-break: break-word;
 }
 
+/* 玩家自己的发言：用主题色底 + 右侧强调条区分出来 */
+.ww-say.is-mine {
+  background: rgba(74, 58, 120, 0.08);
+  border-color: rgba(74, 58, 120, 0.18);
+}
+
+.ww-say.is-mine .ww-say-name {
+  color: #2f2456;
+}
+
+/* ---------- 轮到自己发言：输入区 ---------- */
+.ww__myturn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(74, 58, 120, 0.06);
+  border: 1px solid rgba(74, 58, 120, 0.16);
+}
+
+.ww__myturn-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f2456;
+}
+
+.ww__input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #2b2438;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 12px;
+  resize: vertical;
+}
+
+.ww__input:focus {
+  outline: none;
+  border-color: rgba(74, 58, 120, 0.5);
+  box-shadow: 0 0 0 3px rgba(74, 58, 120, 0.1);
+}
+
 /* ---------- 结算 ---------- */
 /* 结算 / 开局这类「一屏讲完」的内容：居中并充分撑开 */
 .ww__over {
