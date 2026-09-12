@@ -1001,7 +1001,7 @@
     entry.avatars = Object.assign({}, state.avatars);
     entry.msgCount = pack.visible.length;
     entry.lastMsgId = pack.visible.length ? String(pack.visible[pack.visible.length - 1].id) : '';
-    entry.loaded = entry.pane.querySelector('[data-msg-id], .qq-room__empty') != null;
+    entry.loaded = entry.pane.querySelector('[data-msg-id], .qq-room__empty, .qq-greet') != null;
   }
 
   function ensureChatPane(chatId) {
@@ -1080,7 +1080,7 @@
       entry.loaded &&
       entry.pane &&
       entry.pane.isConnected &&
-      entry.pane.querySelector('[data-msg-id], .qq-room__empty')
+      entry.pane.querySelector('[data-msg-id], .qq-room__empty, .qq-greet')
     );
   }
 
@@ -3169,44 +3169,68 @@
   }
 
   /*
-   * 第一楼开场白卡片。
+   * 第一楼·开场白入口。
    *
-   * 只在「单聊 + 对话还没有任何消息」时出现 —— 这就是「第一楼」。
-   * 一旦用户选了开场白、或自己先发了消息，可见消息数就 >= 1，
-   * 卡片自然消失（第二楼起不再显示），也符合「开场白只属于第一楼」。
-   *
-   * 选中的开场白【不写进聊天记录】，只是让模型知道这轮该以什么场景开场；
-   * 用户点「就这个，开始吧」时，它才作为角色的第一条消息落库。
+   * 设计（第六轮改版）：
+   * - 第一楼【留空】：不渲染任何占位气泡，聊天区保持空白，用户直接输入。
+   * - 右下角一枚「›」图标：点它展开抽屉，切换/查看/发送开场白。
+   *   默认停在「空白 · 由我开场」，所以第一楼不会被开场白占位。
+   * - 开场白【只在第一楼出现】。第二条消息落库后，图标与抽屉一起消失，
+   *   后续楼层永远不再注入开场白（服务端侧由 isFirstFloorChat 兜底）。
    */
+  var GREET_BLANK_INDEX = 0;
+
+  /* 抽屉是否展开，按 chatId 记（纯前端态） */
+  var greetDrawerByChat = {};
+
+  function greetingDrawerOpen(chatId) {
+    return !!greetDrawerByChat[String(chatId || '')];
+  }
+
+  function setGreetingDrawerOpen(chatId, on) {
+    var k = String(chatId || '');
+    if (on) greetDrawerByChat[k] = true;
+    else delete greetDrawerByChat[k];
+  }
+
+  /* 列表第 0 位固定是「空白 · 由我开场」，用户开场白从第 1 位开始 */
   function greetingPickerHtml(chatId, ctx) {
     if (!ctx || ctx.isGroup) return '';
     var contact = ctx.contact;
     if (!contact) return '';
-    var cs = global.miyaContactsStore;
-    if (!cs || typeof cs.findCharacter !== 'function') return '';
-    var rid = String(contact.characterId || contact.id || contact.chronicleId || '').trim();
-    var row = cs.findCharacter(rid);
-    if (!row) return '';
-    var list = (row.greetings || []).filter(function (g) { return String(g || '').trim(); });
+    var list = greetingListFor(chatId);
     if (!list.length) return '';
 
     var idx = greetingPickIndex(chatId);
     if (idx >= list.length) idx = 0;
-    var multi = list.length > 1;
+    var open = greetingDrawerOpen(chatId);
 
-    return '<div class="qq-room__greet" data-greet-card data-chat-id="' + esc(chatId) + '">' +
-      '<div class="qq-room__greet-head">' +
-        '<span class="qq-room__greet-kicker">' + esc(row.name || contact.name || '对方') + ' · 开场</span>' +
-        (multi
-          ? '<button type="button" class="qq-room__greet-switch" data-greet-switch>' +
-              '切换 (' + (idx + 1) + '/' + list.length + ')' +
-            '</button>'
-          : '') +
-      '</div>' +
-      '<div class="qq-room__greet-body">' + esc(list[idx]) + '</div>' +
-      '<div class="qq-room__greet-foot">' +
-        '<button type="button" class="qq-room__greet-go" data-greet-go>就这个，开始吧</button>' +
-      '</div>' +
+    function rowHtml(i, label, preview) {
+      var active = i === idx ? ' is-active' : '';
+      return '<button type="button" class="qq-greet__item' + active + '" data-greet-pick="' + i + '">' +
+        '<span class="qq-greet__item-radio" aria-hidden="true"></span>' +
+        '<span class="qq-greet__item-txt">' +
+          '<span class="qq-greet__item-label">' + esc(label) + '</span>' +
+          '<span class="qq-greet__item-prev">' + esc(preview) + '</span>' +
+        '</span>' +
+        (i > 0 ? '<span class="qq-greet__item-use" data-greet-use="' + i + '">发送</span>' : '') +
+      '</button>';
+    }
+
+    var rows = rowHtml(GREET_BLANK_INDEX, '空白 · 由我开场', '第一楼留空，我先输入，再由' +
+      String(contact.name || '对方') + '接话');
+    list.forEach(function (g, i) {
+      rows += rowHtml(i + 1, '开场白 ' + (i + 1), String(g).slice(0, 60));
+    });
+
+    return '<div class="qq-greet' + (open ? ' is-open' : '') + '" data-greet-card data-chat-id="' + esc(chatId) + '">' +
+      (open ? '<div class="qq-greet__sheet" data-greet-sheet>' +
+        '<div class="qq-greet__sheet-title">选一条开场（仅第一楼可见）</div>' +
+        rows +
+      '</div>' : '') +
+      '<button type="button" class="qq-greet__fab" data-greet-fab aria-label="开场白" title="开场白">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg>' +
+      '</button>' +
     '</div>';
   }
 
@@ -3302,13 +3326,16 @@
       : '';
     html += mountHintHtml(pack);
     /*
-     * 第一楼开场白卡片：只在还没有任何可见消息时出现。
-     * 放在消息列表【之前】，作为「这一场对话从哪里开始」的入口。
+     * 第一楼·开场白入口：只在还没有任何可见消息时出现。
+     * 第一楼本身【留空】—— 这里只挂右下角那枚 › 图标（点开才有抽屉），
+     * 不渲染任何占位气泡，用户可以直接输入。
+     * 绝对定位挂在滚动容器上，保证停在可视区右下角而非内容末尾。
      */
-    if (!msgs.length) html += greetingPickerHtml(chatId, ctx);
+    var greetHtml = !msgs.length ? greetingPickerHtml(chatId, ctx) : '';
     html += msgs.map(function (m, i) {
       return bubbleHtml(m, ctx, computeRoundPos(roles, i), i, hvIndex);
     }).join('');
+    html += greetHtml;
     var stickerIds = collectStickerBlobIdsFromMessages(msgs);
     paintMessagesShell(sc, html, chatId, Object.assign({ deferMedia: !!opts.isFirstOpen }, opts), anchor);
     if (stickerIds.length && store.prefetchBlobUrls) {
@@ -5046,10 +5073,10 @@
   }
 
   /*
-   * 第一楼开场白卡片：切换 / 开始。
+   * 第一楼开场白抽屉：展开 / 选中 / 发送。
    *
    * 用捕获阶段监听，避免被消息列表那一堆点击处理抢走。
-   * 「切换」只改前端下标并重绘；「开始」才把选中的开场白写成角色的第一条消息。
+   * 选中只改前端下标并重绘；点某一行的「发送」才把那条开场白写成角色的第一条消息。
    */
   function bindGreetingPicker() {
     if (document.documentElement.getAttribute('data-miya-greet-pick') === '1') return;
@@ -5058,28 +5085,50 @@
       var t = e.target;
       if (!t || !t.closest) return;
       var card = t.closest('[data-greet-card]');
-      if (!card) return;
+      if (!card) {
+        /* 点抽屉外面 → 收起（只处理已展开的，避免全局开销） */
+        var anyOpen = document.querySelector('.qq-greet.is-open[data-chat-id]');
+        if (anyOpen) {
+          var oid = anyOpen.getAttribute('data-chat-id') || state.chatId;
+          setGreetingDrawerOpen(oid, false);
+          if (oid) renderMessages(oid, { preserveScroll: true });
+        }
+        return;
+      }
       var chatId = card.getAttribute('data-chat-id') || state.chatId;
       if (!chatId) return;
 
-      /* 切换下一条开场白 */
-      if (t.closest('[data-greet-switch]')) {
+      /* 展开 / 收起 */
+      if (t.closest('[data-greet-fab]')) {
         e.preventDefault();
-        var list = greetingListFor(chatId);
-        if (list.length <= 1) return;
-        setGreetingPickIndex(chatId, (greetingPickIndex(chatId) + 1) % list.length);
+        e.stopPropagation();
+        setGreetingDrawerOpen(chatId, !greetingDrawerOpen(chatId));
         renderMessages(chatId, { preserveScroll: true });
         return;
       }
 
-      /* 选定：把开场白作为角色的第一条消息落库 */
-      if (t.closest('[data-greet-go]')) {
+      /* 发送某一条开场白：作为角色的第一条消息落库 */
+      var useEl = t.closest('[data-greet-use]');
+      if (useEl) {
         e.preventDefault();
-        var items = greetingListFor(chatId);
-        var idx = greetingPickIndex(chatId);
-        var text = items[idx];
-        if (!text) return;
-        startWithGreeting(chatId, text);
+        e.stopPropagation();
+        var ui = Number(useEl.getAttribute('data-greet-use')) || 0;
+        var useItems = greetingListFor(chatId);
+        var useText = useItems[ui - 1];
+        if (!useText) return;
+        setGreetingPickIndex(chatId, ui);
+        startWithGreeting(chatId, useText);
+        return;
+      }
+
+      /* 只选中，不发送 */
+      var pickEl = t.closest('[data-greet-pick]');
+      if (pickEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        setGreetingPickIndex(chatId, Number(pickEl.getAttribute('data-greet-pick')) || 0);
+        renderMessages(chatId, { preserveScroll: true });
+        return;
       }
     }, true);
   }
@@ -5110,6 +5159,7 @@
       ? store.addMessageImmediate(chatId, { role: 'assistant', type: 'text', content: body })
       : null;
     if (!entry) { toast('开场白写入失败'); return; }
+    setGreetingDrawerOpen(chatId, false);
     delete greetPickByChat[String(chatId || '')];
     renderMessages(chatId, { toBottom: true });
     scheduleRefreshLists();

@@ -171,13 +171,35 @@
     var portrait = c.avatar
       ? '<img src="' + esc(c.avatar) + '" alt="" loading="lazy" decoding="async">'
       : '<div class="mn-panel__mono">' + esc(monogram(c.name)) + '</div>';
+    // 副标题：优先取人设里的「标签/简介」行，其次人设首行摘要，最后回落到开场白条数
+    var metaText = '';
+    var ptext = String(c.persona || '');
+    var tagLine = ptext.match(/【(?:标签|简介|一句话简介)】\s*([^\n【]{1,40})/);
+    if (tagLine) metaText = tagLine[1].trim();
+    if (!metaText) {
+      metaText = ptext
+        .replace(/【[^】]{1,40}】/g, '\n')
+        .split('\n')
+        .map(function (ln) { return ln.replace(/^\s*[·•\-–—]\s*/, '').trim(); })
+        .filter(Boolean)
+        .join(' · ')
+        .slice(0, 32);
+    }
+    if (!metaText) {
+      var gcount = (c.greetings || []).length;
+      if (gcount) metaText = '开场白 ' + gcount + ' 条';
+    }
+    var meta = metaText ? '<span class="mn-panel__meta">' + esc(metaText) + '</span>' : '';
     return (
       '<button type="button" class="mn-panel" data-ct-id="' + esc(c.id) + '">' +
-      badge +
       '<div class="mn-panel__frame">' + portrait + '<span class="mn-panel__speed" aria-hidden="true"></span></div>' +
       '<div class="mn-panel__body">' +
       '<p class="mn-panel__name">' + esc(c.name) + '</p>' +
-      '</div></button>'
+      meta +
+      '</div>' +
+      badge +
+      '<i class="mn-panel__chevron" aria-hidden="true"></i>' +
+      '</button>'
     );
   }
 
