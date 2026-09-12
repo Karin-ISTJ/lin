@@ -1372,8 +1372,63 @@
     /* 上一次 AI 发言失败（空返回）的留痕，避免只弹 toast 一闪而过 */
     speechError: null,
     /* 局中重开的二次确认状态 */
-    confirmReset: false
+    confirmReset: false,
+    /* busy 开始时刻：用于显示「已等待 N 秒」，让用户知道 AI 在工作而非卡死 */
+    busySince: 0,
+    busyTimer: 0,
+    /* 计时重绘所需的上下文（store / chatId / openOverlay） */
+    busyCtx: null
   };
+
+  /**
+   * 进入忙碌态并启动计时。
+   *
+   * 【为什么需要计时】
+   * busy 闸门会吞掉重复点击，但旧实现吞得悄无声息 ——
+   * 用户点了没反应，只能猜是不是卡死了。这里在按钮上跑一个秒表，
+   * 秒数在涨就说明请求还在跑，心里有底。
+   */
+  function beginBusy(store, chatId, openOverlay, text) {
+    state.busy = true;
+    state.busyText = text || '思考中…';
+    state.busySince = now();
+    state.busyCtx = { store: store, chatId: chatId, openOverlay: openOverlay };
+    if (state.busyTimer) clearInterval(state.busyTimer);
+    state.busyTimer = setInterval(function () {
+      if (!state.busy) { clearInterval(state.busyTimer); state.busyTimer = 0; return; }
+      var c = state.busyCtx;
+      if (c && c.store && c.chatId && typeof c.openOverlay === 'function') {
+        refresh(c.store, c.chatId, c.openOverlay);
+      }
+    }, 1000);
+  }
+
+  function endBusy() {
+    state.busy = false;
+    state.busySince = 0;
+    state.busyCtx = null;
+    if (state.busyTimer) { clearInterval(state.busyTimer); state.busyTimer = 0; }
+  }
+
+  /** 已等待秒数（仅 busy 时有意义） */
+  function busySeconds() {
+    if (!state.busy || !state.busySince) return 0;
+    return Math.max(0, Math.floor((now() - state.busySince) / 1000));
+  }
+
+  /** 忙的时候给一句统一提示，别再静默吞点击 */
+  function notifyBusy(toast) {
+    if (!toast || !state.busy) return;
+    var s = busySeconds();
+    toast('AI 还在处理中' + (s > 0 ? '（已等待 ' + s + ' 秒）' : '')
+      + (state.busyText ? '：' + state.busyText : '') + '，请稍候…');
+  }
+
+  /** 按钮文案：带已等待秒数 */
+  function busyLabel(fallback) {
+    var s = busySeconds();
+    return (state.busyText || fallback || '思考中…') + (s > 0 ? ' ' + s + 's' : '');
+  }
 
   function phaseStepHtml(g) {
     var order = [
@@ -1825,7 +1880,15 @@
       }
 
       stageHtml += '<div class="ww__actions">' +
-        '<button type="button" class="ww__btn ww__btn--main" data-ww-act="dawn">天亮（结算夜晚）</button>' +
+        '<button type="button" class="ww__btn ww__btn--main" data-ww-act="dawn"' +
+          (state.busy ? ' disabled' : '') + '>' +
+          (state.busy ? esc(busyLabel('狼人正在行动…')) : '天亮（结算夜晚）') + '</button>' +
+        '</div>' +
+        /* 忙碌时给一行进度说明：秒数在涨就说明 AI 在工作，不是卡死 */
+        (state.busy
+          ? '<div class="ww__hint ww__hint--busy">⏳ ' + esc(busyLabel('AI 正在处理…'))
+            + '　—— 期间重复点击不会生效，请稍候</div>'
+          : '') +
         '</div>';
     }
 
@@ -1882,12 +1945,16 @@
       }
 
       var nextLabel = state.busy
-        ? esc(state.busyText || '思考中…')
+        ? esc(busyLabel('思考中…'))
         : (allDone ? '所有人都发言完了' : (nxtSeat ? '让「' + nxtSeat.seat.name + '」发言' : '让下一位发言'));
 
       stageHtml = '<div class="ww__stage">' +
         '<div class="ww__stage-title">💬 白天讨论</div>' +
         '<div class="ww__speeches">' + (spoken || errHtml ? spoken + errHtml : '<div class="ww__hint">还没有人发言</div>') + '</div>' +
+        (state.busy
+          ? '<div class="ww__hint ww__hint--busy">⏳ ' + esc(busyLabel('AI 正在处理…'))
+            + '　—— 期间重复点击不会生效，请稍候</div>'
+          : '') +
         turnHtml +
         '<div class="ww__actions">' +
           (myTurn ? '' : '<button type="button" class="ww__btn ww__btn--main" data-ww-act="next_speech"'
@@ -1918,7 +1985,7 @@
           '<button type="button" class="ww__btn ww__btn--main" data-ww-act="do_vote"' +
             (state.busy ? ' disabled' : '') + '>' +
             (state.busy
-              ? esc(state.busyText || 'AI 投票中…')
+              ? esc(busyLabel('AI 投票中…'))
               : (mustVote && !voted ? '请先投出你的一票' : '让 AI 投票并计票')) + '</button>' +
         '</div>' +
       '</div>';
@@ -2108,7 +2175,7 @@
 
     if (act === 'dawn') {
       /* 并发闸门：狼人行动 + 结算也是异步流程，连点会重复结算 */
-      if (state.busy) return true;
+      if (state.busy) { notifyBusy(toast); return true; }
       /*
        * 天亮之前先让 AI 狼人把刀口定下来。
        * 不补这一步，玩家拿好人牌时永远没有刀口（狼人 AI 从不选刀）。
@@ -2129,18 +2196,17 @@
           rerender();
           return true;
         }
-        state.busy = true;
-        state.busyText = '狼人正在行动…';
+        beginBusy(store, chatId, openOverlay, '狼人正在行动…');
         rerender();
         runWolfKill(store, chatId).then(function () {
-          state.busy = false;
+          endBusy();
           var fresh = load(store, chatId);
           advanceFromNight(store, chatId, fresh);
           if (toast) toast(fresh.dawnDeaths && fresh.dawnDeaths.length
             ? '天亮了，昨晚有人出局' : '天亮了，昨晚是平安夜');
           rerender();
         }).catch(function (err) {
-          state.busy = false;
+          endBusy();
           var fresh = load(store, chatId);
           advanceFromNight(store, chatId, fresh);
           if (toast) toast('狼人行动出错，按平安夜结算：' + ((err && err.message) || '未知错误'));
@@ -2163,7 +2229,7 @@
        * 说 N 遍 —— 表现出来就是「点一下触发两三次 API」+ 重复发言人 + 顺序乱。
        * 这里用 busy 做互斥：第一次之后的点击直接吞掉。
        */
-      if (state.busy) return true;
+      if (state.busy) { notifyBusy(toast); return true; }
       var nxt = nextSpeaker(g);
       if (!nxt) {
         if (toast) toast('所有人都发言完了，可以进入投票');
@@ -2171,8 +2237,7 @@
       }
       /* 轮到玩家时不该走这条分支：那是输入框的活儿 */
       if (nxt.isUser) { rerender(); return true; }
-      state.busy = true;
-      state.busyText = nxt.seat.name + ' 正在思考…';
+      beginBusy(store, chatId, openOverlay, nxt.seat.name + ' 正在思考…');
       rerender();
       askAi(g, nxt.seat.whoId, 'speech').then(function (out) {
         /*
@@ -2182,7 +2247,7 @@
          * 于是一个座位「沉默」过去，后面的座位跟着连锁沉默。
          */
         if (out.empty) {
-          state.busy = false;
+          endBusy();
           state.speechError = {
             name: nxt.seat.name,
             msg: '⚠️ 这一轮没有返回内容（API 空响应）。常见原因：上下文过长、'
@@ -2197,7 +2262,7 @@
         /* 用「刚发言的座位」推进游标，而不是重新取 nextSpeaker */
         recordSpeech(fresh2, nxt.seat.whoId, out.text, out.truncated);
         advanceSpeechCursor(fresh2, nxt.seat.whoId);
-        state.busy = false;
+        endBusy();
         save(store, chatId, fresh2).then(function () {
           rerender();
           /* 截断时顺手把输出上限面板展开，让用户一眼看到该调哪个开关 */
@@ -2208,7 +2273,7 @@
           }
         });
       }).catch(function (err) {
-        state.busy = false;
+        endBusy();
         fail('AI 发言失败：' + ((err && err.message) || '未知错误'));
         rerender();
       });
@@ -2329,14 +2394,13 @@
         rerender();
         return true;
       }
-      state.busy = true;
-      state.busyText = 'AI 投票中…';
+      beginBusy(store, chatId, openOverlay, 'AI 投票中…');
       rerender();
       runAiVotes(store, chatId).then(function () {
-        state.busy = false;
+        endBusy();
         rerender();
       }).catch(function (err) {
-        state.busy = false;
+        endBusy();
         fail('投票出错：' + ((err && err.message) || '未知错误'));
         rerender();
       });

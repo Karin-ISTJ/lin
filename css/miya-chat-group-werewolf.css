@@ -677,6 +677,16 @@
   font-weight: 600;
 }
 
+/* 忙碌进度条：秒数在涨 = AI 还在跑，避免用户误判成卡死 */
+.ww__hint--busy {
+  color: #8a6d1b;
+  opacity: 1;
+  font-weight: 600;
+  background: rgba(230, 180, 40, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
 /* ---------- 选择按钮组 ---------- */
 .ww__pick {
   display: flex;
