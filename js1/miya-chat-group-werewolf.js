@@ -638,6 +638,77 @@
   }
 
   /**
+   * 裁剪「本群成员人设」块：只保留当前发言者的详细人设。
+   *
+   * 群聊的这块是把【每个】成员的完整人设拼在一起的。狼人杀里每个 AI 只演自己，
+   * 拿全员的详细人设既白烧 token（实测这块能到 90k+），又容易让它串味、
+   * 用别人的口吻说话。其他成员只留「名字 + 本群身份」，足够推理用。
+   *
+   * 人设块内部结构（buildAllPersonasBlock 产出）：
+   *   【本群成员人设】
+   *   · 小明
+   *     性别 男
+   *     年龄 24
+   *     人设 <长文本>
+   *   · 小红
+   *     ...
+   * 成员以小圆点「· 」开头分段，据此切。
+   */
+  function trimPersonaBlock(piece, speakerId) {
+    if (!speakerId) return piece;
+    if (piece.indexOf('【本群成员人设】') !== 0) return piece;
+
+    var lines = piece.split('\n');
+    var head = lines.shift();               /* 【本群成员人设】 */
+    var intro = [];
+    /* 收集成员段：以「· 」开头为新成员起点 */
+    var segs = [];
+    var cur = null;
+    lines.forEach(function (ln) {
+      if (/^\s*[·•]\s*/.test(ln)) {
+        if (cur) segs.push(cur);
+        cur = { name: trim(ln.replace(/^\s*[·•]\s*/, '')), body: [ln] };
+      } else if (cur) {
+        cur.body.push(ln);
+      } else {
+        intro.push(ln);
+      }
+    });
+    if (cur) segs.push(cur);
+    if (!segs.length) return piece;
+
+    /* 找出当前发言者：姓名要匹配（发言者 id 是群成员 id，人设块里是显示名） */
+    var want = trim(speakerId);
+    var keep = null;
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i].name === want) { keep = i; break; }
+    }
+    /* 精确匹配不上就退一步做包含匹配（群昵称常带后缀，如「小明(课代表)」） */
+    if (keep === null && want) {
+      for (var j = 0; j < segs.length; j++) {
+        var nm = segs[j].name;
+        if (nm && want && (nm.indexOf(want) >= 0 || want.indexOf(nm) >= 0)) { keep = j; break; }
+      }
+    }
+    /*
+     * 还是对不上就不动它。宁可多花点 token，也不能因为昵称差异
+     * 把当前角色的人设整段删掉 —— 那会让 AI 直接失去人格。
+     */
+    if (keep === null) return piece;
+
+    var out = [head].concat(intro.filter(function (t) { return trim(t); }));
+    segs.forEach(function (s, idx) {
+      if (idx === keep) {
+        out.push(s.body.join('\n'));
+      } else {
+        /* 非发言者：只留名字，去掉性别/年龄/人设正文 */
+        out.push('· ' + s.name + '（本局其他玩家，无需扮演）');
+      }
+    });
+    return trim(out.join('\n'));
+  }
+
+  /**
    * 组装「对局需要的角色上下文」。
    * 复用群聊自己的 buildApiMessages 拿到人设/世界书/关系等系统块，
    * 再按白名单裁掉与狼人杀无关的部分，并把 ST 预设（前置换·后置换）拼进来。
@@ -648,7 +719,14 @@
    * 都被 ST 流水线判为 rejected → matched 为空 → 体检条报「世界书 0 条」。
    * 现在把当前局势摘要作为扫描文本传进去，关键词词条才能正常命中。
    */
-  function buildWorldContext(store, chatId, scanHint) {
+  function buildWorldContext(store, chatId, scanHint, opts) {
+    opts = opts && typeof opts === 'object' ? opts : {};
+    /*
+     * speakerId = 当前要发言的角色。狼人杀里每个 AI 只演自己，
+     * 拿全员的完整人设既浪费 token 又容易让它串味 —— 只需要自己的详细人设，
+     * 别人的给个名字和身份标签就够推理了。
+     */
+    var speakerId = trim(opts.speakerId);
     var lines = [];
     var group = global.MiyaChatGroup;
     if (!group || typeof group.buildApiMessages !== 'function') {
@@ -681,6 +759,10 @@
 
     var dropped = 0;
     var droppedChars = 0;
+    /* 人设块被裁掉的字数：单独统计，因为它不是「剔除」而是「精简」 */
+    var personaTrimmed = 0;
+    /* 每个保留下来的群 system 块：标题 + 字数，用于体检弹窗定位膨胀源 */
+    var groupBlocks = [];
 
     /*
      * 分项字数：光看总数没法定位膨胀源（152.5k → 133k 折腾了两轮），
@@ -718,6 +800,18 @@
           droppedChars += piece.length;
           continue;
         }
+        /* 人设块单独裁剪：只留当前发言者的详细人设 */
+        var before = piece.length;
+        piece = trimPersonaBlock(piece, speakerId);
+        if (piece.length < before) {
+          personaTrimmed += (before - piece.length);
+        }
+        if (!piece) { dropped += 1; droppedChars += before; continue; }
+        /* 逐块留痕：99.4k 这种量级必须能看出是哪一块撑起来的 */
+        groupBlocks.push({
+          title: (piece.match(/^【[^】]{1,40}】/) || ['(无标题)'])[0],
+          len: piece.length
+        });
         pushPiece(piece, 'group');
       }
     }
@@ -754,6 +848,8 @@
       stFrontChars: stFrontChars,
       stBackChars: stBackChars,
       groupChars: groupChars,
+      groupBlocks: groupBlocks.slice().sort(function (a, b) { return b.len - a.len; }),
+      personaTrimmed: personaTrimmed,
       biggest: biggest,
       groupSystem: groupSystemCount,
       dropped: dropped,
@@ -827,9 +923,12 @@
      * 世界上下文（人设/世界书/ST预设）—— 让 AI 不脱缰。
      * scanHint 传当前局势：世界书的关键词扫描池就是它，
      * 传空串会让所有关键词词条判为未命中、体检条恒显示 0 条。
+     * speakerId 传当前角色的群内显示名：人设块只保留他自己的详细人设。
      */
     var situation = buildSituation(g, { selfId: whoId });
-    var worldCtx = buildWorldContext(global.miyaChatStore, g.chatId, situation);
+    var worldCtx = buildWorldContext(global.miyaChatStore, g.chatId, situation, {
+      speakerId: selfName
+    });
 
     var head = [];
     head.push('【你在这场对局中的身份】');
@@ -1163,8 +1262,35 @@
       row('已精简', (st.dropped || 0) + ' 块'
         + ((st.droppedChars || 0) > 0 ? ' · 约 ' + Math.round(st.droppedChars / 1000) + 'k 字' : '')
         + '（昵称/头衔/关系/记忆/地点等与对局无关）');
+      if ((st.personaTrimmed || 0) > 0) {
+        row('人设瘦身', '约 ' + Math.round(st.personaTrimmed / 1000) + 'k 字'
+          + '（只保留当前发言角色的详细人设，其余成员仅留名字）');
+      }
       row('命中的世界书', st.worldbook + ' 条');
       row('群成员', st.members + ' 人');
+
+      /*
+       * 群聊 system 逐块明细：按字数从大到小排。
+       * 之前只报「群聊 system N 字」一个总数，99.4k 摆在那儿却不知道是谁的，
+       * 只能靠猜哪个 builder 写得多 —— 现在直接列出来。
+       */
+      var gbRows = (st.groupBlocks || []).filter(function (r) { return r.len > 0; });
+      var gbDiag = '';
+      if (gbRows.length) {
+        var gbTop = gbRows[0].len || 1;
+        gbDiag = '<div class="ww-ctx-wbmeta"><b>群聊 system 逐块（'
+          + gbRows.length + ' 块，合计 ' + (st.groupChars / 1000).toFixed(1) + 'k 字）</b>'
+          + gbRows.slice(0, 10).map(function (r) {
+              return '<div class="ww-ctx-part">'
+                + '<span class="ww-ctx-part__name">' + esc(r.title) + '</span>'
+                + '<span class="ww-ctx-part__bar"><i style="width:'
+                + (r.len / gbTop * 100).toFixed(0) + '%"></i></span>'
+                + '<span class="ww-ctx-part__num">'
+                + (r.len >= 1000 ? (r.len / 1000).toFixed(1) + 'k' : r.len) + '</span></div>';
+            }).join('')
+          + (gbRows.length > 10 ? '<div style="margin-top:4px">…其余 ' + (gbRows.length - 10) + ' 块</div>' : '')
+          + '</div>';
+      }
 
       /*
        * ST 预设逐条明细：条目开关只有「启用/停用」两个状态，
@@ -1285,6 +1411,7 @@
       var health = st.systemBlocks >= 2 && st.chars > 200;
       body = '<div class="ww-ctx-list">' + rows.join('') + '</div>'
         + partsDiag
+        + gbDiag
         + stListDiag
         + (wbRows.length ? '<div class="ww-ctx-wblist">' + wbRows.join('') + '</div>' : '')
         + wbDiag + growDiag + '<div class="ww-ctx-tip">' + wbTip + '</div>'
