@@ -262,8 +262,7 @@
   }
 
   // 生成钩子：生成前注入、生成后解析
-  // 原先通过 MiyaPlugins.register 注册，现直接暴露同名方法，
-  // 由 miya-chat-engine / miya-appointment-engine 直接调用（插件宿主已移除）。
+  // 直接暴露同名方法，由 miya-chat-engine / miya-appointment-engine 直接调用。
   function beforeGenerate(ctx) {
     if (!ctx || !Array.isArray(ctx.messages)) return ctx;
     var chatId = ctx.chatId;

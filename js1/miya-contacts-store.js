@@ -373,7 +373,7 @@
    *
    * opts.includeGreetings：是否带上开场白。
    *   **默认 false** —— 这是刻意的。开场白只在「对话第一楼」有意义，而本函数
-   *   被 deep 桥、couple-whisper、朋友圈等 9 处调用，它们都不是第一楼场景。
+   *   被 couple-whisper、朋友圈等多处调用，它们都不是第一楼场景。
    *   默认不带，才能保证这些调用方的输出与加此功能之前【逐字节一致】。
    */
   function renderChronicleBlock(roleId, opts) {
