@@ -46,8 +46,8 @@
   <link rel="stylesheet" href="css/miya-chat-settings.css?v=40">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=5">
   <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=10">
-  <link rel="stylesheet" href="css/miya-offline.css?v=54">
-  <link rel="stylesheet" href="css/miya-offline-themes.css?v=38">
+  <link rel="stylesheet" href="css/miya-offline.css?v=55">
+  <link rel="stylesheet" href="css/miya-offline-themes.css?v=39">
   <link rel="stylesheet" href="css/miya-chat-call.css?v=1">
   <link rel="stylesheet" href="css/miya-chat-notify.css?v=6">
   <link rel="stylesheet" href="css/miya-thermal.css?v=11">
@@ -3114,182 +3114,6 @@
     </div>
   </div>
 
-  <!-- 赛事 · Match -->
-  <div class="miya-match-app" id="miya-match-app" hidden aria-hidden="true">
-    <div class="mt-shell">
-      <!-- 大厅 -->
-      <section class="mt-page is-active" id="mt-page-home" aria-label="赛事大厅">
-        <header class="mt-head">
-          <div>
-            <h1 class="mt-head__title">赛事</h1>
-            <p class="mt-head__sub">LIVE · 主持与裁判</p>
-          </div>
-          <div class="mt-head__actions">
-            <button type="button" class="mt-icon-btn" id="mt-open-history" aria-label="历史记录" title="历史">
-              <img class="mi-ico-img" src="img/icons/clock.svg" alt="" width="18" height="18">
-            </button>
-            <button type="button" class="mt-icon-btn" id="mt-close" aria-label="关闭">
-              <img class="mi-ico-img" src="img/icons/x-close.svg" alt="" width="18" height="18">
-            </button>
-          </div>
-        </header>
-        <div class="mt-scroll" id="mt-home-scroll">
-          <p class="mt-hint">选一场比赛，邀请角色上场。你是主持人兼裁判。</p>
-          <div class="mt-gate">
-            <button type="button" class="mt-gate__btn" data-mt-gate="olympics">
-              <span class="mt-gate__kicker">Built-in</span>
-              <span class="mt-gate__name">咪运会</span>
-              <span class="mt-gate__desc">跑步、拔河、跳绳等十个体力项目</span>
-            </button>
-            <button type="button" class="mt-gate__btn" data-mt-gate="talent">
-              <span class="mt-gate__kicker">Built-in</span>
-              <span class="mt-gate__name">才艺大赛</span>
-              <span class="mt-gate__desc">唱歌、跳舞、绘画等多种才艺比拼</span>
-            </button>
-            <button type="button" class="mt-gate__btn" data-mt-gate="custom">
-              <span class="mt-gate__kicker">Custom</span>
-              <span class="mt-gate__name">自定义比赛</span>
-              <span class="mt-gate__desc">自定项目与规则 · 可导入导出</span>
-            </button>
-            <button type="button" class="mt-gate__btn" data-mt-gate="char">
-              <span class="mt-gate__kicker">Invite</span>
-              <span class="mt-gate__name">角色发起</span>
-              <span class="mt-gate__desc">由角色提出比赛并写入项目库</span>
-            </button>
-          </div>
-          <p class="mt-section-label">最近场次</p>
-          <div class="mt-recent" id="mt-recent-list"></div>
-        </div>
-      </section>
-
-      <!-- 赛事馆 -->
-      <section class="mt-page" id="mt-page-event" aria-label="赛事馆">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="home" aria-label="返回">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title" id="mt-event-title">赛事馆</h2>
-        </header>
-        <div class="mt-scroll">
-          <p class="mt-hint" id="mt-event-hint"></p>
-          <div class="mt-item-list" id="mt-item-list"></div>
-        </div>
-      </section>
-
-      <!-- 自定义比赛库 -->
-      <section class="mt-page" id="mt-page-custom" aria-label="自定义比赛">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="home" aria-label="返回">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title">自定义比赛</h2>
-          <div class="mt-head__actions">
-            <button type="button" class="mt-text-btn" id="mt-custom-import">导入</button>
-            <button type="button" class="mt-text-btn" id="mt-custom-export">导出</button>
-            <button type="button" class="mt-text-btn mt-text-btn--accent" id="mt-custom-new">新建</button>
-          </div>
-          <input type="file" id="mt-custom-import-file" accept="application/json,.json,text/json,text/plain" hidden>
-        </header>
-        <div class="mt-scroll">
-          <p class="mt-hint">保存项目后可随时开赛、编辑、删除；支持 JSON 导入导出。</p>
-          <div class="mt-item-list" id="mt-custom-list"></div>
-        </div>
-      </section>
-
-      <!-- 自定义/角色提案编辑 -->
-      <section class="mt-page" id="mt-page-custom-edit" aria-label="编辑自定义比赛">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="custom" aria-label="返回" id="mt-custom-edit-back">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title" id="mt-custom-edit-title">新建项目</h2>
-        </header>
-        <div class="mt-scroll" id="mt-custom-edit-scroll"></div>
-        <div class="mt-dock mt-dock--col">
-          <button type="button" class="mt-btn mt-btn--primary" id="mt-custom-save-start">保存并开赛</button>
-          <button type="button" class="mt-btn mt-btn--ghost" id="mt-custom-save-only">仅保存</button>
-        </div>
-      </section>
-
-      <!-- 角色发起 · 选人 -->
-      <section class="mt-page" id="mt-page-char" aria-label="角色发起">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="home" aria-label="返回">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title">角色发起</h2>
-        </header>
-        <div class="mt-scroll">
-          <p class="mt-hint">选择一位角色，根据人设提出想比的比赛，确认后写入自定义库并可开赛。</p>
-          <div class="mt-pick-grid mt-pick-grid--loose" id="mt-char-pick-grid"></div>
-        </div>
-      </section>
-
-      <!-- 组赛 -->
-      <section class="mt-page" id="mt-page-setup" aria-label="组赛">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="event" aria-label="返回" id="mt-setup-back">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title" id="mt-setup-title">组赛</h2>
-        </header>
-        <div class="mt-scroll" id="mt-setup-scroll"></div>
-        <div class="mt-dock">
-          <div class="mt-dock__status" id="mt-setup-status">请选择赛制与角色</div>
-          <button type="button" class="mt-btn mt-btn--primary" id="mt-start-btn" disabled>开始比赛</button>
-        </div>
-      </section>
-
-      <!-- 成绩单 -->
-      <section class="mt-page" id="mt-page-result" aria-label="成绩单">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="home" aria-label="返回大厅">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title" id="mt-result-title">成绩单</h2>
-        </header>
-        <div class="mt-scroll" id="mt-result-scroll"></div>
-        <div class="mt-dock" id="mt-result-dock"></div>
-      </section>
-
-      <!-- 发送 -->
-      <section class="mt-page" id="mt-page-send" aria-label="发送记录">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="result" aria-label="返回">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title">发送记录</h2>
-        </header>
-        <div class="mt-scroll" id="mt-send-scroll"></div>
-        <div class="mt-dock">
-          <button type="button" class="mt-btn mt-btn--primary" id="mt-send-confirm">发送到聊天</button>
-        </div>
-      </section>
-
-      <!-- 历史 -->
-      <section class="mt-page" id="mt-page-history" aria-label="历史记录">
-        <header class="mt-subhead">
-          <button type="button" class="mt-icon-btn" data-mt-back="home" aria-label="返回">
-            <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="18" height="18">
-          </button>
-          <h2 class="mt-subhead__title">历史记录</h2>
-        </header>
-        <div class="mt-scroll">
-          <div class="mt-history-list" id="mt-history-list"></div>
-        </div>
-      </section>
-
-      <div class="mt-overlay" id="mt-overlay" aria-live="polite">
-        <div class="mt-overlay__card">
-          <div class="mt-overlay__pulse" aria-hidden="true"></div>
-          <p class="mt-overlay__title" id="mt-overlay-title">裁判记录中…</p>
-          <p class="mt-overlay__desc" id="mt-overlay-desc">正在生成赛程，请稍候</p>
-        </div>
-      </div>
-      <div class="mt-toast" id="mt-toast" role="status"></div>
-    </div>
-  </div>
-
   <!-- 娱乐 · Play -->
   <div class="miya-fun-app" id="miya-fun-app" hidden aria-hidden="true">
     <div class="fn-atmos" aria-hidden="true">
@@ -4033,14 +3857,14 @@
       <button type="button" class="stp-btn mi-ico-btn" id="stp-import" title="导入" aria-label="导入">
         <img src="img/icons/download-01.svg" alt="" width="18" height="18">
       </button>
+      <button type="button" class="stp-btn mi-ico-btn" id="stp-export" title="导出预设" aria-label="导出预设">
+        <img src="img/icons/arrow-square-up-right.svg" alt="" width="18" height="18">
+      </button>
       <button type="button" class="stp-btn mi-ico-btn" id="stp-pack-rename" title="改名" aria-label="改名">
         <img src="img/icons/edit-03.svg" alt="" width="18" height="18">
       </button>
       <button type="button" class="stp-btn mi-ico-btn mi-ico-btn--danger" id="stp-pack-delete" title="删除套" aria-label="删除套">
         <img src="img/icons/trash-01.svg" alt="" width="18" height="18">
-      </button>
-      <button type="button" class="stp-btn mi-ico-btn" id="stp-copy-offline-prompt" title="复制上次线下 Prompt" aria-label="复制上次线下 Prompt">
-        <img src="img/icons/copy-02.svg" alt="" width="18" height="18">
       </button>
       <input type="file" id="stp-file" accept="application/json,.json" hidden />
       <p class="stp-hint">编辑语义对齐 SillyTavern：Relative 参与相对提示词顺序；In-chat 才使用 Depth / Order。启用条目会进入线上与线下请求。</p>
@@ -4246,8 +4070,8 @@
   <script defer src="js2/miya-offline-beautify.js?v=14"></script>
   <script defer src="js2/miya-offline-text-decor.js?v=1"></script>
   <script defer src="js1/miya-appointment-memory.js?v=6"></script>
-  <script defer src="js1/miya-appointment-engine.js?v=43"></script>
-  <script defer src="js1/miya-appointment-app.js?v=41"></script>
+  <script defer src="js1/miya-appointment-engine.js?v=46"></script>
+  <script defer src="js1/miya-appointment-app.js?v=43"></script>
   <script defer src="js1/miya-chat-heartvoice-templates.js?v=15"></script>
   <script defer src="js1/miya-chat-heartvoice.js?v=11"></script>
   <script defer src="js2/miya-offline-status.js?v=6"></script>
@@ -4287,8 +4111,8 @@
   <script defer src="js2/miya-mode-switch.js?v=3"></script>
 
   <script defer src="miya-auth/auth.js?v=5"></script>
-  <script defer src="js2/miya-st-prompt-presets-store.js?v=28"></script>
-  <script defer src="js2/miya-st-prompt-presets-app.js?v=28"></script>
+  <script defer src="js2/miya-st-prompt-presets-store.js?v=29"></script>
+  <script defer src="js2/miya-st-prompt-presets-app.js?v=29"></script>
   <script defer src="js1/app.js?v=64"></script>
 </body>
 </html>

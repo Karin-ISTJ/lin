@@ -1949,12 +1949,15 @@
                         return {
                             contactId: String(r.contactId || '').trim(),
                             rank: Math.max(1, Number(r.rank) || 1),
+                            name: String(r.name || '').trim(),
+                            prize: String(r.prize || '').trim(),
                             note: String(r.note || '').trim()
                         };
                     }).filter(Boolean)
                     : null,
                 winnerTeam: String(mr.winnerTeam || '').trim(),
                 mvpContactId: String(mr.mvpContactId || '').trim(),
+                mvpName: String(mr.mvpName || mr._mvpNameHint || '').trim(),
                 prizes: mr.prizes && typeof mr.prizes === 'object' ? mr.prizes : {},
                 participants: Array.isArray(mr.participants)
                     ? mr.participants.map(function (p) {

@@ -1344,21 +1344,10 @@
         );
     }
 
-    function renderSummaryCard(row) {
-        var body = String((row && row.content) || '').trim();
-        if (!body) return '';
-        return (
-            '<article class="xw-note" data-ap-sum-id="' + esc(row.id) + '">' +
-            '<header class="xw-note__head">' +
-            '<span class="xw-note__tag">场次纪要</span>' +
-            '<span class="xw-note__range">#' + esc(String(row.startIndex || '?')) +
-            '–' + esc(String(row.endIndex || '?')) + '</span>' +
-            '<time class="xw-note__time">' + esc(formatTs(row.createdAt)) + '</time>' +
-            '</header>' +
-            '<p class="xw-note__body">' + esc(body).replace(/\n/g, '<br>') + '</p>' +
-            '</article>'
-        );
-    }
+    /*
+     * 场次纪要卡片已移除：正片里不再插入「场次纪要」卡片。
+     * 纪要数据本身仍保留（记忆总结/记忆页仍在使用），只是不再渲染卡片。
+     */
 
     function renderStoryLines(messages, summaries, extraStreaming, canEdit) {
         var live = (messages || []).filter(function (m) {
@@ -1368,10 +1357,6 @@
         if (live.length && !isJournalTheme()) {
             html += '<div class="xw-script__mark" aria-hidden="true"><span>正片</span></div>';
         }
-        var sums = (summaries || []).slice().sort(function (a, b) {
-            return (a.endIndex || 0) - (b.endIndex || 0);
-        });
-        var sumPtr = 0;
         var lastDay = '';
 
         (messages || []).forEach(function (m, i) {
@@ -1407,16 +1392,7 @@
                     '<header class="xw-floor__head"><span' + (m.hidden ? ' data-floor-tag="hidden"' : '') + '>第 ' + String(floorNo) + ' 层' +
                     (m.hidden ? ' · 已隐藏' : '') + '</span>' + floorTools + '</header>' + block + '</section>';
             }
-            var idx = i + 1;
-            while (sumPtr < sums.length && (sums[sumPtr].endIndex || 0) === idx) {
-                html += renderSummaryCard(sums[sumPtr]);
-                sumPtr += 1;
-            }
         });
-        while (sumPtr < sums.length) {
-            html += renderSummaryCard(sums[sumPtr]);
-            sumPtr += 1;
-        }
 
         return html;
     }
@@ -1470,11 +1446,9 @@
         return esc(para).replace(/\n/g, '<br>');
     }
 
-    function computeStableStoryKey(msgs, sums) {
+    function computeStableStoryKey(msgs) {
         var m = msgs || [];
-        var s = sums || [];
         var last = m.length ? m[m.length - 1] : null;
-        var lastSum = s.length ? s[s.length - 1] : null;
         return (
             String(m.length) +
             ':' +
@@ -1485,12 +1459,11 @@
                   '|' +
                   String(last.content || '').length
                 : '') +
-            '::' +
-            String(s.length) +
-            ':' +
-            (lastSum
-                ? String(lastSum.id || '') + '|' + String(lastSum.content || '').length
-                : '') +
+            /*
+             * 注意：summaryList 不再进稳定 key。
+             * 纪要已不渲染成卡片，若仍把纪要指纹算进来，
+             * 自动纪要一变会触发整段正片 DOM 重建（白闪 + 流式挂载重置）。
+             */
             ':td' +
             (resolveTextDecor() ? '1' : '0') +
             /*
@@ -1840,7 +1813,6 @@
         var sess = apStore().getSession(ui.chatId, ui.sessionId);
         if (!sess) return '<p class="xw-empty">场景找不到了</p>';
         var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
-        var sums = apStore().getSessionSummaries(ui.chatId, ui.sessionId);
         var castContacts = resolveCastContacts(
             Array.isArray(sess.cast) && sess.cast.length
                 ? sess.cast
@@ -1882,7 +1854,7 @@
             !ui.viewingArchive && (ui.streamingLines.length > 0 || ui.status === 'coming');
         var scriptInner =
             '<article class="xw-script" id="mol-story-body">' +
-            renderStoryLines(msgs, sums, [], !ui.viewingArchive) +
+            renderStoryLines(msgs, [], [], !ui.viewingArchive) +
             (streamingActive
                 ? '<div class="xw-stream-mount" data-ap-stream-mount aria-live="polite"></div>'
                 : '') +
@@ -1949,8 +1921,7 @@
         hydrateOfflineAvatars(root);
         if (ui.view === 'story' && ui.chatId && ui.sessionId) {
             var msgsR = apStore().getSessionMessages(ui.chatId, ui.sessionId);
-            var sumsR = apStore().getSessionSummaries(ui.chatId, ui.sessionId);
-            ui.stableStoryKey = computeStableStoryKey(msgsR, sumsR);
+            ui.stableStoryKey = computeStableStoryKey(msgsR);
             if (
                 !ui.viewingArchive &&
                 (ui.status === 'coming' || String(ui.streamingRaw || '').length > 0)
@@ -2046,15 +2017,14 @@ function renderWriter() {
         }
         var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
         if (!body) return;
-        var sums = apStore().getSessionSummaries(ui.chatId, ui.sessionId);
-        var stableKey = computeStableStoryKey(msgs, sums);
+        var stableKey = computeStableStoryKey(msgs);
         var streaming = !ui.viewingArchive && (ui.streamingLines.length > 0 || ui.status === 'coming');
 
         if (!opts.streamOnly && stableKey !== ui.stableStoryKey) {
             ui.stableStoryKey = stableKey;
             var watermark = body.querySelector('.mol-story-watermark');
             var wmHtml = watermark ? watermark.outerHTML : '';
-            body.innerHTML = wmHtml + renderStoryLines(msgs, sums, [], !ui.viewingArchive);
+            body.innerHTML = wmHtml + renderStoryLines(msgs, [], [], !ui.viewingArchive);
             hydrateAppointmentHtmlPanels(body);
             resetStreamUi();
             if (streaming) ensureStreamMount(body);
@@ -2535,10 +2505,10 @@ function renderWriter() {
             '<button type="button" class="xw-btn" id="mol-preset-save">存为预设</button>' +
             '<button type="button" class="xw-btn" id="mol-preset-del">删预设</button></div>' +
             '<p class="xw-field__hint">预设不含世界书；读取后写入表单，须点「保存参数」才会绑定到当前角色。</p></div>' +
-            '<div class="xw-field xw-field--panel"><label>自动纪要（0 关）</label>' +
-            '<input type="number" id="xw-note-trigger" min="0" max="500" value="' +
-            preset.summaryTrigger +
-            '"></div>' +
+            /*
+             * 自动纪要开关已移除：自动归档不再触发，这个输入框填任何值都无效。
+             * summaryTrigger 字段仍在预设里保留读写，老配置不会串位。
+             */
             '<div class="xw-field xw-field--panel"><label>输出方式</label><select id="mol-stream-mode">' +
             (function () {
                 var cfg =
@@ -2673,8 +2643,14 @@ function renderWriter() {
 
         function readFormParams() {
             persistAppointmentStreamMode();
+            /*
+             * summaryTrigger 输入框已移除。这里沿用预设原值，不再从表单读，
+             * 避免 $('xw-note-trigger') 为 null 时抛错，也避免把用户旧配置写丢。
+             */
+            var summaryTrigger =
+                preset && preset.summaryTrigger != null ? preset.summaryTrigger : 0;
             return {
-                summaryTrigger: parseInt($('xw-note-trigger').value, 10) || 0,
+                summaryTrigger: summaryTrigger,
                 summaryPrompt: String((preset && preset.summaryPrompt) || '').trim(),
                 showThinking: $('mol-show-thinking').value !== 'false',
                 enterToSend: $('mol-enter-send').value !== 'false',
@@ -2695,7 +2671,7 @@ function renderWriter() {
 
         function applyParamsToForm(params) {
             if (!params) return;
-            if ($('xw-note-trigger')) $('xw-note-trigger').value = params.summaryTrigger != null ? params.summaryTrigger : 15;
+            /* summaryTrigger 输入框已移除；字段仍在预设里流转，此处不再回填 UI。 */
             if ($('mol-show-thinking')) {
                 $('mol-show-thinking').value = params.showThinking !== false ? 'true' : 'false';
             }
@@ -3614,46 +3590,6 @@ function renderWriter() {
                     removeSessionOpening(openingDelBtn.getAttribute('data-ap-opening-del'));
                     return;
                 }
-            });
-            story.addEventListener('click', function (e) {
-                var sumCard = e.target.closest('[data-ap-sum-id]');
-                if (!sumCard) return;
-                var sid = sumCard.getAttribute('data-ap-sum-id');
-                var sums = apStore().getSessionSummaries(ui.chatId, ui.sessionId);
-                var row = sums.find(function (r) { return r.id === sid; });
-                if (!row) return;
-                if (ui.viewingArchive) {
-                    dialog({
-                        mode: 'confirm',
-                        title: '往期总结',
-                        message:
-                            '第 ' +
-                            row.startIndex +
-                            '–' +
-                            row.endIndex +
-                            ' 条\n\n' +
-                            String(row.content || '').slice(0, 800) +
-                            (String(row.content || '').length > 800 ? '…' : '') +
-                            '\n\n重写纪要将替换该段在记忆中的上下文。',
-                        confirmText: '重写纪要',
-                        cancelText: '收起'
-                    }).then(function (ok) {
-                        if (!ok) return;
-                        runManualSummary({ replaceSummaryId: sid }).catch(function () {});
-                    });
-                    return;
-                }
-                dialog(
-                    storyEditDialogOpts(
-                        '改总结',
-                        '第 ' + row.startIndex + '–' + row.endIndex + ' 条',
-                        row.content
-                    )
-                ).then(function (val) {
-                    if (val == null) return;
-                    apStore().updateSummary(ui.chatId, ui.sessionId, sid, { content: String(val).trim() });
-                    patchStoryBody();
-                });
             });
         }
 

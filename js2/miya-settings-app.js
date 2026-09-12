@@ -35,9 +35,6 @@
   var SIMULATOR_KEY = 'miya-simulator-v2';
   var SIMULATOR_KEY_LEGACY = 'miya-simulator-v1';
   var SIMULATOR_BACKUP_KEY = 'miya-simulator-v2-backup';
-  var MATCH_SESSIONS_KEY = 'miya-match-sessions-v1';
-  var MATCH_PRIZE_PRESETS_KEY = 'miya-match-prize-presets-v1';
-  var MATCH_CUSTOM_ITEMS_KEY = 'miya-match-custom-items-v1';
   var WEATHER_KEY = 'miya-weather-v1';
   var COUPLE_KEY = 'miya-couple-v1';
   var COUPLE_WHISPER_KEY = 'miya-couple-whisper-v1';
@@ -94,7 +91,6 @@
     { id: 'weather', title: '天气', lsKeys: [WEATHER_KEY], widgetKvKeys: [WEATHER_KEY] },
     { id: 'couple', title: '情侣空间', lsKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY], widgetKvKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY] },
     { id: 'theater', title: '小剧场', lsKeys: [THEATER_KEY], widgetKvKeys: [THEATER_KEY] },
-    { id: 'match', title: '赛事', lsKeys: [MATCH_SESSIONS_KEY, MATCH_PRIZE_PRESETS_KEY, MATCH_CUSTOM_ITEMS_KEY] },
     { id: 'simulator', title: '人生分镜馆', lsKeys: [SIMULATOR_KEY, SIMULATOR_KEY_LEGACY, SIMULATOR_BACKUP_KEY], widgetKvKeys: [SIMULATOR_KEY, SIMULATOR_BACKUP_KEY] }
   ];
 
@@ -990,9 +986,6 @@
     if (cat.id === 'offline' && global.MiyaAppointmentStore && global.MiyaAppointmentStore.invalidateCache) {
       global.MiyaAppointmentStore.invalidateCache();
     }
-    if (cat.id === 'match' && global.miyaMatchStore && global.miyaMatchStore.invalidateCache) {
-      global.miyaMatchStore.invalidateCache();
-    }
   }
 
   async function clearAllStorageData() {
@@ -1018,7 +1011,6 @@
     if (global.MiyaAppointmentStore && global.MiyaAppointmentStore.invalidateCache) {
       global.MiyaAppointmentStore.invalidateCache();
     }
-    if (global.miyaMatchStore && global.miyaMatchStore.invalidateCache) global.miyaMatchStore.invalidateCache();
     if (global.MiyaChatAlbum && global.MiyaChatAlbum.invalidateCache) global.MiyaChatAlbum.invalidateCache();
     apiConfigCache = null;
     apiConfigHydrated = false;
@@ -1194,10 +1186,8 @@
   function syncFormsFromConfig() {
     var cfg = getApiConfig();
     var mm = cfg.minimaxTts && typeof cfg.minimaxTts === 'object' ? cfg.minimaxTts : {};
-    var forum = cfg.forumApi && typeof cfg.forumApi === 'object' ? cfg.forumApi : {};
     var chatTemp = cfg.temperature != null ? cfg.temperature : 1;
     syncChatApiPanelForms();
-    syncScopedApiForm('forum', forum, chatTemp);
     if ($('miya-st-mm-key')) $('miya-st-mm-key').value = mm.apiKey || '';
     if ($('miya-st-mm-group')) $('miya-st-mm-group').value = mm.groupId || '';
     var mmSpeed = mm.speed != null ? Number(mm.speed) : 1;
@@ -1577,9 +1567,6 @@
     }
     if (global.MiyaAppointmentStore && typeof global.MiyaAppointmentStore.invalidateCache === 'function') {
       global.MiyaAppointmentStore.invalidateCache();
-    }
-    if (global.miyaMatchStore && typeof global.miyaMatchStore.invalidateCache === 'function') {
-      global.miyaMatchStore.invalidateCache();
     }
     if (global.MiyaChatAlbum && typeof global.MiyaChatAlbum.invalidateCache === 'function') {
       global.MiyaChatAlbum.invalidateCache();
@@ -2222,16 +2209,6 @@
         if (temp2Lbl) temp2Lbl.textContent = temp2In.value;
       });
     }
-
-    ['forum'].forEach(function (prefix) {
-      var tempIn = $('miya-st-' + prefix + '-temp');
-      var tempLbl = $('miya-st-' + prefix + '-temp-lbl');
-      if (tempIn) {
-        tempIn.addEventListener('input', function () {
-          if (tempLbl) tempLbl.textContent = tempIn.value;
-        });
-      }
-    });
 
     function bindScopedFetch(prefix, emptyMsg) {
       var btn = $('miya-st-' + prefix + '-fetch');

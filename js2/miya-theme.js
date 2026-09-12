@@ -9,7 +9,7 @@
   var MAX_FONT_PRESETS = 12;
 
   var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pen'];
-  var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop', 'tile_rift'];
+  var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop'];
   var POLAROID_KEYS = ['polaroid_1', 'polaroid_2', 'polaroid_3'];
   var P2_WIDGET_KEYS = [
     'p2_scrap_base',
@@ -17,7 +17,7 @@
     'p2_film_1', 'p2_film_2', 'p2_film_3', 'p2_film_4',
     'p2_canister', 'p2_memo_img', 'p2_tape_deco', 'p2_stamp_img', 'p2_ticket_bg'
   ];
-  var P3_TILE_KEYS = ['tile_notes', 'tile_match', 'tile_fun', 'tile_echo', 'tile_log'];
+  var P3_TILE_KEYS = ['tile_notes', 'tile_fun', 'tile_log'];
   var P3_WIDGET_KEYS = ['folio_art', 'reel_a', 'reel_b', 'reel_c', 'lunar_bg'];
   var P3_WIDGET_LEGACY = P3_WIDGET_KEYS.slice();
   var P4_TILE_KEYS = ['tile_weather', 'tile_map', 'tile_apps', 'tile_theater'];
@@ -33,15 +33,12 @@
 
   var P2_TILE_SELECTORS = {
     tile_couple: '.desk--p2 .tile--couple',
-    tile_themeshop: '.desk--p2 .tile--itinerary',
-    tile_rift: '.desk--p2 .tile--rift'
+    tile_themeshop: '.desk--p2 .tile--itinerary'
   };
 
   var P3_TILE_SELECTORS = {
     tile_notes: '.desk--p3 .tile--note',
-    tile_match: '.desk--p3 .tile--match',
-    tile_fun: '.desk--p3 .tile--fun .tile__film',
-    tile_echo: '.desk--p3 .tile--echo',
+    tile_fun: '.desk--p3 .tile--fun .tile__film'
   };
 
   var P2_WIDGET_SELECTORS = {

@@ -658,30 +658,6 @@
 .xw-block__tool svg { width: 14px; height: 14px; }
 .xw-block__tool--drop { color: #a05050; }
 
-.xw-note {
-  margin: 2em 0;
-  padding: 14px 16px;
-  border-left: 3px solid var(--xw-ink);
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.xw-note__head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: baseline;
-  margin-bottom: 8px;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--xw-soft);
-}
-
-.xw-note__body {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.75;
-}
-
 .xw-think { margin-bottom: 8px; font-size: 11px; }
 .xw-think__toggle { cursor: pointer; color: var(--xw-soft); list-style: none; }
 .xw-think__toggle::-webkit-details-marker { display: none; }

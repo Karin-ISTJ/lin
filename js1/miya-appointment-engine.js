@@ -1362,18 +1362,95 @@
         });
     }
 
+    /*
+     * 摘要硬护栏。
+     * 之前这里只有一句「客观总结本段线下剧情」，模型经常把它当成续写指令，
+     * 于是纪要里出现凭空生成的剧情；思维链还会空转报怨「未提供具体内容」。
+     * 现在把任务边界、禁止项、输入说明一次说清，且不可被自定义提示词顶掉。
+     */
+    var SUMMARY_GUARDRAIL =
+        '你是一个剧情摘要器，唯一任务是把给定的对话记录压缩成一段客观摘要。\n' +
+        '\n' +
+        '【绝对禁止】\n' +
+        '1. 禁止续写、扩写、推演任何后续剧情；\n' +
+        '2. 禁止新增原文没有的对话、动作、场景、心理描写；\n' +
+        '3. 禁止以任何角色身份说话或输出对话体；\n' +
+        '4. 禁止输出思维链、分析过程、自我检查、任务复述；\n' +
+        '5. 禁止提及「输入」「用户消息」「未提供内容」等元信息；\n' +
+        '6. 禁止输出 <tableEdit>、宏占位符（如 {{...}}、{xxx}）或格式标签。\n' +
+        '\n' +
+        '【输入说明】\n' +
+        '下面给出的对话记录即全部可用素材，已经被完整提供。\n' +
+        '不要抱怨内容缺失，不要要求补充，不要猜测未写出的部分。\n' +
+        '只依据已写出的内容做摘要，未写到的就不写。\n' +
+        '\n' +
+        '【输出要求】\n' +
+        '直接输出摘要正文，不要任何前言、标题、序号或代码块。\n' +
+        '以时间线为序，区分双方，保留关键情节、情绪转折与约定。\n' +
+        '100–280 字，中文，纯叙述，不要复述修辞。';
+
+    /*
+     * 摘要结果清洗：模型偶尔仍会带出禁止内容。
+     * 这里做最后一道兜底，保证脏东西既不进卡片也不进长期记忆。
+     */
+    function sanitizeSummaryText(text) {
+        var s = String(text || '');
+        if (!s) return '';
+        /* 思考块：成对、未闭合、以及常见标签名 */
+        s = s.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        s = s.replace(/<think(?:ing)?>[\s\S]*$/gi, '');
+        s = s.replace(/<\/think(?:ing)?>/gi, '');
+        s = s.replace(/```[\s\S]*?```/g, '');
+        /* 记忆表格写操作：不该出现在摘要里 */
+        s = s.replace(/<tableEdit>[\s\S]*?<\/tableEdit>/gi, '');
+        s = s.replace(/<\/?tableEdit>/gi, '');
+        /* 未替换的宏占位符（{{name}} / {name} / <user_input> 这类） */
+        s = s.replace(/\{\{[\s\S]*?\}\}/g, '');
+        s = s.replace(/<user_input>[\s\S]*?<\/user_input>/gi, '');
+        s = s.replace(/\{[a-z_][a-z0-9_]{2,}\}/gi, '');
+        /* 模型自我检查时爱写的元信息前缀，整行删掉 */
+        s = s
+            .split('\n')
+            .filter(function (line) {
+                var t = String(line || '').trim();
+                if (!t) return false;
+                if (/^(?:用户最新输入|用户输入|最新输入|输入内容)\s*[是为:：]/.test(t)) return false;
+                if (/未提供具体内容|没有提供具体内容|未提供内容/.test(t)) return false;
+                return true;
+            })
+            .join('\n');
+        /* 常见包装：摘要：/总结：/摘要如下 */
+        s = s.replace(/^\s*(?:摘要|总结|剧情摘要|摘要如下|总结如下)\s*[:：]?\s*/i, '');
+        return s.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     function maybeAutoSummary(chatId, sessionId, preset) {
-        var aps = apStore();
-        if (!aps) return;
-        var trigger = clampInt(preset && preset.summaryTrigger, 0, 500, 15);
-        if (trigger <= 0) return;
-        var sess = aps.getSession(chatId, sessionId);
-        if (!sess) return;
-        var msgs = aps.getSessionMessages(chatId, sessionId);
-        var last = aps.lastSummaryEnd(sess);
-        if (last > msgs.length) last = 0;
-        if (msgs.length - last < trigger) return;
-        appointmentSummary(chatId, sessionId, { silent: true });
+        /*
+         * 自动场次纪要已下线：以前每满 N 层自动写一份纪要卡片插进正片，
+         * 用户明确不要这个卡片，所以这里直接不生成。
+         * 保留函数与导出仅为兼容旧调用点，避免 ReferenceError。
+         */
+        return;
+    }
+
+    /*
+     * 找到“可安全总结”的末位序号：从末尾往前跳过尾部连续的 user 消息，
+     * 使摘要素材停在用户最新发言之前。
+     * 若整个区间内没有任何 assistant 回复（例如只有用户单方面发言），
+     * 则退回原始末位，避免把区间压成空、导致永远总结不出来。
+     */
+    function resolveSummaryEndExcludingLatestUser(msgs, start) {
+        var list = msgs || [];
+        var last = list.length;
+        if (!last) return 0;
+        var i = last;
+        while (i >= start) {
+            var m = list[i - 1];
+            if (m && m.role === 'user') i -= 1;
+            else break;
+        }
+        if (i < start) return last;
+        return i;
     }
 
     function appointmentSummary(chatId, sessionId, opts) {
@@ -1403,7 +1480,14 @@
             end = clampInt(opts.endIndex, 1, 9999999, 0);
         } else {
             start = (aps.lastSummaryEnd(sess) || 0) + 1;
-            end = msgs.length;
+            /*
+             * 关键：默认区间必须停在「用户最新一条发言」之前。
+             * 原来 end = msgs.length 会把用户刚发的那条也算进待总结素材，
+             * 模型看到对话停在用户这边，就顺着往下编剧情——这正是
+             * 「纪要自造剧情、像没读我新消息」的直接原因。
+             * 手动传 startIndex/endIndex 或重写已有纪要时不受此约束。
+             */
+            end = resolveSummaryEndExcludingLatestUser(msgs, start);
         }
         if (end < start) return Promise.resolve(null);
         var lines = msgs.slice(start - 1, end).map(function (m) {
@@ -1421,16 +1505,22 @@
         var apiKey = String(cfg.apiKey || '').trim();
         var model = String(cfg.model || '').trim();
         if (!baseUrl || !apiKey || !model) return Promise.reject(new Error('api_not_configured'));
-        var prompt =
-            String((preset && preset.summaryPrompt) || '').trim() ||
-            '客观总结本段线下剧情，区分双方，100-280字。';
+        /*
+         * 摘要提示词：用户自定义的 summaryPrompt 只作为“摘要口径”追加在硬护栏之后。
+         * 护栏必须在前且不可被覆盖——之前自定义提示词可以直接顶掉整个 system，
+         * 于是模型把「总结」任务当成「续写」任务，在纪要里自造剧情。
+         */
+        var customPrompt = String((preset && preset.summaryPrompt) || '').trim();
+        var prompt = SUMMARY_GUARDRAIL;
+        if (customPrompt) prompt = SUMMARY_GUARDRAIL + '\n\n【摘要口径】\n' + customPrompt;
         var payload = {
             model: model,
             messages: [
                 { role: 'system', content: prompt },
                 { role: 'user', content: lines.join('\n') }
             ],
-            temperature: 0.4
+            /* 抽取型任务，压到 0.1 抑制发散；原来 0.4 足够模型开始自由发挥 */
+            temperature: 0.1
         };
         return fetch(baseUrl + '/chat/completions', {
             method: 'POST',
@@ -1442,13 +1532,15 @@
                 return r.json();
             })
             .then(function (data) {
-                var text = extractReplyContent(data);
+                var text = sanitizeSummaryText(extractReplyContent(data));
                 if (!text) throw new Error('empty_summary');
+                /* 区间必须按实际总结到的消息条数收敛，否则卡片区间会和正文对不上 */
+                var hitCount = Math.max(0, end - start + 1);
                 var sum = aps.replaceOrAddSummary(chatId, sessionId, {
                     id: replaceId || undefined,
                     content: text,
                     startIndex: start,
-                    endIndex: end
+                    endIndex: Math.max(start, start + hitCount - 1)
                 });
                 if (!opts.silent && global.miyaOfflineApp && global.miyaOfflineApp.toast) {
                     global.miyaOfflineApp.toast('已生成线下总结');
@@ -1696,7 +1788,6 @@
         splitDisplayLines: splitDisplayLines,
         splitDisplayParagraphs: splitDisplayParagraphs,
         parseThinkingPayload: parseThinkingPayload,
-        getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         getLastOfflinePromptDebug: function () { return global.__MiyaLastOfflinePrompt || null; },
         fetchAppointmentCompletion: fetchAppointmentCompletion,
         isBusy: isBusy,

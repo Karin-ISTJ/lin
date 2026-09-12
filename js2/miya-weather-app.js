@@ -1289,8 +1289,7 @@
       !document.querySelector('#miya-offline-app.is-open') &&
       !document.querySelector('.miya-itinerary-app.is-open') &&
       !document.querySelector('.miya-couple-app.is-open') &&
-      !document.querySelector('.miya-weather-app.is-open') &&
-      !document.querySelector('.miya-match-app.is-open')
+      !document.querySelector('.miya-weather-app.is-open')
     ) {
       document.body.classList.remove('miya-app-open');
     }

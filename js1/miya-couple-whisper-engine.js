@@ -214,14 +214,10 @@
       }
     }
 
-    var mem = global.MiyaAppointmentMemory;
-    if (mem && typeof mem.buildAppointmentCrossMemory === 'function' && chat) {
-      var cross = mem.buildAppointmentCrossMemory(chat.id, contact, profile, settings);
-      if (cross) {
-        if (cross.summaryText) parts.push(String(cross.summaryText));
-        if (cross.slotBlock) parts.push(String(cross.slotBlock));
-      }
-    }
+    /*
+     * 深夜私语不再注入跨场景记忆（含场次纪要总结与线上线下时间线片段）。
+     * 私语本身是独立的线下私密场景，注入往期纪要/线上记录会让模型把旧剧情当成本场续写。
+     */
 
     if (contextText) {
       parts.push('【近期聊天上下文·' + slice.length + '条】\n' + contextText.slice(-4000));

@@ -766,57 +766,6 @@
 }
 
 
-.desk--p2 .tile--rift {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  border-radius: 3px;
-  box-shadow: 0 4px 14px rgba(100, 110, 125, 0.08);
-  overflow: hidden;
-}
-
-.desk--p2 .tile--rift .tile__portal {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  opacity: 0.6;
-}
-
-.desk--p2 .tile--rift .tile__portal span {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(160, 175, 210, 0.28);
-}
-
-.desk--p2 .tile--rift .tile__portal span:nth-child(1) { width: 20px; height: 20px; }
-.desk--p2 .tile--rift .tile__portal span:nth-child(2) { width: 36px; height: 36px; }
-.desk--p2 .tile--rift .tile__portal span:nth-child(3) { width: 52px; height: 52px; }
-
-.desk--p2 .tile--rift .tile__name {
-  position: relative;
-  z-index: 1;
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: var(--ink-soft);
-}
-
-.desk--p2 .tile--rift .tile__hint {
-  position: relative;
-  z-index: 1;
-  font-size: 7px;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-}
-
 /* 可编辑文字 */
 .desk--p2 [data-miya-copy].is-editing {
   outline: 1px dashed rgba(180, 160, 130, 0.55);

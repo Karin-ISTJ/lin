@@ -299,23 +299,48 @@
     reader.readAsText(file, 'utf-8');
   }
 
-  function copyLastOfflinePrompt() {
-    var eng = global.MiyaAppointmentEngine;
-    var dbg = eng && typeof eng.getLastOfflinePromptDebug === 'function' ? eng.getLastOfflinePromptDebug() : global.__MiyaLastOfflinePrompt;
-    if (!dbg || !Array.isArray(dbg.messages) || !dbg.messages.length) { toast('请先生成一次线下回复'); return; }
-    var text = dbg.messages.map(function (m) {
-      return '[' + m.index + '] ' + String(m.role || 'system') + '\n' + String(m.content || '');
-    }).join('\n\n==========\n\n');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { toast('已复制上次线下 Prompt'); }).catch(function () { fallbackCopy(text); });
-    } else fallbackCopy(text);
-  }
+  /*
+   * 导出当前预设为 SillyTavern 兼容 JSON 文件。
+   * 走 Blob + a[download]，文件名用预设名；失败时退回剪贴板提示用户手动保存。
+   */
+  function exportActivePack() {
+    var pack = null;
+    try {
+      pack = store().getActivePack();
+    } catch (e) {}
+    if (!pack) { toast('没有可导出的预设'); return; }
 
-  function fallbackCopy(text) {
-    var ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); toast('已复制上次线下 Prompt'); } catch (e) { toast('复制失败'); }
-    document.body.removeChild(ta);
+    var json;
+    try {
+      json = JSON.stringify(store().exportToStJson(pack.id), null, 2);
+    } catch (e) {
+      toast((e && e.message) || '导出失败');
+      return;
+    }
+
+    var safeName = String(pack.name || '预设').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || '预设';
+    var fileName = safeName + '.json';
+    try {
+      var blob = new Blob([json], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast('已导出「' + pack.name + '」');
+    } catch (e2) {
+      /* 部分 WebView 不支持下载属性，退回剪贴板 */
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(json).then(function () {
+          toast('当前环境不支持直接下载，已复制预设 JSON');
+        }).catch(function () { toast('导出失败'); });
+      } else {
+        toast('导出失败');
+      }
+    }
   }
 
   function bind() {
@@ -379,8 +404,7 @@
         genToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       });
     }
-    var copyOfflineBtn = $('stp-copy-offline-prompt');
-    if (copyOfflineBtn) copyOfflineBtn.addEventListener('click', copyLastOfflinePrompt);
+    /* 「复制上次线下 Prompt」按钮与其监听已移除，原位置改为「导出预设」。 */
 
     var addBtn = $('stp-add');
     if (addBtn) addBtn.addEventListener('click', function () { openEditor(''); });
@@ -401,6 +425,9 @@
         if (fileInput.files && fileInput.files[0]) importFile(fileInput.files[0]);
       });
     }
+
+    var exportBtn = $('stp-export');
+    if (exportBtn) exportBtn.addEventListener('click', exportActivePack);
 
     var sel = $('stp-pack-select');
     if (sel) {

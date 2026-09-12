@@ -2111,10 +2111,6 @@
   }
 
   function scrubMatchRecordProse(text, participants) {
-    var br = global.miyaMatchBridge;
-    if (br && typeof br.scrubMatchProse === 'function') {
-      return br.scrubMatchProse(text, { participants: participants || [] });
-    }
     var t = String(text == null ? '' : text);
     t = t.replace(/\bcontactId\s*[=：:]\s*[A-Za-z0-9_\-]+/gi, '');
     t = t.replace(/[（(\[【]\s*ct_[A-Za-z0-9_]+\s*[）)\]】]/g, '');
@@ -2129,10 +2125,6 @@
   }
 
   function parseMatchRecordSegments(text, nameList) {
-    var br = global.miyaMatchBridge;
-    if (br && typeof br.parseMatchBeatSegments === 'function') {
-      return br.parseMatchBeatSegments(text, nameList);
-    }
     var raw = String(text || '');
     if (!raw.trim()) return [];
     var names = (nameList || []).map(function (n) { return String(n || '').trim(); }).filter(Boolean)
@@ -2282,24 +2274,38 @@
     var rankLines = [];
     if (mr.mode === 'team') {
       rankLines.push('胜方 · 阵营 ' + (mr.winnerTeam || '—'));
-      if (mr.mvpContactId) {
+      var mvpName = String(mr.mvpName || mr._mvpNameHint || '').trim();
+      if (!mvpName && mr.mvpContactId) {
         var mvp = (mr.participants || []).find(function (p) {
-          return String(p.contactId) === String(mr.mvpContactId);
+          return p && String(p.contactId) === String(mr.mvpContactId);
         });
-        rankLines.push('MVP · ' + (mvp && mvp.name ? mvp.name : mr.mvpContactId));
+        mvpName = mvp && mvp.name ? mvp.name : String(mr.mvpContactId);
       }
+      if (mvpName) rankLines.push('MVP · ' + mvpName);
       var prizes = mr.prizes || {};
       if (prizes.teamWin) rankLines.push('胜方奖品 · ' + prizes.teamWin);
       if (prizes.teamLose) rankLines.push('败方奖品 · ' + prizes.teamLose);
       if (prizes.mvp) rankLines.push('MVP奖品 · ' + prizes.mvp);
     } else if (Array.isArray(mr.rankings)) {
-      mr.rankings.slice().sort(function (a, b) { return (a.rank || 0) - (b.rank || 0); }).forEach(function (row) {
-        var who = (mr.participants || []).find(function (p) {
-          return String(p.contactId) === String(row.contactId);
-        });
-        var prize = (mr.prizes && mr.prizes.soloRanks && mr.prizes.soloRanks[(row.rank || 1) - 1]) || '';
+      var soloPrizeList = (mr.prizes && mr.prizes.soloRanks) || [];
+      mr.rankings.slice().sort(function (a, b) { return (a.rank || 0) - (b.rank || 0); }).forEach(function (row, idx) {
+        var rowId = String(row.contactId || '').trim();
+        var who = null;
+        if (rowId) {
+          who = (mr.participants || []).find(function (p) {
+            return p && String(p.contactId) === rowId;
+          });
+        } else {
+          // AI 生成的卡片没有通讯录 ID，按出场顺序回填姓名
+          who = (mr.participants || [])[idx] || null;
+        }
+        var whoName = String(row.name || '').trim() || (who && who.name) || '选手';
+        var prize = String(row.prize || '').trim();
+        if (!prize) {
+          prize = rowId ? soloPrizeList[(row.rank || 1) - 1] || '' : soloPrizeList[idx] || '';
+        }
         rankLines.push(
-          '第' + row.rank + '名 · ' + (who && who.name ? who.name : '选手') +
+          '第' + row.rank + '名 · ' + whoName +
           (prize ? ' · ' + prize : '') +
           (row.note ? ' · ' + scrubMatchRecordProse(row.note, mr.participants || []) : '')
         );

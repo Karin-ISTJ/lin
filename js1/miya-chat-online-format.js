@@ -13,6 +13,8 @@
     var RE_GIFT = /^送礼[-－—]\s*(.+)$/;
     var RE_GROUP_RED_PACKET = /^红包[-－—](拼手气|专属)[-－—](.+)$/;
     var RE_LOVE_POEM = /^情诗[-－—]\s*(.+)$/;
+    /** 赛事记录卡片：单行承载全部字段，用 ｜ 分隔 */
+    var RE_MATCH_RECORD = /^赛事记录[-－—]\s*(.+)$/;
     var RE_RECALL = /^撤回[-－—]\s*(.+)$/;
     /** 旁白行：标准「旁白-」；兼容模型常错写的「旁-」及冒号分隔 */
     var RE_NARRATION = /^旁(?:白)?\s*[-－—：:]\s*(.+)$/;
@@ -806,8 +808,230 @@
         return '情诗-' + style + '｜' + title + '｜' + body;
     }
 
-    function resolveLovePoemFromMessage(m) {
+    /**
+     * 赛事记录卡片：解析单行「赛事记录-…」。
+     *
+     * 字段用 ｜ 分隔，顺序为：
+     *   项目｜事件名｜赛制｜一句话亮点｜名次与奖品｜完整赛程｜选手感想
+     * 其中「名次与奖品」「完整赛程」「选手感想」内部再用 / 分段。
+     * solo 赛制名次段为「1.选手名.奖品.点评」，team 赛制为「胜方阵营.阵营名 / MVP.选手名 / 奖品1 / 奖品2 / 奖品3」。
+     */
+    function parseMatchRecordBody(body) {
+        var raw = trim(body);
+        if (!raw) return null;
+        var parts = raw.split(RE_LOCATION_SPLIT).map(function (x) {
+            return trim(x);
+        });
+        var eventItemName = trim(parts[0]);
+        if (!eventItemName) return null;
+        var eventName = parts.length > 1 ? trim(parts[1]) : '';
+        var modeRaw = parts.length > 2 ? trim(parts[2]) : '';
+        var mode = modeRaw === '阵营赛' || modeRaw === 'team' ? 'team' : 'solo';
+        var highlight = parts.length > 3 ? trim(parts[3]) : '';
+        var rankRaw = parts.length > 4 ? trim(parts[4]) : '';
+        var beatsRaw = parts.length > 5 ? trim(parts[5]) : '';
+        var rxRaw = parts.length > 6 ? trim(parts[6]) : '';
+
+        var rankings = null;
+        var winnerTeam = '';
+        var mvpName = '';
+        var prizes = {};
+        if (mode === 'team') {
+            var tSegs = rankRaw
+                ? rankRaw.split(/\s*\/\s*/).map(trim).filter(Boolean)
+                : [];
+            tSegs.forEach(function (seg) {
+                var kv = seg.split('.');
+                var head = trim(kv[0]);
+                var val = trim(kv.slice(1).join('.'));
+                if (head === '胜方' && val) winnerTeam = val;
+                else if (head === 'MVP' && val) mvpName = val;
+                else if (head === '胜方奖品' && val) prizes.teamWin = val;
+                else if (head === '败方奖品' && val) prizes.teamLose = val;
+                else if (head === 'MVP奖品' && val) prizes.mvp = val;
+            });
+        } else {
+            rankings = [];
+            (rankRaw ? rankRaw.split(/\s*\/\s*/) : []).forEach(function (seg) {
+                var s = trim(seg);
+                if (!s) return;
+                var kv = s.split('.');
+                var rankNo = Math.max(1, parseInt(trim(kv[0]), 10) || 1);
+                var name = trim(kv[1]) || '';
+                var prize = trim(kv[2]) || '';
+                var note = trim(kv[3]) || '';
+                if (!name && !prize && !note) return;
+                rankings.push({ rank: rankNo, name: name, prize: prize, note: note });
+            });
+        }
+
+        var beats = (beatsRaw ? beatsRaw.split(/\s*\/\s*/) : []).map(trim).filter(Boolean);
+        var reactions = [];
+        (rxRaw ? rxRaw.split(/\s*\/\s*/) : []).forEach(function (seg) {
+            var s = trim(seg);
+            if (!s) return;
+            var kv = s.split('.');
+            var nm = trim(kv[0]);
+            var tx = trim(kv.slice(1).join('.'));
+            if (!nm && !tx) return;
+            reactions.push({ name: nm || '角色', text: tx });
+        });
+
+        return {
+            eventName: eventName.slice(0, 60),
+            eventItemName: eventItemName.slice(0, 60),
+            mode: mode,
+            highlight: highlight.slice(0, 200),
+            rankings: rankings,
+            winnerTeam: winnerTeam.slice(0, 40),
+            mvpName: mvpName.slice(0, 40),
+            prizes: prizes,
+            beats: beats.map(function (b) {
+                return b.slice(0, 400);
+            }).slice(0, 8),
+            reactions: reactions.map(function (rx) {
+                return { name: rx.name.slice(0, 40), text: rx.text.slice(0, 300) };
+            }).slice(0, 12)
+        };
+    }
+
+    function formatMatchRecordForApi(mr) {
+        if (!mr || typeof mr !== 'object') return '';
+        var eventItemName = trim(mr.eventItemName);
+        if (!eventItemName) return '';
+        var mode = mr.mode === 'team' ? '阵营赛' : '单人赛';
+        var rankSeg = '';
+        if (mr.mode === 'team') {
+            var tParts = [];
+            if (trim(mr.winnerTeam)) tParts.push('胜方.' + trim(mr.winnerTeam));
+            if (trim(mr.mvpName || mr._mvpNameHint)) tParts.push('MVP.' + trim(mr.mvpName || mr._mvpNameHint));
+            if (mr.prizes && trim(mr.prizes.teamWin)) tParts.push('胜方奖品.' + trim(mr.prizes.teamWin));
+            if (mr.prizes && trim(mr.prizes.teamLose)) tParts.push('败方奖品.' + trim(mr.prizes.teamLose));
+            if (mr.prizes && trim(mr.prizes.mvp)) tParts.push('MVP奖品.' + trim(mr.prizes.mvp));
+            rankSeg = tParts.join(' / ');
+        } else if (Array.isArray(mr.rankings)) {
+            rankSeg = mr.rankings
+                .map(function (r) {
+                    return (
+                        (r.rank || 1) +
+                        '.' +
+                        trim(r.name) +
+                        '.' +
+                        trim(r.prize) +
+                        (trim(r.note) ? '.' + trim(r.note) : '')
+                    );
+                })
+                .join(' / ');
+        }
+        var beatSeg = Array.isArray(mr.beats) ? mr.beats.map(trim).filter(Boolean).join(' / ') : '';
+        var rxSeg = Array.isArray(mr.reactions)
+            ? mr.reactions
+                  .filter(function (rx) {
+                      return rx && trim(rx.text);
+                  })
+                  .map(function (rx) {
+                      return trim(rx.name || '角色') + '.' + trim(rx.text);
+                  })
+                  .join(' / ')
+            : '';
+        return (
+            '赛事记录-' +
+            eventItemName +
+            '｜' +
+            trim(mr.eventName) +
+            '｜' +
+            mode +
+            '｜' +
+            trim(mr.highlight) +
+            '｜' +
+            rankSeg +
+            '｜' +
+            beatSeg +
+            '｜' +
+            rxSeg
+        );
+    }
+
+    /**
+     * 把解析结果转成 message.matchRecord 结构。
+     * participants / mvpContactId / prizes.soloRanks 等字段需要通讯录 ID，
+     * AI 只给姓名，因此在渲染时按姓名回填。
+     */
+    function buildMatchRecordFromParsed(parsed) {
+        if (!parsed) return null;
+        var participants = [];
+        var rankRows = null;
+        var soloPrizes = [];
+        var mvpName = trim(parsed.mvpName);
+        var seenNames = Object.create(null);
+        function pushParticipant(nm) {
+            var name = trim(nm);
+            if (!name) return;
+            var key = name.toLowerCase();
+            if (seenNames[key]) return;
+            seenNames[key] = true;
+            participants.push({ contactId: '', name: name, avatar: '', team: undefined });
+        }
+        if (parsed.mode !== 'team' && Array.isArray(parsed.rankings)) {
+            rankRows = parsed.rankings.map(function (r) {
+                pushParticipant(r.name);
+                soloPrizes.push(trim(r.prize));
+                return {
+                    contactId: '',
+                    rank: r.rank,
+                    name: trim(r.name),
+                    prize: trim(r.prize),
+                    note: trim(r.note)
+                };
+            });
+        }
+        (parsed.reactions || []).forEach(function (rx) {
+            pushParticipant(rx.name);
+        });
+        pushParticipant(mvpName);
+        var reactions = (parsed.reactions || []).map(function (rx) {
+            return { contactId: '', name: trim(rx.name), text: trim(rx.text) };
+        });
+        var rec = {
+            sessionId: '',
+            eventName: trim(parsed.eventName),
+            eventItemName: trim(parsed.eventItemName),
+            mode: parsed.mode === 'team' ? 'team' : 'solo',
+            highlight: trim(parsed.highlight),
+            narrative: '',
+            beats: (parsed.beats || []).slice(),
+            rankings: rankRows,
+            winnerTeam: trim(parsed.winnerTeam),
+            mvpContactId: '',
+            mvpName: mvpName,
+            _mvpNameHint: mvpName,
+            prizes: parsed.mode === 'team' ? parsed.prizes || {} : { soloRanks: soloPrizes },
+            participants: participants,
+            reactions: reactions,
+            createdAt: Date.now()
+        };
+        return rec;
+    }
+
+    function resolveMatchRecordFromMessage(m) {
         if (!m) return null;
+        if (m.matchRecord && typeof m.matchRecord === 'object') return m.matchRecord;
+        var hit = trim(m.content).match(RE_MATCH_RECORD);
+        if (hit) {
+            var parsed = parseMatchRecordBody(hit[1]);
+            if (parsed) return buildMatchRecordFromParsed(parsed);
+        }
+        return null;
+    }
+
+    function isMatchRecordMessage(m) {
+        if (!m || m.deleted) return false;
+        if (m.type === 'match_record') return true;
+        if (m.matchRecord && typeof m.matchRecord === 'object') return true;
+        return RE_MATCH_RECORD.test(trim(m.content));
+    }
+
+    function resolveLovePoemFromMessage(m) {        if (!m) return null;
         if (m.lovePoem && Array.isArray(m.lovePoem.lines) && m.lovePoem.lines.length) {
             return {
                 style: trim(m.lovePoem.style) || '情诗',
@@ -1632,6 +1856,19 @@
             '撤回后对话里会出现「' + roleName + '撤回了一条消息，点击查看」；用户可查看被撤回内容。'
         );
         ruleNum += 1;
+        rows.push(
+            '',
+            ruleNum +
+                '、若你想发一张「赛事记录」卡片（例如向用户汇报你们一起参加的比赛、运动会、才艺评比等结果），须单独输出一行，格式为：赛事记录-项目名｜赛事名｜赛制｜一句话亮点｜名次与奖品｜完整赛程｜选手感想（赛事名、一句话亮点可留空但竖线必须保留；用半角或全角竖线分隔；该行只发卡片，勿与普通文字写在同一行）。',
+            '- 赛制只能写「单人赛」或「阵营赛」二选一；缺省按单人赛处理。',
+            '- 单人赛的「名次与奖品」内部用 / 分段，每段格式为：名次序号.选手姓名.奖品.点评（序号从 1 开始；奖品、点评可留空但点号须保留），例如：1.林晚.冠军奖杯.冲刺时反超了半个身位 / 2.周叙.亚军徽章.前三棒一直很稳。',
+            '- 阵营赛的「名次与奖品」内部用 / 分段，每段格式为：胜方.阵营名 / MVP.选手姓名 / 胜方奖品.内容 / 败方奖品.内容 / MVP奖品.内容（只写有内容的段），例如：胜方.红队 / MVP.林晚 / 胜方奖品.每人一杯奶茶 / 败方奖品.负责收拾场地。',
+            '- 「完整赛程」内部用 / 分段，每段一个场景，写 40–150 字的具体过程（动作、场面、转折），建议 2–5 段，例：发令枪响的瞬间所有人都冲了出去，林晚起步稍慢 / 最后一棒交接时周叙手一抖，接力棒差点脱手。',
+            '- 「选手感想」内部用 / 分段，每段格式为：选手姓名.感想内容，建议 2–6 段，例：林晚.下次想试试四百米 / 周叙.腿现在还抖。',
+            '- 选手姓名只需写名字，系统会自动匹配通讯录；只写当前对话里真实存在的人，禁止虚构陌生人。',
+            '- 赛事记录卡片须符合当下情境与人设，不可每轮都发；一场比赛只发一张。'
+        );
+        ruleNum += 1;
         if (opts.promptCallEnabled !== false) {
             rows.push(
                 '',
@@ -1697,7 +1934,8 @@
             '位置-滨海市｜海晏区星澜路18号一层103室',
             '转账-52｜一点心意',
             '外卖-喜茶｜多肉葡萄×1、烤黑糖波波×1｜46｜送到公司前台',
-            '送礼-丝绒玫瑰礼盒｜1｜今天也想让你开心一下'
+            '送礼-丝绒玫瑰礼盒｜1｜今天也想让你开心一下',
+            '赛事记录-跑步｜咪运会｜单人赛｜最后一百米反超，全场都在喊他的名字｜1.林晚.冠军奖杯.冲刺时反超了半个身位 / 2.周叙.亚军徽章.前三棒一直很稳｜发令枪响的瞬间所有人都冲了出去 / 最后一棒交接时接力棒差点脱手｜林晚.下次想试试四百米 / 周叙.腿现在还抖'
         ]);
         rows = rows.concat([
             '',
@@ -2096,6 +2334,26 @@
                     pending = null;
                 }
                 return { fields: pf, pendingQuote: null };
+            }
+        }
+
+        var mrLine = raw.match(RE_MATCH_RECORD);
+        if (mrLine) {
+            var mrParsed = parseMatchRecordBody(mrLine[1]);
+            if (mrParsed) {
+                var mrRec = buildMatchRecordFromParsed(mrParsed);
+                if (mrRec) {
+                    var mrf = {
+                        type: 'match_record',
+                        content: formatMatchRecordForApi(mrParsed) || '[赛事记录]',
+                        matchRecord: mrRec
+                    };
+                    if (pending) {
+                        mrf.quoteRef = buildQuoteRefFromPending(pending);
+                        pending = null;
+                    }
+                    return { fields: mrf, pendingQuote: null };
+                }
             }
         }
 
@@ -3156,6 +3414,12 @@
         formatTakeoutApiLine: formatTakeoutApiLine,
         RE_GIFT: RE_GIFT,
         RE_LOVE_POEM: RE_LOVE_POEM,
+        RE_MATCH_RECORD: RE_MATCH_RECORD,
+        parseMatchRecordBody: parseMatchRecordBody,
+        formatMatchRecordForApi: formatMatchRecordForApi,
+        buildMatchRecordFromParsed: buildMatchRecordFromParsed,
+        resolveMatchRecordFromMessage: resolveMatchRecordFromMessage,
+        isMatchRecordMessage: isMatchRecordMessage,
         RE_RECALL: RE_RECALL,
         RECALL_RECENT_LIMIT: RECALL_RECENT_LIMIT,
         RE_NARRATION: RE_NARRATION,

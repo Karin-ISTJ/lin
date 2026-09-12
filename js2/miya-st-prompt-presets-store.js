@@ -432,6 +432,62 @@
     });
   }
 
+  /*
+   * 导出为 SillyTavern 兼容 JSON。
+   * 与 importFromStJson 严格对偶：导出的 prompts + prompt_order 再导入回来
+   * 必须得到相同的条目、顺序与启用状态，否则这个功能就是一次性的。
+   */
+  function exportToStJson(packId) {
+    var state = load();
+    var pack =
+      (packId
+        ? (state.packs || []).find(function (p) { return p && p.id === packId; })
+        : getActivePack()) || null;
+    if (!pack) throw new Error('没有可导出的预设');
+
+    var entries = (pack.entries || []).slice().sort(function (a, b) {
+      return (a.order || 0) - (b.order || 0);
+    });
+
+    var prompts = entries.map(function (e) {
+      var row = {
+        identifier: String(e.identifier || e.id || '').trim() || uid('id'),
+        name: String(e.name || '').trim() || '未命名',
+        content: String(e.content != null ? e.content : ''),
+        role: e.role === 'user' || e.role === 'assistant' ? e.role : 'system',
+        system_prompt: e.system_prompt !== false,
+        marker: !!e.marker,
+        injection_position: e.position === 'in_chat' ? 1 : 0,
+        injection_depth: Number.isFinite(Number(e.injection_depth)) ? Number(e.injection_depth) : 4,
+        injection_order: Number.isFinite(Number(e.injection_order)) ? Number(e.injection_order) : 100
+      };
+      if (Array.isArray(e.injection_trigger) && e.injection_trigger.length) {
+        row.injection_trigger = e.injection_trigger.slice();
+      }
+      if (e.forbid_overrides) row.forbid_overrides = true;
+      return row;
+    });
+
+    /* ST 的 prompt_order[0].order 决定条目顺序与启用态 */
+    var order = entries.map(function (e, i) {
+      return {
+        identifier: prompts[i].identifier,
+        enabled: e.enabled !== false
+      };
+    });
+
+    var gen = normalizeGeneration(pack.generation);
+    return {
+      name: String(pack.name || '未命名预设'),
+      prompts: prompts,
+      prompt_order: [{ character_id: 100000, order: order }],
+      generation: gen,
+      /* 便于人眼识别来源，ST 侧会忽略未知字段 */
+      _exportedBy: 'Karin',
+      _exportedAt: new Date().toISOString()
+    };
+  }
+
   global.miyaStPromptPresetsStore = {
     KEY: KEY,
     load: load,
@@ -451,6 +507,7 @@
     setEnabled: setEnabled,
     clearActiveEntries: clearActiveEntries,
     importFromStJson: importFromStJson,
+    exportToStJson: exportToStJson,
     getEnabledForRequest: getEnabledForRequest,
     getActiveGeneration: function () {
       var p = getActivePack();

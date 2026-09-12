@@ -31,7 +31,7 @@
         'js1/miya-couple-timeline.js?v=7',
         'js1/miya-couple-board.js?v=1',
         'js1/miya-couple-whisper-store.js?v=2',
-        'js1/miya-couple-whisper-engine.js?v=2',
+        'js1/miya-couple-whisper-engine.js?v=3',
         'js1/miya-couple-whisper.js?v=4',
         'js1/miya-couple-photos.js?v=5',
         'js1/miya-couple-app.js?v=10'
@@ -66,15 +66,6 @@
       css: ['css/miya-memory.css?v=9'],
       js: ['js2/miya-memory-app.js?v=9']
     },
-    matchUi: {
-      css: ['css/miya-match.css?v=4'],
-      js: [
-        'js2/miya-api-bridge.js?v=1',
-        'js2/miya-match-store.js?v=3',
-        'js2/miya-match-bridge.js?v=5',
-        'js2/miya-match-app.js?v=6'
-      ]
-    },
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],
       js: [
@@ -95,7 +86,6 @@
     itinerary: ['itineraryUi', 'apiCore'],
     weather: ['weatherUi', 'apiCore'],
     memory: ['memoryUi'],
-    match: ['matchUi', 'apiCore'],
     fun: ['funUi', 'apiCore']
   };
 
