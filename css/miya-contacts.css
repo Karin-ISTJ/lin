@@ -411,15 +411,10 @@
   text-overflow: ellipsis;
 }
 
+/* 副标题已废弃：导入卡的人设常是原始 JSON/XML，自动摘要全是噪音。
+   保留样式只为兼容可能残留的旧 DOM，新渲染不会再输出这个类。 */
 .mn-panel__meta {
-  display: block;
-  font-size: 12px;
-  line-height: 1.3;
-  color: var(--mn-tertiary);
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: none;
 }
 
 /* 典藏数：行内胶囊 */
