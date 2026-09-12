@@ -1355,59 +1355,6 @@
         return lines.join('\n');
     }
 
-    /** 共读场景：仅允许多行气泡 + 表情包，禁止其它线上专属前缀 */
-    function buildReadTogetherFormatRules(opts) {
-        opts = opts && typeof opts === 'object' ? opts : {};
-        var roleName = trim(opts.roleName) || '角色';
-        var bubbleMin = Math.max(1, Number(opts.bubbleMin) || 2);
-        var bubbleMax = Math.max(bubbleMin, Number(opts.bubbleMax) || 5);
-        var catalog = opts.catalog || [];
-        var stickerEx =
-            catalog[0] && catalog[0].name ? '表情包-' + catalog[0].name : null;
-        var countHint =
-            bubbleMin === bubbleMax
-                ? '本轮正文建议约 ' + bubbleMin + ' 行'
-                : '本轮正文建议 ' + bubbleMin + ' 至 ' + bubbleMax + ' 行';
-
-        var rows = [
-            '【共读·输出格式·' + roleName + '】',
-            '你正与用户并肩共读，对话区是共读专属聊天，不是微信/QQ 线上聊天。',
-            countHint + '（每行一条气泡，仅供参考，系统不会截断）。',
-            '正文段每一行就是一条独立气泡；禁止把多条气泡挤在同一行。',
-            '禁止在正文输出 ⧗、› 或任何 API 时间戳标记。',
-            '',
-            '【允许】',
-            '· 普通文字：直接写对白，一行一条。',
-            '· 表情包：单独一行「表情包-名称」（名称须来自下文「表情包可用列表」，禁止捏造）。',
-            '',
-            '【输出要求】',
-            '直接输出正文，每行一条气泡，无需任何包裹标签或前缀说明。',
-            '',
-            '【格式示例·' + roleName + '】',
-            '这页写得太好了',
-            stickerEx || '（无表情包则不输出表情包行）',
-            '你看第三段那个比喻'
-        ];
-        return rows.join('\n');
-    }
-
-    function buildReadTogetherPerTurnReminder(opts) {
-        opts = opts && typeof opts === 'object' ? opts : {};
-        var roleName = trim(opts.roleName) || '角色';
-        var bubbleMin = Math.max(1, Number(opts.bubbleMin) || 2);
-        var bubbleMax = Math.max(bubbleMin, Number(opts.bubbleMax) || 5);
-        var countHint =
-            bubbleMin === bubbleMax
-                ? '正文建议约 ' + bubbleMin + ' 行'
-                : '正文建议 ' + bubbleMin + '–' + bubbleMax + ' 行';
-        return [
-            '【本轮输出格式·共读·' + roleName + '】',
-            '本轮仅输出正文气泡，每行一条；' + countHint + '。',
-            '正文仅允许：普通文字、表情包-名称',
-            '发出前自检：是否误用了线上聊天格式或心声/思维链标签。'
-        ].join('\n');
-    }
-
     var RE_RT_FORBIDDEN =
         /^(?:引用|语音|图片|位置|转账|转账回执|外卖|送礼|情诗|旁(?:白)?|发起语音通话|发起视频通话|【发朋友圈)[-－—]/;
     var RE_RT_HEART_VOICE =
@@ -1523,65 +1470,6 @@
         return (Array.isArray(lines) ? lines : []).filter(function (line) {
             return !isStructuralLeakLine(line);
         });
-    }
-
-    function parseReadTogetherOutputLine(line, catalog) {
-        var raw = stripApiTimelinePrefix(trim(line)).replace(/\s*⧗\s*$/g, '').trim();
-        if (!raw) return null;
-        if (RE_RT_META_TAG.test(raw) || RE_RT_HEART_VOICE.test(raw)) return null;
-        if (RE_ROLE_CALL_VOICE.test(raw) || RE_ROLE_CALL_VIDEO.test(raw) ||
-            RE_LEGACY_CALL_VOICE.test(raw) || RE_LEGACY_CALL_VIDEO.test(raw) ||
-            RE_ROLE_MOMENTS_POST.test(raw) || RE_NARRATION.test(raw) ||
-            RE_RECALL.test(raw) || RE_TRANSFER_RECEIPT.test(raw)) {
-            return null;
-        }
-        var stk = raw.match(RE_STICKER);
-        if (stk) {
-            var stickerName = trim(stk[1]);
-            var hit = resolveStickerByName(stickerName, catalog);
-            if (hit) {
-                return {
-                    type: 'sticker',
-                    content: '表情包-' + hit.name,
-                    stickerBlobId: hit.blobId || '',
-                    stickerUrl: hit.url || '',
-                    stickerName: hit.name
-                };
-            }
-            return null;
-        }
-        if (RE_QUOTE.test(raw)) return null;
-        if (RE_RT_FORBIDDEN.test(raw)) return null;
-        return { type: 'text', content: raw };
-    }
-
-    function parseReadTogetherOutputLinesMeta(lines, catalog) {
-        var arr = expandCollapsedOutputLines(lines);
-        var out = [];
-        arr.forEach(function (line) {
-            var fields = parseReadTogetherOutputLine(line, catalog);
-            if (fields) out.push(fields);
-        });
-        return { bubbles: out };
-    }
-
-    function parseReadTogetherUserInput(text, catalog) {
-        var raw = trim(text);
-        if (!raw) return null;
-        var stk = raw.match(RE_STICKER);
-        if (stk) {
-            var hit = resolveStickerByName(trim(stk[1]), catalog || []);
-            if (hit) {
-                return {
-                    type: 'sticker',
-                    content: '表情包-' + hit.name,
-                    stickerBlobId: hit.blobId || '',
-                    stickerUrl: hit.url || '',
-                    stickerName: hit.name
-                };
-            }
-        }
-        return { type: 'text', content: raw };
     }
 
     function buildHeartVoiceRulesBlock(roleName, preset) {
@@ -3319,10 +3207,6 @@
         formatUserRoundLinesForRegenerate: formatUserRoundLinesForRegenerate,
         formatHeartVoiceSnapshotLines: formatHeartVoiceSnapshotLines,
         buildPerTurnFormatReminder: buildPerTurnFormatReminder,
-        buildReadTogetherFormatRules: buildReadTogetherFormatRules,
-        buildReadTogetherPerTurnReminder: buildReadTogetherPerTurnReminder,
-        parseReadTogetherOutputLinesMeta: parseReadTogetherOutputLinesMeta,
-        parseReadTogetherUserInput: parseReadTogetherUserInput,
         splitCollapsedOnlineTypeLines: splitCollapsedOnlineTypeLines,
         stripOrphanMarkdownEmphasis: stripOrphanMarkdownEmphasis,
         sanitizeRoleOutputLines: sanitizeRoleOutputLines,

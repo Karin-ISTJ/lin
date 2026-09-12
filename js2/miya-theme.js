@@ -8,7 +8,7 @@
   var FONT_PRESETS_KEY = 'miya-font-presets-v1';
   var MAX_FONT_PRESETS = 12;
 
-  var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pet', 'pen'];
+  var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pen'];
   var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop', 'tile_rift'];
   var POLAROID_KEYS = ['polaroid_1', 'polaroid_2', 'polaroid_3'];
   var P2_WIDGET_KEYS = [
@@ -192,7 +192,6 @@
     { key: 'memory', label: '记忆', selectors: ['.miya-memory-app'] },
     { key: 'store', label: '线下', selectors: ['.miya-offline-app'] },
     { key: 'contacts', label: '联系人', selectors: ['.miya-contacts-app'] },
-    { key: 'pet', label: '书架', selectors: ['.miya-typewriter-app'] },
     { key: 'pen', label: '模拟器', selectors: ['.miya-simulator-app'] },
     { key: 'couple', label: '情侣空间', selectors: ['.miya-couple-app'] },
     { key: 'itinerary', label: '行程轨迹', selectors: ['.miya-itinerary-app'] },
@@ -1620,7 +1619,7 @@
       promises.push(applyIconBg(btn, theme.icons && theme.icons[key]));
     });
     if (!isCustom) {
-      ['contacts', 'pet', 'pen'].forEach(function (key) {
+      ['contacts', 'pen'].forEach(function (key) {
         var dockBtn = document.querySelector('.foot__dock [data-app="' + key + '"]');
         promises.push(applyIconBg(dockBtn, theme.icons && theme.icons[key]));
       });

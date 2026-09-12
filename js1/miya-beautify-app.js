@@ -9,7 +9,6 @@
     beauty: '美化',
     store: '线下',
     contacts: '联系人',
-    pet: '书架',
     pen: '模拟器',
     polaroid_1: '拍立得 · 前景',
     polaroid_2: '拍立得 · 中层',
@@ -133,7 +132,7 @@
     if (global.miyaAppSvg && global.miyaAppSvg[key]) return global.miyaAppSvg[key];
     var map = {
       memo: 'M', set: '⚙', book: '书', memory: '忆', chat: '聊',
-      beauty: '美', store: '店', contacts: '人', pet: '打', pen: '模',
+      beauty: '美', store: '店', contacts: '人', pen: '模',
       tile_notes: '日', tile_match: '赛', tile_fun: '娱',
       tile_echo: '鸣', tile_log: '录',
       tile_couple: '侣', tile_themeshop: '程', tile_rift: '错',

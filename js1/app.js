@@ -3,7 +3,7 @@
   (function resetOverlayApps() {
     document.body.classList.remove('miya-app-open');
     document.querySelectorAll(
-      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-typewriter-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
+      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess, #miya-match-app'
     ).forEach(function (el) {
       if (!el.classList.contains('is-open')) {
         el.setAttribute('hidden', '');
@@ -28,7 +28,6 @@
     world: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><ellipse cx="12" cy="12" rx="3" ry="7.5" stroke="rgba(130,136,145,0.65)" stroke-width="1"/><path d="M4.5 12h15" stroke="rgba(130,136,145,0.65)" stroke-width="1"/></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="none"><rect x="7" y="2" width="10" height="20" rx="2.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M11 18h2" stroke="rgba(130,136,145,0.65)" stroke-width="1.2" stroke-linecap="round"/></svg>',
     contacts: '<svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M3 20c0-3.3 2.7-6 6-6" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/><circle cx="17" cy="9" r="2.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.1"/><path d="M14 20c.5-2.2 2-3.5 4-3.5s3.5 1.3 4 3.5" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/></svg>',
-    pet: '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="18" height="10" rx="1.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M6 8V6.5A2.5 2.5 0 018.5 4h7A2.5 2.5 0 0118 6.5V8" stroke="rgba(70,74,80,0.82)" stroke-width="1.1"/><path d="M5 14h14M7 17h2M11 17h2M15 17h2" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/><circle cx="18" cy="11" r="1" fill="rgba(130,136,145,0.65)"/></svg>',
     pen: '<svg viewBox="0 0 24 24" fill="none"><path d="M4 20l5-1 10-10-4-4L5 15l-1 5z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/><path d="M13 7l4 4" stroke="rgba(130,136,145,0.65)" stroke-width="1.1"/></svg>',
     couple: '<svg viewBox="0 0 24 24" fill="none"><circle cx="5.5" cy="7" r="1.8" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><circle cx="18.5" cy="7" r="1.8" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M3.5 10.5h4v7.5H3.5a1 1 0 01-1-1v-5.5a1 1 0 011-1z" stroke="rgba(70,74,80,0.82)" stroke-width="1.1" stroke-linejoin="round"/><path d="M16.5 10.5H21v6.5a1 1 0 01-1 1h-3.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.1" stroke-linejoin="round"/><path d="M12 11.5c-.7-.7-1.8-.7-2.5 0-.7.7-.7 1.8 0 2.5L12 15.5l2.5-2.5c.7-.7.7-1.8 0-2.5-.7-.7-1.8-.7-2.5 0z" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linejoin="round"/></svg>',
     itinerary: '<svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h14" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linecap="round"/><circle cx="18" cy="12" r="2" stroke="rgba(130,136,145,0.65)" stroke-width="1.1"/><path d="M18 6v2M18 16v2" stroke="rgba(130,136,145,0.65)" stroke-width="1" stroke-linecap="round"/></svg>',
@@ -58,7 +57,6 @@
     world: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H6C4.35 2 3 3.35 3 5v14c0 1.65 1.35 3 3 3h15v-2H6c-.55 0-1-.45-1-1s.45-1 1-1h14c.55 0 1-.45 1-1V3c0-.55-.45-1-1-1m-3 6H8V6h9z"></path></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 2H5c-.55 0-1 .45-1 1v4H2v2h2v2H2v2h2v2H2v2h2v4c0 .55.45 1 1 1h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-6.5 5C13.93 7 15 8.07 15 9.5S13.93 12 12.5 12 10 10.93 10 9.5 11.07 7 12.5 7M17 17H8v-1c0-1.66 1.34-3 3-3h3c1.66 0 3 1.34 3 3z"></path></svg>',
     contacts: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 2H5c-.55 0-1 .45-1 1v4H2v2h2v2H2v2h2v2H2v2h2v4c0 .55.45 1 1 1h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-6.5 5C13.93 7 15 8.07 15 9.5S13.93 12 12.5 12 10 10.93 10 9.5 11.07 7 12.5 7M17 17H8v-1c0-1.66 1.34-3 3-3h3c1.66 0 3 1.34 3 3z"></path></svg>',
-    pet: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3h-7c-.77 0-1.47.3-2 .78-.53-.48-1.23-.78-2-.78H3c-.55 0-1 .45-1 1v15c0 .55.45 1 1 1h5.76c.53 0 1.04.21 1.41.59l1.12 1.12s.02.01.03.02c.09.08.18.15.29.2.12.05.25.08.38.08s.26-.03.38-.08c.11-.05.21-.12.29-.2 0 0 .02-.01.03-.02l1.12-1.12c.37-.37.89-.59 1.41-.59h5.76c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1Zm-1 15h-4.76c-.8 0-1.58.25-2.24.69V6c0-.55.45-1 1-1h6z"></path></svg>',
     pen: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m22 2-2 2h-6l-2-2v7c0 2.76 2.24 5 5 5s5-2.24 5-5V4h-.01V2Zm-7 7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m4 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1"></path><path d="M11.09 10H5.5C4.67 10 4 9.33 4 8.5S4.67 7 5.5 7C7.06 7 10 6.16 10 3V2H8v1c0 1.88-2.09 2-2.5 2C3.57 5 2 6.57 2 8.5c0 1.42.85 2.63 2.06 3.18L5 21.1a1 1 0 0 0 1 .9h3c.55 0 1-.45 1-1v-3h4v3c0 .55.45 1 1 1h3c.51 0 .94-.38.99-.89l.75-6.78c-.82.43-1.76.67-2.75.67-2.97 0-5.43-2.17-5.91-5Z"></path></svg>',
     couple: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5a2 2 0 1 0 0 4 2 2 0 1 0 0-4m14.5 5h-.7c-.84 0-1.61.42-2.08 1.11L13.46 16h-2.93l-3.26-4.89C6.81 10.41 6.03 10 5.19 10h-.7a2.5 2.5 0 0 0-2.5 2.5V18h5v-3.7l1.87 2.81c.37.56.99.89 1.66.89h2.93c.67 0 1.29-.33 1.66-.89l1.87-2.81V18h5v-5.5a2.5 2.5 0 0 0-2.5-2.5ZM19 5a2 2 0 1 0 0 4 2 2 0 1 0 0-4"></path><path d="M14.51 10.17c.65-.67.65-1.74 0-2.41-.66-.67-1.69-.67-2.34 0l-.17.17-.17-.17c-.65-.67-1.69-.67-2.34 0-.65.68-.65 1.74 0 2.41L12 12.75z"></path></svg>',
     itinerary: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.17 5.11A2 2 0 0 0 17.38 4H4c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2 0 1.65 1.35 3 3 3s3-1.35 3-3h4c0 1.65 1.35 3 3 3s3-1.35 3-3c1.1 0 2-.9 2-2v-3.76c0-.31-.07-.62-.21-.89zM17.38 6l.89.45L20 10h-4.13V6zm-4.13 0v4h-3.5V6zm-5.5 0v4H4V6zM7 18a1.003 1.003 0 0 1-.87-1.5c.36-.62 1.33-.63 1.72-.02A.95.95 0 0 1 8 17c0 .55-.45 1-1 1m10 0a1.003 1.003 0 0 1-.87-1.5c.36-.62 1.33-.63 1.72-.02A.95.95 0 0 1 18 17c0 .55-.45 1-1 1"></path></svg>',
@@ -81,7 +79,7 @@
   var NAMES = {
     set: '设置', book: '世界书',
     beauty: '美化', store: '线下', photo: '多相', world: '世界',
-    phone: '电话', contacts: '联系人', pet: '书架', pen: '模拟器',
+    phone: '电话', contacts: '联系人', pen: '模拟器',
     notes: '日记', match: '赛事', fun: '娱乐', echo: '共鸣', log: '记录',
     couple: '情侣空间', itinerary: '行程轨迹', rift: '错位时空',
     weather: '天气', map: '地图', apps: '应用', theater: '剧场'
@@ -377,9 +375,6 @@
       if (window.miyaModeSwitch && window.miyaModeSwitch.setMode) {
         window.miyaModeSwitch.setMode('sim');
       }
-    },
-    pet: function () {
-      if (window.miyaTypewriterApp && window.miyaTypewriterApp.open) window.miyaTypewriterApp.open();
     },
     itinerary: function () {
       if (window.miyaItineraryApp && window.miyaItineraryApp.open) window.miyaItineraryApp.open();

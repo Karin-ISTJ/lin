@@ -623,34 +623,6 @@
         if (tail) apiMessages.push({ role: 'user', content: tail });
     }
 
-    function buildReadTogetherModeBlock(contact, profile) {
-        return (
-            '【对话模式·共读】\n' +
-            '你正在以「' +
-            String((contact && contact.name) || '对方') +
-            '」的身份，与「' +
-            String((profile && profile.name) || '用户') +
-            '」并肩共读同一本书。\n' +
-            '- 这是共读室专属对话，不是微信/QQ 线上聊天；禁止引用-/语音-/图片-/位置-/转账-/旁白-等线上专属格式。\n' +
-            '- 正文仅允许：普通文字（每行一条气泡）、表情包-名称（单独一行）。\n' +
-            '- 共读只需直接输出正文气泡，禁止输出 <thinking>、<miyavoice> 或任何思维链/心声段。\n' +
-            '- 须遵守下文「共读·输出格式」；提示词顺序：全局 → 联系人档案 → 用户身份 → 关系 → 世界书。'
-        );
-    }
-
-    function buildReadTogetherOperationRules(contact, profile) {
-        var roleName = String((contact && contact.name) || '对方');
-        var userName = String((profile && profile.name) || '用户');
-        return (
-            '【运转规则·共读】\n' +
-            '1、你是' + roleName + '，正与用户并肩共读；须消化人设与世界书，作出符合当下阅读情境的对话。\n' +
-            '2、你知道' + userName + '是谁，须符合你们的关系；禁止辱骂或控制型表达。\n' +
-            '3、每轮仅输出正文：每行一条气泡，直接写对白；禁止输出 <thinking>、<miyavoice> 或任何思维链/心声。\n' +
-            '4、正文仅允许普通文字与「表情包-名称」；禁止语音-/引用-/图片-/位置-/转账-/旁白-等线上专属前缀。\n' +
-            '5、禁止输出 ⧗、› 或 API 时间戳；禁止复读相同句式。'
-        );
-    }
-
     function buildCallModeBlock(contact, profile, callKind) {
         var kindLabel = callKind === 'video' ? '视频' : '语音';
         return (
@@ -1058,80 +1030,6 @@
             blocks.push('【线上格式规则】\n每行一气泡（必须换行，禁止空格挤一行）；语音-内容；表情包-名称；引用-原话独占一行，每条回复各占一行；用户连发多条以「 / 」分隔，引用时一次只引其中一条。');
         }
         return blocks.join('\n\n');
-    }
-
-    function buildReadTogetherRulesBundle(contact, chatSettings) {
-        var fmt = getOnlineFormatApi();
-        var st = global.miyaChatStore;
-        var catalog =
-            fmt && st && typeof fmt.collectStickerCatalog === 'function'
-                ? fmt.collectStickerCatalog(st, contact && contact.id)
-                : [];
-        var roleName = (contact && contact.name) || '角色';
-        var blocks = [];
-        if (fmt && typeof fmt.buildStickerAllowlistBlock === 'function') {
-            blocks.push(fmt.buildStickerAllowlistBlock(catalog, roleName));
-        }
-        if (fmt && typeof fmt.buildReadTogetherFormatRules === 'function') {
-            blocks.push(
-                fmt.buildReadTogetherFormatRules({
-                    roleName: roleName,
-                    bubbleMin: 2,
-                    bubbleMax: 5,
-                    catalog: catalog
-                })
-            );
-        }
-        return blocks.join('\n\n');
-    }
-
-    /**
-     * 共读专用系统提示：不注入线上单聊模式/运转/格式规则
-     */
-    function buildReadTogetherSystemPrompt(input) {
-        var cfg = input && typeof input === 'object' ? input : {};
-        var contact = cfg.contact;
-        var profile = cfg.profile;
-        var chatSettings = cfg.chatSettings || null;
-        var contextText = String(cfg.contextText || '').trim();
-        var parts = [];
-        var aw = global.MiyaChatAwareness;
-
-        appendLayerList(parts, cfg.worldbookFrontLayers);
-
-        var globalP = getGlobalPrompt();
-        if (globalP) parts.push('【全局提示词】\n' + globalP);
-
-        parts.push(buildReadTogetherModeBlock(contact, profile));
-
-        var chronicle = renderChronicleBlock(contact);
-        if (chronicle) parts.push(chronicle);
-
-        var userBlock = renderProfileBlock(profile);
-        if (userBlock) parts.push(userBlock);
-
-        var avatarBlock = buildAvatarRecognitionBlock(chatSettings, contact, profile);
-        if (avatarBlock) parts.push(avatarBlock);
-        appendDynamicAvatarContextBlock(parts, chatSettings, contact, profile);
-        appendAlbumContextBlock(parts, profile, contact, chatSettings);
-
-        if (aw) {
-            var relLine = aw.buildRelationshipLine(chatSettings, contact);
-            if (relLine) parts.push(relLine);
-            var netBlock = aw.buildChronicleRelationshipBlock(contact);
-            if (netBlock) parts.push(netBlock);
-        }
-
-        var wbLayers = Array.isArray(cfg.worldbookLayers)
-            ? cfg.worldbookLayers
-            : buildWorldbookLayers(contact, contextText);
-        appendLayerList(parts, wbLayers);
-        appendLayerList(parts, cfg.worldbookBackLayers);
-
-        parts.push(buildReadTogetherOperationRules(contact, profile));
-        parts.push(buildReadTogetherRulesBundle(contact, chatSettings));
-
-        return parts.filter(Boolean).join('\n\n');
     }
 
     function buildAwarenessBlocks(chatSettings, contact, profile, history) {
@@ -4914,7 +4812,6 @@
         extractThinkingFromResponse: extractThinkingFromResponse,
         buildOnlineRulesBundle: buildOnlineRulesBundle,
         buildCallSystemPrompt: buildCallSystemPrompt,
-        buildReadTogetherSystemPrompt: buildReadTogetherSystemPrompt,
         buildCallRingRules: buildCallRingRules
     };
 })(window);

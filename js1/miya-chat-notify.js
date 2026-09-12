@@ -128,7 +128,6 @@
             global.miyaMemoryApp,
             global.miyaItineraryApp,
             global.miyaCoupleApp,
-            global.miyaTypewriterApp,
             global.miyaOfflineApp
         ];
     }
@@ -137,8 +136,7 @@
         '.miya-beautify-app.is-open, .miya-settings-app.is-open, .miya-worldbook-app.is-open, ' +
         '.miya-contacts-app.is-open, #miya-memory-app.is-open, ' +
         '#miya-itinerary-app.is-open, ' +
-        '#miya-couple-app.is-open, ' +
-        '#miya-typewriter-app.is-open, #miya-offline-app.is-open';
+        '#miya-couple-app.is-open, #miya-offline-app.is-open';
 
     function isOverlayAppOpen(el) {
         return !!(el && el.classList.contains('is-open') && !el.hasAttribute('hidden'));

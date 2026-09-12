@@ -28,9 +28,6 @@
   var CHAT_UI_THEME_KEY = 'miya-chat-ui-theme';
   var CHAT_TIMESTAMPS_KEY = 'miya-chat-show-timestamps-v1';
   var DIARY_KEY = 'miya-diary-v1';
-  var TYPEWRITER_KEY = 'miya-typewriter-v1';
-  var TYPEWRITER_SETTINGS_KEY = 'miya-typewriter-settings-v1';
-  var TYPEWRITER_READ_KEY = 'miya-typewriter-read-together-v1';
   var APPOINTMENT_KEY = 'miya-appointment-v1';
   var APPOINTMENT_BACKUP_KEY = 'miya-appointment-v1-backup';
   var OFFLINE_BEAUTIFY_PRESETS_KEY = 'miya-offline-beautify-presets-v1';
@@ -87,12 +84,6 @@
       chatMediaIdb: true
     },
     { id: 'diary', title: '日记', lsKeys: [DIARY_KEY], widgetKvKeys: [DIARY_KEY] },
-    {
-      id: 'typewriter',
-      title: '书架',
-      lsKeys: [TYPEWRITER_KEY, TYPEWRITER_SETTINGS_KEY, TYPEWRITER_READ_KEY],
-      widgetKvKeys: [TYPEWRITER_KEY, TYPEWRITER_SETTINGS_KEY, TYPEWRITER_READ_KEY]
-    },
     {
       id: 'offline',
       title: '线下剧情',
@@ -978,13 +969,6 @@
     if (cat.id === 'simulator' && global.MiyaSimulatorStore && global.MiyaSimulatorStore.invalidateCache) {
       global.MiyaSimulatorStore.invalidateCache();
     }
-    if (cat.id === 'typewriter') {
-      if (global.miyaTypewriterStore && global.miyaTypewriterStore.invalidateCache) global.miyaTypewriterStore.invalidateCache();
-      if (global.miyaTypewriterSettings && global.miyaTypewriterSettings.invalidateCache) global.miyaTypewriterSettings.invalidateCache();
-      if (global.miyaTypewriterReadTogetherStore && global.miyaTypewriterReadTogetherStore.invalidateCache) {
-        global.miyaTypewriterReadTogetherStore.invalidateCache();
-      }
-    }
     if (cat.id === 'diary' && global.miyaDiaryStore && global.miyaDiaryStore.invalidateCache) {
       global.miyaDiaryStore.invalidateCache();
     }
@@ -1023,11 +1007,6 @@
     if (global.miyaChatStore && global.miyaChatStore.invalidateCache) global.miyaChatStore.invalidateCache();
     if (global.miyaChatGlobalSettings && global.miyaChatGlobalSettings.invalidateCache) global.miyaChatGlobalSettings.invalidateCache();
     if (global.MiyaSimulatorStore && global.MiyaSimulatorStore.invalidateCache) global.MiyaSimulatorStore.invalidateCache();
-    if (global.miyaTypewriterStore && global.miyaTypewriterStore.invalidateCache) global.miyaTypewriterStore.invalidateCache();
-    if (global.miyaTypewriterSettings && global.miyaTypewriterSettings.invalidateCache) global.miyaTypewriterSettings.invalidateCache();
-    if (global.miyaTypewriterReadTogetherStore && global.miyaTypewriterReadTogetherStore.invalidateCache) {
-      global.miyaTypewriterReadTogetherStore.invalidateCache();
-    }
     if (global.miyaDiaryStore && global.miyaDiaryStore.invalidateCache) global.miyaDiaryStore.invalidateCache();
     if (global.miyaWeatherStore && global.miyaWeatherStore.invalidateCache) global.miyaWeatherStore.invalidateCache();
     if (global.miyaCoupleStore && global.miyaCoupleStore.invalidateCache) global.miyaCoupleStore.invalidateCache();
@@ -1574,15 +1553,6 @@
     }
     if (global.MiyaSimulatorStore && typeof global.MiyaSimulatorStore.invalidateCache === 'function') {
       global.MiyaSimulatorStore.invalidateCache();
-    }
-    if (global.miyaTypewriterStore && typeof global.miyaTypewriterStore.invalidateCache === 'function') {
-      global.miyaTypewriterStore.invalidateCache();
-    }
-    if (global.miyaTypewriterSettings && typeof global.miyaTypewriterSettings.invalidateCache === 'function') {
-      global.miyaTypewriterSettings.invalidateCache();
-    }
-    if (global.miyaTypewriterReadTogetherStore && typeof global.miyaTypewriterReadTogetherStore.invalidateCache === 'function') {
-      global.miyaTypewriterReadTogetherStore.invalidateCache();
     }
     if (global.miyaDiaryStore && typeof global.miyaDiaryStore.invalidateCache === 'function') {
       global.miyaDiaryStore.invalidateCache();
