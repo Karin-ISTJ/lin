@@ -1370,7 +1370,9 @@
     /* 玩家发言草稿：draft 是内容，drafting 表示正在让 AI 拟稿 */
     draft: '', drafting: false,
     /* 上一次 AI 发言失败（空返回）的留痕，避免只弹 toast 一闪而过 */
-    speechError: null
+    speechError: null,
+    /* 局中重开的二次确认状态 */
+    confirmReset: false
   };
 
   function phaseStepHtml(g) {
@@ -1678,9 +1680,22 @@
 
   function renderPanel(store, chatId) {
     var g = load(store, chatId);
+    /*
+     * 顶栏常驻「重开一局」：对局进行中也必须能重开。
+     * 之前「清空记录」只在结束态出现，玩到一半发现这局进行不下去
+     * （比如被屠城、或想换个身份）就只能先打到底，很别扭。
+     * 放在顶栏是因为它要全程可达 —— 底部操作区每个阶段都不一样。
+     */
+    var restartBtn = (g.status === 'playing')
+      ? (state.confirmReset
+          ? '<button type="button" class="ww__head-btn ww__head-btn--danger" data-ww-act="reset">确认重开</button>'
+            + '<button type="button" class="ww__head-btn" data-ww-act="reset-cancel">取消</button>'
+          : '<button type="button" class="ww__head-btn" data-ww-act="reset">重开一局</button>')
+      : '';
     var head =
       '<div class="ww__head">' +
         '<div class="ww__title">🐺 狼人杀</div>' +
+        restartBtn +
         '<button type="button" class="ww__close" data-sheet-close aria-label="关闭">关闭</button>' +
       '</div>';
 
@@ -2024,8 +2039,27 @@
     }
 
     if (act === 'reset') {
+      /*
+       * 局中重开要有二次确认：顶栏按钮就在「关闭」旁边，
+       * 误触一下就把整局清掉太伤。结束态（over）不需要确认 ——
+       * 那时本来就没有对局可保护。
+       */
+      if (g.status === 'playing' && !state.confirmReset) {
+        state.confirmReset = true;
+        rerender();
+        if (toast) toast('再点一次「确认重开」才会清空当前对局');
+        return true;
+      }
+      state.confirmReset = false;
       var fresh = emptyGame();
       save(store, chatId, fresh);
+      rerender();
+      if (toast) toast('已清空，可以重新开局');
+      return true;
+    }
+
+    if (act === 'reset-cancel') {
+      state.confirmReset = false;
       rerender();
       return true;
     }

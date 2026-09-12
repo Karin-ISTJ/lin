@@ -94,6 +94,37 @@
 .ww__title {
   font-size: 16px;
   font-weight: 700;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 顶栏常驻小按钮（重开一局 / 取消）：与「关闭」同款胶囊 */
+.ww__head-btn {
+  appearance: none;
+  border: 0;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ww__head-btn:hover {
+  background: rgba(0, 0, 0, 0.11);
+}
+
+/* 二次确认态：用警示色，避免用户当成普通按钮重复误点 */
+.ww__head-btn--danger {
+  background: rgba(214, 69, 69, 0.14);
+  color: #b03030;
+  font-weight: 700;
+}
+
+.ww__head-btn--danger:hover {
+  background: rgba(214, 69, 69, 0.22);
 }
 
 .ww__close {
