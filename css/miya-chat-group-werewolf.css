@@ -110,14 +110,17 @@
 .ww__ctx {
   flex: 0 0 auto;
   display: flex;
+  /* 允许换行：窄屏上「N 段 · N 字 · 世界书 N 条」不再被挤成省略号，
+     以前这里是 nowrap + ellipsis，用户看到的就是「显示一半」 */
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   width: 100%;
   box-sizing: border-box;
   padding: 7px 14px;
   font-family: inherit;
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.45;
   text-align: left;
   color: rgba(0, 0, 0, 0.62);
   background: rgba(74, 58, 120, 0.05);
@@ -146,16 +149,29 @@
 .ww__ctx-sub {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 去掉 nowrap/ellipsis：信息完整展示，超出就自然换行 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: rgba(0, 0, 0, 0.45);
 }
 
 .ww__ctx-more {
+  /* 固定不伸缩：内容再长也把「详情 ›」留在可视区内，
+     否则会被 sub 挤出容器，看起来像「显示一半」 */
   flex: 0 0 auto;
+  margin-left: auto;
   color: #4a3a78;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 窄屏：状态文字换行时，让「详情 ›」独占一行靠右，避免和文字挤在一起 */
+@media (max-width: 400px) {
+  .ww__ctx-more {
+    margin-left: 0;
+    width: 100%;
+    text-align: right;
+  }
 }
 
 .ww__ctx--bad {
@@ -167,10 +183,72 @@
   background: #b3261e;
 }
 
+/* ---------- 输出上限设置条 ---------- */
+.ww__ctx--opt {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.ww__ctx--opt.is-open {
+  background: rgba(74, 58, 120, 0.09);
+}
+
+.ww__ctx-dot.is-opt {
+  background: #4a3a78;
+}
+
+.ww-maxtok {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  background: rgba(74, 58, 120, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ww-maxtok__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ww-maxtok__input {
+  flex: 1 1 96px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: #2b2438;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 10px;
+}
+
+.ww-maxtok__save {
+  flex: 0 0 auto;
+  min-width: 78px;
+}
+
+.ww-maxtok__hint {
+  font-size: 11px;
+  line-height: 1.55;
+  color: rgba(0, 0, 0, 0.5);
+}
+
 /* ---------- 上下文详情弹窗 ---------- */
+/*
+ * 关键：.ww 自身带 padding: var(--mc-safe-t) 0 var(--mc-safe-b)。
+ * 若这里用 inset:0，遮罩会从安全区下方才开始铺，顶部漏出状态栏那么一条缝
+ *（就是用户反馈的「显示一半」）。用负 padding 抵消，遮罩真正铺满整屏。
+ */
 .ww-ctx-modal {
   position: absolute;
-  inset: 0;
+  top: calc(-1 * var(--mc-safe-t, 0px));
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--mc-safe-b, 0px));
   z-index: 60;
   display: flex;
   align-items: center;
@@ -189,7 +267,8 @@
 .ww-ctx-card {
   width: 100%;
   max-width: 320px;
-  max-height: 80%;
+  /* 用 min() 兜底：极端矮屏上也不会高过可视区 */
+  max-height: min(80%, 560px);
   overflow-y: auto;
   box-sizing: border-box;
   padding: 18px 18px 14px;
@@ -252,6 +331,52 @@
 
 .ww-ctx-empty {
   font-size: 12.5px;
+  line-height: 1.7;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+/* 世界书诊断：命中条目清单 + 分桶/预算明细 */
+.ww-ctx-wblist {
+  margin-top: 10px;
+  border-radius: 12px;
+  background: rgba(46, 158, 91, 0.06);
+  padding: 6px 12px;
+}
+
+.ww-ctx-wb {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.045);
+}
+
+.ww-ctx-wb:last-child {
+  border-bottom: none;
+}
+
+.ww-ctx-wb__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #2b2438;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ww-ctx-wb__meta {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.ww-ctx-wbmeta {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 11px;
   line-height: 1.7;
   color: rgba(0, 0, 0, 0.55);
 }

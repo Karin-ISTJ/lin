@@ -59,6 +59,8 @@
       seats: [], roles: {}, night: null, dawnDeaths: [], speeches: [],
       speechCursor: 0, votes: {}, voteCursor: 0, lastResult: null,
       winner: '', healUsed: false, poisonUsed: false, finalVotes: null,
+      /* 本局输出上限（token）：0 = 跟随设置里的「最大回复长度」 */
+      maxTokens: 0,
       log: [], updatedAt: now()
     };
   }
@@ -101,6 +103,7 @@
     g.healUsed = raw.healUsed === true;
     g.poisonUsed = raw.poisonUsed === true;
     g.finalVotes = raw.finalVotes && typeof raw.finalVotes === 'object' ? raw.finalVotes : null;
+    g.maxTokens = Math.max(0, Math.floor(num(raw.maxTokens)));
     g.log = Array.isArray(raw.log) ? raw.log.slice(-60) : [];
     g.updatedAt = num(raw.updatedAt) || now();
     return g;
@@ -419,6 +422,39 @@
   }
 
   /**
+   * 输出上限（token）解析。三级优先级：
+   *   1) 本局面板里手动设的 maxTokens（g.maxTokens > 0）
+   *   2) 设置 → ST 预设 → 生成参数 → 「最大回复长度 (Token)」
+   *   3) 调用处传入的兜底值
+   * 之所以要接设置：以前这里是硬编码 1500/400，用户去 ST 预设里把
+   * 最大回复长度调到多大都没用，弹窗却让他「去设置里调大输出上限」——
+   * 提示语指向了一个对狼人杀无效的开关。
+   */
+  var SPEECH_FLOOR = 800;   /* 发言低于这个数，思维链会把正文吃光 */
+  var ACTION_FLOOR = 400;   /* 投票/查验/毒杀这类短 JSON 任务 */
+
+  function readGlobalMaxTokens() {
+    try {
+      var st = global.miyaStPromptPresetsStore;
+      if (st && typeof st.getActiveGeneration === 'function') {
+        var gen = st.getActiveGeneration() || {};
+        var v = Number(gen.maxTokens);
+        if (Number.isFinite(v) && v > 0) return Math.floor(v);
+      }
+    } catch (e) {}
+    return 0;
+  }
+
+  /** floor 决定这是「发言」还是「短 JSON 动作」任务 */
+  function resolveMaxTokens(g, floor) {
+    var manual = g && Number(g.maxTokens);
+    if (Number.isFinite(manual) && manual > 0) return Math.floor(manual);
+    var global = readGlobalMaxTokens();
+    if (global > 0) return Math.max(floor, global);
+    return Math.max(floor, floor === ACTION_FLOOR ? 400 : 1500);
+  }
+
+  /**
    * 裸调大模型：不落库、不进群聊历史。
    * 关键参数（与行程模块对齐，否则会踩三个坑）：
    *   contentOnly    —— 只用正文，绝不拿 reasoning 兜底当发言（否则 <thinking> 泄漏到聊天里）
@@ -434,10 +470,17 @@
         throw new Error('API 尚未就绪，请确认已在设置里配置好对话 API');
       }
       return br.callMainChatCompletionsRaw(systemHint, userContent, null, {
-        /* 不用 skipUniversalWorldbook：让通用世界书也参与，角色才有设定感 */
+        /*
+         * 关掉 API 桥的通用世界书兜底注入。
+         * 通用（globalReach==='all'）词条已经通过群聊上下文进了 systemHint，
+         * 而桥里的 prependUniversalWorldbookMessage 只对 messages 数组查重，
+         * 狼人杀把上下文拼成了单个字符串，查重永远不命中 —— 会再塞一遍，
+         * 白白翻倍世界书体积。
+         */
+        skipUniversalWorldbook: true,
         disableThinking: true,
         contentOnly: true,
-        max_tokens: maxTokens || 1200,
+        max_tokens: maxTokens || resolveMaxTokens(null, SPEECH_FLOOR),
         timeoutMs: 120000,
         onTruncated: onTruncated
       });
@@ -463,30 +506,65 @@
   var ctxStats = null;
 
   /**
-   * 组装「群聊原生的完整上下文」。
-   * 复用群聊自己的 buildApiMessages —— 它已包含：
-   *   角色人设 / 世界书（前中后层）/ 全局提示词 / 昵称头衔 / 关系 / 群记忆 / 时间地点天气感知
-   * 再把 engine 的 ST 预设（前置换 · 后置换）拼进来。
-   * 效果：AI 会以「这个群里的这个角色」的身份说话，而不是脱缰乱答。
+   * 与「本局对局」无关、但会显著撑大上下文的群聊 system 块。
+   * 狼人杀只需要「这个角色是谁、怎么说话」，不需要群昵称头衔、关系网、
+   * 私密记忆、天气地点、以及群聊专用的输出格式提醒 —— 这些以前全被
+   * 塞进了 bare 请求，是总字数冲到 148.7k 的主要来源之一。
    */
-  function buildWorldContext(store, chatId) {
+  var CTX_DROP_PREFIXES = [
+    '【群头衔·当前】',
+    '【群头衔·规则】',
+    '【群昵称·与本群显示名】',
+    '【各角色与用户关系】',
+    '【成员彼此关系】',
+    '【群聊回复格式】',
+    '【本轮输出格式·群聊·强制复核】',
+    '【互通·单聊记忆】',
+    '【本群·记忆总结】',
+    '【群聊上下文·必读】',
+    '【紧挨上文·群聊末条状态】',
+    '【地点运转】',
+    '【本群身份·群主与管理员】'
+  ];
+
+  function shouldDropCtxBlock(text) {
+    var t = trim(text);
+    for (var i = 0; i < CTX_DROP_PREFIXES.length; i++) {
+      if (t.indexOf(CTX_DROP_PREFIXES[i]) === 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * 组装「对局需要的角色上下文」。
+   * 复用群聊自己的 buildApiMessages 拿到人设/世界书/关系等系统块，
+   * 再按白名单裁掉与狼人杀无关的部分，并把 ST 预设（前置换·后置换）拼进来。
+   *
+   * 关键修复（此前世界书恒显示 0 条）：
+   * 旧代码给 buildApiMessages 传的 userText 是空字符串，而世界书的关键词
+   * 扫描池正是「群历史 + userText」。扫描池为空 → 所有靠关键词触发的词条
+   * 都被 ST 流水线判为 rejected → matched 为空 → 体检条报「世界书 0 条」。
+   * 现在把当前局势摘要作为扫描文本传进去，关键词词条才能正常命中。
+   */
+  function buildWorldContext(store, chatId, scanHint) {
     var lines = [];
     var group = global.MiyaChatGroup;
     if (!group || typeof group.buildApiMessages !== 'function') {
       /* 早期返回也要留痕，否则体检条永远显示「开局后可见」，反而掩盖问题 */
       ctxStats = { systemBlocks: 0, chars: 0, stFront: 0, stBack: 0, groupSystem: 0,
-        worldbook: 0, members: 0, error: '群聊模块未就绪' };
+        worldbook: 0, dropped: 0, members: 0, error: '群聊模块未就绪' };
       return '';
     }
 
-    /* 传一个空 userText，只为拿系统上下文，不产生用户消息 */
+    /* scanHint = 当前局势（含玩家名/身份/发言），喂给世界书做关键词扫描 */
+    var scanText = trim(scanHint);
     var built = null;
     try {
-      built = group.buildApiMessages(chatId, '', {});
+      built = group.buildApiMessages(chatId, scanText, {});
     } catch (e) { built = null; }
     if (!built || !Array.isArray(built.messages) || !built.messages.length) {
       ctxStats = { systemBlocks: 0, chars: 0, stFront: 0, stBack: 0, groupSystem: 0,
-        worldbook: 0, members: 0, error: (built && built.error) || '该群暂无可用的角色上下文' };
+        worldbook: 0, dropped: 0, members: 0, error: (built && built.error) || '该群暂无可用的角色上下文' };
       return '';
     }
 
@@ -499,6 +577,8 @@
       try { stBack = eng.buildStPresetMessages('back') || []; } catch (e) {}
     }
 
+    var dropped = 0;
+
     function pushMsg(m) {
       if (!m || !m.content) return;
       var text = typeof m.content === 'string' ? m.content : '';
@@ -506,25 +586,43 @@
       lines.push(trim(text));
     }
 
+    var groupSystemCount = 0;
     (stFront || []).forEach(pushMsg);
     built.messages.forEach(function (m) {
       /* 只取 system：user/assistant 历史与狼人杀无关，避免把聊天记录带进对局 */
-      if (m && m.role === 'system') pushMsg(m);
+      if (!m || m.role !== 'system') return;
+      groupSystemCount += 1;
+      var body = typeof m.content === 'string' ? m.content : '';
+      if (shouldDropCtxBlock(body)) { dropped += 1; return; }
+      pushMsg(m);
     });
     (stBack || []).forEach(pushMsg);
 
     var text = lines.join('\n\n');
+    var wbMeta = built.worldbookMeta || {};
     /*
-     * 记一份诊断信息：设置面板里能直接看到「到底读进去了多少上下文」。
-     * 用户反馈过「角色说话像没读世界书」，这里留证据方便排查。
+     * 记一份诊断信息：体检弹窗里能直接看到「到底读进去了多少上下文」。
+     * worldbookDetail 用于解释「为什么是 0 条」——以前只报数字，用户无法判断
+     * 到底是没配词条、还是配了但没命中。
      */
     ctxStats = {
       systemBlocks: lines.length,
       chars: text.length,
       stFront: (stFront || []).length,
       stBack: (stBack || []).length,
-      groupSystem: built.messages.filter(function (m) { return m && m.role === 'system'; }).length,
-      worldbook: (built.worldbookMeta && (built.worldbookMeta.matchedSummary || []).length) || 0,
+      groupSystem: groupSystemCount,
+      dropped: dropped,
+      worldbook: (wbMeta.matchedSummary || []).length || 0,
+      /* 世界书诊断：命中 / 被预算丢弃 / 扫描池长度 / 扫描文本样例 */
+      wbMatched: (wbMeta.matchedSummary || []).slice(0, 20),
+      wbDropped: ((wbMeta.budget && wbMeta.budget.dropped) || []).length || 0,
+      wbBudget: (wbMeta.budget && wbMeta.budget.usedTokens) || 0,
+      wbBudgetMax: (wbMeta.budget && wbMeta.budget.budgetTokens) || 0,
+      wbUniversal: wbMeta.universalCount || 0,
+      wbFront: wbMeta.frontCount || 0,
+      wbMiddle: wbMeta.middleCount || 0,
+      wbBack: wbMeta.backCount || 0,
+      scanChars: scanText.length,
       members: (built.members || []).length,
       error: built.error || ''
     };
@@ -572,25 +670,32 @@
     var selfSeat = seatOf(g, whoId);
     var selfName = selfSeat ? selfSeat.name : '你';
 
-    /* 世界上下文（人设/世界书/ST预设/关系/记忆）—— 让 AI 不脱缰 */
-    var worldCtx = buildWorldContext(global.miyaChatStore, g.chatId);
+    /*
+     * 世界上下文（人设/世界书/ST预设）—— 让 AI 不脱缰。
+     * scanHint 传当前局势：世界书的关键词扫描池就是它，
+     * 传空串会让所有关键词词条判为未命中、体检条恒显示 0 条。
+     */
+    var situation = buildSituation(g, { selfId: whoId });
+    var worldCtx = buildWorldContext(global.miyaChatStore, g.chatId, situation);
 
     var head = [];
     head.push('【你在这场对局中的身份】');
     head.push('你在群里的名字是「' + selfName + '」。下面所有发言和判断，都要以「' + selfName + '」这个角色的身份、性格和说话方式来表达。');
     head.push('');
 
-    var lead = buildSituation(g, { selfId: whoId });
+    var lead = situation;
     var others = aliveSeats(g).filter(function (s) { return s.whoId !== whoId; });
 
     if (task === 'speech') {
       lead += '\n\n现在轮到你发言。请用 2~3 句话说出你的判断：可以怀疑某个人、为自己辩解、或分析局势。'
         + '\n要求：保持你一贯的说话风格和语气，像平时在群里聊天一样自然，不要机械套话，不要输出旁白。'
         + SAY_RULE;
-      /* 1500 token 是从「模型先吐一段思维链再说话」的实测里定的：
-         预算太小会被思考吃光，正文断在半句。 */
+      /* 发言预算取「本局设置 → ST 预设最大回复长度 → 1500」的最大值。
+         1500 是「模型先吐一段思维链再说话」的实测下限：再小会被思考吃光、
+         正文断在半句。用户若在设置里调大了，这里跟着一起放大。 */
       var wasTruncated = false;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 1500, function () {
+      var speechTokens = resolveMaxTokens(g, SPEECH_FLOOR);
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, speechTokens, function () {
         wasTruncated = true;
       }).then(function (res) {
         var text = cleanSpeech(extractText(res));
@@ -603,7 +708,7 @@
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, resolveMaxTokens(g, ACTION_FLOOR)).then(function (res) {
         return parseVote(extractText(res), others);
       });
     }
@@ -614,7 +719,7 @@
         + '\n可选目标：' + targets.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, resolveMaxTokens(g, ACTION_FLOOR)).then(function (res) {
         return parseVote(extractText(res), targets);
       });
     }
@@ -624,7 +729,7 @@
         + '\n可选目标：' + others.map(function (s) { return s.name; }).join('、')
         + '\n只输出 JSON：{"vote":"玩家名字","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, resolveMaxTokens(g, ACTION_FLOOR)).then(function (res) {
         return parseVote(extractText(res), others);
       });
     }
@@ -645,7 +750,7 @@
       }
       lead += '\n只输出 JSON：{"save":true或false,"poison":"玩家名字或空字符串","reason":"简短理由"}'
         + JSON_RULE;
-      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, 400).then(function (res) {
+      return callApi(head.join('\n') + worldCtx + '\n\n' + welcome, lead, resolveMaxTokens(g, ACTION_FLOOR)).then(function (res) {
         var text = extractText(res);
         var obj = extractJson(text);
         var out = { save: false, poison: '', poisonId: '', reason: '', text: text };
@@ -750,7 +855,7 @@
   }
 
   /* ---------------- UI ---------------- */
-  var state = { chatId: '', busy: false, busyText: '', ctxOpen: false };
+  var state = { chatId: '', busy: false, busyText: '', ctxOpen: false, maxOpen: false };
 
   function phaseStepHtml(g) {
     var order = [
@@ -793,19 +898,47 @@
   }
 
   /**
+   * 输出上限设置条：一句话说明当前生效值，点开可改。
+   * 以前这里没有入口，弹窗却让用户「去设置里调大输出上限」——
+   * 而狼人杀是裸调 API，压根不读那个设置，用户怎么找都找不到。
+   */
+  function maxTokensBarHtml(g) {
+    var manual = g && Number(g.maxTokens);
+    var hasManual = Number.isFinite(manual) && manual > 0;
+    var globalVal = readGlobalMaxTokens();
+    var val = hasManual ? Math.floor(manual) : (globalVal > 0 ? Math.max(SPEECH_FLOOR, globalVal) : 1500);
+    var src = hasManual ? '本局自定义' : (globalVal > 0 ? '跟随设置' : '默认');
+    var open = state.maxOpen;
+    var html = '<button type="button" class="ww__ctx ww__ctx--opt' + (open ? ' is-open' : '') + '"'
+      + ' data-ww-act="maxtoggle" aria-expanded="' + (open ? 'true' : 'false') + '">'
+      + '<span class="ww__ctx-dot is-opt"></span>输出上限'
+      + '<span class="ww__ctx-sub">' + val + ' token · ' + src + '</span>'
+      + '<span class="ww__ctx-more">' + (open ? '收起 ›' : '调整 ›') + '</span></button>';
+    if (!open) return html;
+    return html
+      + '<div class="ww-maxtok">'
+      +   '<div class="ww-maxtok__row">'
+      +     '<button type="button" class="ww__pick-btn" data-ww-act="maxset" data-ww-target="0">跟随设置</button>'
+      +     '<button type="button" class="ww__pick-btn' + (hasManual && manual === 1500 ? ' is-selected' : '') + '" data-ww-act="maxset" data-ww-target="1500">1500</button>'
+      +     '<button type="button" class="ww__pick-btn' + (hasManual && manual === 3000 ? ' is-selected' : '') + '" data-ww-act="maxset" data-ww-target="3000">3000</button>'
+      +     '<button type="button" class="ww__pick-btn' + (hasManual && manual === 6000 ? ' is-selected' : '') + '" data-ww-act="maxset" data-ww-target="6000">6000</button>'
+      +   '</div>'
+      +   '<div class="ww-maxtok__row">'
+      +     '<input class="ww-maxtok__input" type="number" min="200" max="32000" step="100"'
+      +       ' value="' + val + '" aria-label="自定义输出上限">'
+      +     '<button type="button" class="ww__btn ww__btn--main ww-maxtok__save" data-ww-act="maxsave">保存</button>'
+      +   '</div>'
+      +   '<div class="ww-maxtok__hint">发言任务用这个上限；投票/查验/毒杀这类短 JSON 任务最多用一半。'
+      +     '填 0 或点「跟随设置」即回到设置里的「最大回复长度」。</div>'
+      + '</div>';
+  }
+
+  /**
    * 上下文体检条：一行可点，点开看完整详情。
    * 原来这行直接铺在顶部，窄屏会被裁掉看不见 —— 现在收成按钮 + 弹窗。
    */
   function ctxBarHtml() {
     var st = getCtxStats();
-    var eng = global.miyaChatEngine;
-    var stCount = 0;
-    if (eng && typeof eng.buildStPresetMessages === 'function') {
-      try {
-        stCount = (eng.buildStPresetMessages('front') || []).length
-          + (eng.buildStPresetMessages('back') || []).length;
-      } catch (e) {}
-    }
     if (!st) {
       return '<button type="button" class="ww__ctx ww__ctx--idle" data-ww-act="ctx">'
         + '<span class="ww__ctx-dot"></span>上下文'
@@ -821,7 +954,8 @@
     var size = st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k' : st.chars;
     return '<button type="button" class="ww__ctx" data-ww-act="ctx">'
       + '<span class="ww__ctx-dot is-ok"></span>上下文已载入'
-      + '<span class="ww__ctx-sub">' + st.systemBlocks + ' 段 · ' + size + ' 字 · 世界书 ' + st.worldbook + ' 条</span>'
+      + '<span class="ww__ctx-sub">' + st.systemBlocks + ' 段 · ' + size + ' 字 · 世界书 ' + st.worldbook + ' 条'
+      + ((st.dropped || 0) > 0 ? ' · 已精简 ' + st.dropped + ' 条' : '') + '</span>'
       + '<span class="ww__ctx-more">详情 ›</span></button>';
   }
 
@@ -855,10 +989,45 @@
       row('总字数', st.chars >= 1000 ? (st.chars / 1000).toFixed(1) + 'k 字' : st.chars + ' 字');
       row('ST 预设', '前置 ' + stFront + ' 条 / 后置 ' + stBack + ' 条');
       row('群聊 system 块', st.groupSystem + ' 条');
+      row('已精简', (st.dropped || 0) + ' 条（昵称/关系/记忆等与对局无关）');
       row('命中的世界书', st.worldbook + ' 条');
       row('群成员', st.members + ' 人');
+
+      /* 世界书诊断：解释「为什么是这个条数」，而不是只甩一个数字 */
+      var wbRows = [];
+      if (st.worldbook > 0) {
+        (st.wbMatched || []).forEach(function (e) {
+          wbRows.push('<div class="ww-ctx-wb"><span class="ww-ctx-wb__name">'
+            + esc(e.name || '未命名片段')
+            + '</span><span class="ww-ctx-wb__meta">'
+            + esc((e.scope === 'local' ? '局部' : '全局') + ' · ' + (e.depth || 'middle') + ' · ' + (e.charCount || 0) + ' 字')
+            + '</span></div>');
+        });
+      }
+      var wbTotal = (st.wbFront || 0) + (st.wbMiddle || 0) + (st.wbBack || 0);
+      var wbDiag = '<div class="ww-ctx-wbmeta">'
+        + '分桶：前 ' + (st.wbFront || 0) + ' · 中 ' + (st.wbMiddle || 0) + ' · 后 ' + (st.wbBack || 0)
+        + '（合计 ' + wbTotal + '）<br>'
+        + '全软件词条 ' + (st.wbUniversal || 0) + ' 条 · 预算 '
+        + (st.wbBudget || 0) + '/' + (st.wbBudgetMax || '∞') + ' token'
+        + ((st.wbDropped || 0) > 0 ? ' · 超预算丢弃 ' + st.wbDropped + ' 条' : '')
+        + '<br>扫描文本 ' + (st.scanChars || 0) + ' 字</div>';
+
+      var wbTip;
+      if (st.worldbook > 0) {
+        wbTip = '✅ 世界书已命中并注入提示词。';
+      } else if ((st.wbUniversal || 0) > 0) {
+        wbTip = 'ℹ️ 没有关键词词条命中，但有 ' + st.wbUniversal + ' 条「全软件」词条已注入。'
+          + '关键词词条需要在「世界书」里配置触发词，且触发词要出现在本局局势中。';
+      } else {
+        wbTip = '⚠️ 世界书 0 条：本群没有绑定世界书，或所有词条都没配触发词/未命中。'
+          + '到「世界书」App 给词条加上触发词即可。';
+      }
+
       var health = st.systemBlocks >= 2 && st.chars > 200;
       body = '<div class="ww-ctx-list">' + rows.join('') + '</div>'
+        + (wbRows.length ? '<div class="ww-ctx-wblist">' + wbRows.join('') + '</div>' : '')
+        + wbDiag + '<div class="ww-ctx-tip">' + wbTip + '</div>'
         + '<div class="ww-ctx-tip">'
         + (health
           ? '✅ 角色发言时会带上以上设定，说话风格贴近你在群里的那个角色。'
@@ -882,7 +1051,8 @@
         '<button type="button" class="ww__close" data-sheet-close aria-label="关闭">关闭</button>' +
       '</div>';
 
-    var ctxTip = ctxBarHtml();
+    /* 顶部两条状态栏：输出上限（可调）+ 上下文体检（可点开） */
+    var ctxTip = maxTokensBarHtml(g) + ctxBarHtml();
 
     var html = '';
     var modal = state.ctxOpen ? ctxModalHtml() : '';
@@ -1091,6 +1261,40 @@
       return true;
     }
 
+    /* ---- 输出上限设置 ---- */
+    if (act === 'maxtoggle') {
+      state.maxOpen = !state.maxOpen;
+      rerender();
+      return true;
+    }
+
+    if (act === 'maxset') {
+      var pick = Math.floor(num(target));
+      g.maxTokens = pick > 0 ? pick : 0;
+      pushLog(g, pick > 0 ? '输出上限设为 ' + pick + ' token' : '输出上限改为跟随设置');
+      save(store, chatId, g);
+      rerender();
+      if (toast) toast(pick > 0 ? '输出上限已设为 ' + pick : '输出上限已改为跟随设置');
+      return true;
+    }
+
+    if (act === 'maxsave') {
+      var input = el.closest ? el.closest('.ww-maxtok') : null;
+      var box = input ? input.querySelector('.ww-maxtok__input') : btn;
+      var raw = box ? trim(box.value) : '';
+      var typed = Math.floor(num(raw));
+      /* 低于 200 一律按「跟随设置」处理，避免手滑填 1 把发言掐死 */
+      g.maxTokens = typed >= 200 ? Math.min(32000, typed) : 0;
+      pushLog(g, g.maxTokens ? '输出上限设为 ' + g.maxTokens + ' token' : '输出上限改为跟随设置');
+      save(store, chatId, g);
+      rerender();
+      if (toast) {
+        if (!g.maxTokens && raw && typed < 200) toast('数值太小，已改为跟随设置（下限 200）');
+        else toast(g.maxTokens ? '输出上限已保存' : '输出上限已改为跟随设置');
+      }
+      return true;
+    }
+
     if (act === 'ctx-close') {
       /* 点卡片内部不关闭，只有点遮罩或「知道了」按钮才关 */
       var inCard = el.closest && el.closest('.ww-ctx-card');
@@ -1176,7 +1380,12 @@
         state.busy = false;
         save(store, chatId, fresh2).then(function () {
           rerender();
-          if (out.truncated && toast) toast('这条发言被模型截断了，可在设置里调大输出上限');
+          /* 截断时顺手把输出上限面板展开，让用户一眼看到该调哪个开关 */
+          if (out.truncated) {
+            state.maxOpen = true;
+            rerender();
+            if (toast) toast('这条发言被模型截断了，点顶部「输出上限」调大');
+          }
         });
       }).catch(function (err) {
         state.busy = false;
