@@ -605,7 +605,10 @@
         id: id,
         scope: 'global',
         globalReach: 'all',
-        groupId: 'grp_default',
+        /* 分组归属由 importIntoStore 决定（它会新建/复用真实分组）。
+           这里**不能**预填 'grp_default' —— 预填会让「兜底容器」变成「默认归属」，
+           一旦后续赋值环节出错，条目就真留在未分组里，出现「未分组与分组内同款条目」。 */
+        groupId: '',
         boundRoleIds: [],
         source: 'st-import',
         createdAt: Date.now(),
@@ -656,6 +659,24 @@
     };
   }
 
+  /**
+   * 生成不重复的分组名。
+   * 场景：同一本世界书二次导入做「二改」时，两次的书名完全一样，
+   * 列表里会出现两个同名分组，分不清原件与二改稿。
+   * 这里自动加序号：某世界书 → 某世界书 (2) → 某世界书 (3) …
+   */
+  function uniqueGroupName(store, baseName) {
+    var base = String(baseName || '').trim() || '导入世界书';
+    var existing = {};
+    (store.listGroups ? store.listGroups() : []).forEach(function (g) {
+      if (g && g.name) existing[String(g.name)] = true;
+    });
+    if (!existing[base]) return base;
+    var n = 2;
+    while (existing[base + ' (' + n + ')']) n++;
+    return base + ' (' + n + ')';
+  }
+
   /** 导入到 store（合并或替换） */
   function importIntoStore(data, options) {
     options = options || {};
@@ -679,20 +700,29 @@
       });
     }
     var groupId = null;
+    var finalGroupName = bookName;
     return chain
       .then(function () {
         if (options.groupId) {
           groupId = options.groupId;
+          var g0 = store.getGroup ? store.getGroup(groupId) : null;
+          if (g0 && g0.name) finalGroupName = g0.name;
           return null;
         }
+        /* 二次导入自动加序号，避免与已有分组重名 */
+        finalGroupName = uniqueGroupName(store, bookName);
         return store.upsertGroup({
-          name: bookName,
+          name: finalGroupName,
           sort: Date.now()
         });
       })
       .then(function (g) {
         if (g && g.id) groupId = g.id;
-        if (!groupId) groupId = 'grp_default';
+        /* 建组失败就必须让导入整体失败。
+           以前这里静默降级成 'grp_default'，条目会落进未分组——正是
+           「未分组里出现本该在分组中的条目」的根因。
+           宁可报错让用户重试，也不悄悄把数据放进兜底容器。 */
+        if (!groupId) throw new Error('分组创建失败，已取消导入');
         return parsed.reduce(function (p, entry) {
           return p.then(function () {
             entry.groupId = groupId;
@@ -705,7 +735,9 @@
           count: parsed.length,
           entries: parsed,
           groupId: groupId,
-          groupName: bookName
+          /* 返回「实际建成的分组名」而非原始书名，
+             这样二次导入时调用方 alert 出来的名字带序号，能分辨原件与二改稿。 */
+          groupName: finalGroupName
         };
       });
   }

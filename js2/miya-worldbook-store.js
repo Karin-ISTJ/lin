@@ -78,7 +78,8 @@
       return {
         id: DEFAULT_GROUP_ID,
         name: '未分组',
-        sort: 0,
+        /* 兜底容器固定排在最末位（普通分组 sort 从 10 递增，这里给一个足够大的值） */
+        sort: 999999,
         fixed: true
       };
     }
@@ -100,8 +101,20 @@
       keywords = splitKeywords(String(raw.keywords));
     }
     var ts = Number(raw.updatedAt) || Date.now();
-    var groupId = String(raw.groupId || DEFAULT_GROUP_ID);
-    if (!groupsById[groupId]) groupId = DEFAULT_GROUP_ID;
+    /* 归属分组规整（三档）：
+       1) 指定了有效分组 → 用它
+       2) 未指定 / 分组失效 → 用**第一个真实分组**（默认归属）
+       3) 连真实分组都没有 → 才退回未分组（纯兜底）
+       这样「没给分组」不会被静默塞进未分组，未分组只承接真正的异常数据。 */
+    var groupId = String(raw.groupId || '');
+    if (!groupsById[groupId]) {
+      var firstReal = null;
+      Object.keys(groupsById).some(function (k) {
+        if (k !== DEFAULT_GROUP_ID) { firstReal = k; return true; }
+        return false;
+      });
+      groupId = firstReal || DEFAULT_GROUP_ID;
+    }
     var scope = normalizeScope(raw.scope);
     var base = {
       id: String(raw.id ? raw.id : nowId('wb')),
@@ -180,7 +193,10 @@
   function normalizeState(state) {
     var rawGroups = Array.isArray(state && state.groups) ? state.groups : [];
     var groups = rawGroups.map(normalizeGroup).filter(function (g) { return g.id !== DEFAULT_GROUP_ID; });
-    groups.unshift(normalizeGroup({ id: DEFAULT_GROUP_ID }));
+    /* 未分组是「兜底容器」，不是「第一分组」。
+       以前无条件 unshift 到列表首位，导致它看起来像主分组、永远占据视线第一行。
+       现在追加到末尾，让它退居幕后；UI 层还会在它为空时直接隐藏。 */
+    groups.push(normalizeGroup({ id: DEFAULT_GROUP_ID }));
     groups.sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
     var groupsById = {};
     groups.forEach(function (g) { groupsById[g.id] = g; });
@@ -242,8 +258,75 @@
     return _ready;
   }
 
+  /* ==================================================================
+     分组视图接口（B 阶段·真解耦）
+     ------------------------------------------------------------------
+     「未分组」是 store 内部实现细节，UI 层不应知道它的 id、更不该自己判断
+     它该不该显示。以下三个函数是 UI 唯一的入口：
+
+       listRealGroups()   只给真实分组（新建时「第一个真实分组」从这里取）
+       listVisibleGroups()给该显示的分组（未分组只在兜底了条目时才出现）
+       visibleGroupId(id) 把任意 groupId 规整成「当前该显示的分组 id」
+
+     这样 app.js 里那 10 处 DEFAULT_GROUP_ID 引用可以全部消除。
+     ================================================================== */
+
+  /** 只返回真实分组（不含未分组） */
+  function listRealGroups() {
+    return readState().groups.filter(function (g) { return g.id !== DEFAULT_GROUP_ID; });
+  }
+
+  /** 该分组是否应当出现在 UI 里：未分组只在确实兜底了条目时才露面 */
+  function isGroupVisible(group) {
+    if (!group) return false;
+    if (group.id !== DEFAULT_GROUP_ID) return true;
+    var state = readState();
+    return state.entries.some(function (e) { return e.groupId === DEFAULT_GROUP_ID; });
+  }
+
+  /** 返回当前应当显示的分组列表（已做可见性过滤） */
+  function listVisibleGroups() {
+    return readState().groups.filter(isGroupVisible);
+  }
+
+  /** 分组总数（含未分组），仅在需要「全部」语义时使用 */
   function listGroups() {
     return readState().groups.slice();
+  }
+
+  /**
+   * 把任意 groupId 规整成「当前应当显示的分组 id」。
+   * 兜底条目（落在未分组里的）在列表渲染时需要一个真实存在的归属，
+   * 这里统一处理，UI 不必自己写 `byGroup[x] ? x : DEFAULT_GROUP_ID`。
+   */
+  function visibleGroupId(groupId, visibleList) {
+    var list = visibleList || listVisibleGroups();
+    var id = String(groupId || '');
+    var hit = list.filter(function (g) { return g.id === id; })[0];
+    if (hit) return hit.id;
+    // 归属分组被隐藏（未分组且当前无兜底条目）时，退回最后一个可见分组
+    return list.length ? list[list.length - 1].id : DEFAULT_GROUP_ID;
+  }
+
+  /**
+   * 同步取「默认归属分组」id —— 新建条目、编辑新建时用。
+   * 规则：第一个真实分组；没有真实分组则返回 null（由调用方决定是否建组）。
+   * **绝不返回未分组**，未分组只负责异常兜底。
+   */
+  function peekDefaultGroupId() {
+    var real = listRealGroups()[0];
+    return real ? real.id : null;
+  }
+
+  /**
+   * 异步取「默认归属分组」id —— 导入等场景用。
+   * 没有真实分组时按需新建一个，保证返回值一定是真实分组。
+   */
+  function resolveDefaultGroupId() {
+    var id = peekDefaultGroupId();
+    if (id) return Promise.resolve(id);
+    return upsertGroup({ name: '我的世界书', sort: Date.now() })
+      .then(function (g) { return (g && g.id) ? g.id : null; });
   }
 
   function listEntries() {
@@ -356,6 +439,13 @@
     getState: readState,
     listGroups: listGroups,
     listEntries: listEntries,
+    /* —— 分组视图接口（UI 唯一入口，未分组被封装在其内部）—— */
+    listRealGroups: listRealGroups,
+    listVisibleGroups: listVisibleGroups,
+    isGroupVisible: isGroupVisible,
+    visibleGroupId: visibleGroupId,
+    peekDefaultGroupId: peekDefaultGroupId,
+    resolveDefaultGroupId: resolveDefaultGroupId,
     getGroup: getGroup,
     getEntry: getEntry,
     upsertGroup: upsertGroup,

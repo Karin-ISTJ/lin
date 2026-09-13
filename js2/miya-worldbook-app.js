@@ -2,7 +2,11 @@
   'use strict';
 
   var store = global.miyaWorldbookStore;
-  var DEFAULT_GROUP_ID = store.DEFAULT_GROUP_ID;
+  /* 注意：这里**不再**引入 store.DEFAULT_GROUP_ID。
+     未分组是 store 的内部实现细节，UI 层不应该知道它的 id，
+     也不应该自己判断「它该不该显示」——那些都通过 store 的分组视图接口完成：
+       listVisibleGroups() / listRealGroups() / visibleGroupId() / peekDefaultGroupId()
+     这样以后调整兜底容器的策略时，只需要改 store 一处。 */
   var filterScope = 'all';
   var filterGroupId = 'all';
   var searchQuery = '';
@@ -231,11 +235,14 @@
     }
     if (empty) empty.hidden = true;
 
-    var groups = store.listGroups();
+    /* 该显示哪些分组，完全交给 store 决定（未分组的可见性规则封装在里面） */
+    var groups = store.listVisibleGroups();
+    /* 条目按归属分组归类。归属分组不存在或被隐藏时，由 store.visibleGroupId()
+       统一规整到当前可见的分组，UI 不自己判断兜底。 */
     var byGroup = {};
     groups.forEach(function (g) { byGroup[g.id] = []; });
     rows.forEach(function (entry) {
-      var gid = byGroup[entry.groupId] ? entry.groupId : DEFAULT_GROUP_ID;
+      var gid = store.visibleGroupId(entry.groupId, groups);
       if (!byGroup[gid]) byGroup[gid] = [];
       byGroup[gid].push(entry);
     });
@@ -270,15 +277,29 @@
       }
       html += '</section>';
     });
+
+    /* 说明：不再需要「孤儿条目」兜底分支。
+       store.visibleGroupId() 已保证每一条都会归入某个**可见**分组，
+       不存在归类后却无处显示的情况。若某条目所属分组被隐藏（未分组无内容时），
+       它会自动落到最后一个可见分组下，数据始终可见。 */
+
     list.innerHTML = html || rows.map(function (e, i) { return renderEntryCard(e, i); }).join('');
   }
 
   function fillGroupSelect(selectedId) {
     var sel = $('miya-wb-field-group');
     if (!sel) return;
-    var groups = store.listGroups();
+    /* 下拉里只列「该显示的分组」，未分组不再是一个可选项——
+       它只负责异常兜底，用户没有理由主动往里面存词条。 */
+    var groups = store.listVisibleGroups();
+    if (!groups.length) groups = store.listGroups();
+    /* 默认选中「第一个真实分组」，未分组不作为默认。
+       未分组只会在「正在编辑一条兜底条目」时被显式传入而选中。 */
+    var fallbackId = store.peekDefaultGroupId();
+    if (!fallbackId) fallbackId = groups[0] && groups[0].id;
+    var wantId = selectedId != null && selectedId !== '' ? String(selectedId) : String(fallbackId || '');
     sel.innerHTML = groups.map(function (g) {
-      var picked = String(g.id) === String(selectedId || DEFAULT_GROUP_ID) ? ' selected' : '';
+      var picked = String(g.id) === wantId ? ' selected' : '';
       return '<option value="' + esc(g.id) + '"' + picked + '>' + esc(g.name) + '</option>';
     }).join('');
   }
@@ -291,13 +312,26 @@
     });
   }
 
+  /** 同步取「默认归属分组」id；由 store 决定（绝不返回未分组） */
+  function firstRealGroupId() {
+    return store.peekDefaultGroupId();
+  }
+
   function fillEditor(entry) {
     var isNew = !entry;
+    /* 新建条目的默认归属：当前筛选中的真实分组 → store 给的默认分组。
+       以前无条件用未分组，导致每建一条都默认落进未分组，用户每次都得手动改。 */
+    var defaultGid = null;
+    if (filterGroupId !== 'all') {
+      var cur = store.getGroup(filterGroupId);
+      if (cur && store.isGroupVisible(cur)) defaultGid = filterGroupId;
+    }
+    if (!defaultGid) defaultGid = firstRealGroupId();
     var data = entry || {
       scope: filterScope === 'local' ? 'local' : 'global',
       globalReach: 'online_offline',
       depth: 'middle',
-      groupId: filterGroupId !== 'all' ? filterGroupId : DEFAULT_GROUP_ID,
+      groupId: defaultGid || '',
       keywords: [],
       boundRoleIds: [],
       enabled: true,
@@ -342,7 +376,7 @@
     $('miya-wb-field-body').value = data.content || '';
     var rolesHost = $('miya-wb-roles-host');
     if (rolesHost) rolesHost.innerHTML = '<p class="ins-wb-role-empty">正在读取联系人档案…</p>';
-    fillGroupSelect(data.groupId || DEFAULT_GROUP_ID);
+    fillGroupSelect(data.groupId || '');
     var scope = data.scope === 'local' ? 'local' : 'global';
     $('miya-worldbook-app').querySelectorAll('[data-wb-scope]').forEach(function (btn) {
       btn.classList.toggle('is-active', btn.getAttribute('data-wb-scope') === scope);
@@ -412,11 +446,18 @@
       scope: scope,
       globalReach: collectGlobalReach(),
       depth: depth,
-      groupId: ($('miya-wb-field-group') && $('miya-wb-field-group').value) || DEFAULT_GROUP_ID,
+      /* 分组兜底：优先用下拉框当前值；为空时落到 store 给的默认分组。
+         两者都拿不到时传空串，交由 store 的 normalizer 统一兜底，
+         UI 不再直接引用未分组的 id。 */
+      groupId: ($('miya-wb-field-group') && $('miya-wb-field-group').value) || firstRealGroupId() || '',
       boundRoleIds: scope === 'local' ? roles : [],
       enabled: status !== 'disabled',
       constant: status === 'constant',
-      selective: chk('miya-wb-field-selective') || keysecondary.length > 0,
+      /* W4：selective 只由勾选框决定。
+         原先写的是 chk(...) || keysecondary.length > 0 —— 只要填了次关键词就强行打开
+         selective，导致用户没勾选却生效，勾选框与真实状态不一致。
+         次关键词是否参与，交给勾选框控制；填了但没勾即为「暂不使用」。 */
+      selective: chk('miya-wb-field-selective'),
       selectiveLogic: numVal('miya-wb-field-selective-logic', 0),
       order: numVal('miya-wb-field-order', 100),
       position: position,
