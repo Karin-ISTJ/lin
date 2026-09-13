@@ -643,7 +643,6 @@
     if (store && typeof store.normalizeSchedule === 'function') {
       var norm = store.normalizeSchedule(schedule, contact.id);
       if (!norm) throw new Error('行程校验失败');
-      if (typeof store.clearGenerateFail === 'function') store.clearGenerateFail(contact.id);
       return norm;
     }
     return schedule;

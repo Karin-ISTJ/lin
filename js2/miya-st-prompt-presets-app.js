@@ -133,7 +133,7 @@
     var pack = st && st.getActivePack ? st.getActivePack() : null;
     if (!pack && st && st.createPack) {
       pack = st.createPack('手动预设');
-      renderPackSelect();
+      if (pack) renderPackSelect();
     }
     if (!pack) { toast('当前没有可用的预设包'); return; }
     var e = id ? st.getEntry(id) : null;
@@ -184,6 +184,20 @@
     }, 220);
   }
 
+  /*
+   * 保存编辑器内容。
+   *
+   * S1 修复：injection_trigger 在 ST 里是「数组」（正常/续写/代写/切换回复/
+   * 重新生成/静默，可多选），但这里只有一个单值下拉。若直接提交
+   * [下拉值]，一个原本带多值的条目被编辑一次就会退化成单值 —— 导出回 ST 后
+   * 续写/重新生成时规则不再注入。所以：
+   *   - 新增条目：用下拉值（单元素数组），行为不变；
+   *   - 编辑条目且用户没动过下拉：原样保留原来的数组；
+   *   - 编辑条目且用户改过下拉：以用户选择为准。
+   *
+   * S4 修复：store 的写操作失败（localStorage 配额满）时不再静默 ——
+   * 保持编辑器打开并明确提示，避免「点了保存没反应」。
+   */
   function saveEditor() {
     var st = store();
     if (!st || !st.getActivePack()) { toast('当前没有可用的预设包'); return; }
@@ -192,7 +206,21 @@
     if (!name) { toast('请填写条目名称'); $('stp-edit-name').focus(); return; }
     if (!content.trim() && !$('stp-edit-marker').checked) { toast('正文不能为空；若是空占位项请勾选「标记位」'); $('stp-edit-content').focus(); return; }
     var id = $('stp-editor').getAttribute('data-edit-id') || '';
-    st.upsertEntry({
+
+    /* S1：确定本次要写入的 injection_trigger */
+    var prev = id ? st.getEntry(id) : null;
+    var triggerEl = $('stp-edit-trigger');
+    var pickedTrigger = triggerEl ? String(triggerEl.value || '') : '';
+    var trigger;
+    if (prev && Array.isArray(prev.injection_trigger) && prev.injection_trigger.length &&
+        pickedTrigger && prev.injection_trigger[0] === pickedTrigger) {
+      /* 用户没有改动下拉（仍等于原数组首值）→ 保留原数组 */
+      trigger = prev.injection_trigger.slice();
+    } else {
+      trigger = pickedTrigger ? [pickedTrigger] : (prev && Array.isArray(prev.injection_trigger) ? prev.injection_trigger.slice() : []);
+    }
+
+    var saved = st.upsertEntry({
       id: id || undefined,
       name: name,
       content: content,
@@ -204,10 +232,17 @@
       identifier: String($('stp-edit-identifier').value || '').trim(),
       enabled: $('stp-edit-enabled').checked,
       system_prompt: $('stp-edit-system').checked,
-      injection_trigger: [$('stp-edit-trigger').value],
+      injection_trigger: trigger,
       forbid_overrides: !!$('stp-edit-forbid').checked,
       marker: $('stp-edit-marker').checked
     });
+
+    /* S4：写入失败时保持编辑器打开，别让用户以为存上了 */
+    if (saved === false || saved === null) {
+      toast('存储空间不足，本次修改未保存；请先删掉一些预设或条目');
+      return;
+    }
+
     closeEditor();
     renderList();
     toast(id ? '条目已更新' : '条目已新增');
@@ -215,11 +250,16 @@
 
   function reorderByRows() {
     var list = $('stp-list');
-    if (!list || !store()) return;
+    if (!list || !store()) return true;
     var ids = Array.prototype.map.call(list.querySelectorAll('.stp-row[data-id]'), function (row) {
       return row.getAttribute('data-id');
     });
-    store().reorderEntries(ids);
+    var res = store().reorderEntries(ids);
+    if (res === false || res === null) {
+      toast('存储空间不足，顺序未保存');
+      return false;
+    }
+    return true;
   }
 
   function bindDrag(list) {
@@ -271,7 +311,7 @@
       if (!dragging || e.pointerId !== pointerId) return;
       var didMove = moved;
       clear();
-      if (didMove) { reorderByRows(); toast('顺序已保存'); }
+      if (didMove) { if (reorderByRows()) toast('顺序已保存'); }
       e.preventDefault();
     });
     list.addEventListener('pointercancel', clear);
@@ -368,16 +408,22 @@
         }
         if (act === 'del') {
           if (!confirm('删除该条目？')) return;
-          st.removeEntry(id);
+          var delRes = st.removeEntry(id);
           renderList();
-          toast('已删除');
+          toast(delRes === false || delRes === null ? '存储空间不足，删除未保存' : '已删除');
         }
       });
       list.addEventListener('change', function (e) {
         if (!e.target || e.target.getAttribute('data-act') !== 'toggle') return;
         var row = e.target.closest('.stp-row');
         if (!row) return;
-        store().setEnabled(row.getAttribute('data-id'), e.target.checked);
+        var toggleRes = store().setEnabled(row.getAttribute('data-id'), e.target.checked);
+        if (toggleRes === false || toggleRes === null) {
+          /* 写入失败时把勾选框视觉状态回滚，避免显示与实际不符 */
+          e.target.checked = !e.target.checked;
+          toast('存储空间不足，启用状态未保存');
+          return;
+        }
         row.classList.toggle('is-off', !e.target.checked);
       });
     }
@@ -433,7 +479,12 @@
     if (sel) {
       sel.addEventListener('change', function () {
         if (!sel.value) return;
-        store().setActivePack(sel.value);
+        var prevId = (store().getActivePack() || {}).id;
+        if (store().setActivePack(sel.value) === null) {
+          toast('存储空间不足，切换未保存');
+          if (prevId) sel.value = prevId;
+          return;
+        }
         renderList();
         renderGeneration();
         toast('已切换预设');
@@ -450,7 +501,10 @@
         }
         var name = window.prompt('预设名称', pack.name);
         if (name === null) return;
-        store().renamePack(pack.id, name);
+        if (store().renamePack(pack.id, name) === null) {
+          toast('存储空间不足，重命名未保存');
+          return;
+        }
         renderList();
         toast('已重命名');
       });
@@ -465,7 +519,10 @@
           return;
         }
         if (!confirm('删除整套预设「' + pack.name + '」？')) return;
-        store().removePack(pack.id);
+        if (store().removePack(pack.id) === null) {
+          toast('存储空间不足，删除未保存');
+          return;
+        }
         renderList();
         toast('预设包已删除');
       });

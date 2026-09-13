@@ -2327,6 +2327,39 @@
         return true;
     }
 
+    /*
+     * 取指定消息 id 在「可见消息序列」中的 1-based 序号。
+     *
+     * 必须与 getMessages 的可见性判定完全一致，否则算出的序号会和摘要索引对不上：
+     *   deleted / offlineMeet / momentsMemory 三类都不计入可见序号。
+     *
+     * 删除消息前调用（删除后序号已左移，无法还原）。
+     */
+    function collectVisibleIndexOfIds(chatId, msgIds) {
+        var want = {};
+        (Array.isArray(msgIds) ? msgIds : []).forEach(function (id) {
+            var key = String(id || '').trim();
+            if (key) want[key] = true;
+        });
+        if (!Object.keys(want).length) return [];
+        var arr = metaCache && metaCache.messagesByChat && metaCache.messagesByChat[chatId];
+        if (!Array.isArray(arr)) return [];
+        /* 先按 getMessages 的规则筛出可见消息，再按 createdAt 稳定排序 */
+        var visible = arr
+            .filter(function (m) {
+                return m && !m.deleted && !m.offlineMeet && !isMomentsMemoryRow(m);
+            })
+            .slice()
+            .sort(function (a, b) {
+                return (a.createdAt || 0) - (b.createdAt || 0);
+            });
+        var out = [];
+        visible.forEach(function (m, i) {
+            if (want[String(m.id)]) out.push(i + 1);
+        });
+        return out;
+    }
+
     function bumpChatUnread(chatId, delta) {
         if (!delta || !metaCache || !Array.isArray(metaCache.chats)) return 0;
         var cid = String(chatId || '').trim();
@@ -2900,6 +2933,66 @@
         return p ? normalizeProfile(p) : normalizeProfile(m.profiles[0]);
     }
 
+    /*
+     * 删除联系人时，清理所有「独立存储、按 contactId 分桶」的关联数据。
+     *
+     * 背景：这些数据都不在 meta 快照里，各自存自己的 localStorage key，因此
+     * 删联系人时若不显式清理，就会留下孤儿：重新添加同 id 角色即可读到上一段关系
+     * 的日记 / 朋友圈 / 相册分组 / 约会记录。属于「删除没删干净」的数据语义残留。
+     *
+     * 每个模块都用 try/catch + 能力探测包裹：模块可能未加载（懒加载）或版本较旧
+     * 没有对应清理 API，此时静默跳过，绝不让清理失败反过来阻断删除联系人本身。
+     */
+    function purgeContactScopedData(contactId) {
+        var key = String(contactId || '').trim();
+        if (!key) return;
+
+        var safe = function (label, fn) {
+            try {
+                fn();
+            } catch (e) {
+                /* 清理是尽力而为，不阻断主流程；留下线索便于排查 */
+                if (global.console && console.warn) {
+                    console.warn('[miyaChatStore] purge ' + label + ' failed for ' + key, e);
+                }
+            }
+        };
+
+        /* 情侣空间 / 深夜私语（历史遗留，最早接入的两项） */
+        safe('couple', function () {
+            var cps = global.miyaCoupleStore;
+            if (cps && typeof cps.closeSpace === 'function') cps.closeSpace(key);
+        });
+        safe('coupleWhisper', function () {
+            var wps = global.miyaCoupleWhisperStore;
+            if (wps && typeof wps.removeAllForContact === 'function') wps.removeAllForContact(key);
+        });
+
+        /* 日记本：diaries[contactId] 是独立桶，删角色后旧日记仍会被 getContactDiaries 读出 */
+        safe('diary', function () {
+            var ds = global.miyaDiaryStore;
+            if (ds && typeof ds.removeAllForContact === 'function') ds.removeAllForContact(key);
+        });
+
+        /* 朋友圈：帖子以 authorId === contactId 归属角色 */
+        safe('moments', function () {
+            var mm = global.MiyaChatMoments;
+            if (mm && typeof mm.removeAllForContact === 'function') mm.removeAllForContact(key);
+        });
+
+        /* 相册：分组里 contactIds 会残留指向已删角色的孤儿 id */
+        safe('album', function () {
+            var al = global.MiyaChatAlbum;
+            if (al && typeof al.removeContactFromGroups === 'function') al.removeContactFromGroups(key);
+        });
+
+        /* 约会：预设按 contactId 存，会话按 contactId/chatId 存 */
+        safe('appointment', function () {
+            var ap = global.MiyaAppointmentStore;
+            if (ap && typeof ap.removeAllForContact === 'function') ap.removeAllForContact(key);
+        });
+    }
+
     var store = {
         clearBlobUrlCache: function () {
             Object.keys(urlCache).forEach(function (id) {
@@ -2914,10 +3007,6 @@
                 revokeUrl(id);
             });
             return loadMeta();
-        },
-
-        flushMeta: function () {
-            return flushSaveMeta({ withBackup: true, forceEmergency: true });
         },
 
         init: function () {
@@ -3867,17 +3956,11 @@
             metaCache.chats = metaCache.chats.filter(function (ch) { return ch.contactId !== key; });
             chatIds.forEach(function (cid) { delete metaCache.messagesByChat[cid]; });
             invalidateLookupCache();
-            /* 角色被删除后，情侣空间与深夜私语数据是独立存储的，需一并清理，
-               否则重新添加同 id 角色（或旧数据未清）时会读到上一段关系的记录 */
+            /* 角色被删除后，大量数据是「独立存储、按 contactId 分桶」的。
+               只清 contacts/chats/messagesByChat 会留下孤儿数据，重新添加同 id 角色时
+               读到上一段关系的残留。这里统一收口（详见 purgeContactScopedData）。 */
             if (key) {
-                try {
-                    var cps = global.miyaCoupleStore;
-                    if (cps && typeof cps.closeSpace === 'function') cps.closeSpace(key);
-                } catch (e) { /* ignore */ }
-                try {
-                    var wps = global.miyaCoupleWhisperStore;
-                    if (wps && typeof wps.removeAllForContact === 'function') wps.removeAllForContact(key);
-                } catch (e) { /* ignore */ }
+                purgeContactScopedData(key);
             }
             return saveMeta();
         },
@@ -4437,17 +4520,142 @@
             });
         },
 
+        /*
+         * 删除消息后统一收口：把被删消息占用的「可见序号区间」交给各摘要模块调整索引。
+         *
+         * 背景：摘要（summaryList / megaSummaryList）与角色记忆（charMemoryList）用
+         * startIndex/endIndex 记录「这一段覆盖第几条消息」，序号按可见消息顺序算。
+         * 删掉消息却不修索引，序号就会整体错位，且越删越偏。
+         *
+         * 以前只有 purgeMessagesRange 修索引，deleteMessage / deleteMessages 都没修，
+         * 于是「重回 / 重新生成」与「多选删除」都会留下错位的摘要。
+         *
+         * @param {string} chatId
+         * @param {number[]} removedIndexes 删除前这些消息的 1-based 可见序号
+         */
+        adjustIndicesAfterRemoval: function (chatId, removedIndexes) {
+            var cid = String(chatId || '').trim();
+            var list = (Array.isArray(removedIndexes) ? removedIndexes : [])
+                .map(function (n) {
+                    return parseInt(n, 10);
+                })
+                .filter(function (n) {
+                    return Number.isFinite(n) && n > 0;
+                });
+            if (!cid || !list.length) return Promise.resolve(false);
+
+            var settings = store.getChatSettings(cid);
+            if (!settings) return Promise.resolve(false);
+
+            /*
+             * 连续序号压缩成区间，逐个区间调用 adjust*AfterPurge。
+             * 逐个区间调用是安全的：调整函数按 (delStart, delEnd) 平移，
+             * 多个不连续区间从小到大依次应用，效果等价于一次性全删。
+             */
+            list.sort(function (a, b) {
+                return a - b;
+            });
+            var ranges = [];
+            var rs = list[0];
+            var re = list[0];
+            for (var i = 1; i < list.length; i++) {
+                if (list[i] === re + 1) {
+                    re = list[i];
+                } else {
+                    ranges.push([rs, re]);
+                    rs = list[i];
+                    re = list[i];
+                }
+            }
+            ranges.push([rs, re]);
+
+            var sumMod = global.MiyaChatSummary;
+            var memMod = global.MiyaChatMemoryExtract;
+            var nextSummary = settings.summaryList;
+            var nextMega = settings.megaSummaryList;
+            var nextCharMem = settings.charMemoryList;
+
+            /* 从后往前应用，避免前面的删除让后面的序号失效 */
+            for (var r = ranges.length - 1; r >= 0; r--) {
+                var lo = ranges[r][0];
+                var hi = ranges[r][1];
+                if (sumMod && typeof sumMod.adjustSummaryIndicesAfterPurge === 'function') {
+                    nextSummary = sumMod.adjustSummaryIndicesAfterPurge(nextSummary, lo, hi);
+                }
+                if (sumMod && typeof sumMod.adjustMegaSummaryIndicesAfterPurge === 'function') {
+                    nextMega = sumMod.adjustMegaSummaryIndicesAfterPurge(nextMega, lo, hi);
+                }
+                if (memMod && typeof memMod.adjustCharMemoryIndicesAfterPurge === 'function') {
+                    nextCharMem = memMod.adjustCharMemoryIndicesAfterPurge(nextCharMem, lo, hi);
+                }
+            }
+
+            /* 与 purgeMessagesRange 保持一致：内容真的变了才写回 */
+            if (
+                JSON.stringify(nextSummary) !== JSON.stringify(settings.summaryList) ||
+                JSON.stringify(nextMega) !== JSON.stringify(settings.megaSummaryList) ||
+                JSON.stringify(nextCharMem) !== JSON.stringify(settings.charMemoryList)
+            ) {
+                return store
+                    .saveChatSettings(cid, {
+                        summaryList: nextSummary,
+                        megaSummaryList: nextMega,
+                        charMemoryList: nextCharMem
+                    })
+                    .then(function () {
+                        return true;
+                    });
+            }
+            return Promise.resolve(false);
+        },
+
         deleteMessage: function (chatId, msgId) {
             if (!metaCache.messagesByChat[chatId]) return Promise.resolve();
             var key = String(msgId || '').trim();
+            var removedIdList = key ? [key] : [];
+            /*
+             * 删除前先记录该消息的可见序号，删完就没法还原了。
+             * 可见序号的算法必须与 getMessages 完全一致（过滤 deleted/offlineMeet/momentsMemory）。
+             */
+            var removedIndexes = collectVisibleIndexOfIds(chatId, removedIdList);
             metaCache.messagesByChat[chatId] = metaCache.messagesByChat[chatId].filter(function (m) {
                 return String(m.id) !== key;
             });
-            return refreshChatPreviewFromVisible(chatId, { bumpNow: false }).then(function () {
-                return flushSaveMeta({ withBackup: true, forceEmergency: true }).then(function () {
-                    return true;
+            var chat = store.findChat(chatId);
+            var patch = {};
+            if (chat) {
+                if (Array.isArray(chat.heartVoiceLog)) {
+                    var nextLog = chat.heartVoiceLog.filter(function (entry) {
+                        return removedIdList.indexOf(String(entry && entry.msgId)) < 0;
+                    });
+                    if (nextLog.length !== chat.heartVoiceLog.length) {
+                        patch.heartVoiceLog = nextLog;
+                        patch.lastHeartVoiceParse = null;
+                    }
+                }
+                if (removedIdList.indexOf(String(chat.activeHeartVoiceMsgId)) >= 0) {
+                    patch.activeHeartVoiceMsgId = '';
+                    patch.lastHeartVoiceParse = null;
+                }
+                if (removedIdList.indexOf(String(chat.activeThinkingMsgId)) >= 0) {
+                    patch.activeThinking = '';
+                    patch.activeThinkingMsgId = '';
+                }
+            }
+            /* 顺序无关，但和 deleteMessages 保持一致：先修索引，再刷新预览/落盘 */
+            return store
+                .adjustIndicesAfterRemoval(chatId, removedIndexes)
+                .then(function () {
+                    return refreshChatPreviewFromVisible(chatId, { bumpNow: false });
+                })
+                .then(function () {
+                    if (Object.keys(patch).length) return store.updateChat(chatId, patch);
+                })
+                .then(function () {
+                    return flushSaveMeta({ withBackup: true, forceEmergency: true }).then(function () {
+                        return true;
+                    });
                 });
-            });
         },
 
         findMessageChatId: function (msgId) {
@@ -4473,6 +4681,11 @@
                 if (key) drop[key] = true;
             });
             if (!Object.keys(drop).length) return Promise.resolve(0);
+            /*
+             * 删除前先记录这些消息的可见序号；删完序号已左移，无法再还原。
+             * 用 drop 的 key 而非原始 msgIds，避免重复 id / 空白 id 导致序号算重。
+             */
+            var removedIndexes = collectVisibleIndexOfIds(chatId, Object.keys(drop));
             var before = metaCache.messagesByChat[chatId].length;
             metaCache.messagesByChat[chatId] = metaCache.messagesByChat[chatId].filter(function (m) {
                 return m && !drop[String(m.id)];
@@ -4484,7 +4697,14 @@
                     return String(id || '').trim();
                 })
                 .filter(Boolean);
-            var chain = refreshChatPreviewFromVisible(chatId, { bumpNow: false });
+            /*
+             * 摘要索引必须先修好，再刷新预览：
+             * 预览会读取摘要内容，若索引已错位，预览里显示的摘要区间也是错的。
+             */
+            var chain = store.adjustIndicesAfterRemoval(chatId, removedIndexes);
+            chain = chain.then(function () {
+                return refreshChatPreviewFromVisible(chatId, { bumpNow: false });
+            });
             chain = chain.then(function () {
                 var chat = store.findChat(chatId);
                 if (!chat || !removedIdList.length) return;
@@ -4763,15 +4983,50 @@
             return storeMediaBlob(blob, kind || 'media');
         },
 
+        /* 清空会话：消息清空后，summaryList / megaSummaryList / charMemoryList 里记录的
+         * startIndex / endIndex 已指向不存在的楼层。若原样保留，下次生成记忆会把早已
+         * 不存在的对话重新喂给模型 —— 属于删除操作「没删干净」的数据语义残留。
+         * 这里一并重置这些列表，并清掉与消息强绑定的 heartVoiceLog / activeHeartVoiceMsgId。
+         * 注意：momentsMemoryList（动态记忆）按时间线而非楼层索引，暂不重置。 */
         clearChatMessages: function (chatId) {
-            metaCache.messagesByChat[chatId] = [];
-            return store
-                .updateChat(chatId, {
+            var cid = String(chatId || '').trim();
+            if (!cid) return Promise.reject(new Error('invalid'));
+            /* 先收集旧媒体 key，清空后再回收，避免 IndexedDB / ObjectURL 泄漏 */
+            var oldMediaKeys = [];
+            (metaCache.messagesByChat[cid] || []).forEach(function (m) {
+                if (!m) return;
+                ['imageDataKey', 'karaokeIdbKey', 'voiceTtsIdbKey', 'voiceAudioIdbKey'].forEach(function (field) {
+                    var k = String(m[field] || '').trim();
+                    if (k && oldMediaKeys.indexOf(k) < 0) oldMediaKeys.push(k);
+                });
+            });
+            metaCache.messagesByChat[cid] = [];
+            var chain = store
+                .updateChat(cid, {
                     activeThinking: '',
                     activeThinkingMsgId: '',
-                    activeHeartVoiceMsgId: ''
+                    activeHeartVoiceMsgId: '',
+                    heartVoiceLog: []
                 })
                 .then(function () {
+                    /* 索引类数据一并重置；确实有内容才写，避免无谓落盘 */
+                    var s = store.getChatSettings(cid) || {};
+                    var hasIdx =
+                        (Array.isArray(s.summaryList) && s.summaryList.length) ||
+                        (Array.isArray(s.megaSummaryList) && s.megaSummaryList.length) ||
+                        (Array.isArray(s.charMemoryList) && s.charMemoryList.length);
+                    if (!hasIdx) return;
+                    return store.saveChatSettings(cid, {
+                        summaryList: [],
+                        megaSummaryList: [],
+                        charMemoryList: []
+                    });
+                });
+            oldMediaKeys.forEach(function (k) {
+                revokeUrl(k);
+                idbDelete(k);
+            });
+            return chain.then(function () {
                 return saveMeta();
             });
         },

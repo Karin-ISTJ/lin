@@ -98,19 +98,38 @@
     } catch (e) { /* fallthrough */ }
     var migrated = migrateLegacy();
     if (migrated) {
-      save(migrated);
-      try { localStorage.removeItem(LEGACY_KEY); } catch (e2) {}
+      if (save(migrated).ok) {
+        try { localStorage.removeItem(LEGACY_KEY); } catch (e2) {}
+      }
       return migrated;
     }
     return emptyState();
   }
 
+  /*
+   * 写入 localStorage。
+   * 配额满时 setItem 会抛 QuotaExceededError —— 它是「整体失败」，
+   * 旧值原封不动、不会写坏，但如果放任它冒到调用方，就会出现
+   * 「点了保存没反应」这种最差的失败形态。这里统一兜住并返回结果，
+   * 让上层能给出提示。
+   * 返回：{ ok: true, data } 或 { ok: false, error }
+   */
   function save(state) {
     var data = state && typeof state === 'object' ? state : emptyState();
     if (!Array.isArray(data.packs)) data.packs = [];
     data.version = 3;
-    localStorage.setItem(KEY, JSON.stringify(data));
-    return data;
+    var json;
+    try {
+      json = JSON.stringify(data);
+    } catch (err) {
+      return { ok: false, error: err };
+    }
+    try {
+      localStorage.setItem(KEY, json);
+    } catch (err) {
+      return { ok: false, error: err };
+    }
+    return { ok: true, data: data };
   }
 
   function listPacks() {
@@ -137,7 +156,7 @@
     };
     state.packs.push(pack);
     state.activeId = pack.id;
-    save(state);
+    if (!save(state).ok) return null;
     return pack;
   }
 
@@ -146,7 +165,7 @@
     for (var i = 0; i < state.packs.length; i++) {
       if (state.packs[i].id === id) {
         state.activeId = id;
-        save(state);
+        if (!save(state).ok) return null;
         return state.packs[i];
       }
     }
@@ -159,7 +178,7 @@
     for (var i = 0; i < state.packs.length; i++) {
       if (state.packs[i].id === id) {
         state.packs[i].name = name;
-        save(state);
+        if (!save(state).ok) return null;
         return state.packs[i];
       }
     }
@@ -172,7 +191,7 @@
     if (state.activeId === id) {
       state.activeId = state.packs[0] ? state.packs[0].id : '';
     }
-    save(state);
+    if (!save(state).ok) return null;
     return state;
   }
 
@@ -211,7 +230,7 @@
 
     state.packs.push(copy);
     state.activeId = copy.id;
-    save(state);
+    if (!save(state).ok) return null;
     return copy;
   }
 
@@ -232,7 +251,7 @@
     if (!pack && state.packs.length) { pack = state.packs[0]; state.activeId = pack.id; }
     if (!pack) return null;
     mutator(pack);
-    save(state);
+    if (!save(state).ok) return null;
     return pack;
   }
 
@@ -249,9 +268,9 @@
       pack = state.packs[0];
       state.activeId = pack.id;
     }
-    if (!pack) return [];
+    if (!pack) return false;
     mutator(pack);
-    save(state);
+    if (!save(state).ok) return false;
     return (pack.entries || []).slice();
   }
 
@@ -422,7 +441,10 @@
     };
     state.packs.push(pack);
     state.activeId = pack.id;
-    save(state);
+    var res = save(state);
+    if (!res.ok) {
+      throw new Error('存储空间不足，导入未保存（原有预设未受影响）');
+    }
     return { pack: pack, added: entries.length, total: entries.length };
   }
 

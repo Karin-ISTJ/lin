@@ -6,6 +6,20 @@
 
   function trim(s) { return String(s || '').trim(); }
 
+  /* AI 生成失败时本模块统一返回空串，调用方会当成「没有回响」处理——
+     用户界面上看不出失败。这里补一条日志，便于排查 API 报错 / JSON 解析失败。
+     同一原因 10 分钟内只记一次，避免用户重试时刷屏。 */
+  var WARN_MIN_GAP_MS = 10 * 60 * 1000;
+  var lastWarnAt = Object.create(null);
+  function warnOnce(key, msg) {
+    var now = Date.now();
+    if (lastWarnAt[key] && now - lastWarnAt[key] < WARN_MIN_GAP_MS) return;
+    lastWarnAt[key] = now;
+    if (global.console && typeof console.warn === 'function') {
+      console.warn('[miyaCoupleTimelineBridge] ' + msg);
+    }
+  }
+
   function truncateStr(s, max) {
     var t = String(s == null ? '' : s);
     var n = max || 4000;
@@ -561,7 +575,10 @@
       if (parsed && parsed.echo) return trim(parsed.echo);
       var raw = trim(extractApiText(res));
       return raw.length > 80 ? raw.slice(0, 80) : raw;
-    }).catch(function () { return ''; });
+    }).catch(function (err) {
+      warnOnce('echo', '角色回响生成失败：' + ((err && err.message) || err));
+      return '';
+    });
   }
 
   function generateDualPerspective(contactId, entry) {
@@ -590,7 +607,10 @@
       var parsed = tryParseJson(extractApiText(res));
       if (parsed && parsed.perspective) return trim(parsed.perspective);
       return trim(extractApiText(res));
-    }).catch(function () { return ''; });
+    }).catch(function (err) {
+      warnOnce('dual', '双视角生成失败：' + ((err && err.message) || err));
+      return '';
+    });
   }
 
   function requestGachaApi(system, user, attempt) {

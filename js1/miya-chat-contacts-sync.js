@@ -14,7 +14,14 @@
   function archiveFingerprint(archive) {
     var chars = Array.isArray(archive && archive.characters) ? archive.characters : [];
     var groups = Array.isArray(archive && archive.groups) ? archive.groups : [];
-    var parts = [String(groups.length)];
+    /* 卷名/卷顺序必须进指纹：档案卷改名后 chats 侧 arch-* 分组的显示名要跟着变。
+       旧实现只放 groups.length，改名时指纹不变 -> ensureBootstrap 走 syncAll({prune:false})
+       命中「未变化则跳过」，改名永远同步不过去。 */
+    var groupParts = groups.map(function (g) {
+      if (!g || !g.id) return '';
+      return String(g.id) + '=' + String(g.name || '');
+    }).join(',');
+    var parts = [String(groups.length), groupParts];
     chars.forEach(function (ch) {
       if (!ch || !ch.id) return;
       parts.push(
@@ -66,9 +73,11 @@
       groups.push({ id: CHAT_DEFAULT, name: '我的好友', sort: 0, createdAt: Date.now() });
       byId[CHAT_DEFAULT] = true;
     }
+    var liveArchIds = {};
     (archiveGroups || []).forEach(function (ag, i) {
       if (!ag || ag.id === ARCHIVE_DEFAULT) return;
       var chatGid = archiveGroupToChat(ag.id);
+      liveArchIds[chatGid] = true;
       if (byId[chatGid]) {
         var g = groups.find(function (x) { return x.id === chatGid; });
         if (g) g.name = String(ag.name || g.name).trim() || g.name;
@@ -81,6 +90,16 @@
         createdAt: Date.now()
       });
       byId[chatGid] = true;
+    });
+    /* 档案侧卷被删掉后，对应的 arch-* 分组会变成孤儿。
+       旧实现从不清理（deleteContactGroup 全项目零调用点），只会越攒越多。
+       这里顺手回收：只删 arch- 前缀且档案里已不存在的分组，
+       用户自己新建的 ctg_* 分组和 ct-default 都不动。
+       即使组内还有联系人也不怕 —— 下面的 upsert 会把它们的 groupId 落回档案卷。 */
+    groups = groups.filter(function (g) {
+      if (!g || !g.id) return false;
+      if (String(g.id).indexOf('arch-') !== 0) return true;
+      return !!liveArchIds[g.id];
     });
     meta.contactGroups = groups.sort(function (a, b) {
       return (a.sort || 0) - (b.sort || 0);

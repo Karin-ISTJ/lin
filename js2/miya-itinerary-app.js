@@ -246,7 +246,11 @@
       st.saveSchedule(contact.id, schedule);
       return schedule;
     }).catch(function (err) {
-      if (typeof st.markGenerateFail === 'function') st.markGenerateFail(contact.id);
+      /* 失败冷却已移除：这里不再写冷却，下一个巡检周期会正常重试。
+         只留一行日志，避免整条失败链路彻底静默。 */
+      if (global.console && typeof console.warn === 'function') {
+        console.warn('[itinerary] 生成失败：' + (contact.name || contact.id) + ' — ' + ((err && err.message) || err));
+      }
       return Promise.reject(err);
     }).finally(function () {
       if (state.generatingContactId === contact.id) state.generatingContactId = '';

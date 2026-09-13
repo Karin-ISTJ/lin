@@ -28,7 +28,7 @@
       ],
       js: [
         'js1/miya-couple-checkin.js?v=6',
-        'js1/miya-couple-timeline.js?v=7',
+        'js1/miya-couple-timeline.js?v=8',
         'js1/miya-couple-board.js?v=1',
         'js1/miya-couple-whisper-store.js?v=2',
         'js1/miya-couple-whisper-engine.js?v=3',
@@ -40,7 +40,7 @@
     diaryUi: {
       css: ['css/miya-diary.css?v=13'],
       js: [
-        'js2/miya-diary-scheduler.js?v=3',
+        'js2/miya-diary-scheduler.js?v=4',
         'js2/miya-diary-app.js?v=10'
       ]
     },
@@ -53,7 +53,7 @@
     },
     itineraryUi: {
       css: ['css/miya-itinerary.css?v=3'],
-      js: ['js2/miya-itinerary-app.js?v=9']
+      js: ['js2/miya-itinerary-app.js?v=10']
     },
     weatherUi: {
       css: ['css/miya-weather.css?v=9'],

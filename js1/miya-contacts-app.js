@@ -419,12 +419,33 @@
       greetings: readGreetingsFromEditor(),
       avatar: draftAvatar || ''
     };
+    /*
+     * 编辑器只承载上面这些可见字段，但 normalizeCharacter / upsertCharacter 是
+     * 「全量覆盖」写入。若不把未在表单里出现的字段带上，它们会被重置：
+     *   - characterId：会被 normalizeCharacter 兜底成 id，导致酒馆卡导入角色的
+     *     characterId 关联（世界书绑定、聊天侧匹配）全部漂移
+     *   - tags：会被重置成空数组，导入时记录的标签全部丢失
+     * 因此编辑既有档案时，先从原档案取回这些字段作为基底。
+     */
+    if (editingId) {
+      var prev = null;
+      try {
+        prev = store.findCharacter ? store.findCharacter(editingId) : null;
+      } catch (e) {
+        prev = null;
+      }
+      if (prev) {
+        if (prev.characterId) payload.characterId = prev.characterId;
+        if (Array.isArray(prev.tags)) payload.tags = prev.tags.slice();
+      }
+    }
     if (groupVal === '__new__') {
       payload.newGroupName = ($('miya-ct-field-new-group') && $('miya-ct-field-new-group').value || '').trim();
       if (!payload.newGroupName) payload.groupId = store.DEFAULT_GROUP_ID;
     } else {
       payload.groupId = groupVal;
     }
+    /* 本次导入带来的新标签优先于旧标签 */
     if (pendingImportTags && pendingImportTags.length) payload.tags = pendingImportTags.slice();
     return payload;
   }

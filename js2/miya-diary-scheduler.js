@@ -32,6 +32,19 @@
     tickTimer = null;
   }
 
+  /* 轮询每 30~60s 触发一次，失败会被反复重试，所以同一条原因最多每 10 分钟记一次，
+     避免把一个正常的偶发失败刷成满屏日志。 */
+  var WARN_MIN_GAP_MS = 10 * 60 * 1000;
+  var lastWarnAt = Object.create(null);
+  function warnOnce(key, msg, contactId) {
+    var now = Date.now();
+    if (lastWarnAt[key] && now - lastWarnAt[key] < WARN_MIN_GAP_MS) return;
+    lastWarnAt[key] = now;
+    if (global.console && typeof console.warn === 'function') {
+      console.warn('[miyaDiaryScheduler] ' + msg + (contactId ? '（contactId=' + contactId + '）' : ''));
+    }
+  }
+
   function startIntervalTick(ms) {
     if (global.miyaBgSetInterval) return global.miyaBgSetInterval(checkAllContacts, ms);
     return setInterval(checkAllContacts, ms);
@@ -104,6 +117,11 @@
     var st = store();
     var br = bridge();
     if (!st || !br || typeof br.generateTodayDiary !== 'function') {
+      /* 依赖缺失时不静默放弃：正常路径下 store/bridge 在 index.html 关键路径中，
+         调度器是懒加载的，所以顺序本来就有保证；这里留下日志是为了以后
+         有人改懒加载分组（miya-lazy-boot.js 的 diaryUi 只含 scheduler + app）
+         拆掉依赖时能被立刻发现，而不是表现为「自动日记莫名其妙不写」。 */
+      warnOnce('nodep', '自动日记依赖缺失（miyaDiaryStore / miyaDiaryBridge），本次跳过', contactId);
       return Promise.resolve(false);
     }
     var contact = getContact(contactId);
@@ -125,8 +143,15 @@
         }
         return true;
       }
+      /* 生成返回空：不算成功，也不写 lastRunDateIso。
+         旧实现连这里都静默返回，配合 30s 轮询会一直重试、反复烧 token。 */
+      warnOnce('empty:' + contactId, '自动日记生成返回空，稍后重试', contactId);
       return false;
-    }).catch(function () {
+    }).catch(function (err) {
+      /* 旧实现 .catch(function(){ return false; })，错误被完全吞掉：
+         用户看不到失败，lastRunDateIso 又没写，于是每 30s 重试一次，
+         一直烧 token。这里保留重试语义，但把原因记下来、并做频率限制。 */
+      warnOnce('err:' + contactId, '自动日记生成失败：' + ((err && err.message) || err), contactId);
       return false;
     });
   }
@@ -137,7 +162,13 @@
     var h = Number(aw.hour);
     var m = Number(aw.minute);
     if (!(h >= 0 && h <= 23 && m >= 0 && m <= 59)) return false;
-    return now.getHours() === h && now.getMinutes() === m;
+    /* 旧实现要求 now.getHours()===h && now.getMinutes()===m（精确到分钟）。
+       轮询间隔是 30~60s，且后台/息屏时会暂停，很容易整分钟错过；
+       一旦错过，lastRunDateIso 当天也不会再补，这一天的自动日记就被静默跳过了。
+       改为「已到达今日的设定时刻」即视为到期，是否已跑由 lastRunDateIso 去重。 */
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var targetMin = h * 60 + m;
+    return nowMin >= targetMin;
   }
 
   function checkAllContacts() {

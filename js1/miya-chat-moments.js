@@ -1565,6 +1565,64 @@
         return savePosts(posts).then(function () { refreshFeedUI(); });
     }
 
+    /*
+     * 删除某角色的全部朋友圈内容。
+     * 删除联系人时调用——帖子以 authorId 归属角色，角色删掉后帖子仍留在信息流，
+     * 与"重新添加同 id 角色会读到上一段关系残留"是同一类问题。
+     * 同时清掉该角色在自己帖子下的评论、以及别人帖子下属于该角色的评论。
+     */
+    function removeAllForContact(contactId) {
+        var cid = String(contactId || '').trim();
+        if (!cid) return Promise.resolve(0);
+        var before = getPosts();
+        var removed = 0;
+        var next = [];
+        before.forEach(function (p) {
+            if (!p) return;
+            /* 该角色作为作者发布的帖子：整条移除 */
+            if (String(p.authorId || '').trim() === cid) {
+                removed++;
+                return;
+            }
+            next.push(p);
+        });
+        /* 别人的帖子下，该角色留下的评论/点赞也要清掉，
+           否则会出现"已删角色还在评论/点赞"的幽灵数据。
+           注意点赞项用 id/userId 标识用户，评论项用 authorId。 */
+        next = next.map(function (p) {
+            var changed = false;
+            var out = p;
+            if (Array.isArray(p.comments) && p.comments.length) {
+                var keptC = p.comments.filter(function (c2) {
+                    var author = String((c2 && c2.authorId) || '').trim();
+                    return author !== cid;
+                });
+                if (keptC.length !== p.comments.length) {
+                    out = Object.assign({}, out, { comments: keptC });
+                    changed = true;
+                }
+            }
+            if (Array.isArray(p.likes) && p.likes.length) {
+                var keptL = p.likes.filter(function (l) {
+                    var who = String((l && (l.id || l.userId)) || '').trim();
+                    return who !== cid;
+                });
+                if (keptL.length !== p.likes.length) {
+                    out = Object.assign({}, out, { likes: keptL });
+                    changed = true;
+                }
+            }
+            return changed ? out : p;
+        });
+        if (!removed && JSON.stringify(next) === JSON.stringify(before)) {
+            return Promise.resolve(0);
+        }
+        return savePosts(next).then(function () {
+            refreshFeedUI();
+            return removed;
+        });
+    }
+
     async function publishUserPost(draft) {
         var profile = getCurrentProfile();
         if (!profile) { toast('请先设置面具'); return; }
@@ -3027,7 +3085,8 @@
         toggleLike: toggleLike,
         promptComment: promptComment,
         publishUserPost: publishUserPost,
-        deletePost: deletePost
+        deletePost: deletePost,
+        removeAllForContact: removeAllForContact
     };
 
     bootAutoTick();

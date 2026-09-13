@@ -160,6 +160,32 @@
     return true;
   }
 
+  /*
+   * 删除某角色的全部日记与自动写设置。
+   * 删除联系人时调用——diaries[contactId] 与 settings[contactId] 都是独立桶，
+   * 若不清，重新添加同 id 角色会读到上一段关系的日记。
+   * 注意桶名是 settings（不是 diarySettings），与 getDiarySettings/saveDiarySettings 保持一致。
+   */
+  function removeAllForContact(contactId) {
+    var cid = String(contactId || '').trim();
+    if (!cid) return false;
+    var data = loadRaw();
+    var had = false;
+    if (data.diaries && Object.prototype.hasOwnProperty.call(data.diaries, cid)) {
+      if (Array.isArray(data.diaries[cid]) && data.diaries[cid].length) had = true;
+      delete data.diaries[cid];
+    }
+    if (data.settings && Object.prototype.hasOwnProperty.call(data.settings, cid)) {
+      had = true;
+      delete data.settings[cid];
+    }
+    if (had) {
+      saveRaw();
+      invalidateCache();
+    }
+    return had;
+  }
+
   function getUserDiaries(profileId) {
     var pid = String(profileId || '').trim();
     if (!pid) return [];
@@ -279,6 +305,7 @@
     findByDate: findByDate,
     addDiary: addDiary,
     removeDiary: removeDiary,
+    removeAllForContact: removeAllForContact,
     getUserDiaries: getUserDiaries,
     getUserDiariesForDate: getUserDiariesForDate,
     findUserDiary: findUserDiary,

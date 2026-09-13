@@ -345,24 +345,42 @@
         });
     }
 
+    /*
+     * 合卷索引调整。
+     *
+     * 注意与 adjustSummaryIndicesAfterPurge 的差异：分镜（summaryList）之间不重叠，
+     * 一旦 e < ds 就整体在删除区间之前，可以原样返回；但合卷的范围是
+     * min(来源分镜.startIndex) ~ max(来源分镜.endIndex)，天然横跨多则分镜，
+     * 所以「左端在删除区间之前、右端在之后」是合卷的常态而不是异常。
+     * 早期实现照搬了分镜的 if (e < ds) return row 判断，导致横跨删除区间的合卷
+     * 直接被跳过、索引永不修正（越删越偏）。
+     *
+     * 修正规则（左、右端点各自独立判断）：
+     *   端点值在删除区间之前           → 不变
+     *   端点值落在删除区间内 / 之后    → 先夹到 ds，再减去删除条数 n
+     * 「先夹到 ds」把被删掉的端点吸附到区间起点，保证不会产生非法区间；
+     * 同时保留原来的区间长度（ne = ns + len - 1），避免合卷范围凭空塌缩。
+     */
     function adjustMegaSummaryIndicesAfterPurge(megaList, delStart, delEnd) {
         if (!Array.isArray(megaList) || !megaList.length) return megaList || [];
         var ds = clampInt(delStart, 1, 9999999, 1);
         var de = clampInt(delEnd, ds, 9999999, ds);
         var n = de - ds + 1;
+        var shift = function (v) {
+            return v < ds ? v : Math.max(ds, v) - n;
+        };
         return megaList.map(function (row) {
             if (!row || typeof row !== 'object') return row;
             var s = clampInt(row.startIndex, 0, 9999999, 0);
             var e = clampInt(row.endIndex, 0, 9999999, 0);
             if (!s || !e) return row;
+            /* 整段在删除区间之前：不受影响 */
             if (e < ds) return row;
-            if (s > de) {
-                return Object.assign({}, row, {
-                    startIndex: Math.max(1, s - n),
-                    endIndex: Math.max(1, e - n)
-                });
-            }
-            return row;
+            var ns = Math.max(1, shift(s));
+            /* 保留原始区间长度；合卷本身是长跨度块，不应因端点吸附而塌缩 */
+            var ne = Math.max(ns, ns + (e - s));
+            if (ns === s && ne === e) return row;
+            return Object.assign({}, row, { startIndex: ns, endIndex: ne });
         });
     }
 

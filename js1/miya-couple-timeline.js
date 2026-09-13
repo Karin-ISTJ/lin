@@ -25,7 +25,10 @@
     busy: false,
     detailId: '',
     composeFiles: [],
-    composeMode: 'memory'
+    composeMode: 'memory',
+    /* 来信生成超时句柄。以往只存在局部变量里，close() 无法取消，
+       导致界面关闭 5 分钟后仍会弹「来信生成超时」。 */
+    charLetterWatchdog: null
   };
 
   function store() { return global.miyaCoupleStore || null; }
@@ -194,6 +197,16 @@
     renderAll();
   }
 
+  /* 取消来信生成超时定时器。生成正常结束时会自行 clear，这里主要给 close() 用：
+     界面已关闭就没人关心这次生成的结果了，留着定时器只会在 5 分钟后弹一条幽灵提示。
+     注意只清定时器、不重置 state.busy / 按钮态 —— 生成请求本身还在飞，
+     强行复位会让用户重复点击导致并发请求。 */
+  function clearCharLetterWatchdog() {
+    if (!state.charLetterWatchdog) return;
+    clearTimeout(state.charLetterWatchdog);
+    state.charLetterWatchdog = null;
+  }
+
   function close() {
     var cid = state.contactId;
     setViewVisible(false);
@@ -206,6 +219,7 @@
     closeCommemCompose();
     closeGacha();
     closeCharLetter();
+    clearCharLetterWatchdog();
     if (global.miyaCoupleApp && typeof global.miyaCoupleApp.renderTimelinePreview === 'function') {
       global.miyaCoupleApp.renderTimelinePreview(cid);
     }
@@ -1422,7 +1436,9 @@
     var dateIso = trim(dateEl && dateEl.value);
     var loadingText = isSealed ? '正在封存来信…' : '正在动笔…';
     setCharLetterGenerating(true, loadingText);
-    var watchdog = setTimeout(function () {
+    clearCharLetterWatchdog();
+    state.charLetterWatchdog = setTimeout(function () {
+      state.charLetterWatchdog = null;
       if (!state.busy) return;
       setCharLetterGenerating(false);
       toast('来信生成超时，请重试');
@@ -1431,7 +1447,7 @@
       sealed: isSealed,
       dateIso: dateIso
     }).then(function (entry) {
-      clearTimeout(watchdog);
+      clearCharLetterWatchdog();
       setCharLetterGenerating(false);
       closeCharLetter();
       renderAll();
@@ -1439,7 +1455,7 @@
       toast(isSealed ? 'TA 的信已封好，待到那天拆开' : '收到 TA 的来信');
       if (entry && entry.id && !isSealed) openLetterFullscreen(entry);
     }).catch(function (err) {
-      clearTimeout(watchdog);
+      clearCharLetterWatchdog();
       setCharLetterGenerating(false);
       toast(err && err.message ? err.message : '来信失败');
     });

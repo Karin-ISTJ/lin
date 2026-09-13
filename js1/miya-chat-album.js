@@ -187,6 +187,39 @@
     return saveAlbum(profileId, album);
   }
 
+  /*
+   * 从所有面具的相册分组中剔除指定联系人 id。
+   * 删除联系人时调用——分组用 contactIds 关联角色，角色删掉后这些 id 变成孤儿，
+   * 会导致"分组指向不存在的角色"、以及重新添加同 id 角色时被意外纳入旧分组。
+   * 只动 groups，不删照片（照片属于面具而非角色）。
+   */
+  function removeContactFromGroups(contactId) {
+    var cid = trim(contactId);
+    if (!cid) return Promise.resolve(0);
+    var st = readState();
+    var touched = 0;
+    var chains = [];
+    Object.keys(st.albums || {}).forEach(function (pid) {
+      var album = st.albums[pid];
+      if (!album || !Array.isArray(album.groups)) return;
+      var changed = false;
+      var groups = album.groups.map(function (g) {
+        if (!g || !Array.isArray(g.contactIds)) return g;
+        var kept = g.contactIds.filter(function (x) { return trim(x) !== cid; });
+        if (kept.length === g.contactIds.length) return g;
+        changed = true;
+        return Object.assign({}, g, { contactIds: kept });
+      });
+      if (!changed) return;
+      touched++;
+      chains.push(saveAlbum(pid, Object.assign({}, album, { groups: groups })));
+    });
+    if (!touched) return Promise.resolve(0);
+    return Promise.all(chains).then(function () {
+      return touched;
+    });
+  }
+
   function isRecognized(photo) {
     return !!(photo && trim(photo.visionText));
   }
@@ -1805,6 +1838,7 @@
     renameAlbumGroup: renameAlbumGroup,
     deleteAlbumGroup: deleteAlbumGroup,
     setAlbumGroupContacts: setAlbumGroupContacts,
+    removeContactFromGroups: removeContactFromGroups,
     movePhotoToGroup: movePhotoToGroup,
     groupAppliesToContact: groupAppliesToContact,
     recognizeBatch: recognizeBatch,

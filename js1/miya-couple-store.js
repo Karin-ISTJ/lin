@@ -6,6 +6,15 @@
 
   var STORAGE_KEY = 'miya-couple-v1';
   var cache = null;
+  /* D6 防护：
+     hydrated —— 是否已完成一次权威水合（读到了磁盘数据，或确认磁盘就是空的）
+     diskKnown —— 本次会话是否已经确认过「磁盘里有什么」
+     preDiskCache —— 水合前产生的内存态（含窗口内新写入），水合时用于合并
+     核心思路：水合完成前，绝不把内存态当成权威去覆盖磁盘；
+               所有写入先攒着，水合时与磁盘数据合并后再一次性落盘。 */
+  var hydrated = false;
+  var diskKnown = false;
+  var preDiskCache = null;
 
   function uid(prefix) {
     return (prefix || 'cp') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
@@ -33,8 +42,12 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if (raw && !(global.miyaLsIsIdbPlaceholder && global.miyaLsIsIdbPlaceholder(raw))) {
         cache = JSON.parse(raw);
+        hydrated = true;
+        diskKnown = true;
       } else {
         cache = null;
+        /* LS 空或占位符 —— 磁盘里到底有没有数据，此刻无从得知 */
+        if (!hydrated) diskKnown = false;
       }
     } catch (e) {
       cache = null;
@@ -49,6 +62,18 @@
 
   function saveRaw() {
     if (!cache) return;
+    /* D6 防护：磁盘状态未知（水合未完成）时，先不要写盘 ——
+       此刻 cache 可能是残缺骨架，写下去就会覆盖 IDB 里的历史。
+       把内存态留住，等 whenReady 合并落盘。 */
+    if (!diskKnown && !hydrated) {
+      preDiskCache = cache;
+      return;
+    }
+    persistNow();
+  }
+
+  function persistNow() {
+    if (!cache) return;
     if (typeof global.miyaSyncFlushJsonKey === 'function') {
       global.miyaSyncFlushJsonKey(STORAGE_KEY, cache);
       return;
@@ -60,6 +85,57 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
     } catch (e) { /* ignore */ }
+  }
+
+  function isEmptyRow(v) {
+    if (!v || typeof v !== 'object') return true;
+    var ids = v.spaces && typeof v.spaces === 'object' ? Object.keys(v.spaces) : [];
+    if (ids.length) return false;
+    var inv = v.invites && typeof v.invites === 'object' ? Object.keys(v.invites) : [];
+    return inv.length === 0;
+  }
+
+  function mergeSpaceRows(diskRow, localRow) {
+    /* 以 diskRow 为底，把 localRow（水合窗口内的新写入）并进来。
+       - spaces：本地没有的 contactId 用磁盘的
+       - 同 contactId：checkIns/timeline/board 按 id 取并集，两边条目都保留
+       - invites：键并集，同键以本地为准（本地是刚发生的操作） */
+    var result = {
+      spaces: Object.assign({}, diskRow.spaces),
+      invites: Object.assign({}, diskRow.invites, localRow.invites)
+    };
+
+    Object.keys(localRow.spaces || {}).forEach(function (cid) {
+      var local = localRow.spaces[cid];
+      var disk = diskRow.spaces[cid];
+      if (!disk || typeof disk !== 'object') {
+        result.spaces[cid] = local;
+        return;
+      }
+      var merged = Object.assign({}, disk, local);
+      ['checkIns', 'timeline', 'board'].forEach(function (field) {
+        var seen = {};
+        var list = [];
+        (Array.isArray(disk[field]) ? disk[field] : []).forEach(function (it) {
+          if (it && it.id) {
+            if (!seen[it.id]) { seen[it.id] = true; list.push(it); }
+          } else {
+            list.push(it);
+          }
+        });
+        (Array.isArray(local[field]) ? local[field] : []).forEach(function (it) {
+          if (it && it.id) {
+            if (!seen[it.id]) { seen[it.id] = true; list.push(it); }
+          } else {
+            list.push(it);
+          }
+        });
+        merged[field] = list;
+      });
+      result.spaces[cid] = merged;
+    });
+
+    return result;
   }
 
   var TIMELINE_TYPES = {
@@ -371,8 +447,30 @@
     }) || null;
   }
 
+  /* D2：这些字段承载「这个空间属于谁、对方是谁」，一旦丢失难以恢复 */
+  var D2_IDENTITY_FIELDS = {
+    profileId: true,
+    profileName: true,
+    charName: true
+  };
+
+  function isEmptyValue(v) {
+    if (v === null || v === undefined) return true;
+    if (typeof v === 'string') return v.trim() === '';
+    return false;
+  }
+
   function normalizeSpace(raw, contactId) {
-    if (!raw || typeof raw !== 'object') return null;
+    /* D3 防护：spaces[id] 可能是脏值（字符串 / 数字 / 数组等）。
+       原实现直接 return null，导致：
+         - 读路径拿到 null，用户看到「空间不存在」
+         - 写路径 return null，用户点了没反应
+       这里把它当成「一个全新的空空间」来重建，保住 contactId。
+       注意：null / undefined 仍返回 null（那是「空间不存在」的正常语义）。 */
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
+      raw = {};
+    }
     var status = String(raw.status || '').trim();
     if (status !== 'open' && status !== 'pending' && status !== 'declined') status = 'pending';
     return {
@@ -389,8 +487,11 @@
       timelineMeta: normalizeTimelineMeta(raw.timelineMeta),
       board: normalizeBoard(raw.board),
       boardMeta: normalizeBoardMeta(raw.boardMeta),
-      whispers: Array.isArray(raw.whispers) ? raw.whispers : [],
-      photos: Array.isArray(raw.photos) ? raw.photos : [],
+      /* D5 已清理：whispers / photos 两个废弃字段。
+         它们原本是 `Array.isArray(raw.x) ? raw.x : []` 的裸判断 ——
+         类型异常时整段被静默替换为 []，且永久固化。
+         实测全仓库零读写方（详见 test/fix-d5.js 注释），故直接移除，
+         而不是给死字段补一套逐条归一化。 */
       checkIns: normalizeCheckIns(raw.checkIns),
       imageGenEnabled: !!raw.imageGenEnabled
     };
@@ -447,6 +548,10 @@
       imageGenPending: !!raw.imageGenPending,
       visionNote: String(raw.visionNote || '').trim(),
       timeAt: String(raw.timeAt || '').trim(),
+      /* D1：被重新生成取代的旧打卡（保留用户评论用），需要在归一化时透传，
+         否则白名单会把标记抹掉，导致旧打卡重新出现在列表里。 */
+      superseded: !!raw.superseded,
+      supersededAt: Number(raw.supersededAt) || 0,
       comments: comments,
       createdAt: Number(raw.createdAt) || Date.now(),
       checkInAt: resolveCheckInAt(raw)
@@ -517,14 +622,19 @@
       timelineMeta: { lastGachaWeek: '', lastGachaAt: 0, milestoneDaysLogged: [] },
       board: [],
       boardMeta: normalizeBoardMeta(null),
-      whispers: [],
-      photos: [],
       checkIns: [],
       imageGenEnabled: false
     };
     if (patch && typeof patch === 'object') {
       Object.keys(patch).forEach(function (k) {
-        if (patch[k] !== undefined) cur[k] = patch[k];
+        if (patch[k] === undefined) return;
+        /* D2 防护：身份类字段不允许被「空值」覆盖已有的有效值。
+           场景：openSpace / markPending / markDeclined 未传 meta 时，
+           meta.x || '' 会产生空串，把已存的 profileId / charName 抹掉。 */
+        if (D2_IDENTITY_FIELDS[k] && isEmptyValue(patch[k]) && !isEmptyValue(cur[k])) {
+          return;
+        }
+        cur[k] = patch[k];
       });
     }
     data.spaces[id] = normalizeSpace(cur, id);
@@ -662,10 +772,50 @@
   function getCheckInsByDate(contactId, dateIso) {
     var d = String(dateIso || '').trim();
     return getCheckIns(contactId).filter(function (ci) {
-      return ci && ci.dateIso === d;
+      return ci && ci.dateIso === d && !ci.superseded;   /* D1：被重新生成取代的旧打卡不展示 */
     }).sort(function (a, b) {
       return (a.checkInAt || a.createdAt || 0) - (b.checkInAt || b.createdAt || 0);
     });
+  }
+
+  /* D1 辅助：取出被取代但仍有用户评论的打卡（用于「历史版本」展示或调试） */
+  function getSupersededCheckIns(contactId, dateIso) {
+    var d = dateIso ? String(dateIso).trim() : '';
+    return getCheckIns(contactId).filter(function (ci) {
+      if (!ci || !ci.superseded) return false;
+      return d ? ci.dateIso === d : true;
+    });
+  }
+
+  /* D1 辅助：清理 superseded 记录，避免无限累积。
+     默认保留最近 30 天内被取代的条目；超过这个窗口才真正删除。
+     注意：删除仍然会带走评论，所以窗口不能太短。 */
+  function purgeSupersededCheckIns(contactId, keepDays) {
+    var id = String(contactId || '').trim();
+    if (!id) return 0;
+    var days = Number(keepDays);
+    if (!isFinite(days) || days <= 0) days = 30;
+    var cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    var data = loadRaw();
+    var sp = normalizeSpace(data.spaces[id] || {}, id);
+    if (!sp) return 0;
+
+    var removed = 0;
+    sp.checkIns = (sp.checkIns || []).filter(function (ci) {
+      if (!ci || !ci.superseded) return true;
+      var at = Number(ci.supersededAt);
+      /* 没有时间戳的（早期数据）先留着，不贸然删 */
+      if (!isFinite(at) || at <= 0) return true;
+      if (at < cutoff) { removed++; return false; }
+      return true;
+    });
+
+    if (removed > 0) {
+      data.spaces[id] = sp;
+      saveRaw();
+    }
+    return removed;
   }
 
   function findCheckIn(contactId, checkInId) {
@@ -1036,23 +1186,60 @@
     return revealed;
   }
 
-  function removeCharCheckInsForDate(contactId, dateIso) {
+  function hasUserComment(ci) {
+    if (!ci || !Array.isArray(ci.comments)) return false;
+    return ci.comments.some(function (c) {
+      return c && c.author === 'user' && String(c.text || '').trim() !== '';
+    });
+  }
+
+  function removeCharCheckInsForDate(contactId, dateIso, opts) {
     var id = String(contactId || '').trim();
     var d = String(dateIso || '').trim();
     if (!id || !d) return;
     var data = loadRaw();
     var sp = normalizeSpace(data.spaces[id] || {}, id);
     if (!sp) return;
+
+    /* D1 修复（方案 A）：
+       重新生成是「先删后建」。旧打卡被删除时，挂在它上面的用户评论会一起消失，
+       而评论是用户手写的、不可再生的数据。
+       所以这里区别对待：
+         - 无用户评论的旧打卡 → 照旧删除（保持「重生成即刷新」的原体验）
+         - 有用户评论的旧打卡 → 保留，改标记 superseded（UI 层不展示，评论得以存活）
+       supersededBy 记录本次重生成的时间戳，便于将来追溯与清理。 */
+    var supersededAt = Date.now();
+    var kept = 0;
     sp.checkIns = (sp.checkIns || []).filter(function (ci) {
-      return !(ci && ci.author === 'char' && ci.dateIso === d);
+      var isTodayChar = ci && ci.author === 'char' && ci.dateIso === d;
+      if (!isTodayChar) return true;
+      if (!hasUserComment(ci)) return false;
+      ci.superseded = true;
+      ci.supersededAt = supersededAt;
+      kept++;
+      return true;
     });
+
     data.spaces[id] = sp;
     saveRaw();
+
+    /* 顺手清掉过期的 superseded 记录，避免长期累积 */
+    purgeSupersededCheckIns(id, opts && opts.keepDays);
+
+    return kept;
   }
 
   global.miyaCoupleStore = {
     STORAGE_KEY: STORAGE_KEY,
-    invalidateCache: function () { cache = null; },
+    invalidateCache: function () {
+      cache = null;
+      /* 缓存失效 ⇔ 磁盘状态重新变成「未知」，必须一并复位状态位 */
+      hydrated = false;
+      diskKnown = false;
+      preDiskCache = null;
+      /* D7：内存热缓存也要清，否则备份恢复后读到的还是旧对象 */
+      if (global.__miyaKvMem) delete global.__miyaKvMem[STORAGE_KEY];
+    },
     uid: uid,
     isoToday: isoToday,
     getSpace: getSpace,
@@ -1082,6 +1269,9 @@
     isImageGenEnabled: isImageGenEnabled,
     setImageGenEnabled: setImageGenEnabled,
     removeCharCheckInsForDate: removeCharCheckInsForDate,
+    getSupersededCheckIns: getSupersededCheckIns,
+    purgeSupersededCheckIns: purgeSupersededCheckIns,
+    hasUserComment: hasUserComment,
     slotToCheckInAt: slotToCheckInAt,
     resolveCheckInAt: resolveCheckInAt,
     normalizeTimelineEntry: normalizeTimelineEntry,
@@ -1120,11 +1310,37 @@
   if (global.miyaRegisterKvStore) {
     global.miyaRegisterKvStore({
       whenReady: function () {
-        return global.miyaReadLsJsonKey(STORAGE_KEY, { spaces: {}, invites: {} }).then(function (v) {
-          cache = v && typeof v === 'object' ? v : { spaces: {}, invites: {} };
-          if (!cache.spaces || typeof cache.spaces !== 'object') cache.spaces = {};
-          if (!cache.invites || typeof cache.invites !== 'object') cache.invites = {};
+        return global.miyaReadLsJsonKey(STORAGE_KEY, null).then(function (v) {
+          var disk = v && typeof v === 'object' ? v : null;
+          if (disk) {
+            if (!disk.spaces || typeof disk.spaces !== 'object') disk.spaces = {};
+            if (!disk.invites || typeof disk.invites !== 'object') disk.invites = {};
+          }
+
+          var local = preDiskCache;
+
+          if (disk && local && isEmptyRow(local) === false) {
+            /* 水合前产生过写入：与磁盘合并，两边都保住 */
+            cache = mergeSpaceRows(disk, local);
+          } else if (disk && local) {
+            /* 水合前的内存态是空的（只是读了一下）——以磁盘为准 */
+            cache = disk;
+          } else if (disk) {
+            cache = disk;
+          } else if (local) {
+            /* 磁盘确实没数据，内存里有窗口内写入 —— 直接采用 */
+            cache = local;
+          } else {
+            cache = { spaces: {}, invites: {} };
+          }
+
+          hydrated = true;
+          diskKnown = true;
+          preDiskCache = null;
           if (global.__miyaKvMem) global.__miyaKvMem[STORAGE_KEY] = cache;
+
+          /* 把攒下的写入补落盘（此时 cache 已是合并后的完整数据） */
+          persistNow();
         });
       }
     });

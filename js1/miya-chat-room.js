@@ -4615,11 +4615,28 @@
       if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) global.MiyaMemoryTableApp.open(state.chatId);
       else toast('记忆表模块未加载');
     } else if (key === 'backup') {
-      if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {
-        if (global.MiyaChatBackups.exportChatToFile(state.chatId)) toast('已导出聊天备份');
-        else toast('备份失败');
-      } else toast('备份模块未加载');
+      openBackupPanel();
     }
+  }
+
+  /* 备份入口：打开「导出 / 导入」面板。
+   * 优先走 MiyaChatBackups.openPanel；老版本没有该函数时回退为直接导出，保证不退化。 */
+  function openBackupPanel() {
+    var mod = global.MiyaChatBackups;
+    if (!mod) {
+      toast('备份模块未加载');
+      return;
+    }
+    if (typeof mod.openPanel === 'function') {
+      mod.openPanel(state.chatId);
+      return;
+    }
+    if (typeof mod.exportChatToFile === 'function') {
+      if (mod.exportChatToFile(state.chatId)) toast('已导出聊天备份');
+      else toast('备份失败');
+      return;
+    }
+    toast('备份模块未加载');
   }
 
   function toggleTimestamps() {
@@ -5531,10 +5548,7 @@
       }
       if (t.closest('[data-plus="backup"]')) {
         e.preventDefault();
-        if (global.MiyaChatBackups && global.MiyaChatBackups.exportChatToFile) {
-          if (global.MiyaChatBackups.exportChatToFile(state.chatId)) toast('已导出聊天备份');
-          else toast('备份失败');
-        } else toast('备份模块未加载');
+        openBackupPanel();
         return;
       }
       if (t.closest('#qq-room-tools-toggle')) { e.preventDefault(); toggleToolbarPanel(); return; }

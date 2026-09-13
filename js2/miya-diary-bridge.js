@@ -406,8 +406,38 @@
     return text ? '【世界书·必读】\n' + text : '';
   }
 
+  /*
+   * 把一条聊天消息格式化成日记素材的一行。
+   *
+   * 关键：必须排除「系统注入类」消息。这些消息不是角色真正说的话，而是引擎/玩法
+   * 写入的上下文，其中 diary_peek_context 里还嵌着**用户私人日记的原文**。
+   * 早期实现只过滤 m.deleted，导致：
+   *   1. 偷看日记住入的 diary_peek_context 被当成角色发言（署名成角色名），
+   *      把用户的私密日记二次喂给日记生成 → 串味、污染日记正文；
+   *   2. diary_peek_notice（「XX偷看了你的日记！」）被当成角色说的话。
+   * 正常聊天路径（miya-chat-online-format.js）对这两类消息本来是专门处理的，
+   * 日记桥接漏了同样的过滤，这里补上。
+   */
+  function isDiaryInsightMessage(m) {
+    if (!m) return true;
+    if (m.role === 'system') return true;
+    /* 引擎内部/玩法注入的上下文，不应作为日记素材 */
+    var skipTypes = {
+      diary_peek_context: true,
+      diary_peek_notice: true,
+      call_capsule: true,
+      offline_meet: true
+    };
+    if (m.type && skipTypes[m.type]) return true;
+    /* 被显式标记排除、或旁白/HTML 交互页，都不是角色台词 */
+    if (m.excludedFromContext) return true;
+    if (m.type === 'html' || m.renderAsHtml) return true;
+    return false;
+  }
+
   function formatMsgForDiary(m, contact, profileName) {
     if (!m || m.deleted) return '';
+    if (isDiaryInsightMessage(m)) return '';
     var body = String(m.content || '').trim();
     if (!body) return '';
     if (global.miyaChatEngine && typeof global.miyaChatEngine.stripThinkingForApi === 'function') {

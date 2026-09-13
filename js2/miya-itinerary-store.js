@@ -22,16 +22,27 @@
     return new Date(parts[0], parts[1] - 1, parts[2]);
   }
 
+  /* 清理历史遗留的失败冷却数据。
+     旧版本会把 failCooldown 写进 STORAGE_KEY，机制删掉之后这些字段没有任何读者，
+     但会一直躺在存储里。这里在首次读取时顺手抹掉，避免脏数据长期残留。 */
+  function dropLegacyFailCooldown(obj) {
+    if (obj && typeof obj === 'object' && obj.failCooldown) {
+      delete obj.failCooldown;
+      return true;
+    }
+    return false;
+  }
+
   function loadRaw() {
     if (cache) return cache;
     if (typeof global.miyaSyncReadJsonKey === 'function') {
       var mem = global.miyaSyncReadJsonKey(STORAGE_KEY);
       if (mem && typeof mem === 'object') {
         cache = mem;
+        if (dropLegacyFailCooldown(cache)) saveRaw();
         if (!cache.settings || typeof cache.settings !== 'object') cache.settings = { autoGenerate: false };
         if (!cache.enabled || typeof cache.enabled !== 'object') cache.enabled = {};
         if (!cache.schedules || typeof cache.schedules !== 'object') cache.schedules = {};
-        if (!cache.failCooldown || typeof cache.failCooldown !== 'object') cache.failCooldown = {};
         return cache;
       }
     }
@@ -48,10 +59,10 @@
     if (!cache || typeof cache !== 'object') {
       cache = { settings: { autoGenerate: false }, enabled: {}, schedules: {} };
     }
+    if (dropLegacyFailCooldown(cache)) saveRaw();
     if (!cache.settings || typeof cache.settings !== 'object') cache.settings = { autoGenerate: false };
     if (!cache.enabled || typeof cache.enabled !== 'object') cache.enabled = {};
     if (!cache.schedules || typeof cache.schedules !== 'object') cache.schedules = {};
-    if (!cache.failCooldown || typeof cache.failCooldown !== 'object') cache.failCooldown = {};
     return cache;
   }
 
@@ -291,7 +302,6 @@
     contacts.forEach(function (c) { if (c && c.id) map[c.id] = c; });
     return enabled.filter(function (id) {
       if (!map[id]) return false;
-      if (shouldSkipAutoGenerate(id)) return false;
       var sch = getSchedule(id);
       return !sch || isScheduleExpired(sch);
     }).map(function (id) {
@@ -299,29 +309,10 @@
     });
   }
 
-  var AUTO_FAIL_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-
-  function markGenerateFail(contactId) {
-    var id = String(contactId || '').trim();
-    if (!id) return;
-    loadRaw().failCooldown[id] = Date.now();
-    saveRaw();
-  }
-
-  function clearGenerateFail(contactId) {
-    var id = String(contactId || '').trim();
-    if (!id) return;
-    if (loadRaw().failCooldown) delete loadRaw().failCooldown[id];
-    saveRaw();
-  }
-
-  function shouldSkipAutoGenerate(contactId) {
-    var id = String(contactId || '').trim();
-    if (!id) return false;
-    var ts = loadRaw().failCooldown && loadRaw().failCooldown[id];
-    if (!ts) return false;
-    return Date.now() - Number(ts) < AUTO_FAIL_COOLDOWN_MS;
-  }
+  /* 失败冷却机制已整体移除。
+     原本生成失败会写 6 小时冷却，getExpiredEnabledContacts 期间静默跳过该角色；
+     但界面仍显示「无行程·待生成」，用户看不出为什么不再生成，且取消勾选再勾选也无法恢复。
+     现在失败只写控制台日志，下一个巡检周期会正常重试。 */
 
   function getAllContactRows() {
     var cs = global.miyaChatStore;
@@ -449,9 +440,6 @@
     saveSchedule: saveSchedule,
     removeSchedule: removeSchedule,
     getExpiredEnabledContacts: getExpiredEnabledContacts,
-    markGenerateFail: markGenerateFail,
-    clearGenerateFail: clearGenerateFail,
-    shouldSkipAutoGenerate: shouldSkipAutoGenerate,
     getAllContactRows: getAllContactRows,
     normalizeSchedule: normalizeSchedule,
     parseTimeToMinutes: parseTimeToMinutes,
@@ -469,7 +457,6 @@
           if (!cache.settings || typeof cache.settings !== 'object') cache.settings = { autoGenerate: false };
           if (!cache.enabled || typeof cache.enabled !== 'object') cache.enabled = {};
           if (!cache.schedules || typeof cache.schedules !== 'object') cache.schedules = {};
-          if (!cache.failCooldown || typeof cache.failCooldown !== 'object') cache.failCooldown = {};
           if (global.__miyaKvMem) global.__miyaKvMem[STORAGE_KEY] = cache;
         });
       }

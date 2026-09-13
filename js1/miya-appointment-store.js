@@ -1204,11 +1204,83 @@
         }).length;
     }
 
+    /*
+     * 删除某联系人的全部约会数据。
+     * 删除联系人时调用。约会数据是独立存储的（LS_KEY = miya-appointment-v1）：
+     *   - contactPresetId / contactParams / contactWorldbook / contactOpeningPresets 按 contactId 分桶
+     *   - byChat[chatId].sessions[] 里每个会话带 contactId 字段
+     * 若不清，重新添加同 id 角色会读到上一段关系的约会预设与剧情。
+     * 只清与该联系人相关的桶；群聊会话里若该角色是 cast 成员，一并剔除该成员。
+     */
+    function removeAllForContact(contactId) {
+        var cid = String(contactId || '').trim();
+        if (!cid) return false;
+        load();
+        var touched = false;
+
+        ['contactPresetId', 'contactParams', 'contactWorldbook', 'contactOpeningPresets'].forEach(function (bucket) {
+            if (cache[bucket] && Object.prototype.hasOwnProperty.call(cache[bucket], cid)) {
+                delete cache[bucket][cid];
+                touched = true;
+            }
+        });
+
+        Object.keys(cache.byChat || {}).forEach(function (chatId) {
+            var row = cache.byChat[chatId];
+            if (!row || !Array.isArray(row.sessions)) return;
+            var before = row.sessions.length;
+
+            /* 该联系人自己的会话：整段移除并打墓碑，避免镜像恢复把它复活 */
+            var removedIds = [];
+            var kept = row.sessions.filter(function (s) {
+                if (!s) return false;
+                if (String(s.contactId || '').trim() === cid) {
+                    if (s.id) removedIds.push(String(s.id));
+                    return false;
+                }
+                return true;
+            });
+
+            /* 群聊会话里该角色作为 cast 成员：只剔除成员，不删整段会话 */
+            kept = kept.map(function (s) {
+                if (!Array.isArray(s.cast) || !s.cast.length) return s;
+                var castKept = s.cast.filter(function (m) {
+                    return String((m && m.contactId) || '').trim() !== cid;
+                });
+                if (castKept.length === s.cast.length) return s;
+                return Object.assign({}, s, { cast: castKept });
+            });
+
+            if (kept.length === before && removedIds.length === 0) {
+                /* 长度没变但仍可能有 cast 变化，用 JSON 比对兜底 */
+                if (JSON.stringify(kept) === JSON.stringify(row.sessions)) return;
+            }
+
+            removedIds.forEach(function (sid) {
+                if (!cache.deletedSessionIds) cache.deletedSessionIds = {};
+                cache.deletedSessionIds[sid] = Date.now();
+            });
+
+            cache.byChat[chatId] = Object.assign({}, row, { sessions: kept });
+            if (
+                removedIds.indexOf(String(row.activeSessionId || '')) >= 0 ||
+                !kept.some(function (s) { return s && String(s.id) === String(row.activeSessionId || ''); })
+            ) {
+                cache.byChat[chatId].activeSessionId = kept.length ? String(kept[0].id) : '';
+            }
+            touched = true;
+        });
+
+        if (touched) save({ force: true });
+        return touched;
+    }
+
     var store = {
         BUILTIN_PRESET_ID: null,
         load: load,
         save: save,
         whenReady: ensureHydrated,
+        removeAllForContact: removeAllForContact,
         recoverFromChatMirrors: recoverSessionsFromChatMirrors,
         previewChatMirrorRecovery: previewChatMirrorRecovery,
         restoreFromChatMirrors: function () {
