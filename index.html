@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="css/miya-apps.css?v=30">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=24">
+  <link rel="stylesheet" href="css/miya-settings.css?v=25">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=9">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
@@ -695,6 +695,31 @@
           <img class="mi-ico-img st-io-arrow" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
         </button>
 
+        <div class="st-section-label">接口</div>
+        <div class="st-card">
+          <div class="st-card-row" data-st-nav="miya-st-panel-chat">
+            <div class="st-card-row-left">
+              <div class="st-card-icon st-card-icon--blue"><img class="mi-ico-img " src="img/icons/message-chat-square.svg" alt="" width="18" height="18"></div>
+              <div><div class="st-card-label">对话 API</div><div class="st-card-desc">对话模型服务端点与密钥</div></div>
+            </div>
+            <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
+          </div>
+          <div class="st-card-row" data-st-nav="miya-st-panel-voice">
+            <div class="st-card-row-left">
+              <div class="st-card-icon st-card-icon--warm"><img class="mi-ico-img " src="img/icons/volume-max.svg" alt="" width="18" height="18"></div>
+              <div><div class="st-card-label">语音合成</div><div class="st-card-desc">语音合成服务端点与密钥</div></div>
+            </div>
+            <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
+          </div>
+          <div class="st-card-row" data-st-nav="miya-st-panel-imagegen">
+            <div class="st-card-row-left">
+              <div class="st-card-icon st-card-icon--green"><img class="mi-ico-img " src="img/icons/image-04.svg" alt="" width="18" height="18"></div>
+              <div><div class="st-card-label">生图 API</div><div class="st-card-desc">生图服务端点与密钥 · 测试与自由生图</div></div>
+            </div>
+            <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
+          </div>
+        </div>
+
         <div class="st-section-label">存储</div>
         <button type="button" class="st-feature-card st-feature-card--clickable" data-st-nav="miya-st-panel-storage">
           <div class="st-deco-number">02</div>
@@ -975,6 +1000,24 @@
             <div class="st-form-card ins-form-block">
               <div class="miya-ig-test-wrap" id="miya-st-ig-test-preview"></div>
               <button type="button" class="st-action-btn st-action-btn--primary" id="miya-st-ig-test">测试生图</button>
+            </div>
+          </section>
+
+          <section class="st-form-section">
+            <h4 class="st-form-section__title">自由生图</h4>
+            <div class="st-form-card ins-form-block">
+              <p class="st-form-hint">直接描述你想要的画面，无需绑定联系人即可出图</p>
+              <label class="ins-field-label" for="miya-st-ig-free-prompt">画面描述</label>
+              <textarea class="ins-text-input ins-text-input--area" id="miya-st-ig-free-prompt" rows="3" placeholder="例如：黄昏的海边，一位少女提着裙摆奔跑，逆光，电影感"></textarea>
+              <label class="ins-field-label" for="miya-st-ig-free-size">图片尺寸</label>
+              <select class="ins-select" id="miya-st-ig-free-size"></select>
+              <div class="miya-ig-free-actions">
+                <button type="button" class="st-action-btn st-action-btn--primary" id="miya-st-ig-free-run">生成图片</button>
+                <button type="button" class="st-action-btn" id="miya-st-ig-free-save">保存到相册</button>
+              </div>
+              <div class="miya-ig-test-wrap miya-ig-free-wrap" id="miya-st-ig-free-preview">
+                <div class="miya-ig-test miya-ig-test--idle"><p>输入描述后点击「生成图片」</p></div>
+              </div>
             </div>
           </section>
 
@@ -3819,7 +3862,7 @@
   <script defer src="js2/miya-lockscreen.js?v=10"></script>
   <script defer src="js1/miya-beautify-app.js?v=29"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
-  <script defer src="js2/miya-image-gen.js?v=4"></script>
+  <script defer src="js2/miya-image-gen.js?v=5"></script>
   <script defer src="js2/miya-settings-app.js?v=61"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>

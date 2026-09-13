@@ -1561,3 +1561,44 @@
   margin-top: 4px;
 }
 
+/* ─── 自由生图 ─── */
+.miya-ig-free-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+
+.miya-ig-free-actions .st-action-btn {
+  flex: 1 1 auto;
+  min-width: 96px;
+  justify-content: center;
+}
+
+.miya-ig-free-actions .st-action-btn[disabled] {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.miya-ig-free-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.miya-ig-test--idle p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--st-text-tertiary, #999);
+}
+
+.miya-ig-free-caption {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--st-text-tertiary, #999);
+  word-break: break-word;
+}
+

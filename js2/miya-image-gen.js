@@ -919,6 +919,130 @@
       });
   }
 
+  /* 自由生图：不绑定联系人，直接按用户输入的画面描述出图。
+     复用 generateImageForScene('', prompt, { skipContactCheck: true })，
+     提示词仍会带上全局正向/反向提示词与画质标签。 */
+  var freeGenState = { blob: null, prompt: '', busy: false };
+
+  function renderFreePreview(html) {
+    var el = document.getElementById('miya-st-ig-free-preview');
+    if (el) el.innerHTML = html;
+  }
+
+  function renderFreeIdle() {
+    renderFreePreview('<div class="miya-ig-test miya-ig-test--idle"><p>输入描述后点击「生成图片」</p></div>');
+  }
+
+  function getFreePrompt() {
+    var el = document.getElementById('miya-st-ig-free-prompt');
+    return el ? trim(el.value) : '';
+  }
+
+  function getFreeSize() {
+    var el = document.getElementById('miya-st-ig-free-size');
+    var v = el ? trim(el.value) : '';
+    return v || getImageGenConfig().size;
+  }
+
+  function setFreeBusy(busy) {
+    freeGenState.busy = !!busy;
+    var run = document.getElementById('miya-st-ig-free-run');
+    if (run) {
+      run.disabled = !!busy;
+      run.textContent = busy ? '生成中…' : '生成图片';
+    }
+    var save = document.getElementById('miya-st-ig-free-save');
+    if (save) save.disabled = !!busy;
+  }
+
+  function runFreeGeneration() {
+    if (freeGenState.busy) return Promise.resolve(false);
+    var el = document.getElementById('miya-st-ig-free-preview');
+    if (!el) return Promise.resolve(false);
+    var prompt = getFreePrompt();
+    if (!prompt) {
+      toast('请先输入画面描述');
+      return Promise.resolve(false);
+    }
+    setFreeBusy(true);
+    freeGenState.blob = null;
+    renderFreePreview('<div class="miya-ig-test miya-ig-test--busy"><span class="miya-ig-test__spin"></span><p>生成中…</p></div>');
+    return generateImageForScene('', prompt, {
+      skipContactCheck: true,
+      referenceDataUrl: '',
+      size: getFreeSize()
+    })
+      .then(function (blob) {
+        return blobToDataUrl(blob).then(function (url) {
+          freeGenState.blob = blob;
+          freeGenState.prompt = prompt;
+          renderFreePreview('<div class="miya-ig-test miya-ig-test--done">' +
+            '<img src="' + esc(url) + '" alt="自由生图">' +
+            '<p class="miya-ig-free-caption">' + esc(prompt) + '</p>' +
+          '</div>');
+          return true;
+        });
+      })
+      .catch(function (err) {
+        renderFreePreview('<div class="miya-ig-test miya-ig-test--err"><p>' + esc(formatImageGenError(err)) + '</p></div>');
+        return false;
+      })
+      .then(function (ok) {
+        setFreeBusy(false);
+        return ok;
+      });
+  }
+
+  /* 把当前自由生图结果存进「我」的相册（默认分组），便于后续在聊天里当素材使用 */
+  function saveFreeGenerationToAlbum() {
+    if (!freeGenState.blob) {
+      toast('请先生成一张图片');
+      return Promise.resolve(false);
+    }
+    var album = global.MiyaChatAlbum;
+    if (!album || typeof album.addPhotos !== 'function') {
+      toast('相册模块未加载，无法保存');
+      return Promise.resolve(false);
+    }
+    var st = getStore();
+    var profile = st && typeof st.getActiveProfile === 'function' ? st.getActiveProfile() : null;
+    if (!profile || !profile.id) {
+      toast('未找到当前身份，无法保存');
+      return Promise.resolve(false);
+    }
+    var blob = freeGenState.blob;
+    var name = 'free-gen-' + Date.now() + '.png';
+    var file;
+    try {
+      file = new File([blob], name, { type: blob.type || 'image/png' });
+    } catch (e) {
+      file = blob;
+    }
+    return album.addPhotos(profile.id, [file], 'default').then(function (added) {
+      if (!added || !added.length) {
+        toast('保存失败');
+        return false;
+      }
+      toast('已保存到相册');
+      return true;
+    }).catch(function () {
+      toast('保存失败');
+      return false;
+    });
+  }
+
+  function syncFreeSizeOptions(provider, keepValue) {
+    var sel = document.getElementById('miya-st-ig-free-size');
+    if (!sel) return;
+    fillSizeSelect(sel, provider, keepValue);
+  }
+
+  function resetFreeGenPreview() {
+    freeGenState.blob = null;
+    freeGenState.prompt = '';
+    renderFreeIdle();
+  }
+
   async function loadPresetsArr() {
     var raw = [];
     if (typeof global.miyaReadLsJsonKey === 'function') {
@@ -1174,7 +1298,16 @@
       op.textContent = item.label || item.v;
       sel.appendChild(op);
     });
-    sel.value = sizes.some(function (x) { return x.v === cur; }) ? cur : sizes[0].v;
+    /* 已存尺寸不在当前供应商的预设列表里（例如换过接口、或手填过自定义尺寸）时，
+       不能悄悄回退到第一项——那会让下拉框显示的尺寸和实际请求用的尺寸对不上。
+       改为把该尺寸补成一项并选中，保证「所见即所用」。 */
+    if (!sizes.some(function (x) { return x.v === cur; })) {
+      var custom = document.createElement('option');
+      custom.value = cur;
+      custom.textContent = cur;
+      sel.appendChild(custom);
+    }
+    sel.value = cur;
   }
 
   function syncProviderPanels(provider) {
@@ -1183,6 +1316,7 @@
     if (oa) oa.hidden = provider !== 'openai';
     if (na) na.hidden = provider !== 'novelai';
     fillSizeSelect(document.getElementById('miya-st-ig-size'), provider);
+    syncFreeSizeOptions(provider);
     var contactsBlock = document.getElementById('miya-st-ig-contacts-block');
     if (contactsBlock) contactsBlock.hidden = !isFormEnabled();
   }
@@ -1225,6 +1359,7 @@
     }
     if (samplerSel) samplerSel.value = cfg.novelai.sampler || NOVELAI_SAMPLERS[0];
     fillSizeSelect(document.getElementById('miya-st-ig-size'), cfg.provider, cfg.size);
+    syncFreeSizeOptions(cfg.provider, cfg.size);
     syncProviderPanels(cfg.provider);
     syncContactsBlockVisibility();
     renderContactToggleList();
@@ -1382,6 +1517,14 @@
         );
         return;
       }
+      if (t.closest('#miya-st-ig-free-run')) {
+        runFreeGeneration();
+        return;
+      }
+      if (t.closest('#miya-st-ig-free-save')) {
+        saveFreeGenerationToAlbum();
+        return;
+      }
     });
 
     root.addEventListener('change', function (e) {
@@ -1401,6 +1544,10 @@
     bindSettingsPanelEvents();
     ensurePresetsReady();
     syncSettingsFormFromConfig();
+    /* 上次会话残留的结果图没有对应的内存 blob（刷新后必然拿不到），
+       留着会让人以为「点了保存却没反应」，所以每次进面板都清回待输入状态。 */
+    resetFreeGenPreview();
+    setFreeBusy(false);
   }
 
   global.MiyaImageGen = {
@@ -1428,6 +1575,9 @@
     resumeMomentsImageGeneration: resumeMomentsImageGeneration,
     resolveReferenceDataUrl: resolveReferenceDataUrl,
     runTestGeneration: runTestGeneration,
+    runFreeGeneration: runFreeGeneration,
+    saveFreeGenerationToAlbum: saveFreeGenerationToAlbum,
+    resetFreeGenPreview: resetFreeGenPreview,
     onSettingsPanelOpen: onSettingsPanelOpen,
     syncSettingsFormFromConfig: syncSettingsFormFromConfig,
     ensurePresetsReady: ensurePresetsReady,
