@@ -957,8 +957,12 @@
         if (!btn) return;
         var next = btn.getAttribute('data-bf-layout') === 'custom' ? 'custom' : 'fixed';
         if (next === (isCustomLayoutMode() ? 'custom' : 'fixed')) return;
-        if (!global.miyaSwitchDeskLayout) return;
-        next = 'custom';
+        if (!global.miyaSwitchDeskLayout) {
+          toast('当前环境不支持切换布局');
+          return;
+        }
+        /* 此处曾有一行 `next = 'custom';` 无条件覆盖，
+           导致「固定布局」永远切不过去、对应提示也是死代码。现已移除。 */
         global.miyaSwitchDeskLayout(next).then(function () {
           syncUiFromTheme();
           refreshIconPreviews();

@@ -83,17 +83,29 @@
     });
   }
 
+  /** 主题 id 白名单取自 store 的唯一权威定义；store 未就绪时退回本地兜底（与 store 保持一致） */
+  var THEME_FALLBACK_IDS = ['gallery', 'ins', 'blossom', 'noir', 'custom'];
+  function chatThemeIds() {
+    var st = global.miyaChatStore;
+    var ids = st && st.CHAT_THEME_IDS;
+    return Array.isArray(ids) && ids.length ? ids : THEME_FALLBACK_IDS;
+  }
+
   function normalizeBeautify(raw) {
     var st = global.miyaChatStore;
     var d = st && st.defaultChatSettings ? st.defaultChatSettings().chatBeautify : {};
     if (!raw || typeof raw !== 'object') return Object.assign({}, d);
     var themeId = raw.themeId || d.themeId || 'gallery';
-    if (['gallery', 'ins', 'blossom', 'noir', 'custom'].indexOf(themeId) < 0) themeId = 'gallery';
+    if (chatThemeIds().indexOf(themeId) < 0) themeId = 'gallery';
     return {
       wallpaperMode: ['none', 'idb', 'url'].indexOf(raw.wallpaperMode) >= 0 ? raw.wallpaperMode : d.wallpaperMode,
       wallpaperId: raw.wallpaperId ? String(raw.wallpaperId) : null,
       wallpaperUrl: String(raw.wallpaperUrl || '').trim(),
-      themeId: raw.customCss ? 'custom' : (themeId === 'custom' ? 'custom' : themeId),
+      /* themeId 只由 themeId 决定（与离线侧同一语义）。
+         此处原为 `raw.customCss ? 'custom' : (themeId === 'custom' ? 'custom' : themeId)`：
+         前半段让残留 customCss 劫持用户所选主题，后半段两个分支恒等属半成品写法。
+         与 B1 是同一个 bug，此处为聊天侧残留。 */
+      themeId: themeId,
       customCss: String(raw.customCss || ''),
       bubbleMeCss: '',
       bubbleThemCss: '',
@@ -306,7 +318,8 @@
     if (!room) return Promise.resolve();
     bf = normalizeBeautify(bf);
     allThemeClasses().forEach(function (cls) { room.classList.remove(cls); });
-    room.classList.add(themeClassFor(bf.customCss ? 'custom' : bf.themeId));
+    /* 主题类只认 themeId，不再让 customCss 决定主题（同 B1） */
+    room.classList.add(themeClassFor(bf.themeId));
     room.classList.toggle('mq-has-custom-css', !!bf.customCss);
     room.classList.toggle(
       'mq-foot-wechat',
@@ -386,7 +399,12 @@
 
   function normalizePresetRow(raw) {
     if (!raw || !raw.name) return null;
-    return Object.assign({ name: String(raw.name).trim(), savedAt: raw.savedAt || Date.now() }, normalizeBeautify(raw));
+    var at = Number(raw.savedAt);
+    /* savedAt 只用于排序；补有限性校验（Infinity 是真值，`|| Date.now()` 兜不住） */
+    return Object.assign(
+      { name: String(raw.name).trim(), savedAt: isFinite(at) ? at : Date.now() },
+      normalizeBeautify(raw)
+    );
   }
 
   function hydratePresetsSync() {
@@ -424,15 +442,38 @@
   }
 
   function persistPresets(list) {
+    var prev = presetsCache;
+    var prevReady = presetsReady;
     presetsCache = Array.isArray(list) ? list.slice() : [];
     presetsReady = null;
-    if (typeof global.miyaWriteLsJsonKey === 'function') {
-      return global.miyaWriteLsJsonKey(PRESETS_LS, presetsCache).then(function () {
-        return presetsCache.slice();
-      });
+
+    if (typeof global.miyaWriteLsJsonKey !== 'function') {
+      try {
+        localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache));
+      } catch (e) {
+        /* 连 localStorage 都写不进：回滚缓存并显式失败，不再静默吞掉 */
+        presetsCache = prev;
+        presetsReady = prevReady;
+        return Promise.reject(new Error('preset_persist_failed'));
+      }
+      return Promise.resolve(presetsCache.slice());
     }
-    try { localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache)); } catch (e) {}
-    return Promise.resolve(presetsCache.slice());
+
+    /* miyaWriteLsJsonKey 的契约是「失败 resolve(false)」而非 reject，
+       早期这里只挂 .then() 无视入参，于是存储全挂时依然提示「预设已保存」，
+       刷新后预设消失。现在显式检查返回值，失败即回滚缓存 + reject。 */
+    return Promise.resolve(global.miyaWriteLsJsonKey(PRESETS_LS, presetsCache)).then(function (ok) {
+      if (ok === false) {
+        presetsCache = prev;
+        presetsReady = prevReady;
+        throw new Error('preset_persist_failed');
+      }
+      return presetsCache.slice();
+    }, function () {
+      presetsCache = prev;
+      presetsReady = prevReady;
+      throw new Error('preset_persist_failed');
+    });
   }
 
   function deletePreset(name) {
@@ -747,7 +788,8 @@
           refreshPresetSelect(root, row.name);
           toast('预设已保存');
         }).catch(function (err) {
-          if (err && err.message !== 'empty_name') toast('保存失败');
+          if (!err || err.message === 'empty_name') return;
+          toast(err.message === 'preset_persist_failed' ? '存储空间不足，预设未能保存' : '保存失败');
         });
         return;
       }

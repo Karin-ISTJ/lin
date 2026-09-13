@@ -867,3 +867,108 @@
   background: rgba(139, 115, 85, 0.12);
   color: var(--mc-accent, #8b7355);
 }
+
+/* ---------------------------------------------------------------- *
+ * 群聊记忆 · 事件账本（群设置里查看）
+ * ---------------------------------------------------------------- */
+
+.mi-ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mi-ledger-list--empty {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(139, 115, 85, 0.06);
+  color: rgba(26, 22, 18, 0.55);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mi-ledger-item {
+  border: 1px solid rgba(139, 115, 85, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+}
+
+.mi-ledger-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: rgba(26, 22, 18, 0.72);
+}
+
+.mi-ledger-item__head::-webkit-details-marker { display: none; }
+
+.mi-ledger-item__time {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.mi-ledger-item__scope {
+  flex-shrink: 0;
+  color: rgba(26, 22, 18, 0.45);
+  font-size: 11px;
+}
+
+.mi-ledger-item__body {
+  padding: 0 12px 10px;
+}
+
+.mi-ledger-item__event {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: rgba(26, 22, 18, 0.82);
+}
+
+.mi-ledger-item__who {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(139, 115, 85, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mi-ledger-item__felt {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: rgba(26, 22, 18, 0.68);
+}
+
+.mi-ledger-item__felt strong {
+  display: inline-block;
+  min-width: 3.5em;
+  margin-right: 6px;
+  color: var(--mc-accent, #8b7355);
+  font-weight: 600;
+}
+
+.mi-ledger-item__none {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: rgba(26, 22, 18, 0.42);
+}
+
+/* 账本来源标签：群聊封存 / 线下回流 */
+.mi-ledger-item__src {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  line-height: 16px;
+  font-weight: 600;
+  color: rgba(26, 22, 18, 0.55);
+  background: rgba(26, 22, 18, 0.06);
+}

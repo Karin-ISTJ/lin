@@ -119,6 +119,103 @@
     return '<div class="st-form-card ins-form-block' + (extraClass ? ' ' + extraClass : '') + '">' + inner + '</div>';
   }
 
+  /* ---------------------------------------------------------------- *
+   * 群聊记忆 · 事件账本
+   *
+   * 账本把群聊压成「客观事件 + 每人一句私人视角」，存进群 chatSettings。
+   * 各成员的单聊会读到自己的那一份 —— 让群聊不再演完就没了。
+   * 生命周期随群：解散群聊时 chat 被删，账本自动清空（无需额外清理）。
+   * ---------------------------------------------------------------- */
+
+  function ledgerApi() { return global.MiyaChatGroupLedger; }
+
+  function buildLedgerModuleHtml(chatId) {
+    var api = ledgerApi();
+    var rows = api && typeof api.listLedger === 'function' ? api.listLedger(chatId) : [];
+    var busy = api && typeof api.isGenerating === 'function' && api.isGenerating(chatId);
+    return (
+      '<p class="st-form-hint mi-set-field__sub">' +
+        '把这一段群聊封存成账本：一条客观事件（全员共享）+ 每位成员一句私人视角（只给他自己）。' +
+        '封存后，成员在自己的私聊里会记得群里发生的事，并可能受其影响。' +
+        '已封存 <strong>' + String(rows.length) + '</strong> 条。' +
+      '</p>' +
+      '<div class="mi-btn-row">' +
+        '<button type="button" class="st-action-btn" data-mq-grp-ledger-make' +
+          (busy ? ' disabled' : '') + '>' +
+          (busy ? '封存中…' : '封存本次群聊') +
+        '</button>' +
+        (rows.length
+          ? '<button type="button" class="st-action-btn" data-mq-grp-ledger-clear>清空账本</button>'
+          : '') +
+      '</div>'
+    );
+  }
+
+  function ledgerRowsHtml(chatId) {
+    var api = ledgerApi();
+    var rows = api && typeof api.listLedger === 'function' ? api.listLedger(chatId) : [];
+    if (!rows.length) {
+      return '<div class="mi-ledger-list mi-ledger-list--empty">尚无群聊记忆。封存后这里会列出每次事件。</div>';
+    }
+    var reversed = rows.slice().reverse();
+    return (
+      '<div class="mi-ledger-list">' +
+      reversed.map(function (row, i) {
+        var ts = '';
+        try {
+          ts = new Date(row.createdAt || Date.now()).toLocaleString('zh-CN', { hour12: false });
+        } catch (e) {}
+        var keys = Object.keys(row.perMember || {});
+        var n = keys.length;
+        /*
+         * 展开后展示各成员的私人视角 —— 方便核对「谁记住了什么」，
+         * 也便于发现模型是否写出了不该有的全知视角（穿帮）。
+         */
+        var whoHtml = keys.length
+          ? '<div class="mi-ledger-item__who">' +
+              keys.map(function (cid) {
+                var c = store && store.findContact ? store.findContact(cid) : null;
+                var nm = (c && c.name) || cid;
+                return '<p class="mi-ledger-item__felt">' +
+                  '<strong>' + esc(nm) + '</strong>' +
+                  esc(String(row.perMember[cid] || '')) +
+                  '</p>';
+              }).join('') +
+            '</div>'
+          : '<p class="mi-ledger-item__none">未生成成员视角（仅共享事件）。</p>';
+        var details =
+          '<div class="mi-ledger-item__body">' +
+            '<p class="mi-ledger-item__event">' + esc(row.eventText) + '</p>' +
+            whoHtml +
+          '</div>';
+        /*
+         * 来源标签：群聊封存 / 线下回流。
+         * 两种来源写进同一本账，不看标签用户没法分辨这条是「群里聊出来的」还是
+         * 「一起下线下去玩出来的」。
+         */
+        var isOffline = String(row.source || '') === 'offline';
+        var scene = String(row.sceneTitle || '').trim();
+        var srcHtml = isOffline
+          ? '<span class="mi-ledger-item__src">线下' + (scene ? ' · ' + esc(scene) : '') + '</span>'
+          : '<span class="mi-ledger-item__src">群聊</span>';
+        return (
+          '<details class="mi-ledger-item"' + (i === 0 ? ' open' : '') + '>' +
+            '<summary class="mi-ledger-item__head">' +
+              '<span class="mi-ledger-item__time">' + esc(ts) + '</span>' +
+              srcHtml +
+              '<span class="mi-ledger-item__scope">' +
+                '楼层 ' + String(row.startIndex || '?') + '–' + String(row.endIndex || '?') +
+                ' · ' + String(n) + ' 人视角' +
+              '</span>' +
+            '</summary>' +
+            details +
+          '</details>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
   function toggleRow(id, label, sub, on) {
     return '<div class="st-toggle-in-form">' +
       '<div class="st-toggle-in-form__text">' +
@@ -843,6 +940,13 @@
         subBlock('上下文用量', '点按卡片查看 Token 分区来源', buildContextSection())
       ) +
 
+      renderZone('ledger', '群聊记忆', '封存群内事件，渗入成员私聊',
+        subBlock('事件账本', '封存后，各位成员在私聊里会记得群里发生过的事',
+          formCard(buildLedgerModuleHtml(state.chatId)) +
+          (ledgerRowsHtml(state.chatId))
+        )
+      ) +
+
       renderZone('data', '数据管理', '导入导出、清空与解散',
         subBlock('聊天记录', '共 ' + formatNum(msgCount) + ' 条', formCard(
           '<div class="mi-btn-row">' +
@@ -1424,6 +1528,49 @@
       var delMega = e.target.closest('[data-mq-grp-del-mega]');
       if (delMega) {
         deleteSummaryItem('mega', delMega.getAttribute('data-mq-grp-del-mega'));
+        return;
+      }
+
+      if (e.target.closest('[data-mq-grp-ledger-make]')) {
+        var ledger = ledgerApi();
+        if (!ledger || typeof ledger.generateLedger !== 'function' || !state.chatId) return;
+        var cidMake = state.chatId;
+        var btn = e.target.closest('[data-mq-grp-ledger-make]');
+        btn.disabled = true;
+        btn.textContent = '封存中…';
+        ledger.generateLedger(cidMake).then(function (res) {
+          render();
+          if (res && res.ok) {
+            toast(res.hasPerMember ? '已封存群聊记忆' : '已封存事件（成员视角未生成）');
+          } else {
+            var code = res && res.error;
+            if (code === 'no_history') toast('本群还没有可封存的对话');
+            else if (code === 'api_missing') toast('未配置对话 API');
+            else if (code === 'empty_range') toast('没有新的对话可封存');
+            else if (code === 'busy') toast('正在封存中，请稍候');
+            else if (code === 'group_members_missing') toast('群成员不足两人');
+            else toast('封存失败，请重试');
+          }
+        });
+        return;
+      }
+
+      if (e.target.closest('[data-mq-grp-ledger-clear]')) {
+        var ledger2 = ledgerApi();
+        if (!ledger2 || typeof ledger2.saveLedger !== 'function' || !state.chatId) return;
+        dialog({
+          mode: 'confirm',
+          title: '清空群聊记忆',
+          message: '清空后，各成员将不再记得已封存的群内事件。确定继续？',
+          confirmText: '清空',
+          cancelText: '取消'
+        }).then(function (ok) {
+          if (!ok || !state.chatId) return;
+          ledger2.saveLedger(state.chatId, []).then(function () {
+            toast('群聊记忆已清空');
+            render();
+          });
+        });
         return;
       }
 

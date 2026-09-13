@@ -1490,13 +1490,25 @@
             end = resolveSummaryEndExcludingLatestUser(msgs, start);
         }
         if (end < start) return Promise.resolve(null);
-        var lines = msgs.slice(start - 1, end).map(function (m) {
-            var who =
-                m.role === 'user'
-                    ? (profile && profile.name) || '我'
-                    : (contact && contact.name) || '对方';
-            return who + '：' + String(m.content || '').trim();
-        });
+        /*
+         * 生成摘要素材时排除隐藏楼层。
+         * 序号口径与 summaryList 一致（getSessionMessages，仅排除 deleted），
+         * 因此这里按 i+1 判断区间覆盖是准确的；hidden 只决定「是否进摘要素材」。
+         * 若不排除，被隐藏的剧情会被写进纪要，再经纪要回流到线上上下文，
+         * 等于绕过了 hidden 的「不参与生成」语义。
+         */
+        var lines = msgs
+            .slice(start - 1, end)
+            .filter(function (m) {
+                return m && !m.hidden;
+            })
+            .map(function (m) {
+                var who =
+                    m.role === 'user'
+                        ? (profile && profile.name) || '我'
+                        : (contact && contact.name) || '对方';
+                return who + '：' + String(m.content || '').trim();
+            });
         if (!lines.length || !String(lines.join('\n')).trim()) {
             return Promise.resolve(null);
         }

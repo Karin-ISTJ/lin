@@ -75,20 +75,69 @@
     };
   }
 
+  /**
+   * 装饰项的数值字段此前只有 opacity 做了钳制，x/y/w/h/z 一律裸奔进 style 属性。
+   * 实测（Node 沙箱驱动真实 normalizeDecoItem）确认四类缺陷：
+   *   x: Infinity  → 生成 left:Infinitypx（Number(Infinity) 为真，`|| 0` 兜不住）
+   *   x: 1e30      → 生成 left:1e+30px（非法 CSS 值）
+   *   h: -50       → 负尺寸
+   *   opacity: NaN → Math.min(1, Math.max(0, NaN)) 结果仍是 NaN
+   * 另：w=0 会被 `|| 80` 悄悄改成 80（用户想隐藏却变成 80 宽）。
+   * 这里统一补上「有限数 + 值域」双重校验。
+   *
+   * 注：XSS 走不通 —— 字符串会被 Number() 转成 NaN 并回落默认值，属性无法突破；
+   *     所以这是健壮性/数据合法性修复，不是安全漏洞修复。
+   */
+  var DECO_LIMITS = {
+    pos: 4000,   /* 坐标绝对值上限：远超任何现实屏幕尺寸，纯防溢出 */
+    size: 4000,  /* 尺寸上限 */
+    minSize: 0,  /* 允许 0（0 表示该方向不渲染），但不许负数 */
+    maxZ: 999
+  };
+
+  /** 取有限数值；非法（NaN/Infinity/非数字）时返回 fallback */
+  function finiteNum(v, fallback) {
+    var n = Number(v);
+    return isFinite(n) ? n : fallback;
+  }
+
+  /** 有限数值 + 钳制到 [lo, hi] */
+  function clampNum(v, lo, hi, fallback) {
+    var n = finiteNum(v, fallback);
+    if (n < lo) return lo;
+    if (n > hi) return hi;
+    return n;
+  }
+
+  /** 装饰图 URL 走 store 的图片白名单（store 先于本模块加载）；store 未就绪则退回本地兜底 */
+  function safeDecoUrl(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    var st = global.miyaChatStore;
+    if (st && typeof st.sanitizeImageUrl === 'function') return st.sanitizeImageUrl(s);
+    if (!s) return '';
+    if (/[\u0000-\u001f\u007f]/.test(s)) return '';
+    if (/^(?:https?:\/\/|blob:)/i.test(s)) return s.length <= 2048 ? s : '';
+    if (/^data:image\/(?:png|jpeg|jpg|gif|webp|avif|bmp);base64,[a-z0-9+/=\s]+$/i.test(s)) return s;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return '';
+    return s.length <= 2048 ? s : '';
+  }
+
   function normalizeDecoItem(raw, idx) {
     if (!raw || typeof raw !== 'object') return null;
     var page = String(raw.page || 'all').trim();
     if (['all', 'msg', 'feed', 'contacts', 'mine'].indexOf(page) < 0) page = 'all';
+    var L = DECO_LIMITS;
     return {
       id: String(raw.id || 'deco-' + (idx != null ? idx : Date.now())),
       page: page,
-      url: String(raw.url || '').trim(),
-      x: Number(raw.x) || 0,
-      y: Number(raw.y) || 0,
-      w: Number(raw.w) || 80,
-      h: Number(raw.h) || 80,
-      z: Number(raw.z) || 1,
-      opacity: raw.opacity != null ? Math.min(1, Math.max(0, Number(raw.opacity))) : 1
+      url: safeDecoUrl(raw.url),
+      x: clampNum(raw.x, -L.pos, L.pos, 0),
+      y: clampNum(raw.y, -L.pos, L.pos, 0),
+      /* 尺寸用「缺省才回退」，不再用 `|| 80` —— 0 是用户的有效意图，不该被改写 */
+      w: clampNum(raw.w, L.minSize, L.size, 80),
+      h: clampNum(raw.h, L.minSize, L.size, 80),
+      z: clampNum(raw.z, 0, L.maxZ, 1),
+      opacity: clampNum(raw.opacity, 0, 1, 1)
     };
   }
 
@@ -396,7 +445,7 @@
     }
     return '<div class="cab-deco-list">' + items.map(function (item, i) {
       return '<div class="cab-deco-row" data-cab-deco-row="' + esc(item.id) + '">' +
-        '<div class="cab-deco-row__thumb" style="background-image:url(\'' + esc(item.url).replace(/'/g, '') + '\')"></div>' +
+        '<div class="cab-deco-row__thumb" style="background-image:url(\'' + esc(item.url).replace(/['\\()\s]/g, '') + '\')"></div>' +
         '<div class="cab-deco-row__meta">' +
           '<span>页面：' + esc(item.page === 'all' ? '全部' : item.page) + '</span>' +
           '<span>位置 ' + item.x + ',' + item.y + ' · ' + item.w + '×' + item.h + '</span>' +
@@ -444,10 +493,11 @@
             '<option value="mine">我的</option>' +
           '</select>' +
           '<div class="cab-deco-form__nums">' +
-            '<label>x<input type="number" class="mi-input" data-cab-deco-x value="0" step="1"></label>' +
-            '<label>y<input type="number" class="mi-input" data-cab-deco-y value="0" step="1"></label>' +
-            '<label>宽<input type="number" class="mi-input" data-cab-deco-w value="72" min="8" step="1"></label>' +
-            '<label>高<input type="number" class="mi-input" data-cab-deco-h value="72" min="8" step="1"></label>' +
+            '<label>x<input type="number" class="mi-input" data-cab-deco-x value="0" min="-4000" max="4000" step="1"></label>' +
+            '<label>y<input type="number" class="mi-input" data-cab-deco-y value="0" min="-4000" max="4000" step="1"></label>' +
+            '<label>宽<input type="number" class="mi-input" data-cab-deco-w value="72" min="0" max="4000" step="1"></label>' +
+            '<label>高<input type="number" class="mi-input" data-cab-deco-h value="72" min="0" max="4000" step="1"></label>' +
+            '<label>层级<input type="number" class="mi-input" data-cab-deco-z value="1" min="0" max="999" step="1"></label>' +
           '</div>' +
           '<button type="button" class="mi-pill mi-pill--dark" data-cab-deco-upload>上传装饰图</button>' +
           '<input type="file" accept="image/*" hidden data-cab-deco-file>' +
@@ -500,7 +550,9 @@
     var st = normalizeState(raw);
     return {
       name: String(raw.name).trim(),
-      savedAt: Number(raw.savedAt) || Date.now(),
+      /* savedAt 只用于排序；`Number(x) || Date.now()` 兜得住 NaN 却兜不住 Infinity
+         （Infinity 为真值），故补一次有限性校验。 */
+      savedAt: finiteNum(raw.savedAt, Date.now()),
       themeId: st.themeId,
       customCss: st.customCss,
       decoItems: st.decoItems
@@ -542,15 +594,38 @@
   }
 
   function persistPresets(list) {
+    var prev = presetsCache;
+    var prevReady = presetsReady;
     presetsCache = Array.isArray(list) ? list.slice() : [];
     presetsReady = null;
-    if (typeof global.miyaWriteLsJsonKey === 'function') {
-      return global.miyaWriteLsJsonKey(PRESETS_LS, presetsCache).then(function () {
-        return presetsCache.slice();
-      });
+
+    if (typeof global.miyaWriteLsJsonKey !== 'function') {
+      try {
+        localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache));
+      } catch (e) {
+        /* 连 localStorage 都写不进：回滚缓存并显式失败，不再静默吞掉 */
+        presetsCache = prev;
+        presetsReady = prevReady;
+        return Promise.reject(new Error('preset_persist_failed'));
+      }
+      return Promise.resolve(presetsCache.slice());
     }
-    try { localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache)); } catch (e) {}
-    return Promise.resolve(presetsCache.slice());
+
+    /* miyaWriteLsJsonKey 的契约是「失败 resolve(false)」而非 reject，
+       早期这里只挂 .then() 无视入参，于是存储全挂时依然提示「预设已保存」，
+       刷新后预设消失。现在显式检查返回值，失败即回滚缓存 + reject。 */
+    return Promise.resolve(global.miyaWriteLsJsonKey(PRESETS_LS, presetsCache)).then(function (ok) {
+      if (ok === false) {
+        presetsCache = prev;
+        presetsReady = prevReady;
+        throw new Error('preset_persist_failed');
+      }
+      return presetsCache.slice();
+    }, function () {
+      presetsCache = prev;
+      presetsReady = prevReady;
+      throw new Error('preset_persist_failed');
+    });
   }
 
   function buildPresetSelectOptions(selectedName) {
@@ -737,7 +812,8 @@
           refreshPresetSelect(root, row.name);
           toast('预设已保存');
         }).catch(function (err) {
-          if (err && err.message !== 'empty_name') toast('保存失败');
+          if (!err || err.message === 'empty_name') return;
+          toast(err.message === 'preset_persist_failed' ? '存储空间不足，预设未能保存' : '保存失败');
         });
         return;
       }
@@ -805,15 +881,16 @@
           var yInp = root.querySelector('[data-cab-deco-y]');
           var wInp = root.querySelector('[data-cab-deco-w]');
           var hInp = root.querySelector('[data-cab-deco-h]');
+          var zInp = root.querySelector('[data-cab-deco-z]');
           var item = normalizeDecoItem({
             id: 'deco-' + Date.now(),
             page: pageSel ? pageSel.value : 'all',
             url: url,
-            x: xInp ? Number(xInp.value) : 0,
-            y: yInp ? Number(yInp.value) : 0,
-            w: wInp ? Number(wInp.value) : 72,
-            h: hInp ? Number(hInp.value) : 72,
-            z: 2,
+            x: xInp ? xInp.value : 0,
+            y: yInp ? yInp.value : 0,
+            w: wInp ? wInp.value : 72,
+            h: hInp ? hInp.value : 72,
+            z: zInp ? zInp.value : 2,
             opacity: 1
           });
           var cur = getState();

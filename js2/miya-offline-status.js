@@ -6,7 +6,6 @@
 (function (global) {
     'use strict';
 
-    var FAB_POS_KEY = 'miya-offline-status-fab-pos-v1';
     var PRESETS_LS = 'miya-offline-status-presets-v1';
     var STATUS_LOG_MAX = 40;
 
@@ -17,9 +16,13 @@
     ];
 
     var panelEl = null;
-    var fabEl = null;
-    var dragState = null;
     var presetsCache = null;
+    /* 缓存建立时刻 + 对应的落盘原文指纹。
+       旧实现一旦缓存就永不重读 localStorage，多标签页里 A 页保存的预设
+       B 页永远看不到，只能靠刷新。改为：短 TTL 兜底 + storage 事件即时失效。 */
+    var presetsCacheAt = 0;
+    var PRESETS_CACHE_TTL_MS = 5000;
+    var presetsCacheRaw = '';
     var viewState = {
         chatId: '',
         sessionId: '',
@@ -63,20 +66,6 @@
         return eng && typeof eng.parseHeartVoiceFromReply === 'function' ? eng : null;
     }
 
-    function loadFabPos() {
-        try {
-            var raw = JSON.parse(localStorage.getItem(FAB_POS_KEY) || 'null');
-            if (raw && typeof raw.x === 'number' && typeof raw.y === 'number') return raw;
-        } catch (e) {}
-        return null;
-    }
-
-    function saveFabPos(pos) {
-        try {
-            localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos));
-        } catch (e) {}
-    }
-
     function getStatusSettings() {
         var st = apStore();
         if (st && typeof st.getStatusBar === 'function') return st.getStatusBar() || {};
@@ -94,18 +83,29 @@
         return !s || s.enabled !== false;
     }
 
+    /* 与心声侧 miya-chat-heartvoice-templates 保持一致的截断上限。
+       导入的是外部 JSON，不设上限时超大模板会把 localStorage 直接撑爆；
+       而 persistPresets 若静默吞掉 QuotaExceededError，就会出现
+       「本次会话看得到、重启后没了」且用户毫无提示的鬼影预设。 */
+    var MAX_CUSTOM_PROMPT_LEN = 50000;
+    var MAX_HTML_TEMPLATE_LEN = 200000;
+    var MAX_PRESET_NAME_LEN = 60;
+
     function normalizePreset(raw) {
         if (!raw || typeof raw !== 'object') return null;
-        var name = String(raw.name || '').trim();
+        var name = String(raw.name || '').trim().slice(0, MAX_PRESET_NAME_LEN);
         if (!name) return null;
         var fields = Array.isArray(raw.fields)
             ? raw.fields
+                  .slice(0, 40)
                   .map(function (f) {
-                      var n = String((f && f.name) || '').trim();
+                      var n = String((f && f.name) || '').trim().slice(0, 40);
                       if (!n) return null;
                       return {
                           name: n,
-                          requirement: String((f && f.requirement) || '').trim()
+                          requirement: String((f && f.requirement) || '')
+                              .trim()
+                              .slice(0, 4000)
                       };
                   })
                   .filter(Boolean)
@@ -113,32 +113,79 @@
         if (!fields.length) return null;
         return {
             name: name,
-            customPrompt: String(raw.customPrompt || '').trim(),
+            customPrompt: String(raw.customPrompt || '').trim().slice(0, MAX_CUSTOM_PROMPT_LEN),
             fields: fields,
-            htmlTemplate: String(raw.htmlTemplate || ''),
+            htmlTemplate: String(raw.htmlTemplate || '').slice(0, MAX_HTML_TEMPLATE_LEN),
             savedAt: Number(raw.savedAt) || Date.now()
         };
     }
 
+    /** 读取落盘原文（不做解析），用于缓存一致性比对 */
+    function readPresetsRaw() {
+        try {
+            return localStorage.getItem(PRESETS_LS) || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    /** 主动作废缓存（storage 事件、导入、删除等外部写入后调用） */
+    function invalidatePresetsCache() {
+        presetsCache = null;
+        presetsCacheAt = 0;
+        presetsCacheRaw = '';
+    }
+
     function loadPresets() {
-        if (presetsCache) return presetsCache;
+        var raw = readPresetsRaw();
+        /* 缓存有效条件：存在 + 未过 TTL + 落盘原文未变。
+           任一不满足就重读，兼顾性能与多标签页一致性。 */
+        if (
+            presetsCache &&
+            Date.now() - presetsCacheAt < PRESETS_CACHE_TTL_MS &&
+            raw === presetsCacheRaw
+        ) {
+            return presetsCache;
+        }
         var list = [];
         try {
-            var raw = JSON.parse(localStorage.getItem(PRESETS_LS) || '[]');
-            if (Array.isArray(raw)) {
-                list = raw.map(normalizePreset).filter(Boolean);
+            var parsed = JSON.parse(raw || '[]');
+            if (Array.isArray(parsed)) {
+                list = parsed.map(normalizePreset).filter(Boolean);
             }
         } catch (e) {}
         presetsCache = list;
+        presetsCacheAt = Date.now();
+        presetsCacheRaw = raw;
         return list;
     }
 
+    /**
+     * 落盘预设。成功返回 list，失败返回 null。
+     * 关键：不再静默吞配额错误 —— 先写盘、落盘成功后再更新 presetsCache，
+     * 避免「内存有、盘上没有」的不一致。配额不足时自动丢弃最旧的自定义预设重试。
+     */
     function persistPresets(list) {
-        presetsCache = Array.isArray(list) ? list : [];
-        try {
-            localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache));
-        } catch (e) {}
-        return presetsCache;
+        var next = Array.isArray(list) ? list : [];
+        var attempt = 0;
+        while (true) {
+            try {
+                var raw = JSON.stringify(next);
+                localStorage.setItem(PRESETS_LS, raw);
+                presetsCache = next;
+                presetsCacheAt = Date.now();
+                presetsCacheRaw = raw;
+                return next;
+            } catch (e) {
+                /* 配额不足：优先保留新导入的（在数组前部），从尾部裁掉旧的再试 */
+                if (next.length > 1 && attempt < 8) {
+                    next = next.slice(0, Math.max(1, next.length - 1));
+                    attempt += 1;
+                    continue;
+                }
+                return null;
+            }
+        }
     }
 
     function findOfflinePreset(name) {
@@ -160,19 +207,20 @@
             return p.name !== row.name;
         });
         list.unshift(row);
-        persistPresets(list);
-        return row;
+        /* 落盘失败（配额不足且裁无可裁）时返回 null，由调用方给出明确提示，
+           不能让用户以为保存成功了却什么都没有。 */
+        return persistPresets(list) ? row : null;
     }
 
     function deleteOfflinePreset(name) {
         var n = String(name || '').trim();
         if (!n) return false;
         var before = loadPresets().length;
-        persistPresets(
-            loadPresets().filter(function (p) {
-                return p.name !== n;
-            })
-        );
+        var kept = loadPresets().filter(function (p) {
+            return p.name !== n;
+        });
+        if (before === kept.length) return false;   /* 本来就不存在，别假装删了 */
+        if (!persistPresets(kept)) return false;
         var cur = String((getStatusSettings().presetName) || '').trim();
         if (cur === n || cur === 'offline:' + n) {
             saveStatusSettings({ presetName: '' });
@@ -402,14 +450,48 @@
         return fields;
     }
 
+    /**
+     * 角色名归一化：去掉所有空白（含全角空格 \u3000、不换行空格），
+     * 全角 ASCII 转半角，并去括号等装饰符，用于容错匹配。
+     * 例：「 角色 A 」「角色　A」「角色A（化名）」→ 同一 key。
+     */
+    function normalizeNameKey(raw) {
+        var s = String(raw || '');
+        /* 全角 → 半角（U+FF01–U+FF5E 映射到 U+0021–U+007E） */
+        s = s.replace(/[\uFF01-\uFF5E]/g, function (ch) {
+            return String.fromCharCode(ch.charCodeAt(0) - 0xfee0);
+        });
+        /* 常见的非断行 / 零宽空白统一清掉 */
+        s = s.replace(/[\s\u3000\u00a0\u200b-\u200d\ufeff]+/g, '');
+        /* 去掉包裹性装饰（括号、书名号、引号）与其内容中的常见修饰标记 */
+        s = s.replace(/[（(【\[《<].*?[）)】\]》>]/g, '');
+        s = s.replace(/["'“”‘’`·・]+/g, '');
+        return s.toLowerCase();
+    }
+
     function matchContactByName(castContacts, name) {
         var n = String(name || '').trim();
         var list = Array.isArray(castContacts) ? castContacts : [];
         if (!n) return list[0] || null;
         var found = null;
+        /* 一次精确匹配 */
         list.some(function (c) {
             if (!c) return false;
             if (String(c.name || '').trim() === n) {
+                found = c;
+                return true;
+            }
+            return false;
+        });
+        if (found) return found;
+        /* 二次归一化匹配：容忍 AI 输出里的空白 / 全角 / 括号差异。
+           旧实现只做精确匹配，多人场里「### 角色 A」与 cast 里的「角色A」
+           对不上就把整段静默丢弃并补空槽，用户看不出是 AI 漏写还是解析失败。 */
+        var key = normalizeNameKey(n);
+        if (!key) return null;
+        list.some(function (c) {
+            if (!c) return false;
+            if (normalizeNameKey(c.name) === key) {
                 found = c;
                 return true;
             }
@@ -421,20 +503,28 @@
     function parseStatusFromReply(rawText, castContacts) {
         var inner = extractStatusBlock(rawText);
         if (!inner) {
-            return { ok: false, entries: [], updatedAt: Date.now() };
+            return { ok: false, entries: [], unmatched: [], updatedAt: Date.now() };
         }
         var preset = resolveStatusPreset();
         var fieldNames = resolveFieldNames(preset);
         var sections = splitMultiSections(inner);
         var list = Array.isArray(castContacts) && castContacts.length ? castContacts : [{ id: '', name: '' }];
         var entries = [];
+        /* AI 写了段落但没能匹配上任何角色时记录下来，供 UI 提示，
+           避免「AI 漏写」与「解析失败」在用户侧无法区分。 */
+        var unmatched = [];
         if (sections.length === 1 && !sections[0].name && list.length === 1) {
             entries.push(makeEntry(list[0], parseFieldsFromInner(sections[0].body, fieldNames), preset));
         } else {
             sections.forEach(function (sec) {
                 var contact = matchContactByName(list, sec.name);
                 if (!contact && list.length === 1) contact = list[0];
-                if (!contact) return;
+                if (!contact) {
+                    if (sec.name || (sec.body && sec.body.trim())) {
+                        unmatched.push(String(sec.name || '(未命名段落)').trim());
+                    }
+                    return;
+                }
                 entries.push(makeEntry(contact, parseFieldsFromInner(sec.body, fieldNames), preset));
             });
             if (!entries.length && list[0]) {
@@ -459,7 +549,7 @@
                 })
             );
         });
-        return { ok: ok, entries: entries, updatedAt: Date.now() };
+        return { ok: ok, entries: entries, unmatched: unmatched, updatedAt: Date.now() };
     }
 
     function makeEntry(contact, fields, preset) {
@@ -479,7 +569,15 @@
     }
 
     function appendStatusLog(sess, pack) {
-        if (!sess || !pack || !pack.ok || !pack.entries || !pack.entries.length) return;
+        if (!sess || !pack) return;
+        /* 有段落没匹配上任何角色：明示出来。
+           旧实现静默丢弃并补空槽，用户无法区分是 AI 漏写还是解析失败。 */
+        if (pack.unmatched && pack.unmatched.length) {
+            try {
+                toast('状态栏：未匹配到角色 —— ' + pack.unmatched.join('、'));
+            } catch (e) {}
+        }
+        if (!pack.ok || !pack.entries || !pack.entries.length) return;
         var log = Array.isArray(sess.statusLog) ? sess.statusLog.slice() : [];
         log.unshift({
             updatedAt: pack.updatedAt || Date.now(),
@@ -658,8 +756,24 @@
         var fileInp2 = panelEl.querySelector('#xw-status-import-file');
         if (fileInp2) {
             fileInp2.addEventListener('change', function () {
-                importPresetFiles(fileInp2.files);
+                var picked = fileInp2.files;
                 fileInp2.value = '';
+                if (!picked || !picked.length) return;
+                /* 导入的是外部文件，其 htmlTemplate 会以代码形式在 iframe 内执行。
+                   模板已被 sandbox 隔离（拿不到本机数据），但仍有网络出口，
+                   因此明确告知来源要求，避免用户随意导入群里的陌生 JSON。 */
+                var ask = global.miyaDialog && global.miyaDialog.confirm
+                    ? global.miyaDialog.confirm({
+                          title: '导入预设',
+                          message:
+                              '预设中的自定义模板会以代码形式运行。\n' +
+                              '沙箱已隔离本机数据，但模板仍可联网，请仅导入可信来源的文件。\n\n确定继续导入？'
+                      })
+                    : Promise.resolve(window.confirm('模板将以代码运行，请仅导入可信来源。继续？'));
+                ask.then(function (ok) {
+                    if (!ok) return;
+                    importPresetFiles(picked);
+                });
             });
         }
         return panelEl;
@@ -670,6 +784,13 @@
         var sel = panelEl.querySelector('#xw-status-preset');
         if (!sel) return;
         var cur = String((getStatusSettings().presetName) || '').trim();
+        /* 统一先解析成「带来源前缀的 key」，后续 selected 判断只认 key。
+           旧实现用 `key === cur || p.name === cur` 双条件，
+           当线下与心声库存在同名预设时两个 option 都会被标记 selected ——
+           浏览器保留最后一个（心声库），而 parsePresetKey 解析纯名时优先线下，
+           于是「UI 显示选中的」与「实际生效的」不是同一个预设。 */
+        var parsedCur = parsePresetKey(cur);
+        var resolvedKey = encodePresetKey(parsedCur.source, parsedCur.name);
         var opts = '<option value="">内置 · Ins 简约</option>';
         var offline = loadPresets();
         if (offline.length) {
@@ -680,7 +801,7 @@
                     '<option value="' +
                     esc(key) +
                     '"' +
-                    (key === cur || p.name === cur ? ' selected' : '') +
+                    (key === resolvedKey ? ' selected' : '') +
                     '>' +
                     esc(p.name) +
                     '</option>';
@@ -699,7 +820,7 @@
                         '<option value="' +
                         esc(key) +
                         '"' +
-                        (key === cur || p.name === cur ? ' selected' : '') +
+                        (key === resolvedKey ? ' selected' : '') +
                         '>' +
                         esc(p.name) +
                         '</option>';
@@ -708,14 +829,17 @@
             }
         }
         sel.innerHTML = opts;
-        if (cur) sel.value = cur;
-        if (sel.value !== cur && cur.indexOf(':') < 0) {
-            /* 兼容旧纯名 */
-            var offKey = encodePresetKey('offline', cur);
-            var hvKey = encodePresetKey('hv', cur);
-            if ([].some.call(sel.options, function (o) { return o.value === offKey; })) sel.value = offKey;
-            else if ([].some.call(sel.options, function (o) { return o.value === hvKey; })) sel.value = hvKey;
+        if (resolvedKey) sel.value = resolvedKey;
+        /* 若解析出的来源在 UI 里没有对应项（例如心声库那条被删了），
+           退回到唯一存在的同名项，保证「显示的」与「生效的」始终一致。 */
+        if (resolvedKey && sel.value !== resolvedKey) {
+            var altKey = resolvedKey.indexOf('hv:') === 0
+                ? encodePresetKey('offline', resolvedKey.slice(3))
+                : encodePresetKey('hv', resolvedKey.slice(8));
+            if ([].some.call(sel.options, function (o) { return o.value === altKey; })) sel.value = altKey;
+            else sel.value = '';
         }
+        if (!cur) sel.value = '';
     }
 
     function currentSelectedPreset() {
@@ -754,7 +878,7 @@
                 saveStatusSettings({ presetName: encodePresetKey('offline', row.name) });
                 fillPresetSelect();
                 toast('已保存「' + row.name + '」');
-            } else toast('保存失败');
+            } else toast('保存失败：本地存储空间不足，请先删除部分自定义预设');
         });
     }
 
@@ -859,6 +983,7 @@
         if (!files.length) return;
         var ok = 0;
         var fail = 0;
+        var quotaFail = 0;
         var lastName = '';
         var chain = Promise.resolve();
         files.forEach(function (file) {
@@ -871,8 +996,10 @@
                             var row = parseImportPayload(raw, file && file.name);
                             if (!row) {
                                 fail += 1;
+                            } else if (!saveOfflinePreset(row.name, row)) {
+                                /* normalizePreset 通过但落盘失败 → 几乎必然是配额不足 */
+                                quotaFail += 1;
                             } else {
-                                saveOfflinePreset(row.name, row);
                                 lastName = row.name;
                                 ok += 1;
                             }
@@ -895,9 +1022,20 @@
             }
             fillPresetSelect();
             paintPanel();
-            if (ok && !fail) toast('导入成功 ' + ok + ' 个');
-            else if (ok) toast('导入完成：成功 ' + ok + '，失败 ' + fail);
-            else toast('导入失败，请选择 miyastatus / miyavoice JSON');
+            if (quotaFail && !ok && !fail) {
+                toast('导入失败：本地存储空间不足，请先删除部分自定义预设');
+            } else if (ok && !fail && !quotaFail) {
+                toast('导入成功 ' + ok + ' 个');
+            } else if (ok || !fail) {
+                toast(
+                    '导入完成：成功 ' +
+                        ok +
+                        (quotaFail ? '，空间不足 ' + quotaFail : '') +
+                        (fail ? '，格式错误 ' + fail : '')
+                );
+            } else {
+                toast('导入失败，请选择 miyastatus / miyavoice JSON');
+            }
         });
     }
 
@@ -1141,6 +1279,12 @@
         panelEl.setAttribute('aria-hidden', 'true');
     }
 
+    /* 线下状态悬浮圆钮已整体移除（产品决定），这里只保留接口形状，全部 no-op。
+       旧实现的问题：CSS 用 !important 把它藏起来、syncFab 也无条件 hidden=true，
+       但 ensureFab 仍会被调用方触发 —— 结果往 DOM 里塞了一个看不见的 <button>，
+       并给 window 重复挂上 mousemove / touchmove / mouseup / touchend 监听
+       （ensureFab 一旦重建节点就会再挂一轮），纯属徒增开销与被误触风险。
+       现在不建节点、不绑事件；设置面板里的悬浮球相关 UI 也已同步移除。 */
     var DEFAULT_FAB_ICON =
         '<svg class="xw-status-fab__icon" viewBox="0 0 24 24" aria-hidden="true">' +
         '<circle cx="12" cy="12" r="8.2"/>' +
@@ -1148,129 +1292,35 @@
         '</svg>';
 
     function getFabIconUrl() {
-        return String((getStatusSettings().fabIconUrl) || '').trim();
-    }
-
-    function fabInnerHtml() {
-        var url = getFabIconUrl();
-        if (url) {
-            return '<img class="xw-status-fab__img" src="' + esc(url) + '" alt="">';
-        }
-        return DEFAULT_FAB_ICON;
+        return '';
     }
 
     function applyFabAppearance() {
-        ensureFab();
-        if (!fabEl) return;
-        var url = getFabIconUrl();
-        fabEl.classList.toggle('is-custom', !!url);
-        fabEl.innerHTML = fabInnerHtml();
+        /* 悬浮球已移除，无外观可应用 */
     }
 
     function ensureFab() {
-        var app = document.getElementById('miya-offline-app');
-        if (!app) return null;
-        if (fabEl && fabEl.isConnected) return fabEl;
-        fabEl = document.createElement('button');
-        fabEl.type = 'button';
-        fabEl.id = 'xw-status-fab';
-        fabEl.className = 'xw-status-fab';
-        fabEl.setAttribute('aria-label', '本轮状态');
-        fabEl.title = '本轮状态';
-        fabEl.innerHTML = fabInnerHtml();
-        if (getFabIconUrl()) fabEl.classList.add('is-custom');
-        app.appendChild(fabEl);
-        var pos = loadFabPos();
-        if (pos) {
-            fabEl.style.left = pos.x + 'px';
-            fabEl.style.top = pos.y + 'px';
-            fabEl.style.right = 'auto';
-            fabEl.style.bottom = 'auto';
-        }
-        bindFabDrag(fabEl);
-        return fabEl;
-    }
-
-    function bindFabDrag(el) {
-        var moved = false;
-        function onDown(ev) {
-            if (ev.type === 'mousedown' && ev.button !== 0) return;
-            var point = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
-            var rect = el.getBoundingClientRect();
-            dragState = {
-                ox: point.clientX - rect.left,
-                oy: point.clientY - rect.top,
-                moved: false
-            };
-            moved = false;
-            el.classList.add('is-dragging');
-            ev.preventDefault();
-        }
-        function onMove(ev) {
-            if (!dragState) return;
-            var point = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
-            var app = document.getElementById('miya-offline-app');
-            var box = app
-                ? app.getBoundingClientRect()
-                : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-            var x = point.clientX - box.left - dragState.ox;
-            var y = point.clientY - box.top - dragState.oy;
-            var maxX = Math.max(8, box.width - el.offsetWidth - 8);
-            var maxY = Math.max(8, box.height - el.offsetHeight - 8);
-            x = Math.min(maxX, Math.max(8, x));
-            y = Math.min(maxY, Math.max(8, y));
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
-            el.style.right = 'auto';
-            el.style.bottom = 'auto';
-            dragState.moved = true;
-            moved = true;
-            if (ev.cancelable) ev.preventDefault();
-        }
-        function onUp() {
-            if (!dragState) return;
-            el.classList.remove('is-dragging');
-            if (dragState.moved) {
-                saveFabPos({
-                    x: parseFloat(el.style.left) || 0,
-                    y: parseFloat(el.style.top) || 0
-                });
-            }
-            dragState = null;
-        }
-        el.addEventListener('mousedown', onDown);
-        el.addEventListener('touchstart', onDown, { passive: false });
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('touchmove', onMove, { passive: false });
-        window.addEventListener('mouseup', onUp);
-        window.addEventListener('touchend', onUp);
-        el.addEventListener('click', function (e) {
-            if (moved) {
-                e.preventDefault();
-                e.stopPropagation();
-                moved = false;
-                return;
-            }
-            var appUi = global.miyaOfflineApp;
-            var ctx = appUi && typeof appUi.getStatusContext === 'function' ? appUi.getStatusContext() : null;
-            if (!ctx || !ctx.chatId) return;
-            openPanel(ctx);
-        });
+        /* 不再创建任何 DOM 节点 */
+        return null;
     }
 
     function syncFab(visible) {
-        // 线下状态悬浮圆钮已移除；状态栏本身仍可按原逻辑工作。
-        if (fabEl) {
-            fabEl.hidden = true;
-            fabEl.setAttribute('aria-hidden', 'true');
-            fabEl.classList.remove('is-show');
-        }
+        /* 悬浮球已移除；状态栏本身仍可按原逻辑工作 */
     }
 
     function hideAll() {
         closePanel();
         syncFab(false);
     }
+
+    /* 多标签页同步：其它页写入预设后本页缓存立即作废。
+       storage 事件只在「其它标签页」修改时触发，本页自身写入不会触发，故无回环风险。 */
+    try {
+        window.addEventListener('storage', function (e) {
+            if (!e || e.key !== PRESETS_LS) return;
+            invalidatePresetsCache();
+        });
+    } catch (e) {}
 
     global.MiyaOfflineStatus = {
         isEnabled: isEnabled,
@@ -1287,6 +1337,7 @@
         getStatusSettings: getStatusSettings,
         resolveStatusPreset: resolveStatusPreset,
         loadPresets: loadPresets,
+        invalidatePresetsCache: invalidatePresetsCache,
         saveOfflinePreset: saveOfflinePreset,
         deleteOfflinePreset: deleteOfflinePreset,
         builtinFields: BUILTIN_FIELDS,

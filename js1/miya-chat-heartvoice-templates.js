@@ -665,6 +665,22 @@
   }
 
   /**
+   * 挂载交互 HTML 用的 iframe sandbox 策略（统一口径）。
+   *
+   * 保留 `allow-scripts` 让用户自写模版的翻页 / 表单 / 事件等交互照常可用；
+   * 但**绝不**加 `allow-same-origin` —— 一旦同时拥有脚本执行与同源身份，
+   * iframe 内的脚本就能读 `parent.document`、摸到宿主 localStorage，
+   * 于是「导入一个外部 JSON」就等于「把全部聊天记录交出去」。
+   * 去掉 same-origin 后 iframe 落入不透明源：脚本仍可运行，
+   * 但拿不到宿主存储、Cookie 与 DOM，导入路径与自写路径风险拉平。
+   */
+  var INTERACTIVE_SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads';
+
+  function interactiveSandboxAttr() {
+    return INTERACTIVE_SANDBOX;
+  }
+
+  /**
    * 用 iframe+srcdoc 挂载，脚本/按钮/翻页等交互可完整执行；
    * 事件留在框内，不与心声面板关闭/历史点击冲突。
    */
@@ -675,7 +691,9 @@
     var frame = document.createElement('iframe');
     frame.className = opts.frameClass || 'mc-hv__interactive-frame';
     frame.setAttribute('title', opts.title || '自定义心声');
-    /* 不设 sandbox：用户自写模版需完整执行 script / 翻页 / 表单等交互 */
+    /* 统一上 sandbox：allow-scripts 保住交互，不给 same-origin 隔断宿主访问 */
+    frame.setAttribute('sandbox', interactiveSandboxAttr());
+    frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.setAttribute('allow', 'autoplay; clipboard-write; fullscreen');
     frame.srcdoc = buildInteractiveDocument(html);
     container.appendChild(frame);

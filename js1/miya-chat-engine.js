@@ -2727,6 +2727,30 @@
         if (offSumText) {
             apiMessages.push({ role: 'system', content: offSumText });
         }
+        /*
+         * 群聊记忆：该联系人在群里经历过的事，渗入他的单聊上下文。
+         *
+         * 只在单聊注入 —— 群聊自己不需要看到「自己在群里的记忆」（那是它正发生在的事）。
+         * 账本按 contactId 取本人视角，天然不穿帮：A 拿不到 B 的内心活动。
+         */
+        if (!opts.appointmentMode && !opts.callMode && contact && contact.id) {
+            var gleMod = global.MiyaChatGroupLedger;
+            if (gleMod && typeof gleMod.buildLedgerBlockForContact === 'function') {
+                try {
+                    var gleBlock = String(gleMod.buildLedgerBlockForContact(contact.id) || '').trim();
+                    if (gleBlock) {
+                        apiMessages.push({
+                            role: 'system',
+                            content:
+                                '【群聊记忆·只读】\n' +
+                                '以下是该角色在群聊中亲身经历过的事（不是本次私聊的内容）。\n' +
+                                '他知道这些事，可以自然提及或受其影响，但不要复述成聊天记录格式，也不要在私聊里假装那是你们两人的对话。\n\n' +
+                                gleBlock
+                        });
+                    }
+                } catch (eGle) {}
+            }
+        }
         if (
             offlineCrossSlots.length &&
             apMem &&

@@ -328,7 +328,7 @@
   }
 
   var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'memory', 'backup'];
-  var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket', 'werewolf'];
+  var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -382,13 +382,6 @@
       '<path d="M3 10h18" stroke="currentColor" stroke-width="1.5"/>' +
       '<circle cx="12" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
       '</svg>',
-    werewolf:
-      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-      '<path d="M4 4l3 3 5-3 5 3 3-3v7c0 4.5-3.6 8-8 8s-8-3.5-8-8V4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>' +
-      '<circle cx="9.2" cy="10.6" r="1.15" fill="currentColor"/>' +
-      '<circle cx="14.8" cy="10.6" r="1.15" fill="currentColor"/>' +
-      '<path d="M9.5 15.2c.7.9 1.6 1.35 2.5 1.35s1.8-.45 2.5-1.35" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
-      '</svg>',
     backup:
       '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
     memory:
@@ -409,7 +402,6 @@
     narration: '旁白模式',
     thinking: '思维链',
     groupRedPacket: '红包',
-    werewolf: '狼人杀',
     memory: '记忆表',
     backup: '备份'
   };
@@ -2748,7 +2740,7 @@
         '</div>' +
         '<iframe class="qq-room__html-iframe" data-miya-chat-html-iframe="1" data-miya-chat-srcdoc-b64="' +
         esc(b64) +
-        '" sandbox="allow-scripts allow-modals allow-same-origin" referrerpolicy="no-referrer" title="HTML 交互页"></iframe>' +
+        '" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerpolicy="no-referrer" title="HTML 交互页"></iframe>' +
         edited +
         '</div>'
       );
@@ -3780,14 +3772,6 @@
     if (global.MiyaChatVoiceRecord && typeof global.MiyaChatVoiceRecord.destroyActive === 'function') {
       global.MiyaChatVoiceRecord.destroyActive();
     }
-    /*
-     * 通知狼人杀面板：它被关掉了。
-     * 面板里的「确认清空」是个一次性的中间态，关掉面板就该作废 ——
-     * 否则用户点过一次「清空记录」又直接关掉，下次打开会看到按钮
-     * 还停在「确认清空」，像是没清干净。切群时 openPanel 也会重置。
-     */
-    var wwPanel = global.MiyaChatGroupWerewolf;
-    if (wwPanel && typeof wwPanel.onPanelClose === 'function') wwPanel.onPanelClose();
     var ov = $('qq-room-overlay');
     if (ov) { ov.hidden = true; ov.innerHTML = ''; }
     restoreComposeAfterOverlay();
@@ -4312,20 +4296,6 @@
     openEmojiPanel();
   }
 
-  function openWerewolfSheet() {
-    if (!isGroupRoom()) {
-      toast('狼人杀仅支持群聊');
-      return;
-    }
-    var ww = global.MiyaChatGroupWerewolf;
-    if (!ww || typeof ww.openPanel !== 'function') {
-      toast('狼人杀模块未加载');
-      return;
-    }
-    closeToolbarPanel();
-    ww.openPanel(store, state.chatId, openOverlay);
-  }
-
   function openGroupRedPacketSheet() {
     if (!isGroupRoom()) return;
     var grpRp = global.MiyaChatGroupRedPacket;
@@ -4600,7 +4570,6 @@
     else if (key === 'redo' || key === 'camera') toolRegenerate();
     else if (key === 'emoji') toolEmoji();
     else if (key === 'groupRedPacket') openGroupRedPacketSheet();
-    else if (key === 'werewolf') openWerewolfSheet();
     else if (key === 'transfer') openTransferSheet();
     else if (key === 'takeout') openTakeoutSheet();
     else if (key === 'gift') openGiftSheet();
@@ -5365,8 +5334,27 @@
       offlineBtn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        if (global.miyaOfflineApp && typeof global.miyaOfflineApp.open === 'function') {
-          global.miyaOfflineApp.open();
+        var ofl = global.miyaOfflineApp;
+        if (!ofl) {
+          toast('线下功能未加载');
+          return;
+        }
+        /*
+         * 群聊里的线下：整群一起下场。
+         * 与私聊的区别不只是「多几个人」—— 出场内容会回流成群账本，
+         * 于是没被带下去的其他事、以及其他成员之后在私聊里，都能知道这一趟。
+         * 所以这里必须把群 id 传进去，不能走无参的 open()。
+         */
+        if (isGroupRoom() && state.chatId) {
+          if (typeof ofl.openForGroup === 'function') {
+            ofl.openForGroup(state.chatId);
+          } else {
+            toast('线下功能版本过旧，请刷新页面');
+          }
+          return;
+        }
+        if (typeof ofl.open === 'function') {
+          ofl.open();
         } else {
           toast('线下功能未加载');
         }
@@ -5435,16 +5423,6 @@
           e.preventDefault();
           e.stopPropagation();
           farmApiClick.handlePanelClick(store, state.chatId, t, toast, openOverlay);
-          return;
-        }
-      }
-      // 狼人杀面板
-      if (t.closest && t.closest('[data-ww-act]')) {
-        var wwApiClick = global.MiyaChatGroupWerewolf;
-        if (wwApiClick && state.chatId && typeof wwApiClick.handlePanelClick === 'function') {
-          e.preventDefault();
-          e.stopPropagation();
-          wwApiClick.handlePanelClick(store, state.chatId, t, toast, openOverlay, global.miyaChatEngine);
           return;
         }
       }

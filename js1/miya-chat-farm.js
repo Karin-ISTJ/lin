@@ -11,7 +11,6 @@
   var MAX_PLOTS = 8;
   var MAX_LOG = 40;
   var STAGE_MS = 2 * 3600000;       // 每阶段约 2 小时
-  var DRY_KILL_MS = 16 * 3600000;   // 发芽后 16 小时不浇水 → 枯死
   // 概率递增（连续未中时缓慢上升，出货后清零）。注意这不是"保底必出"，
   // 只是概率逐次提高，所以文案统一表述为「每失手一次 +N%」。
   var FOUR_LEAF_BASE = 0.06;        // 四叶草基础 6%
@@ -82,7 +81,6 @@
     green: { id: 'green', name: '绿植', stages: ['🌱', '🌿', '🍀'], matureIndex: 2, sellPrice: 4, seed: true }
   };
 
-  var DEAD_ICON = '🍂';
   var CROP_IDS = Object.keys(CROPS);
   var SEED_IDS = CROP_IDS.filter(function (id) { return CROPS[id].seed !== false; });
 
@@ -168,7 +166,6 @@
       plantedAt: num(p.plantedAt) || now(),
       wateredAt: num(p.wateredAt) || num(p.plantedAt) || now(),
       lastTickAt: num(p.lastTickAt) || num(p.plantedAt) || now(),
-      dead: p.dead === true,
       stolen: p.stolen === true,
       stolenAt: num(p.stolenAt) || 0
     };
@@ -249,30 +246,32 @@
     return a;
   }
 
+  /**
+   * 推进一块地的状态。
+   *
+   * 这里只做一件事：按现实时钟把生长阶段往前推。
+   *
+   * 历史上这里还有一套「发芽后断水 DRY_KILL_MS 就枯死」的机制，已经移除：
+   * 全部作物的成熟期都只有 4~6 小时，远短于枯萎阈值，那套判定在任何时间点
+   * 都不可能触发（是一段死代码），而规则上它又只会惩罚「睡了一觉/出差回来」
+   * 的玩家 —— 一个休闲农场不该因为玩家离线而没收收成。
+   *
+   * 因此现在的规则很简单：种下 → 到点长大 → 到点成熟 → 成熟后永久停在原地，
+   * 不枯萎、不腐烂、不会自己消失，等到被收获为止。
+   */
   function tickPlot(plot, at) {
     at = at || now();
-    if (!plot || plot.dead || plot.stolen) return plot;
+    if (!plot || plot.stolen) return plot;
     var crop = cropOf(plot.cropId);
     if (!crop) return plot;
 
-    if (plot.stage >= 1) {
-      var sinceWater = at - (plot.wateredAt || plot.plantedAt);
-      if (sinceWater > DRY_KILL_MS) {
-        plot.dead = true;
-        plot.lastTickAt = at;
-        return plot;
-      }
+    if (plot.stage < crop.matureIndex) {
+      var elapsed = at - (plot.plantedAt || at);
+      var expected = Math.min(crop.matureIndex, Math.floor(elapsed / STAGE_MS));
+      if (expected > plot.stage) plot.stage = expected;
     }
-    if (plot.stage >= crop.matureIndex) {
-      plot.lastTickAt = at;
-      return plot;
-    }
-    var elapsed = at - (plot.plantedAt || at);
-    var expected = Math.min(crop.matureIndex, Math.floor(elapsed / STAGE_MS));
-    if (expected > plot.stage) {
-      plot.stage = expected;
-      plot.lastTickAt = at;
-    }
+
+    plot.lastTickAt = at;
     return plot;
   }
 
@@ -308,7 +307,6 @@
 
   function plotIcon(plot) {
     if (!plot) return '⬜';
-    if (plot.dead) return DEAD_ICON;
     if (plot.stolen) return '🕳️';
     var crop = cropOf(plot.cropId);
     if (!crop) return '❓';
@@ -318,7 +316,6 @@
   function plotLabel(plot) {
     var crop = cropOf(plot.cropId);
     if (!crop) return '空地';
-    if (plot.dead) return crop.name + '（枯了）';
     if (plot.stolen) return crop.name + '（被偷）';
     if (plot.stage >= crop.matureIndex) return crop.name + '（成熟）';
     return crop.name + '（生长中）';
@@ -326,7 +323,7 @@
 
   function nextStageIn(plot, at) {
     at = at || now();
-    if (!plot || plot.dead || plot.stolen) return 0;
+    if (!plot || plot.stolen) return 0;
     var crop = cropOf(plot.cropId);
     if (!crop || plot.stage >= crop.matureIndex) return 0;
     return Math.max(0, (plot.plantedAt || at) + (plot.stage + 1) * STAGE_MS - at);
@@ -338,7 +335,7 @@
   }
 
   function activePlotCount(list) {
-    return (list || []).filter(function (p) { return !p.dead && !p.stolen; }).length;
+    return (list || []).filter(function (p) { return !p.stolen; }).length;
   }
 
   // —— 操作 ——
@@ -381,6 +378,26 @@
     });
   }
 
+  /**
+   * mutateFarm 的「永远返回 Promise」包装。
+   *
+   * 为什么需要它：mutateFarm 为了兼顾同步调用方（plant/water/harvest 等
+   * 都要当场拿到结果去弹 toast 和重渲染），失败时返回的是裸对象、成功时才返回
+   * Promise —— 返回类型不固定。而 sell / sellAll 因为要等入账完成，调用方写的是
+   * `sell(...).then(...)`。一旦走到「仓库没有该作物」「钱包不可用」这类失败分支，
+   * mutateFarm 返回裸对象，`.then` 就是 undefined，直接 TypeError。
+   *
+   * 所以这里统一抹平：无论成败都包成 Promise，让异步调用方可以无条件 .then。
+   * 不要改 mutateFarm 本体去「一律返回 Promise」—— 那会打断上面几个同步调用方。
+   */
+  function mutateFarmAsync(store, chatId, mutator) {
+    try {
+      return Promise.resolve(mutateFarm(store, chatId, mutator));
+    } catch (e) {
+      return Promise.resolve({ ok: false, error: (e && e.message) || '操作失败' });
+    }
+  }
+
   function plant(store, chatId, owner, cropId) {
     var crop = cropOf(cropId);
     if (!crop) return { ok: false, error: '未知作物' };
@@ -397,7 +414,6 @@
         plantedAt: now(),
         wateredAt: now(),
         lastTickAt: now(),
-        dead: false,
         stolen: false
       };
       farm[key].push(plot);
@@ -411,7 +427,6 @@
       var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
       var plot = findPlot(farm[key], plotId);
       if (!plot) return { ok: false, error: '找不到这块地' };
-      if (plot.dead) return { ok: false, error: '已经枯了，浇也救不活' };
       if (plot.stolen) return { ok: false, error: '已经被偷走了' };
       plot.wateredAt = now();
       var cname = (cropOf(plot.cropId) || {}).name || '作物';
@@ -426,7 +441,6 @@
       var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
       var plot = findPlot(farm[key], plotId);
       if (!plot) return { ok: false, error: '找不到这块地' };
-      if (plot.dead) return { ok: false, error: '枯了，收不了' };
       if (plot.stolen) return { ok: false, error: '已经被偷走了' };
       var crop = cropOf(plot.cropId);
       if (!crop || plot.stage < crop.matureIndex) return { ok: false, error: '还没成熟' };
@@ -466,7 +480,7 @@
       var key = 'rolePlots';
       var plot = findPlot(farm[key], plotId);
       if (!plot) return { ok: false, error: '找不到这块地' };
-      if (plot.dead || plot.stolen) return { ok: false, error: '这块地没得偷' };
+      if (plot.stolen) return { ok: false, error: '这块地没得偷' };
       var crop = cropOf(plot.cropId);
       if (!crop || plot.stage < crop.matureIndex) return { ok: false, error: '还没成熟，偷不了' };
 
@@ -497,7 +511,7 @@
         ? findPlot(farm.playerPlots, plotId)
         : (cropId ? firstMatureByCrop(farm.playerPlots, cropId) : firstMature(farm.playerPlots));
       if (!target) return { ok: false, error: '没有可偷的作物' };
-      if (target.dead || target.stolen) return { ok: false, error: '这块地没得偷' };
+      if (target.stolen) return { ok: false, error: '这块地没得偷' };
       var c = cropOf(target.cropId);
       if (!c || target.stage < c.matureIndex) return { ok: false, error: '还没成熟，偷不了' };
 
@@ -507,13 +521,15 @@
     });
   }
 
-  function clearDead(store, chatId, owner, plotId) {
+  /** 清理地块：只处理被偷走的地（枯萎机制已移除，被偷的地需要手动翻新） */
+  function clearPlot(store, chatId, owner, plotId) {
     return mutateFarm(store, chatId, function (farm) {
       var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
       var plot = findPlot(farm[key], plotId);
       if (!plot) return { ok: false, error: '找不到' };
+      if (!plot.stolen) return { ok: false, error: '这块地不用清理' };
       farm[key] = farm[key].filter(function (p) { return p.id !== plotId; });
-      pushLog(farm, '清理了枯萎的' + ((cropOf(plot.cropId) || {}).name || '作物'), 'clear');
+      pushLog(farm, '翻新了被偷空的地块', 'clear');
       return { ok: true, farm: farm };
     });
   }
@@ -536,7 +552,7 @@
   function sell(store, chatId, cropId, qty) {
     var crop = cropOf(cropId);
     if (!crop) return Promise.resolve({ ok: false, error: '未知作物' });
-    return mutateFarm(store, chatId, function (farm) {
+    return mutateFarmAsync(store, chatId, function (farm) {
       var want = Math.floor(num(qty));
       if (!(want > 0)) want = farm.warehouse[cropId] || 0;
       var have = farm.warehouse[cropId] || 0;
@@ -573,7 +589,7 @@
   }
 
   function sellAll(store, chatId) {
-    return mutateFarm(store, chatId, function (farm) {
+    return mutateFarmAsync(store, chatId, function (farm) {
       var ids = Object.keys(farm.warehouse || {}).filter(function (k) { return farm.warehouse[k] > 0; });
       if (!ids.length) return { ok: false, error: '仓库是空的' };
 
@@ -616,16 +632,31 @@
   CROP_IDS.forEach(function (id) { NAME_TO_ID[CROPS[id].name] = id; });
   var CROP_NAME_RE = Object.keys(NAME_TO_ID).sort(function (a, b) { return b.length - a.length; }).join('|');
   var RE_STEAL_PLAYER = new RegExp('(?:偷(?:走|了)?|摘走了?|薅走了?)(?:了)?(?:你的|你种的|你家的)?(' + CROP_NAME_RE + ')', 'g');
+  /* 把字句：「我把你的番茄偷走了」—— 动词挪到了作物后面，上面的正则认不出 */
+  var RE_STEAL_PLAYER_BA = new RegExp('(?:把|将)(?:你的|你种的|你家的)?(' + CROP_NAME_RE + ')(?:给)?(?:偷走|偷了|摘走|摘了|薅走|薅了)', 'g');
   var RE_HELP_HARVEST = new RegExp('(?:帮你(?:收|收获|摘)|给你收了|帮你把)(?:了)?(?:你的)?(' + CROP_NAME_RE + ')', 'g');
   var RE_ROLE_PLANT = new RegExp('(?:我(?:也)?种了|我在农场种了|我播了)(?:一[颗株垄批])?(' + CROP_NAME_RE + ')', 'g');
 
   function matchCropName(name) { return NAME_TO_ID[name] || null; }
 
+  /*
+   * 否定/意愿守卫：这些词紧挨在动词前面时，句子是「我没有偷」「别偷」「想偷…算了」
+   * 这类"只是说说"，不该真正执行。正则本身不看语义，只认句式，
+   * 所以在命中后再检查匹配起点前的几个字符。
+   * （历史包袱：这条路以前因为参数写反永远失败，否定句误触发根本暴露不出来；
+   *  Bug 4 修复后正则真正生效，这个坑才显形。）
+   */
+  var NEG_BEFORE = /(?:没有|不曾|并未|不会|没|不|别|莫|未|休|想)$/;
+  function isJustSaying(src, idx) {
+    var head = String(src).slice(Math.max(0, idx - 4), idx);
+    return NEG_BEFORE.test(head);
+  }
+
   function firstMature(list) {
     for (var i = 0; i < (list || []).length; i++) {
       var p = list[i];
       var c = cropOf(p.cropId);
-      if (c && !p.dead && !p.stolen && p.stage >= c.matureIndex) return p;
+      if (c && !p.stolen && p.stage >= c.matureIndex) return p;
     }
     return null;
   }
@@ -633,7 +664,7 @@
     for (var i = 0; i < (list || []).length; i++) {
       var p = list[i];
       var c = cropOf(p.cropId);
-      if (c && p.cropId === cropId && !p.dead && !p.stolen && p.stage >= c.matureIndex) return p;
+      if (c && p.cropId === cropId && !p.stolen && p.stage >= c.matureIndex) return p;
     }
     return null;
   }
@@ -643,18 +674,36 @@
     if (!src || !CROP_NAME_RE) return { applied: 0 };
     var applied = 0;
     var m;
+    /*
+     * 这里是「角色偷玩家的菜」，必须走 roleStealPlayer。
+     * 原先调的是 steal(store, chatId, 'player', ...) —— 而 steal 的第一行就是
+     * `if (fromOwner !== 'role') return {ok:false, error:'不能偷自己的地'}`
+     * （那条守卫是防玩家偷自己的地）。参数写反导致这条路 100% 失败，
+     * 角色的「我偷了你的番茄」永远不会生效。标签路径没这个问题，它正确地用了 roleStealPlayer。
+     */
+    function stealOne(cid) {
+      var farm = reconcile(store, chatId);
+      var target = firstMatureByCrop(farm.playerPlots, cid) || firstMature(farm.playerPlots);
+      if (!target) return false;
+      roleStealPlayer(store, chatId, target.id, cid, '对方');
+      return true;
+    }
     RE_STEAL_PLAYER.lastIndex = 0;
     while ((m = RE_STEAL_PLAYER.exec(src))) {
       var cid = matchCropName(m[1]);
-      if (!cid) continue;
-      var farm = reconcile(store, chatId);
-      var target = firstMatureByCrop(farm.playerPlots, cid) || firstMature(farm.playerPlots);
-      if (target) { steal(store, chatId, 'player', target.id, '对方'); applied++; }
+      if (!cid || isJustSaying(src, m.index)) continue;
+      if (stealOne(cid)) applied++;
+    }
+    RE_STEAL_PLAYER_BA.lastIndex = 0;
+    while ((m = RE_STEAL_PLAYER_BA.exec(src))) {
+      var cidB = matchCropName(m[1]);
+      if (!cidB || isJustSaying(src, m.index)) continue;
+      if (stealOne(cidB)) applied++;
     }
     RE_HELP_HARVEST.lastIndex = 0;
     while ((m = RE_HELP_HARVEST.exec(src))) {
       var cid2 = matchCropName(m[1]);
-      if (!cid2) continue;
+      if (!cid2 || isJustSaying(src, m.index)) continue;
       var farm2 = reconcile(store, chatId);
       var t2 = firstMatureByCrop(farm2.playerPlots, cid2) || firstMature(farm2.playerPlots);
       if (t2) { harvest(store, chatId, 'player', t2.id, '对方帮你'); applied++; }
@@ -662,7 +711,7 @@
     RE_ROLE_PLANT.lastIndex = 0;
     while ((m = RE_ROLE_PLANT.exec(src))) {
       var cid3 = matchCropName(m[1]);
-      if (!cid3 || CROPS[cid3].seed === false) continue;
+      if (!cid3 || CROPS[cid3].seed === false || isJustSaying(src, m.index)) continue;
       if (plant(store, chatId, 'role', cid3).ok) applied++;
     }
     return { applied: applied };
@@ -698,7 +747,16 @@
       }
       if (res && res.ok) found.push(res);
     }
-    applyNaturalLanguage(store, chatId, src);
+    /*
+     * 自然语言兜底只在「没有标签」时才跑。
+     *
+     * 原因：提示词同时教了标签和自然语言两种写法（见 buildPromptContext 末尾），
+     * 模型很可能两样都写 —— 比如「我种了向日葵<miyafarm>{"action":"plant",...}</miyafarm>」。
+     * 若这里把含标签的原文再交给正则跑一遍，同一件事会被执行两次
+     * （实测角色田会一次种下 2 株）。标签是结构化声明，优先级更高、更准，
+     * 所以有标签就只认标签，把自然语言解析让给「纯口语、无标签」的场景。
+     */
+    if (!found.length) applyNaturalLanguage(store, chatId, src);
     return { text: src.replace(TAG, '').trim(), events: found };
   }
 
@@ -709,7 +767,7 @@
       if (!list.length) { lines.push(title + '：空地'); return; }
       list.slice(0, MAX_PLOTS).forEach(function (p) {
         var crop = cropOf(p.cropId);
-        var extra = (!p.dead && !p.stolen && crop && p.stage < crop.matureIndex)
+        var extra = (!p.stolen && crop && p.stage < crop.matureIndex)
           ? ('，约' + formatDelta(nextStageIn(p, at)) + '后下一阶段') : '';
         lines.push(title + '：' + plotIcon(p) + ' ' + plotLabel(p) + extra);
       });
@@ -736,12 +794,12 @@
     var crop = cropOf(plot.cropId);
     var icon = plotIcon(plot);
     var name = plotLabel(plot);
-    var sub = plot.dead ? '脱水枯死了' : plot.stolen ? '被人偷走了'
+    var sub = plot.stolen ? '被人偷走了'
       : (crop && plot.stage >= crop.matureIndex) ? '可以收获了'
       : '约' + formatDelta(nextStageIn(plot, at)) + '后长大一点';
 
     var actions = '';
-    if (plot.dead || plot.stolen) {
+    if (plot.stolen) {
       actions = '<button type="button" class="qq-farm__btn" data-farm-act="clear" data-farm-owner="' + owner + '" data-farm-id="' + esc(plot.id) + '">清理</button>';
     } else if (crop && plot.stage >= crop.matureIndex) {
       if (owner === 'player') {
@@ -811,7 +869,7 @@
         '<div class="qq-farm__title">🌱 小农场</div>' +
         '<button type="button" class="qq-farm__close" data-sheet-close aria-label="关闭">关闭</button>' +
       '</div>' +
-      '<div class="qq-farm__hint">自己选种子 · 发芽后要浇水（断水约 ' + Math.round(DRY_KILL_MS / 3600000) + ' 小时会枯）· 收获入仓 · 售卖进钱包<br/>☘️ 收三叶草时 ' + Math.round(FOUR_LEAF_BASE * 100) + '% 概率出 🍀，每失手一次概率 +' + (FOUR_LEAF_STEP * 100) + '%（封顶 ' + Math.round(FOUR_LEAF_CAP * 100) + '%）· 收获时 ' + Math.round(ANIMAL_BASE * 100) + '% 概率吸引小动物，每失手一次 +' + (ANIMAL_STEP * 100) + '%（封顶 ' + Math.round(ANIMAL_CAP * 100) + '%）</div>' +
+      '<div class="qq-farm__hint">自己选种子 · 现实时钟生长（成熟后不会枯萎）· 收获入仓 · 售卖进钱包<br/>☘️ 收三叶草时 ' + Math.round(FOUR_LEAF_BASE * 100) + '% 概率出 🍀，每失手一次概率 +' + (FOUR_LEAF_STEP * 100) + '%（封顶 ' + Math.round(FOUR_LEAF_CAP * 100) + '%）· 收获时 ' + Math.round(ANIMAL_BASE * 100) + '% 概率吸引小动物，每失手一次 +' + (ANIMAL_STEP * 100) + '%（封顶 ' + Math.round(ANIMAL_CAP * 100) + '%）</div>' +
       '<div class="qq-farm__section">' +
         '<div class="qq-farm__section-title">我的田（' + activePlotCount(farm.playerPlots) + '/' + MAX_PLOTS + '）</div>' +
         '<div class="qq-farm__plots">' + playerHtml + '</div>' +
@@ -888,7 +946,7 @@
       return true;
     }
     if (act === 'clear') {
-      done(clearDead(store, chatId, owner, plotId), '清理了');
+      done(clearPlot(store, chatId, owner, plotId), '清理了');
       return true;
     }
     if (act === 'sell' && cropId) {
@@ -917,7 +975,7 @@
     harvest: harvest,
     steal: steal,
     roleStealPlayer: roleStealPlayer,
-    clearDead: clearDead,
+    clearPlot: clearPlot,
     sell: sell,
     sellAll: sellAll,
     extractAndStore: extractAndStore,

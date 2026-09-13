@@ -69,9 +69,17 @@
     if (themeId === 'ins') themeId = 'korean';
     if (themeId === 'gufeng') themeId = 'museum';
     if (['museum', 'korean', 'custom'].indexOf(themeId) < 0) themeId = 'museum';
+    var customCss = String(raw.customCss || '');
+    /* themeId 是唯一权威：只有用户明确选了 custom 才进自定义主题。
+       此处曾有 `raw.customCss ? 'custom' : ...`，导致「素纸/手帐」主题下只要残留
+       一点 customCss（例如先存了 CSS 再切回内置主题，而切换路径没清空它），
+       下次读盘就被静默改写成 custom —— 用户选的皮肤被 CSS 残留劫持。
+       另：themeId==='custom' 但没有 CSS 时不再强行降级为 museum，
+       否则 UI 上「自定义」按钮永远点不亮，且与保存路径写回的值互相打架。
+       空 CSS 由 applyToAppEl 的 xw-has-custom-css 分支自然处理。 */
     return {
-      themeId: raw.customCss ? 'custom' : (themeId === 'custom' && !raw.customCss ? 'museum' : themeId),
-      customCss: String(raw.customCss || ''),
+      themeId: themeId,
+      customCss: customCss,
       wallpaperMode: ['none', 'idb', 'url'].indexOf(raw.wallpaperMode) >= 0 ? raw.wallpaperMode : d.wallpaperMode,
       wallpaperId: raw.wallpaperId ? String(raw.wallpaperId) : null,
       wallpaperUrl: String(raw.wallpaperUrl || '').trim()
@@ -125,8 +133,9 @@
     if (!app) return;
     bf = normalizeBeautify(bf || (apStore() && apStore().getBeautify()));
     allThemeClasses().forEach(function (cls) { app.classList.remove(cls); });
-    var tid = bf.customCss ? 'custom' : bf.themeId;
-    app.classList.add(themeClassFor(tid));
+    /* 主题类只认 themeId，不再让 customCss 反过来决定主题；
+       自定义 CSS 的有无仅通过 xw-has-custom-css 这一开关类表达。 */
+    app.classList.add(themeClassFor(bf.themeId));
     app.classList.toggle('xw-has-custom-css', !!bf.customCss);
     injectCustomCss(bf.customCss);
   }
@@ -206,9 +215,11 @@
 
   function normalizePresetRow(raw) {
     if (!raw || !raw.name) return null;
+    var at = Number(raw.savedAt);
     return {
       name: String(raw.name).trim(),
-      savedAt: Number(raw.savedAt) || Date.now(),
+      /* 只用于排序；补有限性校验（Infinity 是真值，`|| Date.now()` 兜不住） */
+      savedAt: isFinite(at) ? at : Date.now(),
       customCss: String(raw.customCss || ''),
       themeId: normalizeBeautify(raw).themeId
     };
@@ -399,7 +410,9 @@
     }
 
     var bf = normalizeBeautify(apStore() ? apStore().getBeautify() : {});
-    var activeTheme = bf.customCss ? 'custom' : bf.themeId;
+    /* 高亮态同样只认 themeId：此前用 customCss 覆盖，会让「素纸」主题下已存过
+       CSS 的用户一开面板就看到「自定义」被点亮，与真正生效的主题不符。 */
+    var activeTheme = bf.themeId;
 
     var sheet = document.createElement('div');
     sheet.id = 'xw-bf-drawer';
@@ -460,11 +473,18 @@
       }
       if (e.target.closest('[data-xw-bf-save-css]')) {
         var cssVal = readCustomCss();
+        /* CSS 为空时不再把 themeId 强写成 'custom'，否则用户点一次「应用」
+           就会把当前内置主题（素纸/手帐）顶掉，落到一个没有 CSS 的空主题上。
+           有 CSS 才进自定义；没有则只提示，不动主题。 */
+        if (!cssVal.trim()) {
+          toast('CSS 为空，未切换主题；请写入 CSS 后点应用');
+          return;
+        }
         sheet.querySelectorAll('[data-xw-bf-theme]').forEach(function (b) {
           b.classList.toggle('is-active', b.getAttribute('data-xw-bf-theme') === 'custom');
         });
         saveBeautify({ themeId: 'custom', customCss: cssVal }).then(function () {
-          toast(cssVal.trim() ? '自定义 CSS 已应用' : 'CSS 为空，已回退素纸');
+          toast('自定义 CSS 已应用');
         });
         return;
       }

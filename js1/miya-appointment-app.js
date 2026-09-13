@@ -15,7 +15,10 @@
         catalogNo: '',
         stableStoryKey: '',
         dockCollapsed: false,
-        pickSelected: []
+        pickSelected: [],
+        /* 从群聊进来时记住来源，用于关闭时把本场内容回流成群账本 */
+        groupChatId: '',
+        sceneTitle: ''
     };
 
     var streamUi = {
@@ -1150,7 +1153,7 @@
                 '</div>' +
                 '<iframe class="xw-embed__frame" data-ap-html-iframe="1" data-ap-html-srcdoc-b64="' +
                 encodeApHtmlSrcdocB64(hp.iframeSrcdoc) +
-                '" sandbox="allow-scripts allow-modals allow-same-origin" referrerpolicy="no-referrer" title="嵌入页面"></iframe>' +
+                '" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerpolicy="no-referrer" title="嵌入页面"></iframe>' +
                 '</div>'
             );
         }
@@ -2012,11 +2015,9 @@
 
     function syncStatusFab() {
         var statusApi = global.MiyaOfflineStatus;
-        if (!statusApi || typeof statusApi.syncFab !== 'function') return;
+        if (!statusApi) return;
         var enabled = typeof statusApi.isEnabled !== 'function' || statusApi.isEnabled();
-        var show =
-            enabled && ui.view === 'story' && !ui.viewingArchive && !!ui.chatId && !!ui.sessionId;
-        statusApi.syncFab(show);
+        /* 悬浮球已移除，不再需要计算显示条件；保留关闭面板的行为即可 */
         if (!enabled && typeof statusApi.closePanel === 'function') statusApi.closePanel();
     }
 
@@ -2222,12 +2223,23 @@ function renderWriter() {
                 ? apStore().findResumableSessionByCast(cast)
                 : apStore().getActiveSession(hostChatId);
         var sess = active;
+        var brokeNew = false;
         if (!sess) {
             sess = apStore().startNewSession(hostChatId, contactId, cast);
+            brokeNew = true;
         }
         if (!sess) return;
         if ((!sess.cast || !sess.cast.length) && cast.length) {
             sess.cast = cast;
+            apStore()._writeSession(sess);
+        }
+        /*
+         * 群来源的新场次：把群名写进场景标题。
+         * 否则卷宗里只会显示「未命名场景」，一群人下去玩过几次之后根本分不清哪场是哪场。
+         * 只在新开场次时写 —— 续上的旧场次可能已被用户手动改名，不该覆盖。
+         */
+        if (brokeNew && ui.sceneTitle && !String(sess.title || '').trim()) {
+            sess.title = ui.sceneTitle;
             apStore()._writeSession(sess);
         }
         ui.chatId = String(sess.chatId || hostChatId);
@@ -2619,7 +2631,7 @@ function renderWriter() {
                 : '<option value="true">开</option><option value="false" selected>关</option>') +
             '</select>' +
             '<p class="xw-field__hint">关则引号、括号等恢复为普通正文；按当前角色单独保存</p></div>' +
-            '<div class="xw-field xw-field--panel"><label>状态栏悬浮球</label>' +
+            '<div class="xw-field xw-field--panel"><label>状态栏</label>' +
             '<select id="mol-status-fab">' +
             (function () {
                 var sb =
@@ -2630,15 +2642,7 @@ function renderWriter() {
                     : '<option value="true">开</option><option value="false" selected>关</option>';
             })() +
             '</select>' +
-            '<p class="xw-field__hint">关则每轮不要求输出状态，也不显示悬浮球（单人/多人共用）</p>' +
-            '<div class="xw-status-fab-preview" id="mol-status-fab-preview">' +
-            '<div class="xw-status-fab-preview__face" id="mol-status-fab-face"></div>' +
-            '<div class="xw-status-fab-preview__btns">' +
-            '<button type="button" class="xw-btn" id="mol-status-fab-upload">更换图标</button>' +
-            '<button type="button" class="xw-btn" id="mol-status-fab-reset">恢复默认</button>' +
-            '<input type="file" id="mol-status-fab-file" accept="image/*" hidden>' +
-            '</div></div>' +
-            '<p class="xw-field__hint">默认简约圆环图标；可上传图片作为悬浮按钮</p></div>' +
+            '<p class="xw-field__hint">关则每轮不要求输出状态（单人/多人共用）</p></div>' +
             '<div class="xw-field xw-field--panel"><label>开场白预设</label>' +
             '<p class="xw-field__hint">按当前角色保存；新场景选用后作为系统上下文首条，非任一方气泡。</p>' +
             '<div class="xw-opening-sheet__list" id="xw-opening-preset-list">' +
@@ -2788,124 +2792,11 @@ function renderWriter() {
             return true;
         }
 
-        function paintStatusFabPreview() {
-            var face = $('mol-status-fab-face');
-            if (!face) return;
-            var sb = typeof apStore().getStatusBar === 'function' ? apStore().getStatusBar() : {};
-            var url = String((sb && sb.fabIconUrl) || '').trim();
-            var statusApi = global.MiyaOfflineStatus;
-            if (url) {
-                face.innerHTML = '<img src="' + escAttr(url) + '" alt="">';
-            } else if (statusApi && statusApi.defaultFabIconHtml) {
-                face.innerHTML = statusApi.defaultFabIconHtml;
-            } else {
-                face.innerHTML =
-                    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
-            }
-        }
+        /* 悬浮球已移除：原 paintStatusFabPreview / readFabIconFile 一并删除 */
 
-        function readFabIconFile(file) {
-            if (!file) return Promise.resolve('');
-            var imgApi = global.MiyaChatImage;
-            var maxEdge = 128;
-            function toDataUrl(blobOrFile) {
-                return new Promise(function (resolve, reject) {
-                    var reader = new FileReader();
-                    reader.onload = function () {
-                        resolve(String(reader.result || ''));
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blobOrFile);
-                });
-            }
-            function shrinkDataUrl(dataUrl) {
-                return new Promise(function (resolve) {
-                    var img = new Image();
-                    img.onload = function () {
-                        var w = img.naturalWidth || img.width || maxEdge;
-                        var h = img.naturalHeight || img.height || maxEdge;
-                        var scale = Math.min(1, maxEdge / Math.max(w, h));
-                        var cw = Math.max(1, Math.round(w * scale));
-                        var ch = Math.max(1, Math.round(h * scale));
-                        var canvas = document.createElement('canvas');
-                        canvas.width = cw;
-                        canvas.height = ch;
-                        var ctx = canvas.getContext('2d');
-                        if (!ctx) {
-                            resolve(dataUrl);
-                            return;
-                        }
-                        ctx.drawImage(img, 0, 0, cw, ch);
-                        try {
-                            resolve(canvas.toDataURL('image/png'));
-                        } catch (e) {
-                            resolve(dataUrl);
-                        }
-                    };
-                    img.onerror = function () {
-                        resolve(dataUrl);
-                    };
-                    img.src = dataUrl;
-                });
-            }
-            var prep =
-                imgApi && typeof imgApi.compressImageFileToBlob === 'function'
-                    ? imgApi.compressImageFileToBlob(file, { maxEdge: maxEdge, quality: 0.85 }).catch(function () {
-                          return file;
-                      })
-                    : Promise.resolve(file);
-            return prep
-                .then(toDataUrl)
-                .then(shrinkDataUrl)
-                .then(function (url) {
-                    return String(url || '').slice(0, 350000);
-                });
-        }
 
-        paintStatusFabPreview();
-
-        var fabUpload = $('mol-status-fab-upload');
-        var fabReset = $('mol-status-fab-reset');
-        var fabFile = $('mol-status-fab-file');
-        if (fabUpload && fabFile) {
-            fabUpload.addEventListener('click', function () {
-                fabFile.click();
-            });
-            fabFile.addEventListener('change', function () {
-                var file = fabFile.files && fabFile.files[0];
-                fabFile.value = '';
-                if (!file) return;
-                toast('处理图标中…');
-                readFabIconFile(file)
-                    .then(function (url) {
-                        if (!url) {
-                            toast('读取图片失败');
-                            return;
-                        }
-                        apStore().saveStatusBar({ fabIconUrl: url });
-                        paintStatusFabPreview();
-                        if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.applyFabAppearance) {
-                            global.MiyaOfflineStatus.applyFabAppearance();
-                        }
-                        syncStatusFab();
-                        toast('悬浮图标已更换');
-                    })
-                    .catch(function () {
-                        toast('更换失败');
-                    });
-            });
-        }
-        if (fabReset) {
-            fabReset.addEventListener('click', function () {
-                apStore().saveStatusBar({ fabIconUrl: '' });
-                paintStatusFabPreview();
-                if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.applyFabAppearance) {
-                    global.MiyaOfflineStatus.applyFabAppearance();
-                }
-                syncStatusFab();
-                toast('已恢复默认图标');
-            });
-        }
+        /* 悬浮球功能已整体移除：图标预览 / 上传 / 重置 三段 UI 与逻辑一并删除，
+           MiyaOfflineStatus.ensureFab / applyFabAppearance 现在都是 no-op。 */
 
         persistAppointmentPresetFromSheet = persistPresetFromForm;
 
@@ -3691,7 +3582,70 @@ function renderWriter() {
         }
     }
 
-    function openApp() {
+    /**
+     * 从群聊进入线下：全群成员作为出演名单入场，一个群对应一场专属场景。
+     *
+     * 复用点：
+     *   · findResumableSessionByCast 按「出演名单」找回未封存场次 —— 同一个群的成员集合
+     *     天然映射到同一场，所以反复进出会续上同一场戏，而不是每次新开。
+     *   · 镜像机制会把线下内容写回各成员的单聊线程（offlineMeet 标记），
+     *     线上 UI 不展示这些镜像，但 API 上下文会带上 —— 这正是「线下内容进得来」的既有通道。
+     *
+     * 与单人入口的区别：单人走 openWithChat(chatId, contactId)，这里带完整 cast。
+     */
+    function openForGroup(groupChatId) {
+        var st = chatStore();
+        var gg = global.MiyaChatGroup;
+        var gid = String(groupChatId || '').trim();
+        if (!st || !gid) return false;
+        var groupChat = st.findChat(gid);
+        if (!groupChat || groupChat.type !== 'group') {
+            toast('群聊不存在');
+            return false;
+        }
+        var members = gg && typeof gg.getMembers === 'function'
+            ? (gg.getMembers(st, groupChat) || [])
+            : [];
+        if (members.length < 2) {
+            toast('群成员不足两人，无法开线下');
+            return false;
+        }
+        /*
+         * 出演名单：每位成员各自的主私聊作为镜像落点。
+         * 拿不到私聊线程的成员直接跳过 —— cast 里的 chatId 是镜像落点，
+         * 空字符串会让回流写不回去，进而让这个人在群里「参加了但没记忆」。
+         * 与其静默降级，不如少带一个人。
+         */
+        var cast = [];
+        members.forEach(function (c) {
+            if (!c || !c.id) return;
+            var cChat =
+                (st.findChatByContact && st.findChatByContact(c.id, c.defaultProfileId)) ||
+                (st.findChatByContact && st.findChatByContact(c.id, '')) ||
+                null;
+            if (!cChat || !cChat.id) return;
+            cast.push({
+                contactId: String(c.id),
+                chatId: String(cChat.id)
+            });
+        });
+        if (cast.length < 2) {
+            toast('群成员不足两人有私聊，无法开线下');
+            return false;
+        }
+        /* 用群名作为场景名，便于在卷宗里区分「这是哪群人」 */
+        var sceneTitle = String(groupChat.name || '').trim();
+        openApp({
+            groupChatId: gid,
+            cast: cast,
+            sceneTitle: sceneTitle,
+            contactId: cast[0].contactId,
+            chatId: cast[0].chatId || gid
+        });
+        return true;
+    }
+
+    function openApp(ctx) {
         var app = $('miya-offline-app');
         if (!app) return;
         var st = apStore();
@@ -3705,6 +3659,14 @@ function renderWriter() {
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.pickSelected = [];
+        /*
+         * groupChatId / sceneTitle 必须一起清。
+         * 只清 groupChatId 的话，上一次从群进来的群名会残留，
+         * 紧接着走单人入口新开的场次会被错误地冠上那个群名。
+         * 这两个字段由 ctx 分支按需重新写入。
+         */
+        ui.groupChatId = '';
+        ui.sceneTitle = '';
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
@@ -3728,9 +3690,20 @@ function renderWriter() {
         }
         /* 封存记录以本地落盘为准；勿每次进入都从线上镜像自动重建。
          * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
+        var entry = ctx && ctx.cast && ctx.cast.length
+            ? function () {
+                  ui.groupChatId = String(ctx.groupChatId || '');
+                  ui.sceneTitle = String(ctx.sceneTitle || '');
+                  openWithChat(
+                      String(ctx.chatId || ctx.cast[0].chatId || ''),
+                      String(ctx.contactId || ctx.cast[0].contactId || ''),
+                      ctx.cast
+                  );
+              }
+            : function () { enterDirectOffline(); };
         hydrate
             .then(function () {
-                enterDirectOffline();
+                entry();
                 applyOfflineBeautify();
             })
             .catch(function () {});
@@ -3754,10 +3727,37 @@ function renderWriter() {
             !document.querySelector('.miya-contacts-app.is-open')) {
             document.body.classList.remove('miya-app-open');
         }
+        /*
+         * 从群聊进来的场次：离开时把本场内容回流成群账本。
+         * 与「封存本次群聊」共用同一个账本 —— 群里其他人之后也能知道你们去线下做了什么。
+         */
+        flushGroupLedger();
+        ui.groupChatId = '';
+        ui.sceneTitle = '';
+    }
+
+    /**
+     * 把本场（群来源）线下的内容沉淀成群聊账本。
+     *
+     * 只在「本场确实有内容」时才写，避免只是进来看看就产生空账本。
+     * 生成失败不阻塞关闭 —— 账本是增强，不该拦住用户退出。
+     */
+    function flushGroupLedger() {
+        var gid = String(ui.groupChatId || '').trim();
+        if (!gid) return;
+        var ledger = global.MiyaChatGroupLedger;
+        if (!ledger || typeof ledger.syncFromOfflineSession !== 'function') return;
+        if (!ui.sessionId || !ui.chatId) return;
+        var sess = apStore().getSession(ui.chatId, ui.sessionId);
+        if (!sess) return;
+        try {
+            ledger.syncFromOfflineSession(gid, sess);
+        } catch (e) {}
     }
 
     global.miyaOfflineApp = {
         open: openApp,
+        openForGroup: openForGroup,
         close: closeApp,
         toast: toast,
         rerender: render,

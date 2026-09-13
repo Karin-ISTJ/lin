@@ -12,6 +12,7 @@
     var _hydratePromise = null;
     var _lastRecoveryInfo = null;
     var _saveTimer = 0;
+    var _dirtyBeforeHydrate = false;
     var SAVE_DEBOUNCE_MS = 280;
 
     function uid(prefix) {
@@ -48,18 +49,18 @@
     function defaultStatusBar() {
         return {
             enabled: true,
-            presetName: '',
-            fabIconUrl: ''
+            presetName: ''
         };
     }
 
     function normalizeStatusBar(raw) {
         var d = defaultStatusBar();
         if (!raw || typeof raw !== 'object') return Object.assign({}, d);
+        /* fabIconUrl 随悬浮球功能一并移除，不再读取也不再写回。
+           历史数据里残留的该字段会在下次保存时自然消失。 */
         return {
             enabled: raw.enabled !== false,
-            presetName: String(raw.presetName || '').trim(),
-            fabIconUrl: String(raw.fabIconUrl || '').trim()
+            presetName: String(raw.presetName || '').trim()
         };
     }
 
@@ -83,12 +84,27 @@
                 }
             ];
         }
-        var seen = Object.create(null);
-        return list.filter(function (row) {
-            if (!row.contactId || seen[row.contactId]) return false;
-            seen[row.contactId] = true;
-            return true;
+        /* 同一 contactId 出现多条时不能整条丢弃 —— 那会让 mirrorMessageToCast 漏掉目标
+           （多面具 / 多线程场景：同一角色在多个 chat 里各有一条 cast 记录）。
+           改为按 contactId 合并：优先保留带 chatId 的那条作为镜像目标，
+           若两条都没有 chatId，则保留先出现的一条。 */
+        var indexOf = Object.create(null);
+        var merged = [];
+        list.forEach(function (row) {
+            if (!row || !row.contactId) return;
+            var key = row.contactId;
+            var hit = indexOf[key];
+            if (hit == null) {
+                indexOf[key] = merged.length;
+                merged.push({ contactId: row.contactId, chatId: row.chatId });
+                return;
+            }
+            var cur = merged[hit];
+            if (!cur.chatId && row.chatId) {
+                cur.chatId = row.chatId;
+            }
         });
+        return merged;
     }
 
     function normalizeCastMirrors(raw) {
@@ -165,6 +181,57 @@
         };
     }
 
+    /* 墓碑保留窗口：超过该时长的墓碑视为不再必要。
+       理由：镜像恢复只可能「复活」仍存在镜像消息的卷宗，而镜像会随线上消息一起被清理；
+       墓碑的作用是跨重启兜住「删除已落盘、镜像尚未清理干净」的窄窗口，
+       该窗口以分钟计，保留 30 天已远超必要，同时避免墓碑表无限膨胀。 */
+    var TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+    /* 墓碑条数硬上限：即便时间未到，也只保留最近 N 条，防止极端批量删除撑爆存储 */
+    var TOMBSTONE_MAX = 500;
+
+    /** 淘汰过期 / 超量的墓碑。keep(可选) 为额外的保护集合，永不淘汰。 */
+    function pruneDeletedSessionIds(map, keep) {
+        var rows = [];
+        Object.keys(map || {}).forEach(function (sid) {
+            var ts = Number(map[sid]) || 0;
+            rows.push({ id: sid, ts: ts });
+        });
+        var guard = keep && typeof keep === 'object' ? keep : null;
+        var now = Date.now();
+        // 先按时间淘汰
+        rows = rows.filter(function (r) {
+            if (guard && guard[r.id]) return true;
+            return now - r.ts <= TOMBSTONE_TTL_MS;
+        });
+        // 再按条数淘汰（保留最新的）
+        if (rows.length > TOMBSTONE_MAX) {
+            rows.sort(function (a, b) {
+                return b.ts - a.ts;
+            });
+            var kept = [];
+            var keptGuarded = 0;
+            var out = {};
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var isGuarded = !!(guard && guard[r.id]);
+                if (isGuarded) {
+                    keptGuarded += 1;
+                    out[r.id] = r.ts;
+                    continue;
+                }
+                if (kept.length + keptGuarded >= TOMBSTONE_MAX) continue;
+                kept.push(r);
+                out[r.id] = r.ts;
+            }
+            return out;
+        }
+        var result = {};
+        rows.forEach(function (r) {
+            result[r.id] = r.ts;
+        });
+        return result;
+    }
+
     function normalizeDeletedSessionIds(raw) {
         var out = {};
         if (!raw || typeof raw !== 'object') return out;
@@ -174,7 +241,7 @@
             var ts = Number(raw[k]);
             out[sid] = Number.isFinite(ts) && ts > 0 ? ts : Date.now();
         });
-        return out;
+        return pruneDeletedSessionIds(out);
     }
 
     function isSessionTombstoned(sessionId) {
@@ -192,6 +259,10 @@
             cache.deletedSessionIds = {};
         }
         cache.deletedSessionIds[sid] = Date.now();
+        /* 顺手淘汰：刚写入的这条必须保住，否则墓碑会当场失效 */
+        var guard = {};
+        guard[sid] = true;
+        cache.deletedSessionIds = pruneDeletedSessionIds(cache.deletedSessionIds, guard);
     }
 
     function normalizeOpeningPreset(raw) {
@@ -415,7 +486,37 @@
         var tid = String(chatId || '').trim();
         var mid = String(mirrorId || '').trim();
         if (!st || !tid || !mid || typeof st.updateMessage !== 'function') return;
-        st.updateMessage(tid, mid, { deleted: true, content: '' }).catch(function () {});
+        /* 镜像删除失败不能静默吞：失败时记入待重试队列，随下次 flush 再试一次。
+           否则"墓碑尚未落盘 + 镜像删除失败"叠加会导致已删卷宗被 mirror 复活。 */
+        st.updateMessage(tid, mid, { deleted: true, content: '' }).catch(function () {
+            _pendingMirrorDeletes.push({ chatId: tid, mirrorId: mid });
+            scheduleMirrorRetry();
+        });
+    }
+
+    var _pendingMirrorDeletes = [];
+    var _mirrorRetryTimer = 0;
+
+    /** 重试失败的镜像删除；仍失败则保留在队列，等下一次触发 */
+    function retryPendingMirrorDeletes() {
+        if (!_pendingMirrorDeletes.length) return;
+        var st = global.miyaChatStore;
+        if (!st || typeof st.updateMessage !== 'function') return;
+        var queue = _pendingMirrorDeletes.slice();
+        _pendingMirrorDeletes.length = 0;
+        queue.forEach(function (job) {
+            st.updateMessage(job.chatId, job.mirrorId, { deleted: true, content: '' }).catch(function () {
+                _pendingMirrorDeletes.push(job);
+            });
+        });
+    }
+
+    function scheduleMirrorRetry() {
+        if (_mirrorRetryTimer) return;
+        _mirrorRetryTimer = setTimeout(function () {
+            _mirrorRetryTimer = 0;
+            retryPendingMirrorDeletes();
+        }, 1200);
     }
 
     /** 彻底删除某卷宗在线上的镜像：不再注入 API / 不再被镜像恢复 */
@@ -470,6 +571,51 @@
         if (msg.castMirrors && typeof msg.castMirrors === 'object') {
             Object.keys(msg.castMirrors).forEach(function (tid) {
                 softDeleteChatMirror(st, tid, msg.castMirrors[tid]);
+            });
+        }
+    }
+
+    /**
+     * 把一条线下消息的最新内容同步到它在线上的全部镜像。
+     *
+     * 与 purgeMessageOnlineMirrors 成对：删除会清掉所有落点，编辑也应覆盖所有落点，
+     * 否则多人场里只有主线镜像被更新，其余角色看到的仍是旧内容。
+     * 枚举口径刻意与 purge 保持一致（主线 chatMirrorId + castMirrors 全量）。
+     * 落点缺失或不合法时跳过，不抛错——镜像只是增强，不该阻断编辑本身。
+     */
+    function syncMessageToOnlineMirrors(chatId, msg) {
+        if (!msg) return;
+        /*
+         * 已删除的消息绝不能走这里。
+         * deleteMessage 的流程是「先 purgeMessageOnlineMirrors 软删镜像，再
+         * updateMessage({deleted:true})」；若不拦住，本次同步会以 edited 的身份
+         * 把刚删掉的镜像复活成空内容。删除语义一律由 purgeMessageOnlineMirrors 负责。
+         */
+        if (msg.deleted) return;
+        var st = global.miyaChatStore;
+        if (!st || typeof st.updateMessage !== 'function') return;
+        var primary = String(chatId || '').trim();
+        var content = String(msg.content || '');
+        var touched = Object.create(null);
+
+        function sync(tid, mid) {
+            var t = String(tid || '').trim();
+            var m = String(mid || '').trim();
+            if (!t || !m) return;
+            var key = t + '\0' + m;
+            if (touched[key]) return;
+            touched[key] = true;
+            st.updateMessage(t, m, {
+                content: content,
+                edited: true,
+                editedAt: Date.now()
+            }).catch(function () {});
+        }
+
+        if (msg.chatMirrorId) sync(primary, msg.chatMirrorId);
+        if (msg.castMirrors && typeof msg.castMirrors === 'object') {
+            Object.keys(msg.castMirrors).forEach(function (tid) {
+                sync(tid, msg.castMirrors[tid]);
             });
         }
     }
@@ -1082,13 +1228,23 @@
                         _lastRecoveryInfo = { sessions: bestScore, from: 'backup' };
                     }
                     flushSave();
+                } else if (_dirtyBeforeHydrate) {
+                    /* 水合期间被延后的强写（如全新安装时立刻删角色/删场次），
+                       此处补落盘，避免"只改内存、杀进程即丢"。 */
+                    retryPendingMirrorDeletes();
+                    writeNow();
                 }
+                _dirtyBeforeHydrate = false;
                 return cache;
             })
             .catch(function () {
                 if (!cache) applyParsedState(null, { skipSave: true });
                 _hydrated = true;
                 _hydratePromise = null;
+                if (_dirtyBeforeHydrate) {
+                    writeNow();
+                    _dirtyBeforeHydrate = false;
+                }
                 return cache;
             });
         return _hydratePromise;
@@ -1123,7 +1279,18 @@
 
     function saveNow() {
         if (!cache) load();
-        if (!_hydrated && needsAsyncHydrate()) return cache;
+        if (!_hydrated && needsAsyncHydrate()) {
+            /* 数据还在 IDB、异步水合未完成：此刻写盘会用空 cache 覆盖真数据，
+               所以只能延后。但必须记下"有未落盘的修改"，等水合完成后补写，
+               否则全新安装（bestScore === 0）时这段强写会永久丢失。 */
+            _dirtyBeforeHydrate = true;
+            return cache;
+        }
+        return writeNow();
+    }
+
+    /** 真正执行落盘（调用方需保证 _hydrated 或无需异步水合） */
+    function writeNow() {
         if (typeof global.miyaSyncFlushJsonKey === 'function') {
             global.miyaSyncFlushJsonKey(LS_KEY, cache);
             if (stateRichness(cache) > 0) {
@@ -1211,11 +1378,29 @@
      *   - byChat[chatId].sessions[] 里每个会话带 contactId 字段
      * 若不清，重新添加同 id 角色会读到上一段关系的约会预设与剧情。
      * 只清与该联系人相关的桶；群聊会话里若该角色是 cast 成员，一并剔除该成员。
+     *
+     * 异步化原因：本函数原先只调一次同步 load()，而当数据落在 IndexedDB 时
+     * load() 会拿到空 cache（见 load 的 needsAsyncHydrate 分支），于是在「空数据」
+     * 上删了个寂寞——returns false 且不打墓碑，真数据仍在 IDB，下次 hydrate 又回来。
+     * 现在改为「先等 hydrate 完成，再执行同一套清理逻辑」，返回 Promise<boolean>。
+     * 调用方 miya-chat-store 的 purgeContactScopedData 用 safe() 同步包裹且不读返回值，
+     * 因此返回 Promise 兼容；旧调用方若按同步用法读返回值，会得到真值（Promise 恒真）。
      */
     function removeAllForContact(contactId) {
         var cid = String(contactId || '').trim();
-        if (!cid) return false;
-        load();
+        if (!cid) return Promise.resolve(false);
+        return ensureHydrated()
+            .catch(function () {
+                /* hydrate 失败仍尝试清理，至少清掉当前 cache 里已有的部分 */
+                return cache;
+            })
+            .then(function () {
+                return purgeAllForContact(cid);
+            });
+    }
+
+    /** 同步清理实体：调用方必须保证此刻 cache 已完成 hydrate */
+    function purgeAllForContact(cid) {
         var touched = false;
 
         ['contactPresetId', 'contactParams', 'contactWorldbook', 'contactOpeningPresets'].forEach(function (bucket) {
@@ -1230,15 +1415,27 @@
             if (!row || !Array.isArray(row.sessions)) return;
             var before = row.sessions.length;
 
-            /* 该联系人自己的会话：整段移除并打墓碑，避免镜像恢复把它复活 */
+            /*
+             * 区分「该联系人自己的单人场」与「包含该联系人的多人场」。
+             * 多人场（cast > 1）的 contactId 只是宿主/第一顺位，并不代表
+             * 「这一卷属于他一个人」——它同样属于其他出演角色。
+             * 旧实现只看 contactId，于是删掉群里任一位成员都会把整卷群戏删掉，
+             * 其他人下次进线下就发现「我们一起玩的那场没了」。
+             * 所以：多人场只剔除该成员（并在剔到不足两人时保留该卷，
+             * 因为剩余内容仍属其他角色），单人场才整卷移除。
+             */
+            var isMultiCast = function (s) {
+                return !!(s && Array.isArray(s.cast) && s.cast.length > 1);
+            };
+
             var removedIds = [];
             var kept = row.sessions.filter(function (s) {
                 if (!s) return false;
-                if (String(s.contactId || '').trim() === cid) {
-                    if (s.id) removedIds.push(String(s.id));
-                    return false;
-                }
-                return true;
+                if (String(s.contactId || '').trim() !== cid) return true;
+                /* 多人场：不整卷删，留给下面的 cast 剔除分支处理 */
+                if (isMultiCast(s)) return true;
+                if (s.id) removedIds.push(String(s.id));
+                return false;
             });
 
             /* 群聊会话里该角色作为 cast 成员：只剔除成员，不删整段会话 */
@@ -1260,6 +1457,14 @@
                 if (!cache.deletedSessionIds) cache.deletedSessionIds = {};
                 cache.deletedSessionIds[sid] = Date.now();
             });
+            if (removedIds.length) {
+                /* 批量删除：本批 id 全部保护，避免刚写完就被条数上限淘汰 */
+                var guardIds = {};
+                removedIds.forEach(function (sid) {
+                    guardIds[sid] = true;
+                });
+                cache.deletedSessionIds = pruneDeletedSessionIds(cache.deletedSessionIds, guardIds);
+            }
 
             cache.byChat[chatId] = Object.assign({}, row, { sessions: kept });
             if (
@@ -1271,7 +1476,7 @@
             touched = true;
         });
 
-        if (touched) save({ force: true });
+        if (touched) flushSave();
         return touched;
     }
 
@@ -1726,15 +1931,14 @@
                 Object.assign({}, sess.messages[idx], patch || {}, { editedAt: Date.now() })
             );
             store._writeSession(sess);
-            var st = global.miyaChatStore;
-            var mid = sess.messages[idx].chatMirrorId;
-            if (st && mid && st.updateMessage) {
-                st.updateMessage(chatId, mid, {
-                    content: sess.messages[idx].content,
-                    edited: true,
-                    editedAt: Date.now()
-                }).catch(function () {});
-            }
+            /*
+             * 镜像同步必须覆盖全部出演角色的线程。
+             * 旧实现只取 msg.chatMirrorId（主线），多人场里 castMirrors 中的
+             * 其余落点不会被更新 —— 表现为「主线聊天记录改了，但别的角色
+             * 回线上时记的还是旧文本」。这里与 purgeMessageOnlineMirrors
+             * 保持同一套枚举口径：主线 + castMirrors 全量。
+             */
+            syncMessageToOnlineMirrors(chatId, sess.messages[idx]);
             return sess.messages[idx];
         },
         deleteMessage: function (chatId, sessionId, messageId) {
@@ -1893,6 +2097,7 @@
             }
             /* 彻底删除：线下卷宗 + 线上镜像一并清掉，不再注入上下文 */
             purgeSessionOnlineMirrors(sess);
+            retryPendingMirrorDeletes();
             load();
             Object.keys(cache.byChat || {}).forEach(function (key) {
                 var bucket = cache.byChat[key];
@@ -1901,12 +2106,26 @@
                 if (bucket.activeSessionId === sid) bucket.activeSessionId = '';
             });
             markSessionTombstone(sid);
-            save();
+            /* 破坏性操作必须强落盘：墓碑若因防抖未落盘就被杀进程，
+               recoverSessionsFromChatMirrors 会把已删卷宗复活。 */
+            flushSave();
         },
         setActiveSession: function (chatId, sessionId) {
             var b = chatBucket(chatId);
             if (!b) return;
-            b.activeSessionId = String(sessionId || '').trim();
+            var sid = String(sessionId || '').trim();
+            /* 空串语义是「清空当前场次」，合法放行；
+               非空时必须校验该卷宗确实存在，否则会写入悬空 activeSessionId —— 
+               后续 getSession(chatId, activeSessionId) 恒取不到，
+               UI 表现为「明明选了场次却打不开」，且脏数据会一直留在存储里。 */
+            if (sid) {
+                var exists = (b.sessions || []).some(function (s) {
+                    return s && String(s.id) === sid;
+                });
+                if (!exists) return;
+            }
+            if (String(b.activeSessionId || '') === sid) return;
+            b.activeSessionId = sid;
             save();
         },
         countLiveMessages: countLiveMessages,

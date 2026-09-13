@@ -9,6 +9,15 @@
     /** 超过此大小仅写 IndexedDB，localStorage 只保留占位指针 */
     var META_LS_SOFT_MAX = Math.floor(0.75 * 1024 * 1024);
 
+    /**
+     * 聊天室主题 id 白名单 —— 这里是唯一权威定义。
+     * 历史上本白名单在 store 与 miya-chat-beautify 里各写了一份，
+     * 且 store 这份漏了 'noir'，导致「夜刊」主题一经落盘就被静默降级为「素纸」
+     * （CSS 里 .mq-theme-noir 有完整皮肤，属真实可用的主题）。
+     * 现改为单点定义 + 对外导出，其它模块一律引用这里，避免同类漂移。
+     */
+    var CHAT_THEME_IDS = ['gallery', 'ins', 'blossom', 'noir', 'custom'];
+
     var metaCache = null;
     var urlCache = {};
     var initPromise = null;
@@ -968,16 +977,50 @@
         };
     }
 
+    /**
+     * 图片类 URL 白名单校验。
+     *
+     * 背景：壁纸 / 装饰图的 url 会经 `url("...")` 或 `<img src>` 落进 DOM。
+     * 实测确认双引号已被 %22 转义、无法提前闭合 `url()`，所以**不是**转义漏洞；
+     * 但协议层此前完全放行：
+     *   - `javascript:` 虽会被 CSS 解析器拒绝，仍不应写进样式；
+     *   - `data:image/svg+xml,<svg onload=...>` 在部分引擎下可执行脚本；
+     *   - `file:` / `blob:` 等来源不明。
+     * 这里统一只放行三类可信来源：http(s) 远程图、data:image 内联图、blob: 本地对象。
+     *
+     * 返回合法 URL 字符串；不合法一律返回 ''（调用方按「未设置」处理）。
+     */
+    var IMG_URL_DATA_RE = /^data:image\/(?:png|jpeg|jpg|gif|webp|avif|bmp);base64,[a-z0-9+/=\s]+$/i;
+
+    function sanitizeImageUrl(raw) {
+        var s = String(raw == null ? '' : raw).trim();
+        if (!s) return '';
+        /* 含控制字符的直接拒绝（可被用于绕过协议检测） */
+        if (/[\u0000-\u001f\u007f]/.test(s)) return '';
+        var lower = s.toLowerCase();
+        if (lower.indexOf('data:') === 0) {
+            return IMG_URL_DATA_RE.test(s) ? s : '';
+        }
+        if (lower.indexOf('blob:') === 0) {
+            return s.length <= 2048 ? s : '';
+        }
+        if (lower.indexOf('http://') === 0 || lower.indexOf('https://') === 0) {
+            return s.length <= 2048 ? s : '';
+        }
+        /* 相对路径（站内资源）也放行，但不得以协议形式伪装 */
+        if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return '';
+        return s.length <= 2048 ? s : '';
+    }
+
     function normalizeChatBeautify(raw) {
         var d = defaultChatSettings().chatBeautify;
         if (!raw || typeof raw !== 'object') return Object.assign({}, d);
-        var themeId =
-            ['gallery', 'ins', 'blossom', 'custom'].indexOf(raw.themeId) >= 0 ? raw.themeId : d.themeId;
+        var themeId = CHAT_THEME_IDS.indexOf(raw.themeId) >= 0 ? raw.themeId : d.themeId;
         return {
             wallpaperMode: ['none', 'idb', 'url'].indexOf(raw.wallpaperMode) >= 0 ? raw.wallpaperMode : d.wallpaperMode,
             wallpaperId: raw.wallpaperId ? String(raw.wallpaperId) : null,
-            wallpaperUrl: String(raw.wallpaperUrl || '').trim(),
-            themeId: raw.customCss ? 'custom' : (themeId === 'custom' ? 'custom' : themeId),
+            wallpaperUrl: sanitizeImageUrl(raw.wallpaperUrl),
+            themeId: themeId,
             customCss: String(raw.customCss || ''),
             bubbleMeCss: '',
             bubbleThemCss: '',
@@ -2945,13 +2988,29 @@
      */
     function purgeContactScopedData(contactId) {
         var key = String(contactId || '').trim();
-        if (!key) return;
+        if (!key) return Promise.resolve(false);
+
+        var pending = [];
 
         var safe = function (label, fn) {
             try {
-                fn();
+                var ret = fn();
+                /*
+                 * 部分清理接口是异步的（例如约会 store 需要先等 IndexedDB hydrate
+                 * 完成才能拿到真实数据）。这里收进 pending 一并等待，
+                 * 并补一个 rejection 兜底，避免未处理的拒绝冒泡成全局错误。
+                 */
+                if (ret && typeof ret.then === 'function') {
+                    pending.push(
+                        Promise.resolve(ret).catch(function (e) {
+                            if (global.console && console.warn) {
+                                console.warn('[miyaChatStore] purge ' + label + ' failed for ' + key, e);
+                            }
+                            return false;
+                        })
+                    );
+                }
             } catch (e) {
-                /* 清理是尽力而为，不阻断主流程；留下线索便于排查 */
                 if (global.console && console.warn) {
                     console.warn('[miyaChatStore] purge ' + label + ' failed for ' + key, e);
                 }
@@ -2989,11 +3048,23 @@
         /* 约会：预设按 contactId 存，会话按 contactId/chatId 存 */
         safe('appointment', function () {
             var ap = global.MiyaAppointmentStore;
-            if (ap && typeof ap.removeAllForContact === 'function') ap.removeAllForContact(key);
+            if (ap && typeof ap.removeAllForContact === 'function') return ap.removeAllForContact(key);
+            return null;
         });
+
+        /* 返回聚合结果：调用方（removeContact）可等待全部清理落定 */
+        return pending.length
+            ? Promise.all(pending).then(function () { return true; })
+            : Promise.resolve(true);
     }
 
     var store = {
+        /** 聊天室主题 id 白名单（唯一权威定义，供美化模块引用） */
+        CHAT_THEME_IDS: CHAT_THEME_IDS,
+
+        /** 图片 URL 白名单校验（壁纸 / 装饰图共用；本模块先于美化模块加载） */
+        sanitizeImageUrl: sanitizeImageUrl,
+
         clearBlobUrlCache: function () {
             Object.keys(urlCache).forEach(function (id) {
                 revokeUrl(id);
@@ -3958,11 +4029,16 @@
             invalidateLookupCache();
             /* 角色被删除后，大量数据是「独立存储、按 contactId 分桶」的。
                只清 contacts/chats/messagesByChat 会留下孤儿数据，重新添加同 id 角色时
-               读到上一段关系的残留。这里统一收口（详见 purgeContactScopedData）。 */
-            if (key) {
-                purgeContactScopedData(key);
-            }
-            return saveMeta();
+               读到上一段关系的残留。这里统一收口（详见 purgeContactScopedData）。
+               约会 store 的清理是异步的（需先等 IndexedDB hydrate），先发起，
+               再等 saveMeta 落盘后一并返回，保证 removeContact 的 Promise 完成时
+               该角色的残留数据已清干净。 */
+            var purgeDone = key ? purgeContactScopedData(key) : null;
+            return saveMeta().then(function () {
+                return purgeDone || null;
+            }).then(function () {
+                return true;
+            });
         },
 
         getChats: function (groupId) {

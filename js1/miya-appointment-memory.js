@@ -139,7 +139,11 @@
 
     /** 线下 session 总结范围 + 消息 id→序号，供线上 API 按条过滤镜像（仅去掉已总结段，保留未总结尾巴） */
     function buildOfflineMirrorFilterContext(chatId, contactId) {
-        var ctx = { sessionRanges: Object.create(null), msgIndexById: Object.create(null) };
+        var ctx = {
+            sessionRanges: Object.create(null),
+            msgIndexById: Object.create(null),
+            hiddenMsgIds: Object.create(null)
+        };
         var aps = apStore();
         if (!aps || typeof aps.exportForMemory !== 'function') return ctx;
         var cid = String(contactId || '').trim();
@@ -149,26 +153,47 @@
             if (!sess) return;
             var sid = String(sess.id || '').trim();
             if (!sid) return;
-            var ranges = offlineSummaryRanges(sess);
-            if (!ranges.length) return;
-            ctx.sessionRanges[sid] = ranges;
+            /*
+             * 序号口径必须与总结区间一致。
+             * summaryList 的 startIndex/endIndex 是按「可见消息（仅排除 deleted）」
+             * 的 1-based 序号写入的，因此这里不能用 liveSessionMessages——它额外
+             * 排除了 hidden，一旦区间之前存在隐藏层，映射出的序号就会整体偏小，
+             * 导致已总结的镜像被判为「未覆盖」而重复注入。
+             * 因此：索引一律按 deleted-only 口径建，hidden 另用一张表记录。
+             */
             var idxMap = Object.create(null);
-            liveSessionMessages(sess).forEach(function (m, i) {
-                if (m && m.id) idxMap[String(m.id)] = i + 1;
+            (sess.messages || []).forEach(function (m, i) {
+                if (!m || m.deleted) return;
+                if (!m.id) return;
+                var mid = String(m.id);
+                idxMap[mid] = i + 1;
+                if (m.hidden) ctx.hiddenMsgIds[mid] = true;
             });
             ctx.msgIndexById[sid] = idxMap;
+            var ranges = offlineSummaryRanges(sess);
+            /* 没有总结区间时无需过滤，但 hidden 集合仍要保留（隐藏是独立语义） */
+            if (ranges.length) ctx.sessionRanges[sid] = ranges;
         });
         return ctx;
     }
 
     function shouldKeepOfflineMirror(m, filterCtx) {
         if (!m || !m.offlineMeet) return true;
-        filterCtx = filterCtx || { sessionRanges: {}, msgIndexById: {} };
+        filterCtx = filterCtx || { sessionRanges: {}, msgIndexById: {}, hiddenMsgIds: {} };
+        /*
+         * 隐藏楼层不参与任何生成，线上上下文也不例外。
+         * 镜像在消息创建时就已写到线上线程，之后用户点「隐藏」并不会回收它，
+         * 若此处不拦，被隐藏的内容仍会经由镜像进入线上 API——与界面上的
+         * 「隐藏这一层（不参与生成）」相矛盾。
+         */
+        var hiddenIds = filterCtx.hiddenMsgIds;
+        var apId = String(m.appointmentMsgId || '').trim();
+        if (apId && hiddenIds && hiddenIds[apId]) return false;
         var sid = String(m.appointmentSessionId || '').trim();
         if (!sid) return true;
         var ranges = filterCtx.sessionRanges[sid];
         if (!ranges || !ranges.length) return true;
-        var mid = String(m.appointmentMsgId || '').trim();
+        var mid = apId;
         if (!mid) return true;
         var idxMap = filterCtx.msgIndexById[sid];
         var idx = idxMap && idxMap[mid];
@@ -302,9 +327,18 @@
         var items = [];
         sessions.forEach(function (sess) {
             var ranges = offlineSummaryRanges(sess);
-            var live = liveSessionMessages(sess);
-            live.forEach(function (m, i) {
-                var idx = i + 1;
+            /*
+             * 序号必须按「仅排除 deleted」的口径推进，与 summaryList 的
+             * startIndex/endIndex 保持一致；hidden 只用于「是否注入内容」，
+             * 不能参与序号计算，否则区间之前有隐藏层时整段序号都会错位。
+             */
+            var seq = 0;
+            (sess.messages || []).forEach(function (m) {
+                if (!m || m.deleted) return;
+                seq += 1;
+                if (m.hidden) return;              /* 隐藏层不注入，但仍占序号 */
+                if (!String(m.content || '').trim()) return;
+                var idx = seq;
                 if (messageIndexCovered(idx, ranges)) return;
                 var body = plainBody(m, null);
                 if (!body) return;

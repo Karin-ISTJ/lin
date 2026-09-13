@@ -397,7 +397,7 @@
             '<header class="miya-chat-html-fs-head">' +
             '<button type="button" class="miya-chat-html-fs-back">返回</button>' +
             '</header>' +
-            '<iframe class="miya-chat-html-fs-iframe" title="HTML 全屏" sandbox="allow-scripts allow-modals allow-same-origin" referrerpolicy="no-referrer"></iframe>' +
+            '<iframe class="miya-chat-html-fs-iframe" title="HTML 全屏" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerpolicy="no-referrer"></iframe>' +
             '</div>';
         document.body.appendChild(layer);
         var iframe = layer.querySelector('.miya-chat-html-fs-iframe');
