@@ -509,13 +509,77 @@
         );
     }
 
-    function renderOpeningPicker() {
-        var contact = activeContact();
-        var name = characterRealName(contact);
-        var presets =
+    /*
+     * 联系人档案里的「开场白」搬到线下用。
+     *
+     * 背景：线下开场白原本只认 MiyaAppointmentStore.contactOpeningPresets（调参里手动加的），
+     * 而「联系人」App 的档案编辑页把开场白存在另一个库（miyaContactsStore.greetings）。
+     * 两套数据互不相通，导致在档案里编辑好的开场白，线下「选择开场白」永远看不到。
+     *
+     * 这里做一层只读桥接：按 chronicleId / characterId / id 找到对应档案，
+     * 把 greetings 映射成与预设同构的行（id 加 'ct-greeting:' 前缀，避免与预设 id 撞车）。
+     * 桥接行不写库，纯展示；用户选中后同样走 setSessionOpeningMessage 落成开场白消息，
+     * 之后由引擎作为【本场线下·开场白】注入 —— 使用体验与调参里加预设完全一致。
+     */
+    var CT_GREETING_ID_PREFIX = 'ct-greeting:';
+
+    function contactProfileGreetingRows(contact) {
+        if (!contact) return [];
+        var cs = global.miyaContactsStore;
+        if (!cs || typeof cs.findCharacter !== 'function') return [];
+        var ids = [contact.chronicleId, contact.characterId, contact.id];
+        var row = null;
+        for (var i = 0; i < ids.length; i++) {
+            var id = String(ids[i] || '').trim();
+            if (!id) continue;
+            try {
+                row = cs.findCharacter(id);
+            } catch (e) {
+                row = null;
+            }
+            if (row) break;
+        }
+        if (!row || !Array.isArray(row.greetings)) return [];
+        return row.greetings
+            .map(function (text, idx) {
+                var body = String(text == null ? '' : text).trim();
+                /* 空串是用户故意留的占位，跳过它 —— 但下标 idx 必须保留，
+                   否则「首条消息」标签会错位到备选开场头上。 */
+                if (!body) return null;
+                return {
+                    id: CT_GREETING_ID_PREFIX + String(row.id || row.characterId || '') + ':' + String(idx),
+                    name: idx === 0 ? '首条消息' : '备选开场 ' + String(idx),
+                    content: body,
+                    fromProfile: true
+                };
+            })
+            .filter(Boolean);
+    }
+
+    /* 线下预设 + 联系人档案开场白，档案的排前面（它是角色卡原生的，优先级更高）。 */
+    function openingPresetRowsForContact(contact) {
+        var manual =
             contact && apStore().getContactOpeningPresets
                 ? apStore().getContactOpeningPresets(contact.id)
                 : [];
+        var fromProfile = contactProfileGreetingRows(contact);
+        if (!fromProfile.length) return manual;
+        var seen = Object.create(null);
+        var merged = [];
+        fromProfile
+            .concat(manual)
+            .forEach(function (p) {
+                if (!p || !p.id || seen[p.id]) return;
+                seen[p.id] = true;
+                merged.push(p);
+            });
+        return merged;
+    }
+
+    function renderOpeningPicker() {
+        var contact = activeContact();
+        var name = characterRealName(contact);
+        var presets = openingPresetRowsForContact(contact);
         var listHtml = presets.length
             ? '<div class="xw-opening-pick__list">' +
               presets
@@ -552,7 +616,8 @@
     function applyOpeningPreset(presetId) {
         var contact = activeContact();
         if (!contact) return;
-        var presets = apStore().getContactOpeningPresets(contact.id);
+        /* 走合并列表：档案开场白的 id 带前缀，只有这里才找得到 */
+        var presets = openingPresetRowsForContact(contact);
         var preset = presets.find(function (p) {
             return p.id === presetId;
         });
@@ -616,7 +681,9 @@
     }
 
     function renderSheetOpeningPresetList(contactId) {
-        var presets = apStore().getContactOpeningPresets(contactId);
+        var st = chatStore();
+        var contact = st && st.findContact ? st.findContact(contactId) : null;
+        var presets = openingPresetRowsForContact(contact);
         if (!presets.length) {
             return '<p class="xw-opening-sheet__empty">暂无预设</p>';
         }
@@ -624,6 +691,16 @@
             .map(function (p) {
                 var preview = String(p.content || '').replace(/\s+/g, ' ').trim();
                 if (preview.length > 64) preview = preview.slice(0, 64) + '…';
+                /*
+                 * 来自联系人档案的行是只读的 —— 它归「联系人」App 管，
+                 * 在调参里删不掉，也不该删（下次进来又会从档案里读出来）。
+                 * 用户要改就去联系人 App 的档案编辑页改，改完这里立刻同步。
+                 */
+                var delBtn = p.fromProfile
+                    ? '<span class="xw-opening-sheet__src">档案</span>'
+                    : '<button type="button" class="xw-opening-sheet__del" data-ap-opening-preset-del="' +
+                      esc(p.id) +
+                      '" aria-label="删除">×</button>';
                 return (
                     '<div class="xw-opening-sheet__row" data-ap-opening-preset="' +
                     esc(p.id) +
@@ -635,9 +712,8 @@
                     '<span>' +
                     esc(preview) +
                     '</span></div>' +
-                    '<button type="button" class="xw-opening-sheet__del" data-ap-opening-preset-del="' +
-                    esc(p.id) +
-                    '" aria-label="删除">×</button></div>'
+                    delBtn +
+                    '</div>'
                 );
             })
             .join('');

@@ -1266,6 +1266,21 @@
   color: var(--xw-soft);
 }
 
+/* 来自「联系人」档案的开场白：只读标记，替代删除按钮 */
+.xw-opening-sheet__src {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  color: var(--xw-soft);
+  white-space: nowrap;
+}
+
 .xw-opening-sheet__input {
   display: block;
   width: 100%;
