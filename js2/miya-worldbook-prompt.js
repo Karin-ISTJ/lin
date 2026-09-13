@@ -247,11 +247,24 @@
     if (!roleId && roleIds.length) roleId = roleIds[0];
     var contextText = String(cfg.contextText || '');
 
-    var universalRows = matcher && typeof matcher.collectUniversalGlobalEntries === 'function'
+    /* 「全软件层」= globalReach 为 all 的全局词条。
+       注意：all 只表示「线上线下都生效」，**不等于无条件注入**。
+       带关键词的 all 词条仍须关键词命中；只有无关键词（或 constant）的
+       才天然常驻。此处拆成两组分别处理，避免关键词未命中的词条被强行注入。 */
+    var allReachRows = matcher && typeof matcher.collectUniversalGlobalEntries === 'function'
       ? matcher.collectUniversalGlobalEntries(entries).filter(notExcluded)
       : [];
+    function entryHasKeys(entry) {
+      var k = Array.isArray(entry.key) && entry.key.length ? entry.key : (entry.keywords || []);
+      return Array.isArray(k) && k.length > 0;
+    }
+    /* 无条件常驻：无关键词且非关键词触发态（或 constant） */
+    var universalRows = allReachRows.filter(function (entry) {
+      return entry.constant === true || !entryHasKeys(entry);
+    });
+    /* 其余 all 词条照常参与关键词匹配，只是命中后归入「全软件设定」分组 */
     var universalIdSet = {};
-    universalRows.forEach(function (entry) {
+    allReachRows.forEach(function (entry) {
       if (entry && entry.id) universalIdSet[String(entry.id)] = true;
     });
     var universalBlock = renderBlock('全软件·全局设定', universalRows);
@@ -279,29 +292,26 @@
     var includeProfile = cfg.skipChronicleProfile !== true && cfg.layersOnly !== true;
     var profileBlock = includeProfile ? renderChronicleProfile(roleId) : '';
     var relationBlock = includeProfile ? renderRelationshipBlock(roleId) : '';
-    /* 走 ST 流水线时，激活判定由 ST 独占负责（rg 正则 / selective / matchWholeWords /
-       caseSensitive / probability 都在那边实现）。此时不再跑 matcher 预筛，
-       否则两套判定分叉会把正常词条静默丢掉。 */
+    /* 【W2 修复】准入判定归 matcher，ST 只做增量裁决。
+       历史问题：useStPipeline 开启时把 keywordMatched 硬置为空，导致
+       「全局+online/offline」「局部+绑定角色但无关键词」等词条在进入 ST 之前
+       就已被丢弃；而 ST 的世界观里没有 Miya 的 scope / globalReach 概念，
+       即便放行也会被 ST 的 activateEntries 按「非常驻且无关键词」二次筛掉。
+       现在：matcher 负责「要不要用」，ST 负责「用了之后怎么排和裁」。 */
     var st = global.miyaWorldbookST;
-    var useStPipeline = !!(st && typeof st.runPipeline === 'function' && cfg.useStPipeline !== false);
-    var keywordMatched;
-    if (useStPipeline) {
-      keywordMatched = { matched: [], global: [], local: [] };
-    } else {
-      keywordMatched = matcher && typeof matcher.matchEntries === 'function'
-        ? matcher.matchEntries({
-            roleId: roleId,
-            roleIds: roleIds,
-            contextText: contextText,
-            promptContext: promptContext,
-            entries: keywordPool
-          })
-        : { matched: [], global: [], local: [] };
-    }
+    var keywordMatched = matcher && typeof matcher.matchEntries === 'function'
+      ? matcher.matchEntries({
+          roleId: roleId,
+          roleIds: roleIds,
+          contextText: contextText,
+          promptContext: promptContext,
+          entries: keywordPool
+        })
+      : { matched: [], global: [], local: [] };
 
     var merged = mergeForcedMatches({
       matched: (keywordMatched.matched || []).filter(notExcluded),
-      entries: useStPipeline ? keywordPool : entries,
+      entries: entries,
       bindings: Array.isArray(cfg.extraBindings) ? cfg.extraBindings : [],
       forcedEntryIds: cfg.forcedEntryIds || cfg.entryIds || [],
       contextText: contextText,
@@ -318,11 +328,14 @@
       merged.push(entry);
     });
 
-    /* ST 对齐：激活判定 + 分组互斥 + token 预算（sticky/cooldown/delay 见下方说明，本项目未实现） */
+    /* ST 增量裁决：概率掷骰 + 分组互斥 + token 预算。
+       不再调用 runPipeline —— 那会用 ST 语义重新裁决「要不要注入」，
+       把 Miya 的生效范围语义（scope / globalReach）覆盖掉。
+       （sticky/cooldown/delay 见下方说明，本项目未实现） */
     var budgetMeta = null;
-    if (useStPipeline) {
+    if (st && typeof st.applyStDecoration === 'function') {
       var budget = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
-      var pipe = st.runPipeline(merged, {
+      var dec = st.applyStDecoration(merged, {
         contextText: contextText,
         messages: cfg.messages,
         scanDepth: cfg.scanDepth,
@@ -330,20 +343,15 @@
         chatId: cfg.chatId,
         dryRun: !!cfg.dryRun
       });
-      /* ST 流水线是激活判定的唯一权威来源；这里只把它选出的条目映射回原对象，
-         保留引用（mutable 字段如 position/depth 由原对象提供）。 */
-      var idset = {};
-      merged.forEach(function (e) { if (e && e.id) idset[String(e.id)] = e; });
-      merged = (pipe.selected || []).map(function (e) {
-        return idset[String(e.id)] || e;
-      }).filter(Boolean);
+      merged = (dec.selected || []).slice();
       budgetMeta = {
-        usedTokens: pipe.usedTokens,
-        budgetTokens: pipe.budgetTokens,
-        dropped: pipe.dropped,
-        debug: pipe.debug
+        usedTokens: dec.usedTokens,
+        budgetTokens: dec.budgetTokens,
+        dropped: dec.dropped,
+        debug: dec.debug
       };
     } else if (st && typeof st.applyTokenBudget === 'function') {
+      /* 兜底：ST 模块版本较旧、无 applyStDecoration 时，至少保住 token 预算能力 */
       var budget2 = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
       var bud = st.applyTokenBudget(merged, budget2);
       merged = bud.entries;

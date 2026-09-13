@@ -481,6 +481,55 @@
   }
 
   /**
+   * 增量裁决：对「已经由 Miya matcher 判定应当注入」的候选集，
+   * 只施加 ST 的**排序 / 互斥 / 预算 / 概率**能力，**不再做 activate / reject**。
+   *
+   * 与 runPipeline 的区别（W2 修复的核心）：
+   *   runPipeline      = 准入判定（constant / 关键词）+ 排序 + 预算 —— ST 独占「要不要用」
+   *   applyStDecoration= 仅排序 + 预算 + 概率掷骰           —— ST 只管「用了怎么排怎么裁」
+   *
+   * 为什么需要它：Miya 的 scope（全局/局部）与 globalReach（全软件/线上/线下）
+   * 是 ST 世界观里不存在的概念，runPipeline 的 activateEntries 会用 ST 语义
+   * 把「Miya 认为该注入」的词条静默筛掉。改用本函数后，准入权归还 matcher，
+   * ST 只负责它真正擅长的部分。
+   */
+  function applyStDecoration(entries, input) {
+    input = input || {};
+    var list = (Array.isArray(entries) ? entries : []).slice();
+    var debug = { checked: list.length, probabilityRejected: 0, afterGroup: 0 };
+
+    /* 1) probability 掷骰（原本在 activateEntries 内，随准入一起被移除，此处补回） */
+    var survived = list.filter(function (entry) {
+      if (!entry) return false;
+      if (entry.constant) return true; // 常驻条目不受概率约束
+      if (entry.useProbability && entry.probability < 100) {
+        if (Math.random() * 100 >= entry.probability) {
+          debug.probabilityRejected++;
+          return false;
+        }
+      }
+      return true;
+    });
+
+    /* 2) 同组互斥（groupWeight / groupOverride） */
+    var filtered = applyGroupScoring(survived);
+    debug.afterGroup = filtered.length;
+
+    /* 3) token 预算 */
+    var budget = input.tokenBudget != null ? input.tokenBudget : input.budget;
+    if (budget == null) budget = 2048;
+    var bud = applyTokenBudget(filtered, budget, input);
+
+    return {
+      selected: bud.entries,
+      dropped: bud.dropped,
+      usedTokens: bud.usedTokens,
+      budgetTokens: bud.budgetTokens,
+      debug: debug
+    };
+  }
+
+  /**
    * 完整流水线：激活 → 预算 → 分桶
    */
   function runPipeline(entries, input) {
@@ -675,6 +724,7 @@
     applyTokenBudget: applyTokenBudget,
     partitionByDepth: partitionByDepth,
     runPipeline: runPipeline,
+    applyStDecoration: applyStDecoration,
     parseStWorldInfoJson: parseStWorldInfoJson,
     exportStWorldInfoJson: exportStWorldInfoJson,
     importIntoStore: importIntoStore,

@@ -20,6 +20,12 @@
 
   var _cache = null;
   var _ready = null;
+  /* 【W1 修复】水合竞态标记。
+     模块加载时会发起一次异步读盘（whenReady），若在读盘返回之前就发生了写入
+     （persist 已把新数据写进 _cache 并落盘），那个迟到的读盘结果就是**过期数据**。
+     原先的无条件赋值会把刚写进去的新数据覆盖掉，造成「内存态旧、持久层新」的不一致。
+     这里用 _dirtySinceRead 记录「读盘发起后是否被写过」，迟到结果只在未被写过时才采纳。 */
+  var _dirtySinceRead = false;
 
   function nowId(prefix) {
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
@@ -207,6 +213,7 @@
   function persist(state) {
     var normalized = normalizeState(state);
     _cache = normalized;
+    _dirtySinceRead = true; // 【W1】标记：读盘发起后已发生写入，迟到结果不得覆盖
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(STORE_KEY, normalized).then(function () { return normalized; });
     }
@@ -222,9 +229,13 @@
       ? global.miyaReadLsJsonKey(STORE_KEY, { entries: [] })
       : Promise.resolve({ entries: [] })
     ).then(function (v) {
+      /* 【W1】读盘期间若已发生写入，内存里的 _cache 才是最新真相，
+         不能被这份迟到的、过期的盘数据覆盖。 */
+      if (_cache && _dirtySinceRead) return _cache;
       _cache = normalizeState(v && typeof v === 'object' ? v : { entries: [] });
       return _cache;
     }).catch(function () {
+      if (_cache) return _cache; // 【W1】读盘失败时，已有内存态优先，不做清零
       _cache = normalizeState({ entries: [] });
       return _cache;
     });
@@ -353,7 +364,7 @@
     removeEntry: removeEntry,
     toggleEntryEnabled: toggleEntryEnabled,
     resolveAvailableRoles: resolveAvailableRoles,
-    invalidateCache: function () { _cache = null; _ready = null; },
+    invalidateCache: function () { _cache = null; _ready = null; _dirtySinceRead = false; },
     importStJson: function (data, opts) {
       var st = global.miyaWorldbookST;
       if (!st || typeof st.importIntoStore !== 'function') {
