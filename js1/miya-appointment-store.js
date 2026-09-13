@@ -39,10 +39,7 @@
     function defaultBeautify() {
         return {
             themeId: 'museum',
-            customCss: '',
-            wallpaperMode: 'none',
-            wallpaperId: null,
-            wallpaperUrl: ''
+            customCss: ''
         };
     }
 
@@ -155,12 +152,11 @@
     function normalizeBeautify(raw) {
         var d = defaultBeautify();
         if (!raw || typeof raw !== 'object') return Object.assign({}, d);
+        /* wallpaperMode / wallpaperId / wallpaperUrl 随「线下壁纸」功能一并移除，
+           不再读取也不再写回。历史数据里残留的这三个字段会在下次保存时自然消失。 */
         return {
             themeId: normalizeThemeId(raw.themeId, d.themeId),
-            customCss: String(raw.customCss || ''),
-            wallpaperMode: ['none', 'idb', 'url'].indexOf(raw.wallpaperMode) >= 0 ? raw.wallpaperMode : d.wallpaperMode,
-            wallpaperId: raw.wallpaperId ? String(raw.wallpaperId) : null,
-            wallpaperUrl: String(raw.wallpaperUrl || '').trim()
+            customCss: String(raw.customCss || '')
         };
     }
 

@@ -76,13 +76,12 @@
        下次读盘就被静默改写成 custom —— 用户选的皮肤被 CSS 残留劫持。
        另：themeId==='custom' 但没有 CSS 时不再强行降级为 museum，
        否则 UI 上「自定义」按钮永远点不亮，且与保存路径写回的值互相打架。
-       空 CSS 由 applyToAppEl 的 xw-has-custom-css 分支自然处理。 */
+       空 CSS 由 applyToAppEl 的 xw-has-custom-css 分支自然处理。
+       另：wallpaperMode / wallpaperId / wallpaperUrl 随「线下壁纸」功能一并移除
+       （该功能从未实现，UI 无入口、渲染无实现），不再读取也不再写回。 */
     return {
       themeId: themeId,
-      customCss: customCss,
-      wallpaperMode: ['none', 'idb', 'url'].indexOf(raw.wallpaperMode) >= 0 ? raw.wallpaperMode : d.wallpaperMode,
-      wallpaperId: raw.wallpaperId ? String(raw.wallpaperId) : null,
-      wallpaperUrl: String(raw.wallpaperUrl || '').trim()
+      customCss: customCss
     };
   }
 

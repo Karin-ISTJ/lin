@@ -1595,12 +1595,12 @@
 
   global.miyaApplyTheme = function (theme) {
     theme = theme || global.miyaGetTheme();
-    var isCustom = global.miyaGetDeskLayoutMode && global.miyaGetDeskLayoutMode() === 'custom';
-    if (!isCustom) {
-      applyTextColor(theme);
-      applyIconFrameless(theme);
-      applyAltIconStyle(theme);
-    }
+    /* B14：原 `var isCustom = miyaGetDeskLayoutMode() === 'custom'` 恒真，
+       故 applyTextColor / applyIconFrameless / applyAltIconStyle 三个「旧主题」分支
+       在本入口中从不执行 —— 自定义桌面由 miyaApplyCustomDesk 独立设置
+       miyaTextMode / miya-icon-frameless / miya-alt-app-icons，CSS 侧（style.css、
+       miya-apps.css）已备好对应规则。折叠后直接跳过，保持原有可观察行为不变。
+       （三个函数体保留：仍可能被其它路径引用，且删除对可读性无增益。） */
     applyHomeCopy(theme);
     var promises = [];
     promises.push(applyFont(theme));
@@ -2029,9 +2029,8 @@
       }
       if (!global.miyaSetCustomDeskTheme) return Promise.resolve();
       return Promise.resolve(global.miyaSetCustomDeskTheme(theme)).then(function () {
-        if (global.miyaGetDeskLayoutMode && global.miyaGetDeskLayoutMode() === 'custom' && global.miyaApplyCustomDesk) {
-          return global.miyaApplyCustomDesk();
-        }
+        /* B14：原判断恒真（布局恒为 custom），已折叠。 */
+        if (global.miyaApplyCustomDesk) return global.miyaApplyCustomDesk();
       });
     });
   };
@@ -2086,4 +2085,28 @@
     Object.keys(blobUrlCache).forEach(revokeUrl);
     return global.miyaImportNamedDbBlobs(MEDIA_DB, MEDIA_STORE, src);
   };
+
+  /* B13 跨标签页同步：另一标签页改了主题（壁纸 / 字体 / 文字颜色 / 桌面布局等）后，
+     本标签页此前只在下次进入前台（pageshow / visibilitychange）时才会重读，
+     中间窗口期内若本页发生一次保存，就会拿旧状态整包覆盖对方 —— 典型的多标签丢改动。
+     这里补上 storage 事件监听：仅当 key 是本模块的 META_KEY 且 newValue 非空时，
+     重新 hydrate 一次。写入方自身不会收到该事件（storage 只派发给其它标签页），
+     因此不存在自回环；再加一层值比较兜底，避免无谓重绘。 */
+  window.addEventListener('storage', function (ev) {
+    if (!ev || ev.key !== META_KEY || ev.newValue == null) return;
+    var incoming;
+    try {
+      incoming = JSON.parse(ev.newValue);
+    } catch (e) {
+      return;
+    }
+    if (!incoming || typeof incoming !== 'object') return;
+    var current = loadMeta();
+    /* 内容一致则跳过，避免重复 apply 造成闪烁 */
+    if (JSON.stringify(current) === JSON.stringify(incoming)) return;
+    themeState = current;
+    Promise.resolve()
+      .then(function () { return global.miyaApplyTheme(themeState); })
+      .catch(function () {});
+  });
 })(window);

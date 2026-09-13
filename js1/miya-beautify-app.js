@@ -64,14 +64,13 @@
   var pendingFont = null;
   var selectedCustomIconKey = null;
 
-  function isCustomLayoutMode() {
-    return global.miyaGetDeskLayoutMode && global.miyaGetDeskLayoutMode() === 'custom';
-  }
+  /* B14：原 isCustomLayoutMode() 判据（miyaGetDeskLayoutMode() === 'custom'）恒真，
+     其全部调用点已折叠，函数因失去引用而删除。后端 getLayoutMode/setLayoutMode
+     均硬编码返回 'custom'，此处无需再做运行时判断。 */
 
   function getActiveSurfaceTheme() {
-    if (isCustomLayoutMode() && global.miyaGetCustomDeskTheme) {
-      return global.miyaGetCustomDeskTheme();
-    }
+    /* B14：布局恒为 custom，故优先取自定义桌面主题（原 if 恒真，已折叠）。 */
+    if (global.miyaGetCustomDeskTheme) return global.miyaGetCustomDeskTheme();
     return global.miyaGetTheme ? global.miyaGetTheme() : {};
   }
 
@@ -284,52 +283,45 @@
     });
   }
 
+  /* B14：后端已彻底移除「固定布局」概念（getLayoutMode / setLayoutMode 均硬编码
+     'custom'，源码注释明写「仅保留自定义桌面，不再使用默认四页杂志桌面」）。
+     因此 isCustomLayoutMode() 恒真，本文件内所有 layout 分支恒走自定义桌面一侧，
+     相关 fixed 分支连同 `mode === 'custom' ? A : B` 三元已全部折叠为确定值。 */
   function syncLayoutModeUi() {
-    var mode = isCustomLayoutMode() ? 'custom' : 'fixed';
-    var pick = $('miya-bf-layout-pick');
-    if (pick) {
-      pick.querySelectorAll('[data-bf-layout]').forEach(function (btn) {
-        btn.classList.toggle('is-active', btn.getAttribute('data-bf-layout') === mode);
-      });
-    }
+    /* 布局切换选择器 #miya-bf-layout-pick 及 [data-bf-layout] 按钮
+       全仓无 DOM 声明（曾经存在、随「固定布局」一并移除），故此处无高亮态需同步。 */
     var hint = $('miya-bf-layout-hint');
     if (hint) {
-      hint.textContent = mode === 'custom'
-        ? '自定义布局 · 壁纸、图标与字体独立保存；左滑翻页可自动增加空白页'
-        : '固定布局 · 四页杂志风桌面';
+      hint.textContent = '自定义布局 · 壁纸、图标与字体独立保存；左滑翻页可自动增加空白页';
     }
     var presetTitle = $('miya-bf-preset-title');
     var presetHint = $('miya-bf-preset-hint');
     if (presetTitle) {
-      presetTitle.textContent = mode === 'custom' ? '自定义布局方案' : '固定布局方案';
+      presetTitle.textContent = '自定义布局方案';
     }
-      if (presetHint) {
-      presetHint.textContent = mode === 'custom'
-        ? '保存壁纸、图标、字体、桌面布局与自定义小组件库，与固定布局方案分开存储'
-        : '保存壁纸、图标与字体组合，可随时切换';
+    if (presetHint) {
+      presetHint.textContent = '保存壁纸、图标、字体、桌面布局与自定义小组件库，与固定布局方案分开存储';
     }
     var app = $('miya-beautify-app');
     if (app) {
       app.querySelectorAll('.is-fixed-layout-only').forEach(function (el) {
-        el.hidden = mode === 'custom';
+        el.hidden = true;
       });
       app.querySelectorAll('.is-custom-layout-only').forEach(function (el) {
-        el.hidden = mode !== 'custom';
+        el.hidden = false;
       });
       var activePanel = app.querySelector('[data-bf-panel].is-active');
       if (activePanel && activePanel.hidden) switchBeautifyTab('scene');
     }
     var lede = $('miya-bf-masthead-lede');
     if (lede) {
-      lede.textContent = mode === 'custom'
-        ? '在这里换壁纸和图标；桌面小组件请回到主屏点按编辑，每个实例独立保存。'
-        : '在这里换壁纸和图标；固定布局可在组件页替换挂件图片。';
+      lede.textContent = '在这里换壁纸和图标；桌面小组件请回到主屏点按编辑，每个实例独立保存。';
     }
     var wallTitle = document.querySelector('[data-bf-panel="scene"] .ins-atelier-showcase-side .ins-atelier-panel-title');
     if (wallTitle) {
-      wallTitle.textContent = mode === 'custom' ? '自定义壁纸' : '主屏壁纸';
+      wallTitle.textContent = '自定义壁纸';
     }
-    if (mode === 'custom') buildCustomWidgetGallery();
+    buildCustomWidgetGallery();
   }
 
   function refreshIconPreviews() {
@@ -517,9 +509,8 @@
     }
     global.miyaSetTheme({ fontId: pendingFont.id, fontName: pendingFont.name });
     return global.miyaApplyFont().then(function () {
-      if (isCustomLayoutMode() && global.miyaApplyCustomDesk) {
-        return global.miyaApplyCustomDesk();
-      }
+      /* B14：布局恒为 custom（原 if 恒真，已折叠）。 */
+      if (global.miyaApplyCustomDesk) return global.miyaApplyCustomDesk();
       return global.miyaApplyTheme();
     }).then(function () {
       syncUiFromTheme();
@@ -534,10 +525,8 @@
   function renderPresets() {
     var listEl = $('miya-bf-preset-list');
     if (!listEl) return;
-    var isCustom = isCustomLayoutMode();
-    var list = isCustom
-      ? (global.miyaGetCustomPresets ? global.miyaGetCustomPresets() : [])
-      : (global.miyaGetPresets ? global.miyaGetPresets() : []);
+    /* B14：布局恒为 custom，直接取自定义方案列表（原三元恒取前者，已折叠）。 */
+    var list = global.miyaGetCustomPresets ? global.miyaGetCustomPresets() : [];
     listEl.innerHTML = '';
     if (!list.length) {
       listEl.innerHTML = '<p class="ins-atelier-panel-desc">还没有保存的方案，保存后会显示在这里。</p>';
@@ -563,7 +552,8 @@
   }
 
   function loadPresetById(id) {
-    if (isCustomLayoutMode()) {
+    /* B14：布局恒为 custom，只走自定义方案分支（原 if 恒真，已折叠）。 */
+    if (true) {
       return global.miyaLoadCustomPreset(id).then(function (ok) {
         if (ok) {
           syncUiFromTheme();
@@ -740,7 +730,8 @@
       panel.classList.toggle('is-active', on);
       panel.hidden = !on;
     });
-    if (tabId === 'object' && isCustomLayoutMode()) buildCustomWidgetGallery();
+    /* B14：布局恒为 custom（原 && 右项恒真，已折叠）。 */
+    if (tabId === 'object') buildCustomWidgetGallery();
   }
 
   function syncIconFrameUi(theme) {
@@ -792,7 +783,7 @@
       if (activeFont) {
         var applied = fixedTheme.fontId === activeFont.id;
         fontHint.textContent = applied
-          ? '当前字体 · ' + activeFont.name + (isCustomLayoutMode() ? ' · 与固定布局同步' : '')
+          ? '当前字体 · ' + activeFont.name + ' · 与固定布局同步'
           : '待应用 · ' + activeFont.name + '（点击「应用字体」生效）';
       } else {
         fontHint.textContent = '支持本地上传或粘贴链接 · .woff / .woff2 / .ttf / .otf · 全局字体与固定布局同步';
@@ -905,20 +896,18 @@
   }
 
   function applyMediaKey(key, ref) {
-    if (isCustomLayoutMode()) {
-      if (isCustomDeskIconKey(key)) return global.miyaCustomSetIcon(key, ref);
-      if (key.indexOf('polaroid_') === 0) {
-        return global.miyaCustomSetPolaroid ? global.miyaCustomSetPolaroid(key, ref) : Promise.resolve();
-      }
-      if (key.indexOf('memo_ava_') === 0 || key === 'profile_ava') {
-        return global.miyaCustomSetMemoAva ? global.miyaCustomSetMemoAva(key, ref) : Promise.resolve();
-      }
-      if (key === 'profile_bg') {
-        return global.miyaCustomSetProfileBg ? global.miyaCustomSetProfileBg(ref) : Promise.resolve();
-      }
+    /* B14：布局恒为 custom，原 `if (isCustomLayoutMode()) {...}` 恒真，
+       其后的旧主题兜底分支永不执行，一并折叠删除。 */
+    if (isCustomDeskIconKey(key)) return global.miyaCustomSetIcon(key, ref);
+    if (key.indexOf('polaroid_') === 0) {
+      return global.miyaCustomSetPolaroid ? global.miyaCustomSetPolaroid(key, ref) : Promise.resolve();
     }
-    if (key.indexOf('polaroid_') === 0) return global.miyaSetPolaroid(key, ref);
-    if (key.indexOf('memo_ava_') === 0 || key === 'profile_ava') return global.miyaSetMemoAva(key, ref);
+    if (key.indexOf('memo_ava_') === 0 || key === 'profile_ava') {
+      return global.miyaCustomSetMemoAva ? global.miyaCustomSetMemoAva(key, ref) : Promise.resolve();
+    }
+    if (key === 'profile_bg') {
+      return global.miyaCustomSetProfileBg ? global.miyaCustomSetProfileBg(ref) : Promise.resolve();
+    }
     if (isP2TileKey(key)) return global.miyaSetP2Tile(key, ref);
     if (isP3TileKey(key)) return global.miyaSetP3Tile(key, ref);
     if (isP4TileKey(key)) return global.miyaSetP4Tile(key, ref);
@@ -950,26 +939,11 @@
     buildCustomWidgetGallery();
     syncUiFromTheme();
 
-    var layoutPick = $('miya-bf-layout-pick');
-    if (layoutPick) {
-      layoutPick.addEventListener('click', function (e) {
-        var btn = e.target.closest('[data-bf-layout]');
-        if (!btn) return;
-        var next = btn.getAttribute('data-bf-layout') === 'custom' ? 'custom' : 'fixed';
-        if (next === (isCustomLayoutMode() ? 'custom' : 'fixed')) return;
-        if (!global.miyaSwitchDeskLayout) {
-          toast('当前环境不支持切换布局');
-          return;
-        }
-        /* 此处曾有一行 `next = 'custom';` 无条件覆盖，
-           导致「固定布局」永远切不过去、对应提示也是死代码。现已移除。 */
-        global.miyaSwitchDeskLayout(next).then(function () {
-          syncUiFromTheme();
-          refreshIconPreviews();
-          toast(next === 'custom' ? '已切换至自定义布局' : '已改为仅使用自定义桌面');
-        });
-      });
-    }
+    /* B14：此处曾有一整段「布局切换」事件绑定，监听 #miya-bf-layout-pick 下的
+       [data-bf-layout] 按钮。但该容器与按钮在全仓 DOM 中从无声明，handler 永不执行；
+       同时后端 switchDeskLayout(mode) 忽略入参、硬编码 'custom'，'fixed' 分支不可达。
+       「固定布局」概念已由后端整体移除，故整段删除。若将来重新引入布局切换，
+       需同时：① 在 HTML 补回容器与按钮 ② 恢复后端 fixed 实现 ③ 重建本段绑定。 */
 
     app.querySelectorAll('[data-bf-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -1036,7 +1010,7 @@
       if (e.target.closest('[data-bf-wall-url-apply]')) {
         var wallUrl = ($('miya-bf-wall-url') || {}).value ? $('miya-bf-wall-url').value.trim() : '';
         if (!wallUrl) { toast('请填写图片链接'); return; }
-        var setWall = isCustomLayoutMode() ? global.miyaCustomSetWallpaper : global.miyaSetWallpaper;
+        var setWall = global.miyaCustomSetWallpaper;
         global.miyaStoreImageUrl(wallUrl).then(function (id) {
           return setWall(id);
         }).then(function () { refreshWallPreview(); toast('壁纸已更新'); })
@@ -1049,9 +1023,7 @@
         return;
       }
       if (e.target.closest('[data-bf-wall-clear]')) {
-        var clearWall = isCustomLayoutMode()
-          ? global.miyaCustomClearWallpaper
-          : function () { return global.miyaSetWallpaper(null); };
+        var clearWall = global.miyaCustomClearWallpaper;
         clearWall().then(function () {
           refreshWallPreview();
           if ($('miya-bf-wall-url')) $('miya-bf-wall-url').value = '';
@@ -1072,11 +1044,8 @@
       if (clearKey) {
         var ck = clearKey.getAttribute('data-bf-clear');
         applyMediaKey(ck, null).then(function () {
-          if (isCustomLayoutMode()) {
-            global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-          } else {
-            global.miyaApplyTheme && global.miyaApplyTheme();
-          }
+          /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
           refreshIconPreviews();
           toast('已恢复默认');
         });
@@ -1166,9 +1135,8 @@
         global.miyaSetTheme({ fontId: null, fontName: null });
         var resetChain = global.miyaApplyFont ? global.miyaApplyFont() : global.miyaApplyTheme();
         resetChain.then(function () {
-          if (isCustomLayoutMode() && global.miyaApplyCustomDesk) {
-            return global.miyaApplyCustomDesk();
-          }
+          /* B14：布局恒为 custom（原 if 恒真，已折叠）。 */
+          if (global.miyaApplyCustomDesk) return global.miyaApplyCustomDesk();
           return global.miyaApplyTheme();
         }).then(function () {
           syncUiFromTheme();
@@ -1182,11 +1150,8 @@
           toast('请填写方案名称');
           return;
         }
-        if (isCustomLayoutMode()) {
-          global.miyaSaveCustomPreset(name.trim());
-        } else {
-          global.miyaSavePreset(name.trim());
-        }
+        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+        global.miyaSaveCustomPreset(name.trim());
         renderPresets();
         toast('方案已保存');
         return;
@@ -1203,24 +1168,19 @@
       }
       var delId = e.target.closest('[data-preset-del]');
       if (delId) {
-        if (isCustomLayoutMode()) {
-          global.miyaDeleteCustomPreset(delId.getAttribute('data-preset-del'));
-        } else {
-          global.miyaDeletePreset(delId.getAttribute('data-preset-del'));
-        }
+        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+        global.miyaDeleteCustomPreset(delId.getAttribute('data-preset-del'));
         renderPresets();
         toast('已删除');
         return;
       }
       if (e.target.closest('[data-bf-export]')) {
-        var exportFn = isCustomLayoutMode()
-          ? global.miyaExportCustomDecorPack
-          : global.miyaExportDecorPack;
+        var exportFn = global.miyaExportCustomDecorPack;
         if (!exportFn) { toast('导出失败'); return; }
         exportFn().then(function (json) {
           var blob = new Blob([json], { type: 'application/json' });
           var a = document.createElement('a');
-          a.download = (isCustomLayoutMode() ? 'miya-custom-' : 'miya-decor-') + Date.now() + '.json';
+          a.download = 'miya-custom-' + Date.now() + '.json';
           a.href = URL.createObjectURL(blob);
           a.click();
           setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
@@ -1253,15 +1213,10 @@
     if (iconFrameSw) {
       iconFrameSw.addEventListener('click', function () {
         var on = !iconFrameSw.classList.contains('is-on');
-        if (isCustomLayoutMode()) {
-          global.miyaSetCustomDeskTheme({ iconFrameless: on });
-          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-          syncIconFrameUi(getActiveSurfaceTheme());
-        } else {
-          global.miyaSetTheme({ iconFrameless: on });
-          global.miyaApplyTheme && global.miyaApplyTheme();
-          syncIconFrameUi(global.miyaGetTheme());
-        }
+        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+        global.miyaSetCustomDeskTheme({ iconFrameless: on });
+        global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
+        syncIconFrameUi(getActiveSurfaceTheme());
         toast(on ? '已去掉图标外框' : '已恢复图标外框');
       });
     }
@@ -1270,15 +1225,10 @@
     if (altIconSw) {
       altIconSw.addEventListener('click', function () {
         var on = !altIconSw.classList.contains('is-on');
-        if (isCustomLayoutMode()) {
-          global.miyaSetCustomDeskTheme({ altIconStyle: on });
-          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-          syncAltIconStyleUi(getActiveSurfaceTheme());
-        } else {
-          global.miyaSetTheme({ altIconStyle: on });
-          global.miyaApplyTheme && global.miyaApplyTheme();
-          syncAltIconStyleUi(global.miyaGetTheme());
-        }
+        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+        global.miyaSetCustomDeskTheme({ altIconStyle: on });
+        global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
+        syncAltIconStyleUi(getActiveSurfaceTheme());
         refreshDefaultIconGlyphs();
         refreshIconPreviews();
         toast(on ? '已切换为实心初始图标' : '已恢复线稿初始图标');
@@ -1320,15 +1270,10 @@
           textColorMode: mode,
           textColor: mode === 'white' ? 'rgba(255, 255, 255, 0.92)' : 'rgba(0, 0, 0, 0.88)'
         };
-        if (isCustomLayoutMode()) {
-          global.miyaSetCustomDeskTheme(patch);
-          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-          syncTextModeUi(getActiveSurfaceTheme());
-        } else {
-          global.miyaSetTheme(patch);
-          global.miyaApplyTheme();
-          syncTextModeUi(global.miyaGetTheme());
-        }
+        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+        global.miyaSetCustomDeskTheme(patch);
+        global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
+        syncTextModeUi(getActiveSurfaceTheme());
       });
     }
 
@@ -1383,7 +1328,7 @@
         }
         var theme = getActiveSurfaceTheme();
         var oldId = theme && theme.wallpaper ? String(theme.wallpaper).trim() : '';
-        var setWall = isCustomLayoutMode() ? global.miyaCustomSetWallpaper : global.miyaSetWallpaper;
+        var setWall = global.miyaCustomSetWallpaper;
         global.miyaStoreImageFile(file, oldId ? { replaceId: oldId } : undefined).then(function (id) {
           return setWall(id);
         }).then(function () {
@@ -1440,11 +1385,8 @@
       }).then(function (id) {
         return applyMediaKey(key, id);
       }).then(function () {
-        if (isCustomLayoutMode()) {
-          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-        } else {
-          global.miyaApplyTheme && global.miyaApplyTheme();
-        }
+        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+        global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
         refreshIconPreviews();
         toast('图片已更新');
       })
@@ -1463,11 +1405,8 @@
         global.miyaStoreImageUrl(url).then(function (id) {
           return applyMediaKey(key, id);
         }).then(function () {
-          if (isCustomLayoutMode()) {
-            global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-          } else {
-            global.miyaApplyTheme && global.miyaApplyTheme();
-          }
+          /* B14：布局恒为 custom（原 if/else 已折叠）。 */
+          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
           refreshIconPreviews();
           toast('已更新');
         }).catch(function () {

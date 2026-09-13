@@ -305,9 +305,11 @@ function testB4() {
     check('B4-a1 不再存在无条件 next = "custom" 覆盖',
         !/next\s*=\s*['"]custom['"]\s*;/.test(codeOnly));
 
-    // 2) 必须补上 API 缺失时的兜底提示（旧版无此保护，会抛异常）
-    check('B4-a2 布局切换前有 miyaSwitchDeskLayout 存在性校验',
-        /if\s*\(\s*!global\.miyaSwitchDeskLayout\s*\)/.test(bfApp));
+    // 2) v29 曾在布局切换 handler 里补了「miyaSwitchDeskLayout 缺失」的兜底提示。
+    //    v31（B14）进一步确认该 handler 全段为死代码（容器/按钮全仓无声明），已整段删除，
+    //    故该兜底提示随之移除 —— 断言改为「确认整段已删除」，与 v31 结论一致。
+    check('B4-a2 布局切换 handler 已整段删除（v31 由 B14 收口）',
+        !/layoutPick\.addEventListener/.test(bfApp));
 
     // 3) 事实核查：布局切换 UI 容器在整个包内不存在 → 整段为死代码
     const allFiles = [];

@@ -4159,7 +4159,8 @@
     applyCustomTextColor(theme);
     applyCustomIconFrameless(theme);
     applyCustomAltIconStyle(theme);
-    if (getLayoutMode() === 'custom') renderCustomLayout();
+    /* B14：getLayoutMode() 恒返回 'custom'（后端已移除固定布局），原 if 恒真，已折叠。 */
+    renderCustomLayout();
     var promises = [
       global.miyaResolveMediaUrl(theme.wallpaper).then(function (url) { applyWallToPhone(url); })
     ];
@@ -4203,7 +4204,8 @@
         pager.appendChild(dot);
       }
     }
-    pager.hidden = getLayoutMode() !== 'custom';
+    /* B14：恒为 false，已折叠（原 `pager.hidden = getLayoutMode() !== 'custom';`）。 */
+    pager.hidden = false;
   }
 
   function scrollCustomToPage(dx, behavior) {
@@ -4313,7 +4315,8 @@
     }
 
     function syncFromScroll() {
-      if (getLayoutMode() !== 'custom' || wgEditorState.open) return;
+      /* B14：前半恒 false，已折叠。 */
+      if (wgEditorState.open) return;
       /* 拖着图标/组件时才锁页；编辑模式正常左右滑不受影响 */
       if (drag.active && !customPageScrollLock) {
         var lockedLeft = currentPage * pageWidth();
@@ -4369,7 +4372,8 @@
     }
 
     track.addEventListener('touchstart', function (e) {
-      if (getLayoutMode() !== 'custom' || drag.active || drag.pending || wgEditorState.open) return;
+      /* B14：前半恒 false，已折叠。 */
+      if (drag.active || drag.pending || wgEditorState.open) return;
       if (e.touches.length !== 1) return;
       if (isPagerSwipeBlockedTarget(e.target)) return;
       edgeStartX = e.touches[0].clientX;
@@ -4378,7 +4382,8 @@
     }, { passive: true });
 
     track.addEventListener('touchend', function (e) {
-      if (getLayoutMode() !== 'custom' || editMode || drag.active || wgEditorState.open) return;
+      /* B14：前半恒 false，已折叠。 */
+      if (editMode || drag.active || wgEditorState.open) return;
       var layout = getLayout();
       var touch = e.changedTouches[0];
       if (!touch) return;
@@ -4397,7 +4402,8 @@
       pager._customPagerBound = true;
       pager.addEventListener('click', function (e) {
         var dot = e.target.closest('[data-desk-page]');
-        if (!dot || getLayoutMode() !== 'custom') return;
+        /* B14：后半恒 false，已折叠。 */
+        if (!dot) return;
         setCustomPage(parseInt(dot.getAttribute('data-desk-page'), 10) || 0);
       });
     }
@@ -5610,7 +5616,7 @@
   }
 
   function onPointerDown(e) {
-    if (getLayoutMode() !== 'custom') return;
+    /* B14：原 `if (getLayoutMode() !== 'custom') return;` 恒不成立（该判据恒为 'custom'），已删除。 */
     if (wgEditorState.open || isCustomOverlayTarget(e.target)) return;
     if (drag.active || drag.pending) return;
     var removeBtn = e.target.closest('.desk-custom__wg-remove');
@@ -5882,7 +5888,8 @@
           !document.documentElement.classList.contains('is-ios'))) {
       return;
     }
-    if (getLayoutMode() !== 'custom' || editMode || drag.active) return;
+    /* B14：前半恒 false，已折叠。 */
+    if (editMode || drag.active) return;
     if (Date.now() < dragConsumedUntil || wgEditorState.open) return;
     if (isCustomOverlayTarget(e.target)) return;
     var touch = e.changedTouches && e.changedTouches[0];
@@ -5896,7 +5903,8 @@
   }
 
   function onWidgetClickFallback(e) {
-    if (getLayoutMode() !== 'custom' || editMode || drag.active || drag.pending) return;
+    /* B14：前半恒 false，已折叠。 */
+    if (editMode || drag.active || drag.pending) return;
     if (Date.now() < dragConsumedUntil) return;
     if (wgEditorState.open || isCustomOverlayTarget(e.target)) return;
     var widgetItem = resolveWidgetAtPoint(e.clientX, e.clientY, e.target);
@@ -5908,7 +5916,7 @@
   function onEditModeTap(e) {
     if (!editMode || drag.active || drag.pending) return;
     if (Date.now() < dragConsumedUntil) return;
-    if (getLayoutMode() !== 'custom') return;
+    /* B14：原 `if (getLayoutMode() !== 'custom') return;` 恒不成立，已删除。 */
     if (Date.now() < customPagerSwipedUntil) return;
     if (wgEditorState.open || isCustomOverlayTarget(e.target)) return;
     if (e.target.closest('.desk-custom__ic, .desk-custom__dock-ic')) return;
@@ -6114,32 +6122,38 @@
   whenCustomDeskReady();
   global.miyaCustomSetWallpaper = function (ref) {
     global.miyaSetCustomDeskTheme({ wallpaper: ref });
-    return getLayoutMode() === 'custom' ? applyCustomDeskTheme() : Promise.resolve();
+    /* B14：getLayoutMode() 恒返回 'custom'，三元恒取前者，已折叠。 */
+    return applyCustomDeskTheme();
   };
   global.miyaCustomSetIcon = function (key, ref) {
     var icons = Object.assign({}, (customThemeState || loadCustomTheme()).icons || {});
     if (ref) icons[key] = ref; else delete icons[key];
     global.miyaSetCustomDeskTheme({ icons: icons });
-    return getLayoutMode() === 'custom' ? applyCustomDeskTheme() : Promise.resolve();
+    /* B14：getLayoutMode() 恒返回 'custom'，三元恒取前者，已折叠。 */
+    return applyCustomDeskTheme();
   };
   global.miyaCustomClearWallpaper = function () {
     global.miyaSetCustomDeskTheme({ wallpaper: null });
-    return getLayoutMode() === 'custom' ? applyCustomDeskTheme() : Promise.resolve();
+    /* B14：getLayoutMode() 恒返回 'custom'，三元恒取前者，已折叠。 */
+    return applyCustomDeskTheme();
   };
   global.miyaCustomSetProfileBg = function (ref) {
     global.miyaSetCustomDeskTheme({ profileBg: ref || null });
-    return getLayoutMode() === 'custom' ? applyCustomDeskTheme() : Promise.resolve();
+    /* B14：getLayoutMode() 恒返回 'custom'，三元恒取前者，已折叠。 */
+    return applyCustomDeskTheme();
   };
   global.miyaCustomSetMemoAva = function (key, ref) {
     var memoAvas = Object.assign({}, (customThemeState || loadCustomTheme()).memoAvas || {});
     if (ref) memoAvas[key] = ref; else delete memoAvas[key];
     global.miyaSetCustomDeskTheme({ memoAvas: memoAvas });
-    return getLayoutMode() === 'custom' ? applyCustomDeskTheme() : Promise.resolve();
+    /* B14：getLayoutMode() 恒返回 'custom'，三元恒取前者，已折叠。 */
+    return applyCustomDeskTheme();
   };
   global.miyaCustomSetPolaroid = function (key, ref) {
     var polaroids = Object.assign({}, (customThemeState || loadCustomTheme()).polaroids || {});
     if (ref) polaroids[key] = ref; else delete polaroids[key];
     global.miyaSetCustomDeskTheme({ polaroids: polaroids });
-    return getLayoutMode() === 'custom' ? applyCustomDeskTheme() : Promise.resolve();
+    /* B14：getLayoutMode() 恒返回 'custom'，三元恒取前者，已折叠。 */
+    return applyCustomDeskTheme();
   };
 })(window);

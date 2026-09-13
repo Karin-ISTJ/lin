@@ -916,6 +916,16 @@
     hydrateAppBeautifyFromIdb().catch(function () {});
   }
 
+  /* B13 跨标签页同步：另一标签页改了聊天 App 美化（主题 / 自定义 CSS / 装饰）后，
+     本标签页此前不会感知，若随后发生一次保存就会用旧 stateCache 整包覆盖。
+     这里补 storage 监听：仅认本模块 STORAGE_KEY。
+     storage 事件只派发给其它标签页，写入方自身收不到，故无自回环；
+     hydrateAppBeautifyFromIdb 内部带 appBeautifyScore 比较，不会用低分旧状态覆盖高分新状态。 */
+  window.addEventListener('storage', function (ev) {
+    if (!ev || ev.key !== STORAGE_KEY || ev.newValue == null) return;
+    hydrateAppBeautifyFromIdb().catch(function () {});
+  });
+
   global.MiyaChatAppBeautify = {
     BUILTIN_THEMES: BUILTIN_THEMES,
     STORAGE_KEY: STORAGE_KEY,

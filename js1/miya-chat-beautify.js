@@ -19,7 +19,10 @@
     ins: 'mq-theme-porcelain',
     blossom: 'mq-theme-sakura',
     noir: 'mq-theme-noir',
-    custom: 'mq-theme-atelier'
+    /* custom 不再映射到 mq-theme-atelier —— 该 class 全仓无任何 CSS 规则，
+       挂上去等于「以为在自定义、实为默认外观」。语义上 custom 就该「不套任何
+       内置皮肤」，外观完全由用户写入的 CSS 决定（injectCustomCss 接管）。 */
+    custom: ''
   };
 
   var BUILTIN_THEMES = [
@@ -115,12 +118,22 @@
   }
 
   function themeClassFor(id) {
-    return THEME_MAP[id] || THEME_MAP.gallery;
+    /* custom 映射为空串：不套任何内置皮肤。
+       注意不能写成 `|| THEME_MAP.gallery`，否则正好把 custom 兜成 gallery。 */
+    if (Object.prototype.hasOwnProperty.call(THEME_MAP, id)) return THEME_MAP[id] || '';
+    return THEME_MAP.gallery;
+  }
+
+  function applyThemeClass(el, cls) {
+    if (!el) return;
+    if (cls) el.classList.add(cls);
   }
 
   function allThemeClasses() {
     var seen = {};
-    Object.keys(THEME_MAP).forEach(function (k) { seen[THEME_MAP[k]] = true; });
+    Object.keys(THEME_MAP).forEach(function (k) {
+      if (THEME_MAP[k]) seen[THEME_MAP[k]] = true;
+    });
     return Object.keys(seen);
   }
 
@@ -295,7 +308,7 @@
     var css = ta ? String(ta.value || '') : '';
     var hasCss = !!css.trim();
     allThemeClasses().forEach(function (cls) { room.classList.remove(cls); });
-    room.classList.add(themeClassFor(hasCss ? 'custom' : 'gallery'));
+    applyThemeClass(room, themeClassFor(hasCss ? 'custom' : 'gallery'));
     room.classList.toggle('mq-has-custom-css', hasCss);
     room.classList.toggle('mq-foot-wechat', hasCss && String(css).indexOf('mq-wechat-skin') >= 0);
     injectPreviewCss(css);
@@ -319,7 +332,7 @@
     bf = normalizeBeautify(bf);
     allThemeClasses().forEach(function (cls) { room.classList.remove(cls); });
     /* 主题类只认 themeId，不再让 customCss 决定主题（同 B1） */
-    room.classList.add(themeClassFor(bf.themeId));
+    applyThemeClass(room, themeClassFor(bf.themeId));
     room.classList.toggle('mq-has-custom-css', !!bf.customCss);
     room.classList.toggle(
       'mq-foot-wechat',
