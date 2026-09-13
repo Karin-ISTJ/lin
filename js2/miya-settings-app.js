@@ -38,7 +38,6 @@
   var WEATHER_KEY = 'miya-weather-v1';
   var COUPLE_KEY = 'miya-couple-v1';
   var COUPLE_WHISPER_KEY = 'miya-couple-whisper-v1';
-  var THEATER_KEY = 'miya-theater-v1';
   var ALBUM_KEY = 'miya-album-v1';
   var LOCK_KEY = 'miya-lock-meta';
   var DESK_LAYOUT_KEY = 'miya-desk-layout-mode';
@@ -90,7 +89,6 @@
     { id: 'itinerary', title: '行程轨迹', lsKeys: [ITINERARY_KEY], widgetKvKeys: [ITINERARY_KEY] },
     { id: 'weather', title: '天气', lsKeys: [WEATHER_KEY], widgetKvKeys: [WEATHER_KEY] },
     { id: 'couple', title: '情侣空间', lsKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY], widgetKvKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY] },
-    { id: 'theater', title: '小剧场', lsKeys: [THEATER_KEY], widgetKvKeys: [THEATER_KEY] },
     { id: 'simulator', title: '人生分镜馆', lsKeys: [SIMULATOR_KEY, SIMULATOR_KEY_LEGACY, SIMULATOR_BACKUP_KEY], widgetKvKeys: [SIMULATOR_KEY, SIMULATOR_BACKUP_KEY] }
   ];
 
@@ -977,9 +975,6 @@
         global.miyaCoupleWhisperStore.invalidateCache();
       }
     }
-    if (cat.id === 'theater' && global.miyaTheaterStore && global.miyaTheaterStore.invalidateCache) {
-      global.miyaTheaterStore.invalidateCache();
-    }
     if (cat.id === 'itinerary' && global.miyaItineraryStore && global.miyaItineraryStore.invalidateCache) {
       global.miyaItineraryStore.invalidateCache();
     }
@@ -1006,7 +1001,6 @@
     if (global.miyaCoupleWhisperStore && global.miyaCoupleWhisperStore.invalidateCache) {
       global.miyaCoupleWhisperStore.invalidateCache();
     }
-    if (global.miyaTheaterStore && global.miyaTheaterStore.invalidateCache) global.miyaTheaterStore.invalidateCache();
     if (global.miyaItineraryStore && global.miyaItineraryStore.invalidateCache) global.miyaItineraryStore.invalidateCache();
     if (global.MiyaAppointmentStore && global.MiyaAppointmentStore.invalidateCache) {
       global.MiyaAppointmentStore.invalidateCache();
@@ -1558,9 +1552,6 @@
     }
     if (global.miyaCoupleWhisperStore && typeof global.miyaCoupleWhisperStore.invalidateCache === 'function') {
       global.miyaCoupleWhisperStore.invalidateCache();
-    }
-    if (global.miyaTheaterStore && typeof global.miyaTheaterStore.invalidateCache === 'function') {
-      global.miyaTheaterStore.invalidateCache();
     }
     if (global.miyaItineraryStore && typeof global.miyaItineraryStore.invalidateCache === 'function') {
       global.miyaItineraryStore.invalidateCache();

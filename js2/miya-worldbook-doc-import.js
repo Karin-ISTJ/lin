@@ -218,10 +218,8 @@
   }
 
   global.miyaWorldbookExtractFileText = miyaWorldbookExtractFileText;
-  global.miyaWorldbookDocImport = {
-    version: 1,
-    extract: miyaWorldbookExtractFileText,
-    PLAIN_EXTS: PLAIN_EXTS.slice(),
-    ZIP_EXTS: ZIP_EXTS.slice()
-  };
+  /* 注：原 global.miyaWorldbookDocImport 聚合导出（version/extract/PLAIN_EXTS/ZIP_EXTS）
+     无任何外部引用，v36 批次 4 移除。真正的对外接口是上面的
+     global.miyaWorldbookExtractFileText，被 miya-contacts-app.js、
+     miya-worldbook-app.js、miya-beautify-doc-import.js 三处调用。 */
 })(typeof window !== 'undefined' ? window : this);

@@ -1,0 +1,357 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   锁屏 · 样式表
+   ───────────────────────────────────────────────────────────────────────
+   背景：本文件在 v32 打包时缺失（index.html 仍引用 css/miya-lockscreen.css?v=9），
+   导致锁屏 <div id="miya-lockscreen"> 完全没有定位与显隐规则，回落到
+   position:static / 默认 display，一旦用户在设置里开启「锁屏壁纸」或
+   「锁屏密码」，js2/miya-lockscreen.js 的 showOverlay() 会把它 hidden=false
+   放出来 —— 届时它既不会铺满屏幕，也不会盖住桌面，纯文本流式堆在文档末尾。
+   本文件按 miya-lockscreen.js 的实际契约重建。
+
+   样式契约（严格对应 JS 里操作到的类名，勿改）：
+     .miya-lockscreen              根层；[hidden] 时必须不显示
+     .is-show                      JS 加上的「已显示」态（opacity/visibility 过渡）
+     .is-clock / .is-passcode      两个阶段互斥，控制 clock 与 pass 区块显隐
+     .is-shake                     密码错误抖动（failPasscode 先移除再加回以重启动画）
+     .is-dragging                  上滑手势进行中
+     #miya-lock-bg  .has-wallpaper 有自定义壁纸时才铺背景图
+     body.miya-lock-active         锁屏生效期间的全局标记
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.miya-lockscreen {
+  --lks-ink: #1A1A1A;
+  --lks-ink-soft: rgba(26, 26, 26, 0.62);
+  --lks-ink-faint: rgba(26, 26, 26, 0.38);
+  --lks-paper: #F5F3EF;
+  --lks-accent: #C4A882;
+
+  position: fixed;
+  inset: 0;
+  z-index: 9400;                      /* 低于开屏遮罩 9500，高于全部应用层 */
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Serif SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--lks-ink);
+  background: var(--lks-paper);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+
+  /* 初始态：JS 通过 .is-show 放行 */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.28s ease,
+    visibility 0.28s ease;
+}
+
+/* 关键：未放行时彻底移出命中测试。
+   若只靠 opacity:0，透明全屏层在 iOS/安卓上仍会吃掉触摸事件。 */
+.miya-lockscreen:not(.is-show) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.miya-lockscreen[hidden] {
+  display: none !important;
+}
+
+.miya-lockscreen.is-show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* 锁屏生效期间锁住背后页面滚动 */
+body.miya-lock-active {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* ── 背景层 ───────────────────────────────────────────────────────── */
+
+.miya-lockscreen__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: var(--lks-paper);
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* 无自定义壁纸时的柔和底纹 */
+.miya-lockscreen__bg:not(.has-wallpaper) {
+  background-image:
+    radial-gradient(ellipse 78% 52% at 22% 0%, rgba(196, 168, 130, 0.16) 0%, transparent 68%),
+    radial-gradient(ellipse 66% 46% at 88% 12%, rgba(196, 168, 130, 0.1) 0%, transparent 66%);
+}
+
+.miya-lockscreen__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(0, 0, 0, 0.02) 42%,
+    rgba(0, 0, 0, 0.14) 100%
+  );
+}
+
+.miya-lockscreen__main {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 72px) 24px
+           calc(env(safe-area-inset-bottom, 0px) + 28px);
+}
+
+/* ── 时钟区 ───────────────────────────────────────────────────────── */
+
+.miya-lockscreen__clock {
+  text-align: center;
+  transition: opacity 0.28s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.miya-lockscreen__time {
+  display: block;
+  font-size: clamp(64px, 21vw, 92px);
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--lks-ink);
+}
+
+.miya-lockscreen__date {
+  margin: 12px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: var(--lks-ink-soft);
+}
+
+/* ── 上滑解锁区 ───────────────────────────────────────────────────── */
+
+.miya-lockscreen__swipe {
+  margin-top: auto;
+  padding: 24px 0 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  touch-action: none;                 /* 避免与页面滚动/下拉刷新抢手势 */
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.28s ease;
+}
+
+.miya-lockscreen__hint {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--lks-ink-faint);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.miya-lockscreen__home-bar {
+  display: block;
+  width: 132px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.24);
+}
+
+.miya-lockscreen__swipe.is-dragging .miya-lockscreen__home-bar {
+  background: rgba(26, 26, 26, 0.4);
+}
+
+/* ── 密码区 ───────────────────────────────────────────────────────── */
+
+.miya-lockscreen__pass {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.miya-lockscreen__pass-msg {
+  min-height: 17px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: #C0503F;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.miya-lockscreen__pass-msg.is-visible {
+  opacity: 1;
+}
+
+.miya-lockscreen__keypad-wrap {
+  width: min(300px, 78vw);
+}
+
+.miya-lockscreen__keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px 18px;
+  justify-items: center;
+}
+
+.miya-lockscreen__key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 66px;
+  height: 66px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(26, 26, 26, 0.1);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--lks-ink);
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.14s ease, transform 0.1s ease, opacity 0.14s ease;
+}
+
+.miya-lockscreen__key:active {
+  background: rgba(196, 168, 130, 0.24);
+  transform: scale(0.92);
+}
+
+.miya-lockscreen__key-num {
+  font-size: 25px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.miya-lockscreen__key-sub {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--lks-ink-faint);
+  transform: scale(0.92);
+}
+
+.miya-lockscreen__key--blank {
+  border: none;
+  background: none;
+  pointer-events: none;
+}
+
+.miya-lockscreen__key--delete {
+  border-color: transparent;
+  background: none;
+}
+
+.miya-lockscreen__key--delete:active {
+  background: rgba(26, 26, 26, 0.06);
+}
+
+.miya-lockscreen__key--delete img {
+  width: 26px;
+  height: 26px;
+  opacity: 0.62;
+  display: block;
+}
+
+.miya-lockscreen__pass-cancel {
+  margin: 22px 0 0;
+  padding: 9px 26px;
+  border: 1px solid rgba(26, 26, 26, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--lks-ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.miya-lockscreen__pass-cancel:active {
+  transform: scale(0.95);
+}
+
+.miya-lockscreen__pass-cancel[hidden] {
+  display: none !important;
+}
+
+/* ── 阶段互斥：clock 与 passcode 二选一 ──────────────────────────── */
+
+.miya-lockscreen.is-clock .miya-lockscreen__clock,
+.miya-lockscreen.is-clock .miya-lockscreen__swipe {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.miya-lockscreen.is-clock .miya-lockscreen__pass {
+  display: none;
+}
+
+.miya-lockscreen.is-passcode .miya-lockscreen__clock {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-14px);
+}
+
+.miya-lockscreen.is-passcode .miya-lockscreen__swipe {
+  display: none;
+}
+
+.miya-lockscreen.is-passcode .miya-lockscreen__pass {
+  display: flex;
+}
+
+/* ── 密码错误抖动 ─────────────────────────────────────────────────── */
+
+.miya-lockscreen.is-shake .miya-lockscreen__keypad-wrap {
+  animation: miya-lock-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes miya-lock-shake {
+  10%, 90% { transform: translateX(-3px); }
+  20%, 80% { transform: translateX(5px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
+
+/* ── 小屏适配 ─────────────────────────────────────────────────────── */
+
+@media (max-height: 700px) {
+  .miya-lockscreen__main {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 40px);
+  }
+  .miya-lockscreen__key {
+    width: 58px;
+    height: 58px;
+  }
+  .miya-lockscreen__keypad {
+    gap: 10px 16px;
+  }
+  .miya-lockscreen__key-num {
+    font-size: 22px;
+  }
+}
+
+/* ── 无动画偏好 ───────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .miya-lockscreen,
+  .miya-lockscreen * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

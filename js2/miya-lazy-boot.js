@@ -44,13 +44,6 @@
         'js2/miya-diary-app.js?v=10'
       ]
     },
-    theaterUi: {
-      css: ['css/miya-theater.css?v=3'],
-      js: [
-        'js2/miya-api-bridge.js?v=1',
-        'js2/miya-theater-app.js?v=3'
-      ]
-    },
     itineraryUi: {
       css: ['css/miya-itinerary.css?v=3'],
       js: ['js2/miya-itinerary-app.js?v=10']
@@ -82,7 +75,6 @@
     pen: ['simulator', 'apiCore'],
     couple: ['coupleUi', 'apiCore'],
     notes: ['diaryUi', 'apiCore'],
-    theater: ['theaterUi', 'apiCore'],
     itinerary: ['itineraryUi', 'apiCore'],
     weather: ['weatherUi', 'apiCore'],
     memory: ['memoryUi'],
@@ -230,10 +222,8 @@
   }
 
   global.miyaLazyEnsure = ensureGroup;
-  global.miyaLazyEnsureGroups = ensureGroups;
   global.miyaLazyEnsureApp = ensureApp;
   global.miyaLazyPeekSimMode = peekSimulatorLastMode;
-  global.miyaLazyGroups = GROUPS;
 
   startBoot();
 })(typeof window !== 'undefined' ? window : self);

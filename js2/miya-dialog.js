@@ -142,24 +142,4 @@
     confirm: function (opts) { return show(Object.assign({ mode: 'confirm' }, opts || {})); },
     prompt: function (opts) { return show(Object.assign({ mode: 'prompt' }, opts || {})); }
   };
-
-  global.miyaSlidePanel = {
-    open: function (el) {
-      if (!el) return;
-      el.hidden = false;
-      el.setAttribute('aria-hidden', 'false');
-      requestAnimationFrame(function () { el.classList.add('is-open'); });
-    },
-    close: function (el, opts) {
-      opts = opts || {};
-      if (!el || el.hidden) return;
-      var ms = opts.ms != null ? opts.ms : 340;
-      el.classList.remove('is-open');
-      el.setAttribute('aria-hidden', 'true');
-      setTimeout(function () {
-        el.hidden = true;
-        if (typeof opts.onDone === 'function') opts.onDone();
-      }, ms);
-    }
-  };
 })(window);

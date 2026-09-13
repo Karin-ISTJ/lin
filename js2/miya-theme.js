@@ -9,83 +9,12 @@
   var MAX_FONT_PRESETS = 12;
 
   var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pen'];
-  var P2_TILE_KEYS = ['tile_couple', 'tile_themeshop'];
   var POLAROID_KEYS = ['polaroid_1', 'polaroid_2', 'polaroid_3'];
-  var P2_WIDGET_KEYS = [
-    'p2_scrap_base',
-    'p2_polaroid_1', 'p2_polaroid_2', 'p2_polaroid_3',
-    'p2_film_1', 'p2_film_2', 'p2_film_3', 'p2_film_4',
-    'p2_canister', 'p2_memo_img', 'p2_tape_deco', 'p2_stamp_img', 'p2_ticket_bg'
-  ];
-  var P3_TILE_KEYS = ['tile_notes', 'tile_fun', 'tile_log'];
-  var P3_WIDGET_KEYS = ['folio_art', 'reel_a', 'reel_b', 'reel_c', 'lunar_bg'];
-  var P3_WIDGET_LEGACY = P3_WIDGET_KEYS.slice();
-  var P4_TILE_KEYS = ['tile_weather', 'tile_map', 'tile_apps', 'tile_theater'];
-  var P4_WIDGET_KEYS = ['p4_mist_a', 'p4_mist_b', 'p4_chip', 'p4_mood'];
   var MEDIA_KEYS = APP_KEYS.concat(POLAROID_KEYS).concat([
     'memo_ava_1', 'memo_ava_2',
     'profile_bg', 'profile_ava', 'weekcal_bg',
     'player_cover', 'player_bg'
-  ])
-    .concat(P2_TILE_KEYS).concat(P2_WIDGET_KEYS)
-    .concat(P3_TILE_KEYS).concat(P3_WIDGET_KEYS)
-    .concat(P4_TILE_KEYS).concat(P4_WIDGET_KEYS);
-
-  var P2_TILE_SELECTORS = {
-    tile_couple: '.desk--p2 .tile--couple',
-    tile_themeshop: '.desk--p2 .tile--itinerary'
-  };
-
-  var P3_TILE_SELECTORS = {
-    tile_notes: '.desk--p3 .tile--note',
-    tile_fun: '.desk--p3 .tile--fun .tile__film'
-  };
-
-  var P2_WIDGET_SELECTORS = {
-    p2_scrap_base: '.desk--p2 .p2f-board__art',
-    p2_polaroid_1: '.desk--p2 .p2f-polaroid--1 .p2f-polaroid__art',
-    p2_polaroid_2: '.desk--p2 .p2f-polaroid--2 .p2f-polaroid__art',
-    p2_polaroid_3: '.desk--p2 .p2f-polaroid--3 .p2f-polaroid__art',
-    p2_film_1: '.desk--p2 .p2f-reel__frame--1 .p2f-reel__art',
-    p2_film_2: '.desk--p2 .p2f-reel__frame--2 .p2f-reel__art',
-    p2_film_3: '.desk--p2 .p2f-reel__frame--3 .p2f-reel__art',
-    p2_film_4: '.desk--p2 .p2f-reel__frame--4 .p2f-reel__art',
-    p2_canister: '.desk--p2 .p2f-canister__art',
-    p2_memo_img: '.desk--p2 .p2f-memo__art',
-    p2_tape_deco: '.desk--p2 .p2f-tape-deco__art',
-    p2_stamp_img: '.desk--p2 .p2f-stamp-cluster__art',
-    p2_ticket_bg: '.desk--p2 .p2f-ticket-stack__art'
-  };
-
-  var P2_WIDGET_LEGACY_MAP = {
-    cal_bg: 'p2_scrap_base',
-    deco_orbit: 'p2_tape_deco',
-    deco_moon: 'p2_canister',
-    deco_note: 'p2_memo_img',
-    cal_art: 'p2_scrap_base'
-  };
-
-  var P3_WIDGET_SELECTORS = {
-    folio_art: '.desk--p3 .wg-folio__art',
-    reel_a: '.desk--p3 .wg-reel__frame--a',
-    reel_b: '.desk--p3 .wg-reel__frame--b',
-    reel_c: '.desk--p3 .wg-reel__frame--c',
-    lunar_bg: '.desk--p3 .wg-ledger__face'
-  };
-
-  var P4_TILE_SELECTORS = {
-    tile_weather: '.desk--p4 .p4-tag--weather .p4-tag__art',
-    tile_map: '.desk--p4 .p4-tag--map .p4-tag__art',
-    tile_apps: '.desk--p4 .p4-tag--apps .p4-tag__art',
-    tile_theater: '.desk--p4 .p4-frame .p4-frame__art'
-  };
-
-  var P4_WIDGET_SELECTORS = {
-    p4_mist_a: '.desk--p4 .p4-veil__art',
-    p4_mist_b: '.desk--p4 .p4-glow__art',
-    p4_chip: '.desk--p4 .p4-chip__art',
-    p4_mood: '.desk--p4 .p4-polar__art'
-  };
+  ]);
 
   var defaultCopy = {
     profileName: '半醒手记',
@@ -145,8 +74,6 @@
     p4MapMeta: '附近',
     p4AppsTag: '应用',
     p4AppsMeta: '全部',
-    p4TheaterTag: '剧场',
-    p4TheaterMeta: '夜场',
     p4ChipText: '慢'
   };
 
@@ -156,12 +83,6 @@
     icons: {},
     polaroids: {},
     memoAvas: {},
-    p2Widgets: {},
-    p2Tiles: {},
-    p3Tiles: {},
-    p3Widgets: {},
-    p4Tiles: {},
-    p4Widgets: {},
     profileBg: null,
     weekcalBg: null,
     playerCover: null,
@@ -193,7 +114,6 @@
     { key: 'couple', label: '情侣空间', selectors: ['.miya-couple-app'] },
     { key: 'itinerary', label: '行程轨迹', selectors: ['.miya-itinerary-app'] },
     { key: 'notes', label: '日记', selectors: ['.miya-diary-app'] },
-    { key: 'theater', label: '剧场', selectors: ['.miya-theater-app'] },
     { key: 'beauty', label: '美化', selectors: ['.miya-beautify-app'] },
     { key: 'lockscreen', label: '锁屏', selectors: ['.miya-lockscreen'] },
     { key: 'system', label: '系统弹窗', selectors: ['.miya-dialog-root', '.miya-upd-overlay', '.modal'] },
@@ -737,68 +657,6 @@
     return out;
   }
 
-  function resolveP3Widgets(theme) {
-    var out = Object.assign({}, theme.p3Widgets || {});
-    var legacy = theme.p2Widgets || {};
-    P3_WIDGET_LEGACY.forEach(function (k) {
-      if (!out[k] && legacy[k]) out[k] = legacy[k];
-    });
-    return out;
-  }
-
-  function resolveP2Widgets(theme) {
-    var src = theme.p2Widgets || {};
-    var out = {};
-    P2_WIDGET_KEYS.forEach(function (k) {
-      if (src[k]) out[k] = src[k];
-    });
-    Object.keys(P2_WIDGET_LEGACY_MAP).forEach(function (legacyKey) {
-      var mapped = P2_WIDGET_LEGACY_MAP[legacyKey];
-      if (!out[mapped] && src[legacyKey]) out[mapped] = src[legacyKey];
-    });
-    return out;
-  }
-
-  function resolveP3Tiles(theme) {
-    var out = Object.assign({}, theme.p3Tiles || {});
-    var legacy = theme.p2Tiles || {};
-    P3_TILE_KEYS.forEach(function (k) {
-      if (!out[k] && legacy[k]) out[k] = legacy[k];
-    });
-    return out;
-  }
-
-  function resolveP2Tiles(theme) {
-    var out = Object.assign({}, theme.p2Tiles || {});
-    var icons = theme.icons || {};
-    P2_TILE_KEYS.forEach(function (k) {
-      if (!out[k]) {
-        var appKey = k.replace(/^tile_/, '');
-        if (icons[appKey]) out[k] = icons[appKey];
-      }
-    });
-    return out;
-  }
-
-  function normalizeDeskPageStorage(theme) {
-    if (!theme) return theme;
-    var p3Widgets = resolveP3Widgets(theme);
-    var p2Widgets = resolveP2Widgets(theme);
-    var p3Tiles = resolveP3Tiles(theme);
-    var p2Tiles = resolveP2Tiles(theme);
-    theme.p3Widgets = p3Widgets;
-    theme.p2Widgets = p2Widgets;
-    theme.p3Tiles = p3Tiles;
-    theme.p2Tiles = p2Tiles;
-    theme.p4Tiles = Object.assign({}, theme.p4Tiles || {});
-    theme.p4Widgets = Object.assign({}, theme.p4Widgets || {});
-    return theme;
-  }
-
-  function migrateDeskPages(theme) {
-    return normalizeDeskPageStorage(theme);
-  }
-
   var LEGACY_PROFILE_COPY = {
     profileName: ['NongillZove', '你的名字'],
     profileBio: ['温哥华是雨季 台湾今天天气很晴', '写一句简介吧']
@@ -854,7 +712,6 @@
           if (!merged.polaroids) merged.polaroids = {};
           if (!merged.memoAvas) merged.memoAvas = {};
           if (!merged.profileBg && merged.playerBg) merged.profileBg = merged.playerBg;
-          migrateDeskPages(merged);
           return merged;
         }
       }
@@ -869,12 +726,6 @@
       icons: theme.icons || {},
       polaroids: theme.polaroids || {},
       memoAvas: theme.memoAvas || {},
-      p2Widgets: theme.p2Widgets || {},
-      p2Tiles: theme.p2Tiles || {},
-      p3Tiles: theme.p3Tiles || {},
-      p3Widgets: theme.p3Widgets || {},
-      p4Tiles: theme.p4Tiles || {},
-      p4Widgets: theme.p4Widgets || {},
       profileBg: theme.profileBg || null,
       weekcalBg: theme.weekcalBg || null,
       playerCover: theme.playerCover || null,
@@ -1508,47 +1359,6 @@
     });
   }
 
-  function applyP2Tile(key, ref) {
-    var selector = P2_TILE_SELECTORS[key];
-    if (!selector) return Promise.resolve();
-    var appKey = key.replace(/^tile_/, '');
-    return applyCustomArt(selector, ref, { asTileBg: true, tileKey: appKey, deskSel: '.desk--p2' });
-  }
-
-  function applyP3Tile(key, ref) {
-    var selector = P3_TILE_SELECTORS[key];
-    if (!selector) return Promise.resolve();
-    var appKey = key.replace(/^tile_/, '');
-    if (key === 'tile_fun') {
-      return applyCustomArt(selector, ref, {});
-    }
-    return applyCustomArt(selector, ref, { asTileBg: true, tileKey: appKey, deskSel: '.desk--p3' });
-  }
-
-  function applyP2Widget(key, ref) {
-    var selector = P2_WIDGET_SELECTORS[key];
-    if (!selector) return Promise.resolve();
-    return applyCustomArt(selector, ref, {});
-  }
-
-  function applyP3Widget(key, ref) {
-    var selector = P3_WIDGET_SELECTORS[key];
-    if (!selector) return Promise.resolve();
-    return applyCustomArt(selector, ref, {});
-  }
-
-  function applyP4Tile(key, ref) {
-    var selector = P4_TILE_SELECTORS[key];
-    if (!selector) return Promise.resolve();
-    return applyCustomArt(selector, ref, {});
-  }
-
-  function applyP4Widget(key, ref) {
-    var selector = P4_WIDGET_SELECTORS[key];
-    if (!selector) return Promise.resolve();
-    return applyCustomArt(selector, ref, {});
-  }
-
   function applyIconFrameless(theme) {
     var on = theme && theme.iconFrameless === true;
     document.documentElement.classList.toggle('miya-icon-frameless', on);
@@ -1600,27 +1410,21 @@
        在本入口中从不执行 —— 自定义桌面由 miyaApplyCustomDesk 独立设置
        miyaTextMode / miya-icon-frameless / miya-alt-app-icons，CSS 侧（style.css、
        miya-apps.css）已备好对应规则。折叠后直接跳过，保持原有可观察行为不变。
-       （三个函数体保留：仍可能被其它路径引用，且删除对可读性无增益。） */
+       （三个函数体保留：仍可能被其它路径引用，且删除对可读性无增益。）
+
+       修复（v32-T1）：同时删除了下方两处 `if (!isCustom) {...}` 死分支。
+       变量 isCustom 已随 B14 折叠一并移除，但这两处判断被漏改，
+       每次调用 miyaApplyTheme 都会抛 ReferenceError: isCustom is not defined，
+       使 miyaHydrateTheme 的 then 链断裂 —— 桌面骨架（desk-custom-track）
+       永远挂不上子节点，表现为「开屏动画结束后纯白页面、任何位置都点不动」。
+       因 isCustom 恒真 => !isCustom 恒假，两处分支本就永不执行，直接删除即可。 */
     applyHomeCopy(theme);
     var promises = [];
     promises.push(applyFont(theme));
-    if (!isCustom) {
-      promises.push(
-        global.miyaResolveMediaUrl(theme.wallpaper).then(function (url) {
-          applyWallToPhone(url);
-        })
-      );
-    }
     APP_KEYS.forEach(function (key) {
       var btn = document.querySelector('.desk-viewport [data-app="' + key + '"], .desk--p1 [data-app="' + key + '"]');
       promises.push(applyIconBg(btn, theme.icons && theme.icons[key]));
     });
-    if (!isCustom) {
-      ['contacts', 'pen'].forEach(function (key) {
-        var dockBtn = document.querySelector('.foot__dock [data-app="' + key + '"]');
-        promises.push(applyIconBg(dockBtn, theme.icons && theme.icons[key]));
-      });
-    }
     POLAROID_KEYS.forEach(function (key) {
       var slot = key === 'polaroid_1' ? '1' : key === 'polaroid_2' ? '2' : '3';
       promises.push(applyPolaroid(slot, theme.polaroids && theme.polaroids[key]));
@@ -1632,30 +1436,11 @@
     promises.push(applyWeekcalBg(theme.weekcalBg));
     promises.push(applyPlayerCover(theme.playerCover));
     promises.push(applyPlayerBg(theme.playerBg));
-    P2_TILE_KEYS.forEach(function (key) {
-      promises.push(applyP2Tile(key, theme.p2Tiles && theme.p2Tiles[key]));
-    });
-    P2_WIDGET_KEYS.forEach(function (key) {
-      promises.push(applyP2Widget(key, theme.p2Widgets && theme.p2Widgets[key]));
-    });
-    P3_TILE_KEYS.forEach(function (key) {
-      promises.push(applyP3Tile(key, theme.p3Tiles && theme.p3Tiles[key]));
-    });
-    P3_WIDGET_KEYS.forEach(function (key) {
-      promises.push(applyP3Widget(key, theme.p3Widgets && theme.p3Widgets[key]));
-    });
-    P4_TILE_KEYS.forEach(function (key) {
-      promises.push(applyP4Tile(key, theme.p4Tiles && theme.p4Tiles[key]));
-    });
-    P4_WIDGET_KEYS.forEach(function (key) {
-      promises.push(applyP4Widget(key, theme.p4Widgets && theme.p4Widgets[key]));
-    });
     return Promise.all(promises);
   };
 
   global.miyaHydrateTheme = function () {
     themeState = loadMeta();
-    themeState = normalizeDeskPageStorage(themeState);
     saveMeta(themeState);
     return global.miyaApplyTheme(themeState).then(function () {
       global.miyaInitHomeCopyEdit();
@@ -1796,64 +1581,8 @@
     return global.miyaApplyTheme();
   };
 
-  global.miyaSetP2Tile = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var tiles = Object.assign({}, theme.p2Tiles || {});
-    if (ref) tiles[key] = ref; else delete tiles[key];
-    global.miyaSetTheme({ p2Tiles: tiles });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetP3Tile = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var tiles = Object.assign({}, theme.p3Tiles || {});
-    if (ref) tiles[key] = ref; else delete tiles[key];
-    global.miyaSetTheme({ p3Tiles: tiles });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetP2Widget = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var widgets = Object.assign({}, theme.p2Widgets || {});
-    if (ref) widgets[key] = ref; else delete widgets[key];
-    global.miyaSetTheme({ p2Widgets: widgets });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetP3Widget = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var widgets = Object.assign({}, theme.p3Widgets || {});
-    if (ref) widgets[key] = ref; else delete widgets[key];
-    global.miyaSetTheme({ p3Widgets: widgets });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetP4Tile = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var tiles = Object.assign({}, theme.p4Tiles || {});
-    if (ref) tiles[key] = ref; else delete tiles[key];
-    global.miyaSetTheme({ p4Tiles: tiles });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetP4Widget = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var widgets = Object.assign({}, theme.p4Widgets || {});
-    if (ref) widgets[key] = ref; else delete widgets[key];
-    global.miyaSetTheme({ p4Widgets: widgets });
-    return global.miyaApplyTheme();
-  };
-
   global.miyaAPP_KEYS = APP_KEYS;
-  global.miyaP2_TILE_KEYS = P2_TILE_KEYS;
   global.miyaPOLAROID_KEYS = POLAROID_KEYS;
-  global.miyaP2_WIDGET_KEYS = P2_WIDGET_KEYS;
-  global.miyaP3_TILE_KEYS = P3_TILE_KEYS;
-  global.miyaP3_WIDGET_KEYS = P3_WIDGET_KEYS;
-  global.miyaP4_TILE_KEYS = P4_TILE_KEYS;
-  global.miyaP4_WIDGET_KEYS = P4_WIDGET_KEYS;
-  global.miyaMEDIA_KEYS = MEDIA_KEYS;
-  global.miyaDefaultCopy = defaultCopy;
 
   function collectMediaIds(theme, bag) {
     bag = bag || {};
@@ -2071,7 +1800,6 @@
       var t = Object.assign({}, defaultTheme, data.theme);
       t.copy = Object.assign({}, defaultCopy, t.copy || {});
       t.copy = migrateProfileCopy(t.copy);
-      migrateDeskPages(t);
       global.miyaSetTheme(t);
       return global.miyaApplyTheme(t);
     });

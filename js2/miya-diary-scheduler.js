@@ -238,11 +238,9 @@
     });
   }
 
-  global.miyaDiaryScheduler = {
-    boot: boot,
-    checkAllContacts: checkAllContacts,
-    triggerAutoWrite: triggerAutoWrite
-  };
+  /* 注：原 global.miyaDiaryScheduler 导出（boot/checkAllContacts/triggerAutoWrite）
+     无任何外部引用，v36 批次 4 移除。三个函数仍由本文件的定时器与
+     DOMContentLoaded 引导流程内部使用，故保留。 */
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

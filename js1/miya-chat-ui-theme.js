@@ -48,25 +48,13 @@
     }
   }
 
-  function get() {
-    return current;
-  }
-
-  function toggle() {
-    return current;
-  }
-
   function init() {
     apply(getStored(), { animate: false });
   }
 
-  global.miyaChatUiTheme = {
-    init: init,
-    get: get,
-    apply: apply,
-    toggle: toggle,
-    THEMES: THEMES
-  };
+  /* 注：原 global.miyaChatUiTheme 导出（init/get/apply/toggle/THEMES）无任何外部引用，
+     v36 批次 4 移除。内部 init/apply/THEMES 仍被本文件与 DOMContentLoaded 引导使用，
+     故保留；本模块通过 applyClasses 直接作用于 #miya-chat-app 达成效果。 */
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

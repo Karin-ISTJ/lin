@@ -3,7 +3,7 @@
   (function resetOverlayApps() {
     document.body.classList.remove('miya-app-open');
     document.querySelectorAll(
-      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-theater-app, #miya-offline-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess'
+      '.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .miya-contacts-app, #miya-chat-app, #miya-memory-app, #miya-st-presets-app, #miya-diary-app, #miya-offline-app, #miya-itinerary-app, #miya-couple-app, #miya-fun-app, #miya-fun-sayguess'
     ).forEach(function (el) {
       if (!el.classList.contains('is-open')) {
         el.setAttribute('hidden', '');
@@ -36,7 +36,6 @@
     log: '<svg viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="12" height="16" rx="1.5" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><rect x="9" y="10" width="6" height="5" rx="0.5" stroke="rgba(130,136,145,0.65)" stroke-width="1.1"/><path d="M8 7.5h8" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/></svg>',
     weather: '<svg viewBox="0 0 24 24" fill="none"><circle cx="16.5" cy="8" r="2.6" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M16.5 4.2v1M16.5 10.8v1M12.7 8h1M19.3 8h1" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/><path d="M7 17.5c-2 0-3.5-1.4-3.5-3.1S5 11.3 7 11.3c.4-1.9 2.1-3.3 4.2-3.3 2.3 0 4.2 1.7 4.4 3.9 1.6.1 2.9 1.4 2.9 2.9 0 1.6-1.4 3-3.1 3H7z" stroke="rgba(70,74,80,0.82)" stroke-width="1.2" stroke-linejoin="round"/></svg>',
     apps: '<svg viewBox="0 0 24 24" fill="none"><rect x="3.8" y="3.8" width="7" height="7" rx="2.1" stroke="rgba(70,74,80,0.82)" stroke-width="1.15"/><rect x="13.2" y="3.8" width="7" height="7" rx="2.1" stroke="rgba(70,74,80,0.82)" stroke-width="1.15"/><rect x="3.8" y="13.2" width="7" height="7" rx="2.1" stroke="rgba(70,74,80,0.82)" stroke-width="1.15"/><rect x="13.2" y="13.2" width="7" height="7" rx="2.1" stroke="rgba(70,74,80,0.82)" stroke-width="1.15"/><circle cx="7.3" cy="7.3" r="1.05" stroke="rgba(130,136,145,0.65)" stroke-width="1"/><path d="M15.4 6.2h2.6M16.7 5v2.5" stroke="rgba(130,136,145,0.65)" stroke-width="1" stroke-linecap="round"/><path d="M5.6 15.8h3.4M5.6 17.4h2.2" stroke="rgba(130,136,145,0.65)" stroke-width="1" stroke-linecap="round"/><circle cx="15.5" cy="15.5" r="0.7" fill="rgba(130,136,145,0.65)"/><circle cx="17.7" cy="15.5" r="0.7" fill="rgba(130,136,145,0.55)"/><circle cx="15.5" cy="17.7" r="0.7" fill="rgba(130,136,145,0.55)"/><circle cx="17.7" cy="17.7" r="0.7" fill="rgba(130,136,145,0.45)"/></svg>',
-    theater: '<svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="6" width="17" height="12" rx="2" stroke="rgba(70,74,80,0.82)" stroke-width="1.2"/><path d="M3.5 9.5h17" stroke="rgba(130,136,145,0.65)" stroke-width="1.1" stroke-linecap="round"/><path d="M10.2 12.2l4.2 2.4-4.2 2.4v-4.8z" fill="rgba(130,136,145,0.65)"/></svg>'
   };
 
   var SVG_ENT = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 4H7C4.24 4 2 6.24 2 9v7.88a3.124 3.124 0 0 0 5.33 2.21l1.96-1.96c.71-.71 1.7-1.12 2.71-1.12s1.99.41 2.71 1.12l1.96 1.96A3.124 3.124 0 0 0 22 16.88V9c0-2.76-2.24-5-5-5M7 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2m9.5-5c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1m-2 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m2 2c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m2-2c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1"></path></svg>';
@@ -61,7 +60,6 @@
     log: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-2V2h-2v2H9V2H7v2H5c-1.1 0-2 .9-2 2v1h18V6c0-1.1-.9-2-2-2M3 20c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8H3zm4-8h10v2H7zm0 4h7v2H7z"></path></svg>',
     weather: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.97 0-5.43 2.17-5.91 5H2v2h20v-2h-4.09c-.48-2.83-2.94-5-5.91-5m0 2c1.86 0 3.41 1.28 3.86 3H8.14c.45-1.72 2-3 3.86-3m-1-7h2v3h-2zm6.71 5.71 1-1 1-1L19 5l-.71-.71-1 1-1 1L17 7zm-11.42 0L7 7l.71-.71-1-1-1-1L5 5l-.71.71 1 1zM9 16h11v2H9zm-5 0h3v2H4zm2 4h10v2H6z"></path></svg>',
     apps: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 10c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4v2h-4V6c0-2.21-1.79-4-4-4S2 3.79 2 6s1.79 4 4 4h2v4H6c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4v-2h4v2c0 2.21 1.79 4 4 4s4-1.79 4-4-1.79-4-4-4h-2v-4zm-2-4c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2h-2zM8 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2h2zM8 8H6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2zm6 6h-4v-4h4zm4 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2v-2z"></path></svg>',
-    theater: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 7.5C22 4.47 19.53 2 16.5 2c-1.86 0-3.5.93-4.5 2.35C11 2.93 9.36 2 7.5 2A5.51 5.51 0 0 0 2 7.5c0 1.86.93 3.5 2.35 4.5C2.93 13 2 14.64 2 16.5 2 19.53 4.47 22 7.5 22c1.86 0 3.5-.93 4.5-2.35 1 1.42 2.64 2.35 4.5 2.35 3.03 0 5.5-2.47 5.5-5.5 0-1.86-.93-3.5-2.35-4.5C21.07 11 22 9.36 22 7.5M15 12v.02c-.02 1.66-1.32 2.96-3.02 2.98-1.65-.01-2.96-1.32-2.98-3.02.02-1.66 1.32-2.96 3.02-2.98 1.65.01 2.96 1.32 2.98 2.98zM7.5 4c1.8 0 3.28 1.36 3.48 3.1h-.01c-.01 0-.03 0-.04.01-.28.06-.55.15-.81.25l-.21.09a5.4 5.4 0 0 0-.77.44c-.5.35-.94.79-1.28 1.3 0 0 0 .01-.01.02-.35.53-.61 1.12-.74 1.76-1.74-.2-3.1-1.68-3.1-3.48 0-1.93 1.57-3.5 3.5-3.5Zm0 16C5.57 20 4 18.43 4 16.5c0-1.8 1.36-3.28 3.1-3.48v.01c0 .02.01.03.01.05.06.28.15.54.25.8.03.07.06.14.1.21.1.21.21.42.34.61a4.95 4.95 0 0 0 1.4 1.43s.01 0 .02.01c.53.35 1.11.61 1.76.74-.2 1.74-1.68 3.1-3.48 3.1Zm9 0c-1.8 0-3.28-1.36-3.48-3.1h.01c.02 0 .03 0 .05-.01.28-.06.54-.15.8-.25.08-.03.16-.07.23-.11.2-.09.38-.19.56-.31.07-.04.14-.08.21-.13.47-.33.88-.74 1.21-1.21.04-.06.08-.13.12-.19.12-.19.23-.39.32-.59.03-.07.07-.14.09-.21.11-.28.21-.56.27-.86 1.74.2 3.1 1.68 3.1 3.48 0 1.93-1.57 3.5-3.5 3.5Zm.4-9.02v-.01c0-.02-.01-.03-.01-.05-.06-.28-.15-.54-.25-.8-.03-.07-.06-.14-.1-.21-.1-.21-.21-.42-.34-.61a4.95 4.95 0 0 0-1.4-1.43s-.01 0-.02-.01a4.9 4.9 0 0 0-1.76-.74c.2-1.74 1.68-3.1 3.48-3.1 1.93 0 3.5 1.57 3.5 3.5 0 1.8-1.36 3.28-3.1 3.48Z"></path></svg>'
   };
 
   var SVG = SVG_CLASSIC;
@@ -74,7 +72,6 @@
     phone: '电话', contacts: '联系人', pen: '模拟器',
     notes: '日记', fun: '娱乐', log: '记录',
     couple: '情侣空间', itinerary: '行程轨迹',
-    weather: '天气', apps: '应用', theater: '剧场'
   };
 
   var WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -125,8 +122,6 @@
 
   window.miyaFillAppIcons = fillAppIcons;
   window.miyaSyncAppIconStyle = syncAppIconStyle;
-  window.miyaAppSvgClassic = SVG_CLASSIC;
-  window.miyaAppSvgAlt = SVG_ALT;
   window.miyaAppSvg = SVG_CLASSIC;
 
   document.addEventListener('visibilitychange', function () {
@@ -379,9 +374,6 @@
     },
     notes: function () {
       if (window.miyaDiaryApp && window.miyaDiaryApp.open) window.miyaDiaryApp.open();
-    },
-    theater: function () {
-      if (window.miyaTheaterApp && window.miyaTheaterApp.open) window.miyaTheaterApp.open();
     },
     fun: function () {
       if (window.miyaFunApp && window.miyaFunApp.open) window.miyaFunApp.open();
@@ -705,55 +697,7 @@
     syncBar();
   })();
 
-  (function initP4MistRail() {
-    var desk = document.querySelector('.desk--p4');
-    var rail = document.getElementById('p4-haze-rail');
-    var knob = document.getElementById('p4-haze-knob');
-    var track = document.getElementById('p4-haze-track');
-    if (!desk || !rail || !knob || !track) return;
 
-    var dragging = false;
-
-    function setHaze(ratio) {
-      var t = Math.max(0.08, Math.min(0.95, ratio));
-      desk.style.setProperty('--p4-haze', String(Math.round(t * 100) / 100));
-      knob.style.left = (t * 100) + '%';
-    }
-
-    function ratioFromEvent(e) {
-      var rect = track.getBoundingClientRect();
-      var clientX = e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX;
-      if (!rect.width) return 0.55;
-      return (clientX - rect.left) / rect.width;
-    }
-
-    function onDown(e) {
-      dragging = true;
-      rail.classList.add('is-dragging');
-      setHaze(ratioFromEvent(e));
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    function onMove(e) {
-      if (!dragging) return;
-      setHaze(ratioFromEvent(e));
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    function onUp() {
-      if (!dragging) return;
-      dragging = false;
-      rail.classList.remove('is-dragging');
-    }
-
-    setHaze(0.55);
-    rail.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove, { passive: false });
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-  })();
 
   if (window.miyaBootstrapKvStoresIdle) {
     window.miyaBootstrapKvStoresIdle();

@@ -451,8 +451,6 @@
   };
 
   /** 供下载：从临时目录取出已写好的 OPFS File */
-  global.miyaZipGetOpfsBackupFile = getOpfsFile;
-  global.miyaZipRemoveOpfsBackupFile = removeOpfsFile;
 
   function readU16(view, off) {
     return view.getUint16(off, true);

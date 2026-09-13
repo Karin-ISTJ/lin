@@ -19,10 +19,7 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="css/style.css?v=40">
   <link rel="stylesheet" href="css/miya-desk-p1-weekcal.css?v=12">
-  <link rel="stylesheet" href="css/miya-desk-p2.css?v=14">
-  <link rel="stylesheet" href="css/miya-desk-p3.css?v=1">
-  <link rel="stylesheet" href="css/miya-desk-p4.css?v=4">
-  <link rel="stylesheet" href="css/miya-desk-custom.css?v=35">
+  <link rel="stylesheet" href="css/miya-desk-custom.css?v=36">
   <link rel="stylesheet" href="css/miya-desk-wg-4x1.css?v=9">
   <link rel="stylesheet" href="css/miya-desk-wg-4x2.css?v=13">
   <link rel="stylesheet" href="css/miya-desk-wg-4x3.css?v=11">
@@ -51,7 +48,7 @@
   <link rel="stylesheet" href="css/miya-chat-notify.css?v=6">
   <link rel="stylesheet" href="css/miya-thermal.css?v=11">
   <link rel="stylesheet" href="css/miya-ios-no-blue.css?v=2">
-  <link rel="stylesheet" href="css/miya-lockscreen.css?v=9">
+  <link rel="stylesheet" href="css/miya-lockscreen.css?v=10">
   <!-- 登录包：仅部署版上传 miya-auth/ 时生效；开源版无此文件夹则跳过登录 -->
   <script src="miya-auth/config.js?v=3"></script>
   <script src="miya-auth/boot.js?v=3"></script>
@@ -545,8 +542,6 @@
             </div>
             <button type="button" class="ins-toggle" id="miya-bf-alt-icon-switch" role="switch" aria-checked="false" aria-label="切换初始图标样式"></button>
           </div>
-          <p class="ins-atelier-panel-desc is-fixed-layout-only">第一页 · 标准图标</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--pick is-fixed-layout-only" id="miya-bf-icon-grid"></div>
           <p class="ins-atelier-panel-desc is-custom-layout-only">自定义布局 · 全部应用图标</p>
           <div class="ins-tile-mosaic ins-tile-mosaic--pick is-custom-layout-only" id="miya-bf-custom-icon-grid"></div>
           <div class="ins-url-replace ins-url-replace--panel">
@@ -554,62 +549,9 @@
             <input type="url" class="ins-text-input" id="miya-bf-icon-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
             <button type="button" class="ins-chip" id="miya-bf-icon-url-apply">应用链接</button>
           </div>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--gap is-fixed-layout-only">第二页 · 磁贴应用</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--pick is-fixed-layout-only" id="miya-bf-p2-icon-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-p2-icon-url-label">链接替换 · 第二页磁贴</span>
-            <input type="url" class="ins-text-input" id="miya-bf-p2-icon-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-p2-icon-url-apply">应用链接</button>
-          </div>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--gap is-fixed-layout-only">第三页 · 磁贴图标</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--pick is-fixed-layout-only" id="miya-bf-p3-icon-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-p3-icon-url-label">链接替换 · 第三页磁贴</span>
-            <input type="url" class="ins-text-input" id="miya-bf-p3-icon-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-p3-icon-url-apply">应用链接</button>
-          </div>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--gap is-fixed-layout-only">第四页 · 悬笺入口</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--pick is-fixed-layout-only" id="miya-bf-p4-icon-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-p4-icon-url-label">链接替换 · 第四页入口</span>
-            <input type="url" class="ins-text-input" id="miya-bf-p4-icon-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-p4-icon-url-apply">应用链接</button>
-          </div>
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="object" hidden>
-          <div class="is-fixed-layout-only">
-          <p class="ins-atelier-panel-kicker">03 · 组件</p>
-          <h2 class="ins-atelier-panel-title">桌面挂件</h2>
-          <p class="ins-atelier-panel-desc">第一页 · 名片 / 拍立得 / MEMO</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--wide ins-tile-mosaic--pick" id="miya-bf-extra-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-extra-url-label">链接替换</span>
-            <input type="url" class="ins-text-input" id="miya-bf-extra-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-extra-url-apply">应用链接</button>
-          </div>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--gap">第二页 · 手帐 / 拍立得 / 胶卷</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--wide ins-tile-mosaic--pick" id="miya-bf-p2-widget-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-p2-widget-url-label">链接替换 · 第二页组件</span>
-            <input type="url" class="ins-text-input" id="miya-bf-p2-widget-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-p2-widget-url-apply">应用链接</button>
-          </div>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--gap">第三页 · 刊物 / 胶片 / 账册</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--wide ins-tile-mosaic--pick" id="miya-bf-p3-widget-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-p3-widget-url-label">链接替换 · 第三页组件</span>
-            <input type="url" class="ins-text-input" id="miya-bf-p3-widget-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-p3-widget-url-apply">应用链接</button>
-          </div>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--gap">第四页 · 雾底 / 光晕 / 雾窗 / 小笺</p>
-          <div class="ins-tile-mosaic ins-tile-mosaic--wide ins-tile-mosaic--pick" id="miya-bf-p4-widget-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-p4-widget-url-label">链接替换 · 第四页组件</span>
-            <input type="url" class="ins-text-input" id="miya-bf-p4-widget-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-p4-widget-url-apply">应用链接</button>
-          </div>
-          </div>
           <div class="is-custom-layout-only">
             <p class="ins-atelier-panel-kicker">03 · 组件</p>
             <h2 class="ins-atelier-panel-title">桌面小组件</h2>
@@ -1497,9 +1439,9 @@
             </button>
           </div>
         </header>
-        <div class="fg-leaf-deco fg-leaf-deco--msg" aria-hidden="true"></div>
+        <div class="fg-leaf-deco fg-chrome fg-leaf-deco--msg" aria-hidden="true"></div>
         <div class="qq-page__scroll qq-page__scroll--msg">
-          <div class="fg-greeting">
+          <div class="fg-greeting fg-chrome fg-chrome--flex">
             <div class="fg-greeting__text">
               <p class="fg-greeting__hello">Hello,</p>
               <p class="fg-greeting__name" id="fg-greeting-name">Selina</p>
@@ -1539,7 +1481,7 @@
             <button type="button" class="soft-topbar__icon ins-hide-when-white fg-hide-when-green" data-mm-compose-open aria-label="发布动态">
               <img class="mi-ico-img" src="img/icons/edit-05.svg" alt="" width="18" height="18">
             </button>
-            <button type="button" class="soft-topbar__icon" aria-label="通知">
+            <button type="button" class="soft-topbar__icon ins-chrome ins-chrome--bell fg-chrome" aria-label="通知">
               <img class="mi-ico-img" src="img/icons/message-chat-square.svg" alt="" width="18" height="18">
             </button>
           </div>
@@ -1571,13 +1513,13 @@
             <button type="button" class="soft-topbar__icon fg-hide-when-green" aria-label="添加联系人">
               <img class="mi-ico-img" src="img/icons/plus.svg" alt="" width="18" height="18">
             </button>
-            <button type="button" class="soft-topbar__icon" aria-label="搜索联系人">
+            <button type="button" class="soft-topbar__icon fg-chrome" aria-label="搜索联系人">
               <img class="mi-ico-img" src="img/icons/search-lg.svg" alt="" width="18" height="18">
             </button>
           </div>
         </header>
         <div class="qq-page__scroll">
-          <div class="fg-friends-hero">
+          <div class="fg-friends-hero fg-chrome">
             <span class="fg-friends-hero__label">My Friends</span>
             <span class="fg-friends-hero__count" id="fg-friends-count">0</span>
           </div>
@@ -1586,11 +1528,11 @@
               <span class="soft-quick-card__icon"><img class="mi-ico-img " src="img/icons/user-02.svg" alt="" width="18" height="18"></span>
               <span class="soft-quick-card__label">群聊</span>
             </button>
-            <button type="button" class="soft-quick-card ins-hide-when-white">
+            <button type="button" class="soft-quick-card ins-hide-when-white fg-chrome">
               <span class="soft-quick-card__icon"><img class="mi-ico-img" src="img/icons/share-01.svg" alt="" width="18" height="18"></span>
               <span class="soft-quick-card__label">标签</span>
             </button>
-            <button type="button" class="soft-quick-card ins-hide-when-white">
+            <button type="button" class="soft-quick-card ins-hide-when-white fg-chrome">
               <span class="soft-quick-card__icon"><img class="mi-ico-img" src="img/icons/image-01.svg" alt="" width="18" height="18"></span>
               <span class="soft-quick-card__label">公众号</span>
             </button>
@@ -1619,10 +1561,10 @@
             <p class="soft-topbar__subtitle ins-hide-when-white">/ Profile</p>
           </div>
           <div class="soft-topbar__actions">
-            <button type="button" class="soft-topbar__icon" data-mine-action="settings" aria-label="设置">
+            <button type="button" class="soft-topbar__icon ins-chrome ins-chrome--gear" data-mine-action="settings" aria-label="设置">
               <img class="mi-ico-img" src="img/icons/menu-01.svg" alt="" width="18" height="18">
             </button>
-            <button type="button" class="soft-topbar__icon" aria-label="更多">
+            <button type="button" class="soft-topbar__icon ins-chrome ins-chrome--more" aria-label="更多">
               <img class="mi-ico-img" src="img/icons/dots-horizontal.svg" alt="" width="18" height="18">
             </button>
           </div>
@@ -1642,14 +1584,14 @@
             </div>
           </div>
 
-          <div class="fg-vip-bar">
+          <div class="fg-vip-bar fg-chrome fg-chrome--flex">
             <span class="fg-vip-bar__icon" aria-hidden="true">🌿</span>
             <span class="fg-vip-bar__text">VIP Member</span>
           </div>
 
           <div class="soft-menu" id="qq-mine-menu"></div>
 
-          <div class="fg-life-card">
+          <div class="fg-life-card fg-chrome">
             <p class="fg-life-card__quote">生活就像一盒巧克力，你永远不知道下一颗是什么味道。</p>
             <span class="fg-life-card__sign">My Life</span>
           </div>
@@ -1658,7 +1600,7 @@
     </div>
 
     <nav class="soft-tabbar qq-tabbar" aria-label="聊天导航">
-      <button type="button" class="fg-tabbar-ava" data-qq-avatar-home aria-label="返回主屏幕">
+      <button type="button" class="fg-tabbar-ava fg-chrome" data-qq-avatar-home aria-label="返回主屏幕">
         <img class="fg-tabbar-ava__img" id="fg-tabbar-avatar-img" src="" alt="">
       </button>
       <button type="button" class="soft-tabbar__item qq-tabbar__item is-active" data-qq-tab="msg">
@@ -3457,152 +3399,6 @@
   </div>
 
 
-  <!-- 剧场 · 小剧场 -->
-  <div class="miya-theater-app" id="miya-theater-app" hidden aria-hidden="true">
-    <div class="th-atmos" aria-hidden="true"></div>
-    <div class="th-shell">
-      <header class="th-top">
-        <button type="button" class="th-back" id="th-back" aria-label="返回">←</button>
-        <div class="th-top__titles">
-          <p class="th-top__kicker">Theater</p>
-          <h1 class="th-top__title">剧场</h1>
-        </div>
-      </header>
-
-      <div class="th-mode" role="tablist" aria-label="剧场模式">
-        <button type="button" class="th-mode__btn is-active" data-th-mode="solo">单人小剧场</button>
-        <button type="button" class="th-mode__btn" data-th-mode="multi">多人小剧场</button>
-      </div>
-
-      <div class="th-body">
-        <section class="th-panel" id="th-panel-stage">
-          <div class="th-section">
-            <div class="th-section__head">
-              <h2 class="th-section__title">选择角色</h2>
-              <p class="th-section__hint" id="th-cast-hint">选一位</p>
-            </div>
-            <div class="th-chip-scroll" id="th-cast-list"></div>
-          </div>
-          <div class="th-section">
-            <div class="th-section__head">
-              <h2 class="th-section__title">选择模版</h2>
-            </div>
-            <div class="th-tpl-list" id="th-tpl-pick-list"></div>
-          </div>
-          <button type="button" class="th-primary" id="th-start-btn" disabled>开始剧目</button>
-        </section>
-
-        <section class="th-panel" id="th-panel-templates" hidden>
-          <div class="th-section">
-            <div class="th-section__head">
-              <h2 class="th-section__title">我的模版</h2>
-              <button type="button" class="th-secondary" id="th-tpl-new">＋ 新建</button>
-            </div>
-            <div class="th-tpl-list" id="th-tpl-manage-list"></div>
-          </div>
-        </section>
-
-        <section class="th-panel" id="th-panel-history" hidden>
-          <div class="th-filter">
-            <button type="button" class="th-filter__btn is-on" data-th-plays-filter="all">全部</button>
-            <button type="button" class="th-filter__btn" data-th-plays-filter="fav">收藏</button>
-          </div>
-          <div class="th-play-list" id="th-play-list"></div>
-        </section>
-      </div>
-
-      <nav class="th-nav" aria-label="剧场导航">
-        <button type="button" class="th-nav__btn is-active" data-th-tab="stage">开演</button>
-        <button type="button" class="th-nav__btn" data-th-tab="templates">模版</button>
-        <button type="button" class="th-nav__btn" data-th-tab="history">剧目</button>
-      </nav>
-
-      <div class="th-sheet" id="th-tpl-sheet" hidden>
-        <header class="th-top">
-          <button type="button" class="th-back" id="th-tpl-sheet-back" aria-label="返回">←</button>
-          <div class="th-top__titles">
-            <p class="th-top__kicker">Template</p>
-            <h1 class="th-top__title" id="th-tpl-sheet-title">新建模版</h1>
-          </div>
-        </header>
-        <div class="th-sheet__scroll">
-          <div class="th-form-card">
-            <div class="th-field">
-              <label for="th-tpl-title">标题</label>
-              <input class="th-input" id="th-tpl-title" type="text" maxlength="60" placeholder="例如：雨夜告白">
-            </div>
-            <div class="th-field">
-              <label for="th-tpl-mode">适用模式</label>
-              <select class="th-select" id="th-tpl-mode">
-                <option value="any">通用</option>
-                <option value="solo">仅单人</option>
-                <option value="multi">仅多人</option>
-              </select>
-            </div>
-            <div class="th-field">
-              <label for="th-tpl-prompt">生成要求</label>
-              <textarea class="th-textarea" id="th-tpl-prompt" placeholder="写明剧场风格、篇幅、是否输出 HTML、互动规则等…"></textarea>
-              <div class="th-field__row">
-                <button type="button" class="th-secondary" id="th-tpl-import">上传 txt / docx</button>
-                <input type="file" id="th-tpl-file" hidden accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-              </div>
-            </div>
-          </div>
-          <button type="button" class="th-primary" id="th-tpl-save">保存模版</button>
-        </div>
-      </div>
-
-      <div class="th-stage" id="th-stage" hidden>
-        <header class="th-top">
-          <button type="button" class="th-back" id="th-stage-back" aria-label="退出">←</button>
-          <div class="th-top__titles">
-            <p class="th-top__kicker">Now Playing</p>
-            <h1 class="th-top__title" id="th-stage-title">小剧场</h1>
-          </div>
-        </header>
-        <div class="th-stage__meta">
-          <p class="th-stage__cast" id="th-stage-cast"></p>
-        </div>
-        <div class="th-stage__body">
-          <pre class="th-stage__text" id="th-stage-text"></pre>
-          <div class="th-stage__html-wrap" id="th-stage-html" hidden>
-            <iframe class="th-stage__iframe" id="th-stage-iframe" title="小剧场 HTML" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerpolicy="no-referrer"></iframe>
-          </div>
-        </div>
-        <footer class="th-stage__foot" id="th-stage-foot">
-          <button type="button" class="th-tool" id="th-act-regen" aria-label="重新生成" title="重新生成">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0113.2-4.9M19.5 12a7.5 7.5 0 01-13.2 4.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M16.2 3.8v4.2H20M7.8 20.2v-4.2H4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button type="button" class="th-tool" id="th-act-fav" aria-label="收藏" title="收藏">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19.2l-6.2-5.4A4.2 4.2 0 0112 7.4a4.2 4.2 0 016.2 6.4L12 19.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-          </button>
-          <button type="button" class="th-tool" id="th-act-enlarge" aria-label="放大" title="放大" hidden>
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4.5H4.5V9M15 4.5h4.5V9M9 19.5H4.5V15M15 19.5h4.5V15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button type="button" class="th-tool th-tool--danger" id="th-act-del" aria-label="删除" title="删除">
-            <img class="mi-ico-img" src="img/icons/trash-01.svg" alt="" width="18" height="18">
-          </button>
-          <button type="button" class="th-tool" id="th-act-exit" aria-label="退出" title="退出">
-            <img class="mi-ico-img " src="img/icons/x-close.svg" alt="" width="18" height="18">
-          </button>
-        </footer>
-      </div>
-
-      <div class="th-fs" id="th-fs" hidden>
-        <header class="th-fs__head">
-          <button type="button" class="th-fs__back" id="th-fs-back">返回</button>
-        </header>
-        <iframe class="th-fs__iframe" id="th-fs-iframe" title="小剧场全屏" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerpolicy="no-referrer"></iframe>
-      </div>
-
-      <div class="th-loading" id="th-loading" hidden>
-        <div class="th-loading__spin" aria-hidden="true"></div>
-        <p class="th-loading__text" id="th-loading-text">正在生成小剧场…</p>
-      </div>
-      <div class="th-toast" id="th-toast" role="status"></div>
-    </div>
-  </div>
-
   <!-- 日记 -->
   <div class="miya-diary-app" id="miya-diary-app" hidden aria-hidden="true">
     <div class="dy-grain" aria-hidden="true"></div>
@@ -4016,11 +3812,11 @@
   <script defer src="js2/miya-zip-store.js?v=4"></script>
   <script defer src="js1/jszip.min.js"></script>
   <script defer src="js2/miya-dialog.js?v=4"></script>
-  <script defer src="js2/miya-theme.js?v=30"></script>
+  <script defer src="js2/miya-theme.js?v=32"></script>
   <script defer src="js2/miya-desk-custom-widget-templates.js?v=5"></script>
-  <script defer src="js2/miya-desk-custom.js?v=54"></script>
+  <script defer src="js2/miya-desk-custom.js?v=55"></script>
   <script defer src="js2/miya-lockscreen.js?v=10"></script>
-  <script defer src="js1/miya-beautify-app.js?v=28"></script>
+  <script defer src="js1/miya-beautify-app.js?v=29"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=4"></script>
   <script defer src="js2/miya-settings-app.js?v=61"></script>
@@ -4037,7 +3833,7 @@
   <script defer src="js2/miya-worldbook-prompt.js?v=15"></script>
   <script defer src="js2/miya-worldbook-app.js?v=21"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=5"></script>
-  <script defer src="js1/miya-chat-store.js?v=54"></script>
+  <script defer src="js1/miya-chat-store.js?v=55"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>
   <script defer src="js1/miya-chat-emoji-url.js?v=1"></script>
   <script defer src="js1/miya-chat-contacts-sync.js?v=3"></script>
@@ -4099,8 +3895,6 @@
   <script defer src="js2/miya-diary-store.js?v=2"></script>
   <script defer src="js2/miya-diary-bridge.js?v=4"></script>
   <script defer src="js2/miya-diary-peek.js?v=1"></script>
-  <script defer src="js2/miya-theater-store.js?v=2"></script>
-  <script defer src="js2/miya-theater-bridge.js?v=3"></script>
   <script defer src="js1/miya-couple-store.js?v=10"></script>
   <script defer src="js1/miya-couple-bridge.js?v=5"></script>
   <script defer src="js1/miya-couple-checkin-bridge.js?v=7"></script>

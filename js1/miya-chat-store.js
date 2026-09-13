@@ -590,15 +590,6 @@
         return s;
     }
 
-    function inventoryContentText(raw) {
-        var val = inventoryContentRaw(raw);
-        if (val == null) return '';
-        if (typeof val === 'object') {
-            try { return JSON.stringify(val, null, 2).slice(0, 4000); } catch (e2) { return ''; }
-        }
-        return String(val).slice(0, 4000);
-    }
-
     function normalizeInventoryItem(raw) {
         if (!raw || typeof raw !== 'object') return null;
         var name = String(raw.name || '').trim();
@@ -728,9 +719,6 @@
             groupWorldbookEntryIds: [],
             groupWorldbookDisabledEntryIds: [],
             groupHeartVoice: null,
-            groupTheaterPresets: [],
-            groupTheaterHistory: [],
-            groupTheaterLastId: '',
             groupAvatar: '',
             groupAvatarBlobId: null,
             memoryInterop: true,
@@ -1368,43 +1356,6 @@
         } else {
             out.groupHeartVoice = null;
         }
-        if (!Array.isArray(out.groupTheaterPresets)) out.groupTheaterPresets = [];
-        else {
-            out.groupTheaterPresets = out.groupTheaterPresets
-                .map(function (row, i) {
-                    if (!row || typeof row !== 'object') return null;
-                    var prompt = String(row.prompt || '').trim();
-                    if (!prompt) return null;
-                    return {
-                        id: String(row.id || '').trim() || 'gtp_' + i,
-                        name: String(row.name || '').trim() || '预设',
-                        prompt: prompt.slice(0, 2000),
-                        createdAt: Number(row.createdAt) || 0
-                    };
-                })
-                .filter(Boolean)
-                .slice(0, 30);
-        }
-        if (!Array.isArray(out.groupTheaterHistory)) out.groupTheaterHistory = [];
-        else {
-            out.groupTheaterHistory = out.groupTheaterHistory
-                .map(function (row, i) {
-                    if (!row || typeof row !== 'object') return null;
-                    var html = String(row.html || '').trim();
-                    if (!html && !row.iframeSrcdoc) return null;
-                    return {
-                        id: String(row.id || '').trim() || 'gth_' + i,
-                        prompt: String(row.prompt || '').trim().slice(0, 2000),
-                        html: html,
-                        raw: String(row.raw || '').trim(),
-                        useIframe: !!row.useIframe,
-                        iframeSrcdoc: String(row.iframeSrcdoc || ''),
-                        createdAt: Number(row.createdAt) || 0
-                    };
-                })
-                .filter(Boolean);
-        }
-        out.groupTheaterLastId = String(out.groupTheaterLastId || '').trim();
         out.avatarRecognition = normalizeAvatarRecognition(out.avatarRecognition);
         out.imageGen = normalizeContactImageGen(out.imageGen);
         out.chatDisplayAvatars = normalizeChatDisplayAvatars(out.chatDisplayAvatars);
@@ -5244,10 +5195,6 @@
                 .catch(function () {});
         });
     })();
-
-    global.miyaExportChatMediaDb = function () {
-        return global.miyaExportNamedDbBlobs(DB_NAME, STORE);
-    };
 
     global.miyaImportChatMediaDb = function (src) {
         Object.keys(urlCache).forEach(revokeUrl);

@@ -1424,7 +1424,6 @@
       !document.querySelector('#miya-chat-app.is-open') &&
       !document.querySelector('#miya-memory-app.is-open') &&
       !document.querySelector('#miya-diary-app.is-open') &&
-      !document.querySelector('#miya-theater-app.is-open') &&
       !document.querySelector('#miya-offline-app.is-open') &&
       !document.querySelector('.miya-itinerary-app.is-open') &&
       !document.querySelector('.miya-couple-app.is-open') &&

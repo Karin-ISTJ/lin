@@ -155,15 +155,10 @@
     });
   }
 
-  global.miyaIsLowEnd = isLowEnd;
-  global.miyaIsMobile = isMobile;
   global.miyaRepaintGlass = repaintGlass;
-  global.miyaPerfEnabled = perfEnabled;
   global.miyaDeepClone = deepClone;
   global.miyaYieldToMain = yieldToMain;
-  global.miyaRafCoalesce = rafCoalesce;
   global.miyaBindScrollBlur = bindScrollBlur;
   global.miyaScheduleIdle = scheduleIdle;
-  global.miyaScheduleForeground = scheduleForeground;
   global.miyaBindForeground = bindForeground;
 })(typeof window !== 'undefined' ? window : self);

@@ -1,5 +1,9 @@
 /* Miya Chat App · 美化编辑面板 */
 
+/* Removed built-in theme chrome stays inert in the shared chat DOM. */
+.ins-chrome,
+.fg-chrome { display: none !important; }
+
 .cab-theme-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -13,7 +13,25 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const ROOT = process.argv[2] || path.join(__dirname, '..', 'v31');
+/* 包目录解析顺序（先命中先用）：
+     1) 命令行参数            node v31-regression-test.js /path/to/pkg
+     2) 环境变量 PKG_ROOT     PKG_ROOT=/path/to/pkg node v31-regression-test.js
+     3) ../v31（本仓默认布局）
+     4) __dirname（套件被放进包内时）
+   最后兜底会打印解析结果，避免「路径猜错 → 静默 7 连挂」这种难排查的假失败。 */
+function resolveRoot() {
+    if (process.argv[2]) return path.resolve(process.argv[2]);
+    if (process.env.PKG_ROOT) return path.resolve(process.env.PKG_ROOT);
+    const candidates = [
+        path.join(__dirname, '..', 'v31'),
+        __dirname
+    ];
+    for (const c of candidates) {
+        if (fs.existsSync(path.join(c, 'index.html'))) return c;
+    }
+    return candidates[0];
+}
+const ROOT = resolveRoot();
 const results = [];
 let pass = 0;
 let fail = 0;
@@ -196,38 +214,56 @@ function testB8() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   B9：僵尸主题 CSS 三步清理
+   B9：僵尸主题 CSS 文件清理
+   ───────────────────────────────────────────────────────────────────────
+   重要更正（v31 复核实锤）：原报告的三步方案（删文件 + 删 18 处 class + 删兜底规则）
+   会引入回归 —— 这批元素并非纯装饰：
+     · `data-mine-action="settings"` 是「设置」的唯一入口，JS(miya-chat-app.js:1634) 真绑定
+     · `data-qq-avatar-home` 是「返回主屏」的唯一入口，JS(:1531) 真绑定
+     · `fg-greeting-name` / `fg-friends-count` 被 JS(:1332,:1339) 真实写入
+   它们处于「功能活着、视觉隐藏」状态，靠 miya-chat-app-beautify.css 的兜底规则压住。
+   因此正确做法是【只删两个从未加载的 CSS 文件】，保留 class 与兜底规则。
    ═══════════════════════════════════════════════════════════════════════ */
 function testB9() {
-    // 步骤 1：两个 CSS 文件已删除
+    // 正向：两个僵尸 CSS 文件已删除（它们从未被 index.html / sw.js / JS 加载）
     check('B9-a1 fresh-green CSS 文件已删除', !exists('css/miya-chat-app-theme-fresh-green.css'));
     check('B9-a2 ins-white CSS 文件已删除', !exists('css/miya-chat-app-theme-ins-white.css'));
 
-    // 步骤 2：index.html 中 fg-chrome / ins-chrome 已清零
+    // 反向：这两个文件确实从未被加载（删除才是安全的）
     const html = read('index.html');
+    const sw = read('sw.js');
+    check('B9-a3 index.html 从未引用过两个主题',
+        !/fresh-green|ins-white/.test(html));
+    check('B9-a4 sw.js 预缓存表从未引用过两个主题',
+        !/fresh-green|ins-white/.test(sw));
+    const dynHits = grepAll(/fresh-green|ins-white/, ['.js']);
+    check('B9-a5 JS 未动态注入这两个主题', dynHits.length === 0, dynHits.join(', '));
+
+    // 正向：兜底隐藏规则必须保留（否则裸元素会露出来）
+    const bfCss = read('css/miya-chat-app-beautify.css');
+    check('B9-a6 兜底隐藏规则保留（.ins-chrome,.fg-chrome{display:none}）',
+        /\.ins-chrome\s*,?\s*\.fg-chrome\s*\{\s*display\s*:\s*none\s*!important/.test(bfCss));
+
+    // 正向：18 处 class 必须保留（它们是兜底规则的挂钩）
     const fg = (html.match(/fg-chrome/g) || []).length;
     const ins = (html.match(/ins-chrome/g) || []).length;
-    check('B9-a3 index.html 中 fg-chrome 零残留', fg === 0, '残留 ' + fg);
-    check('B9-a4 index.html 中 ins-chrome 零残留', ins === 0, '残留 ' + ins);
+    check('B9-a7 index.html 保留 fg-chrome class（挂钩兜底规则）', fg >= 9, '当前 ' + fg);
+    check('B9-a8 index.html 保留 ins-chrome class（挂钩兜底规则）', ins >= 3, '当前 ' + ins);
 
-    // 反向：整包 CSS/JS 真实代码不应再有引用这两个 class 的规则（注释不计）
-    const fgHits = grepAll(/fg-chrome/, ['.css', '.js']);
-    const insHits = grepAll(/ins-chrome/, ['.css', '.js']);
-    check('B9-a5 CSS/JS 代码中 fg-chrome 零残留', fgHits.length === 0, fgHits.join(', '));
-    check('B9-a6 CSS/JS 代码中 ins-chrome 零残留', insHits.length === 0, insHits.join(', '));
+    // 反向：关键功能入口仍在 DOM 中（删了就是打断功能）
+    check('B9-a9 「设置」入口 data-mine-action="settings" 仍在',
+        /data-mine-action="settings"/.test(html));
+    check('B9-a10 「返回主屏」入口 data-qq-avatar-home 仍在',
+        /data-qq-avatar-home/.test(html));
 
-    // 步骤 3：display:none 兜底规则已移除
-    const bfCss = read('css/miya-chat-app-beautify.css');
-    check('B9-a7 display:none 兜底规则已移除',
-        !/\.ins-chrome\s*,?\s*\.fg-chrome\s*\{\s*display\s*:\s*none/.test(bfCss));
-
-    // 反向：index.html 完全无 fresh-green / ins-white
-    check('B9-a8 index.html 零引用 fresh-green/ins-white',
-        !/fresh-green|ins-white/.test(html));
-
-    // 反向：sw.js 预缓存表也未引用
-    const sw = read('sw.js');
-    check('B9-a9 sw.js 零引用两个僵尸主题', !/fresh-green|ins-white/.test(sw));
+    // 正向：JS 侧确实在使用这些元素（印证「不能删元素」的结论）
+    const chatApp = read('js1/miya-chat-app.js');
+    check('B9-a11 JS 仍绑定 data-mine-action=settings',
+        /data-mine-action="settings"/.test(chatApp));
+    check('B9-a12 JS 仍绑定 data-qq-avatar-home',
+        /data-qq-avatar-home/.test(chatApp));
+    check('B9-a13 JS 仍写入 fg-greeting-name / fg-friends-count',
+        /fg-greeting-name/.test(chatApp) && /fg-friends-count/.test(chatApp));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -338,6 +374,50 @@ function testB14() {
     let ok2 = true, err2 = '';
     try { runIn(sb2, theme, 'theme.js'); } catch (e) { ok2 = false; err2 = e.message; }
     check('B14-b7 miya-theme.js 折叠后可正常加载', ok2, err2);
+
+    // ── 桌面侧：miya-desk-custom.js 的恒真判据（v31 补漏，原只扫了两个文件）──
+    // 该文件 getLayoutMode() 恒返回 'custom'，曾散落 16 处恒真/恒假判断。
+    const deskCode = stripComments(desk);
+    const eqTrue = (deskCode.match(/getLayoutMode\(\)\s*===\s*['"]custom['"]/g) || []).length;
+    const neTrue = (deskCode.match(/getLayoutMode\(\)\s*!==\s*['"]custom['"]/g) || []).length;
+    check('B14-c1 miya-desk-custom.js 无 === "custom" 恒真判断', eqTrue === 0, '残留 ' + eqTrue);
+    check('B14-c2 miya-desk-custom.js 无 !== "custom" 恒假判断', neTrue === 0, '残留 ' + neTrue);
+
+    // 反向：后端 getLayoutMode 仍然恒值（这是折叠的正当性依据）
+    check('B14-c3 getLayoutMode 仍恒返回 custom（折叠依据仍成立）',
+        /function\s+getLayoutMode\s*\(\s*\)\s*\{[\s\S]{0,300}return\s+['"]custom['"]/.test(desk));
+
+    // 反向：桌面侧确实存在被恒值影响的旧形态（注释中应有折叠说明留痕）
+    check('B14-c4 折叠处留有说明注释',
+        /getLayoutMode\(\)[^\n]*恒/.test(desk));
+
+    // 语言级验证：desk 折叠后语法/加载均正常
+    const sb3 = makeSandbox();
+    let ok3 = true, err3 = '';
+    try { runIn(sb3, desk, 'desk.js'); } catch (e) { ok3 = false; err3 = e.message; }
+    check('B14-c5 miya-desk-custom.js 折叠后可正常加载', ok3, err3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOOL：恒值判据静态检查器自检
+   —— 确认 tools/check-constant-predicates.py 在当前代码上无发现
+   ═══════════════════════════════════════════════════════════════════════ */
+function testConstPredicateTool() {
+    const tool = path.join(ROOT, 'tools', 'check-constant-predicates.py');
+    check('TOOL-1 检查器脚本存在', fs.existsSync(tool));
+    if (!fs.existsSync(tool)) return;
+
+    const { execFileSync } = require('child_process');
+    let out = '', code = 0;
+    try {
+        out = execFileSync('python3', [tool, ROOT], { encoding: 'utf8' });
+    } catch (e) {
+        code = e.status;
+        out = (e.stdout || '') + (e.stderr || '');
+    }
+    check('TOOL-2 检查器退出码为 0（无恒真判据）', code === 0, '退出码=' + code);
+    check('TOOL-3 检查器报告无发现',
+        /未发现/.test(out), out.split('\n').slice(-6).join(' / '));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -361,6 +441,7 @@ try { testB8(); } catch (e) { check('testB8 执行', false, e.message); }
 try { testB9(); } catch (e) { check('testB9 执行', false, e.message); }
 try { testB13(); } catch (e) { check('testB13 执行', false, e.message); }
 try { testB14(); } catch (e) { check('testB14 执行', false, e.message); }
+try { testConstPredicateTool(); } catch (e) { check('testConstPredicateTool 执行', false, e.message); }
 try { testSyntax(); } catch (e) { check('testSyntax 执行', false, e.message); }
 
 console.log(results.join('\n'));

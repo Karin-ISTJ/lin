@@ -25,42 +25,13 @@
     tile_log: '记录 · 磁贴',
     tile_couple: '情侣空间 · 磁贴',
     tile_themeshop: '行程轨迹 · 磁贴',
-    p2_scrap_base: '手帐 · 底纸',
-    p2_polaroid_1: '拍立得 · ①',
-    p2_polaroid_2: '拍立得 · ②',
-    p2_polaroid_3: '拍立得 · ③',
-    p2_film_1: '胶卷 · 格 1',
-    p2_film_2: '胶卷 · 格 2',
-    p2_film_3: '胶卷 · 格 3',
-    p2_film_4: '胶卷 · 格 4',
-    p2_canister: '胶卷罐 · 顶盖',
-    p2_memo_img: '便签卡 · 背景',
-    p2_tape_deco: '和纸胶带 · 装饰',
-    p2_stamp_img: '印章 · 图案',
-    p2_ticket_bg: '票根 · 堆叠',
-    folio_art: '刊物封面 · 背景',
-    reel_a: '胶片 · 格 1',
-    reel_b: '胶片 · 格 2',
-    reel_c: '胶片 · 格 3',
-    lunar_bg: '账册 · 纸张',
     tile_weather: '天气 · 悬笺',
     tile_apps: '应用 · 悬笺',
-    tile_theater: '剧场 · 雾框',
-    p4_mist_a: '雾底 · 背景',
-    p4_mist_b: '光晕 · 点缀',
-    p4_chip: '小笺 · 背景',
-    p4_mood: '雾窗 · 侧图'
   };
 
   var pendingIconKey = null;
   var selectedIconKey = null;
   var selectedExtraKey = null;
-  var selectedP2IconKey = null;
-  var selectedP2WidgetKey = null;
-  var selectedP3IconKey = null;
-  var selectedP3WidgetKey = null;
-  var selectedP4IconKey = null;
-  var selectedP4WidgetKey = null;
   var pendingFont = null;
   var selectedCustomIconKey = null;
 
@@ -78,30 +49,6 @@
     return (global.miyaCUSTOM_DESK_ICON_KEYS || []).indexOf(key) >= 0;
   }
 
-  function isP2TileKey(key) {
-    return (global.miyaP2_TILE_KEYS || []).indexOf(key) >= 0;
-  }
-
-  function isP2WidgetKey(key) {
-    return (global.miyaP2_WIDGET_KEYS || []).indexOf(key) >= 0;
-  }
-
-  function isP3TileKey(key) {
-    return (global.miyaP3_TILE_KEYS || []).indexOf(key) >= 0;
-  }
-
-  function isP3WidgetKey(key) {
-    return (global.miyaP3_WIDGET_KEYS || []).indexOf(key) >= 0;
-  }
-
-  function isP4TileKey(key) {
-    return (global.miyaP4_TILE_KEYS || []).indexOf(key) >= 0;
-  }
-
-  function isP4WidgetKey(key) {
-    return (global.miyaP4_WIDGET_KEYS || []).indexOf(key) >= 0;
-  }
-
   function isP1AppIconKey(key) {
     return (global.miyaAPP_KEYS || []).indexOf(key) >= 0;
   }
@@ -110,12 +57,6 @@
     theme = theme || getActiveSurfaceTheme();
     if (key.indexOf('polaroid_') === 0) return theme.polaroids && theme.polaroids[key];
     if (key.indexOf('memo_ava_') === 0 || key === 'profile_ava') return theme.memoAvas && theme.memoAvas[key];
-    if (isP2TileKey(key)) return theme.p2Tiles && theme.p2Tiles[key];
-    if (isP3TileKey(key)) return theme.p3Tiles && theme.p3Tiles[key];
-    if (isP4TileKey(key)) return theme.p4Tiles && theme.p4Tiles[key];
-    if (isP2WidgetKey(key)) return theme.p2Widgets && theme.p2Widgets[key];
-    if (isP3WidgetKey(key)) return theme.p3Widgets && theme.p3Widgets[key];
-    if (isP4WidgetKey(key)) return theme.p4Widgets && theme.p4Widgets[key];
     if (key === 'profile_bg') return theme.profileBg;
     if (key === 'weekcal_bg') return theme.weekcalBg;
     if (key === 'player_cover') return theme.playerCover;
@@ -133,14 +74,9 @@
       tile_couple: '侣', tile_themeshop: '程',
       couple: '侣', itinerary: '程',
       notes: '日', fun: '娱', log: '录',
-      weather: '天', apps: '应', theater: '剧',
-      tile_weather: '天', tile_apps: '应', tile_theater: '剧',
-      p2_scrap_base: '纸', p2_polaroid_1: '①', p2_polaroid_2: '②', p2_polaroid_3: '③',
-      p2_film_1: '1', p2_film_2: '2', p2_film_3: '3', p2_film_4: '4',
-      p2_canister: '罐', p2_memo_img: '笺', p2_tape_deco: '胶', p2_stamp_img: '印', p2_ticket_bg: '票',
+      weather: '天', apps: '应',
+      tile_weather: '天', tile_apps: '应',
       profile_bg: '封', profile_ava: '像', weekcal_bg: '底',
-      folio_art: '刊', reel_a: '1', reel_b: '2', reel_c: '3', lunar_bg: '账',
-      p4_mist_a: '雾', p4_mist_b: '霭', p4_chip: '笺', p4_mood: '光'
     };
     return map[key] || '◆';
   }
@@ -186,12 +122,6 @@
   function buildIconGrid() {
     var gridApps = $('miya-bf-icon-grid');
     var gridExtra = $('miya-bf-extra-grid');
-    var gridP2Icons = $('miya-bf-p2-icon-grid');
-    var gridP2Widgets = $('miya-bf-p2-widget-grid');
-    var gridP3Icons = $('miya-bf-p3-icon-grid');
-    var gridP3Widgets = $('miya-bf-p3-widget-grid');
-    var gridP4Icons = $('miya-bf-p4-icon-grid');
-    var gridP4Widgets = $('miya-bf-p4-widget-grid');
     if (!gridApps || !gridExtra) return;
 
     function appendItem(grid, key) {
@@ -222,24 +152,6 @@
       'memo_ava_1', 'memo_ava_2'
     ]).forEach(function (k) {
       appendItem(gridExtra, k);
-    });
-    (global.miyaP2_TILE_KEYS || []).forEach(function (k) {
-      if (gridP2Icons) appendItem(gridP2Icons, k);
-    });
-    (global.miyaP3_TILE_KEYS || []).forEach(function (k) {
-      if (gridP3Icons) appendItem(gridP3Icons, k);
-    });
-    (global.miyaP4_TILE_KEYS || []).forEach(function (k) {
-      if (gridP4Icons) appendItem(gridP4Icons, k);
-    });
-    (global.miyaP2_WIDGET_KEYS || []).forEach(function (k) {
-      if (gridP2Widgets) appendItem(gridP2Widgets, k);
-    });
-    (global.miyaP3_WIDGET_KEYS || []).forEach(function (k) {
-      if (gridP3Widgets) appendItem(gridP3Widgets, k);
-    });
-    (global.miyaP4_WIDGET_KEYS || []).forEach(function (k) {
-      if (gridP4Widgets) appendItem(gridP4Widgets, k);
     });
     refreshIconPreviews();
   }
@@ -300,13 +212,12 @@
       presetTitle.textContent = '自定义布局方案';
     }
     if (presetHint) {
-      presetHint.textContent = '保存壁纸、图标、字体、桌面布局与自定义小组件库，与固定布局方案分开存储';
+      presetHint.textContent = '保存壁纸、图标、字体、桌面布局与自定义小组件库';
     }
     var app = $('miya-beautify-app');
     if (app) {
-      app.querySelectorAll('.is-fixed-layout-only').forEach(function (el) {
-        el.hidden = true;
-      });
+      /* B15：固定布局与 P2/P3/P4 旧桌面已整体移除，
+         相关 DOM 不再存在，故只处理自定义布局节点。 */
       app.querySelectorAll('.is-custom-layout-only').forEach(function (el) {
         el.hidden = false;
       });
@@ -783,10 +694,10 @@
       if (activeFont) {
         var applied = fixedTheme.fontId === activeFont.id;
         fontHint.textContent = applied
-          ? '当前字体 · ' + activeFont.name + ' · 与固定布局同步'
+          ? '当前字体 · ' + activeFont.name
           : '待应用 · ' + activeFont.name + '（点击「应用字体」生效）';
       } else {
-        fontHint.textContent = '支持本地上传或粘贴链接 · .woff / .woff2 / .ttf / .otf · 全局字体与固定布局同步';
+        fontHint.textContent = '支持本地上传或粘贴链接 · .woff / .woff2 / .ttf / .otf · 全局生效';
       }
     }
     var previewIn = $('miya-bf-font-preview-input');
@@ -908,12 +819,6 @@
     if (key === 'profile_bg') {
       return global.miyaCustomSetProfileBg ? global.miyaCustomSetProfileBg(ref) : Promise.resolve();
     }
-    if (isP2TileKey(key)) return global.miyaSetP2Tile(key, ref);
-    if (isP3TileKey(key)) return global.miyaSetP3Tile(key, ref);
-    if (isP4TileKey(key)) return global.miyaSetP4Tile(key, ref);
-    if (isP2WidgetKey(key)) return global.miyaSetP2Widget(key, ref);
-    if (isP3WidgetKey(key)) return global.miyaSetP3Widget(key, ref);
-    if (isP4WidgetKey(key)) return global.miyaSetP4Widget(key, ref);
     if (key === 'profile_bg') return global.miyaSetProfileBg(ref);
     if (key === 'weekcal_bg') return global.miyaSetWeekcalBg(ref);
     if (key === 'player_cover') return global.miyaSetPlayerCover(ref);

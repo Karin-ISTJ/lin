@@ -457,9 +457,7 @@
       return Promise.resolve();
     }
     if (global.miyaLazyEnsure) {
-      return global.miyaLazyEnsure('weatherUi').catch(function () {
-        return global.miyaLazyEnsure('theaterUi');
-      });
+      return global.miyaLazyEnsure('weatherUi');
     }
     return Promise.reject(new Error('对话 API 未加载'));
   }

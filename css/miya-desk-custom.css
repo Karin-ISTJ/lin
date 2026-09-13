@@ -195,7 +195,7 @@ html.is-custom-dragging .desk-custom__dock-ic {
   justify-self: center;
 }
 
-/* 自定义布局 · 图标略大（不影响固定布局） */
+/* 自定义布局 · 图标略大 */
 .desk-custom__grid .desk-custom__ic .ic__box {
   width: 58px;
   height: 58px;
@@ -321,7 +321,7 @@ html.miya-custom-desk-icon-frameless .desk-custom__grid .ic__box.glass {
   -webkit-backdrop-filter: none !important;
 }
 
-/* 自定义图标铺满圆角（与固定布局 frameless 一致） */
+/* 自定义图标铺满圆角（frameless 一致） */
 html.miya-custom-desk-icon-frameless .has-custom-icon .miya-icon-bg {
   background-size: cover;
 }
@@ -587,8 +587,7 @@ html.is-custom-dragging .desk-custom__dock-ic:active .foot__dock-btn {
   transform: scale(0.98);
 }
 
-.ins-atelier-panel.is-custom-layout-only[hidden],
-.ins-atelier-panel.is-fixed-layout-only[hidden] {
+.ins-atelier-panel.is-custom-layout-only[hidden] {
   display: none !important;
 }
 
@@ -795,7 +794,7 @@ html.is-custom-dragging .desk-custom__dock-ic:active .foot__dock-btn {
   color: var(--ink-faint);
 }
 
-/* ── 精选小组件 · 与固定布局同款，按网格等比缩放 ── */
+/* ── 精选小组件 · 按网格等比缩放 ── */
 .desk-custom__item--widget > .desk-custom__wg {
   width: 100%;
   height: 100%;
@@ -1301,10 +1300,7 @@ html.is-custom-wg-editing .desk-custom-viewport {
   border-radius: 12px;
 }
 
-/* 已移除固定主屏幕：美化面板只保留自定义布局相关 */
-.is-fixed-layout-only {
-  display: none !important;
-}
+/* 已移除固定主屏幕与 P2/P3/P4 旧桌面：美化面板只保留自定义布局相关 */
 .is-custom-layout-only {
   display: block !important;
 }
