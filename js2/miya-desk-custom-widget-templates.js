@@ -472,9 +472,16 @@
         return presetsCache.slice();
       });
     }
-    try {
-      localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(presetsCache); } catch (eStr) {
+      notifyCatalogChanged();
+      return Promise.resolve(presetsCache.slice());
+    }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(PRESETS_LS, str);
+    } else {
+      try { localStorage.setItem(PRESETS_LS, str); } catch (e) {}
+    }
     notifyCatalogChanged();
     return Promise.resolve(presetsCache.slice());
   }
@@ -902,9 +909,13 @@
   }
 
   function saveDraft(state) {
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(state || defaultDraft()));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(state || defaultDraft()); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(DRAFT_KEY, str);
+    } else {
+      try { localStorage.setItem(DRAFT_KEY, str); } catch (e) {}
+    }
   }
 
   function buildSlotRowHtml(slot, index) {

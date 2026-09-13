@@ -1,6 +1,10 @@
 (function (global) {
   'use strict';
 
+  /* 流式空闲超时：多久没收到数据算「卡死」。
+     不设请求级总时长（会误杀正常的长回复），只在「持续无进展」时判定。 */
+  var STREAM_IDLE_TIMEOUT_MS = 60000;
+
   function store() {
     return global.MiyaSimulatorStore;
   }
@@ -493,17 +497,74 @@
       var reader = res.body.getReader();
       var decoder = new TextDecoder('utf-8');
       var sseBuf = '';
-      function pump() {
-        return reader.read().then(function (result) {
-          if (result.done) return finishStream();
-          sseBuf += decoder.decode(result.value, { stream: true });
-          var parts = sseBuf.split('\n');
-          sseBuf = parts.pop() || '';
-          parts.forEach(consumeSsePayload);
-          return pump();
-        });
+      /* 读流中断韧性。
+         与 api-bridge / appointment-engine 保持同一套策略：
+         有内容 → 以已收内容收尾并标记 partial；无内容 → 抛错。
+         同样不做「退避续读」——同一个 reader 出错后不会复活。
+         另加空闲超时看门狗，避免服务端挂住不发数据时无限等待。 */
+      function hasAny() {
+        return !!String(contentAcc || '').length;
       }
-      return pump();
+      function finishPartial(err) {
+        if (sseBuf.trim()) {
+          try { consumeSsePayload(sseBuf); } catch (eTail) {}
+        }
+        if (handlers.onPartial) {
+          try {
+            handlers.onPartial({
+              reason: (err && err.name === 'StreamIdleTimeout') ? 'idle_timeout' : 'disconnected',
+              message: String((err && err.message) || '流式中断')
+            });
+          } catch (eCb) {}
+        }
+        return finishStream();
+      }
+      return (function pump() {
+        var idleTimer = null;
+        var stalled = false;
+        function clearIdle() {
+          if (idleTimer != null) { clearTimeout(idleTimer); idleTimer = null; }
+        }
+        function armIdle() {
+          clearIdle();
+          idleTimer = setTimeout(function () {
+            stalled = true;
+            if (global.console && console.warn) {
+              console.warn('[miya] 模拟器流式空闲超时（' + STREAM_IDLE_TIMEOUT_MS + 'ms 无数据），以已收内容收尾');
+            }
+            try { reader.cancel(); } catch (e) { /* 尽力而为 */ }
+          }, STREAM_IDLE_TIMEOUT_MS);
+        }
+        function step() {
+          if (stalled) {
+            var idleErr = new Error('流式空闲超时');
+            idleErr.name = 'StreamIdleTimeout';
+            if (!hasAny()) throw idleErr;
+            return finishPartial(idleErr);
+          }
+          armIdle();
+          return reader.read().then(function (result) {
+            clearIdle();
+            if (result.done) return finishStream();
+            sseBuf += decoder.decode(result.value, { stream: true });
+            var parts = sseBuf.split('\n');
+            sseBuf = parts.pop() || '';
+            parts.forEach(consumeSsePayload);
+            return step();
+          }, function (err) {
+            clearIdle();
+            /* 用户主动中止 → 原样抛出，不做部分收尾 */
+            var aborted = !!(err && (err.name === 'AbortError' || err.name === 'TimeoutError'));
+            if (aborted) throw err;
+            if (!hasAny()) throw err;
+            if (global.console && console.warn) {
+              console.warn('[miya] 模拟器流式中断，以已收内容收尾：', err && err.message);
+            }
+            return finishPartial(err);
+          });
+        }
+        return step();
+      })();
     });
   }
 

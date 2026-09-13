@@ -1718,9 +1718,21 @@
 
   function applyBackupLocalStorage(ls) {
     try { localStorage.clear(); } catch (e0) {}
+    /* 恢复备份时最怕「看起来成功了，其实大部分 key 没写进去」——
+       用户在别的机器上恢复完，发现数据只回来一半，还以为是备份文件损坏。
+       这里把失败数收集起来，交给调用方提示。 */
+    var failed = 0;
     Object.keys(ls || {}).forEach(function (k) {
-      try { localStorage.setItem(k, ls[k] == null ? '' : String(ls[k])); } catch (e1) {}
+      var v = ls[k] == null ? '' : String(ls[k]);
+      var ok;
+      if (typeof global.miyaSafeLsSet === 'function') {
+        ok = global.miyaSafeLsSet(k, v);
+      } else {
+        try { localStorage.setItem(k, v); ok = true; } catch (e1) { ok = false; }
+      }
+      if (!ok) failed += 1;
     });
+    return { total: Object.keys(ls || {}).length, failed: failed };
   }
 
   async function restoreBackupPayload(raw, onProgress) {
@@ -1753,8 +1765,12 @@
     }
 
     onProgress(88, '正在写入本地设置…');
-    applyBackupLocalStorage(ls);
+    var lsResult = applyBackupLocalStorage(ls);
     finishBackupImport();
+    if (lsResult && lsResult.failed > 0) {
+      toast('本地设置写入失败 ' + lsResult.failed + '/' + lsResult.total +
+        ' 项（可能空间不足），部分设置未恢复');
+    }
     onProgress(100, '导入完成');
   }
 
@@ -1857,9 +1873,9 @@
     }
 
     setBackupProgress(88, '正在写入本地设置…');
-    applyBackupLocalStorage(ls);
+    var lsResultFull = applyBackupLocalStorage(ls);
     finishBackupImport();
-    return { manifest: manifest, kind: 'full' };
+    return { manifest: manifest, kind: 'full', lsFailed: (lsResultFull && lsResultFull.failed) || 0 };
   }
 
   async function importBackupZipFiles(files) {

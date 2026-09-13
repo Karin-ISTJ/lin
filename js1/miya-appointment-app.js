@@ -2376,6 +2376,12 @@ function renderWriter() {
                 ui.streamingRaw = String(full || '');
                 startStreamRevealLoop();
                 scheduleStreamMountPatch();
+            },
+            /* 断线/空闲超时导致回复没写完：内容照常保留，但明确告诉用户
+               这不是完整的回复，避免他以为角色话说到一半就停了。 */
+            onPartial: function (info) {
+                var why = info && info.reason === 'idle_timeout' ? '连接卡住了' : '网络中断';
+                toast(why + '，这段回复没能写完');
             }
         };
     }

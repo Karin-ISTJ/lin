@@ -8,13 +8,13 @@
 
   var GROUPS = {
     apiCore: {
-      js: ['js2/miya-api-bridge.js?v=1']
+      js: ['js2/miya-api-bridge.js?v=2']
     },
     simulator: {
       css: ['css/miya-simulator.css?v=11'],
       js: [
         'js2/miya-simulator-store.js?v=14',
-        'js2/miya-simulator-engine.js?v=11',
+        'js2/miya-simulator-engine.js?v=12',
         'js2/miya-simulator-narrative.js?v=2',
         'js2/miya-simulator-play-modules.js?v=7',
         'js2/miya-simulator-app.js?v=18'
@@ -51,7 +51,7 @@
     weatherUi: {
       css: ['css/miya-weather.css?v=9'],
       js: [
-        'js2/miya-api-bridge.js?v=1',
+        'js2/miya-api-bridge.js?v=2',
         'js2/miya-weather-app.js?v=12'
       ]
     },
@@ -62,7 +62,7 @@
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],
       js: [
-        'js2/miya-api-bridge.js?v=1',
+        'js2/miya-api-bridge.js?v=2',
         'js2/miya-fun-sayguess-store.js?v=3',
         'js2/miya-fun-sayguess-bridge.js?v=6',
         'js2/miya-fun-sayguess-app.js?v=9',

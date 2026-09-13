@@ -58,9 +58,13 @@
       global.miyaWriteLsJsonKey(STORAGE_KEY, cache).catch(function () {});
       return;
     }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-    } catch (e) { /* ignore */ }
+    var str = '';
+    try { str = JSON.stringify(cache); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(STORAGE_KEY, str);
+    } else {
+      try { localStorage.setItem(STORAGE_KEY, str); } catch (e) {}
+    }
   }
 
   function defaultSettings() {

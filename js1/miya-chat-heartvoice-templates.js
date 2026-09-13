@@ -376,9 +376,13 @@
         return presetsCache.slice();
       });
     }
-    try {
-      localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(presetsCache); } catch (eStr) { return Promise.resolve(presetsCache.slice()); }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(PRESETS_LS, str);
+    } else {
+      try { localStorage.setItem(PRESETS_LS, str); } catch (e) {}
+    }
     return Promise.resolve(presetsCache.slice());
   }
 
@@ -970,10 +974,16 @@
     try {
       if (typeof global.miyaWriteLsJsonKey === 'function') {
         global.miyaWriteLsJsonKey(DRAFT_KEY, draft);
-      } else {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        return;
       }
-    } catch (e) {}
+    } catch (eIdb) { /* IDB 通路异常，落到下面同步写 */ }
+    var draftStr = '';
+    try { draftStr = JSON.stringify(draft); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(DRAFT_KEY, draftStr);
+    } else {
+      try { localStorage.setItem(DRAFT_KEY, draftStr); } catch (e) {}
+    }
   }
 
   function buildFieldRowHtml(field, idx) {

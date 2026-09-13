@@ -182,9 +182,13 @@
       global.miyaWriteLsJsonKey(STORAGE_KEY, state).catch(function () {});
       return;
     }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) { /* ignore */ }
+    var str = '';
+    try { str = JSON.stringify(state); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(STORAGE_KEY, str);
+    } else {
+      try { localStorage.setItem(STORAGE_KEY, str); } catch (e) {}
+    }
   }
 
   function appBeautifyScore(raw) {

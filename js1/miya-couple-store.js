@@ -82,9 +82,16 @@
       global.miyaWriteLsJsonKey(STORAGE_KEY, cache).catch(function () {});
       return;
     }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-    } catch (e) { /* ignore */ }
+    /* 兜底分支：走到了这里说明 miya-storage 的 IDB 通路不可用，
+       这时 localStorage 是唯一的落盘位置，写不进去必须让用户知道，
+       否则界面照常显示「已保存」而数据已经丢了。 */
+    var str = '';
+    try { str = JSON.stringify(cache); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(STORAGE_KEY, str);
+    } else {
+      try { localStorage.setItem(STORAGE_KEY, str); } catch (e) {}
+    }
   }
 
   function isEmptyRow(v) {

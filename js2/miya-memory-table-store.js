@@ -88,9 +88,13 @@
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(STORE_KEY, payload);
     }
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(payload));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(payload); } catch (eStr) { return Promise.reject(eStr); }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(STORE_KEY, str);
+    } else {
+      try { localStorage.setItem(STORE_KEY, str); } catch (e) {}
+    }
     return Promise.resolve();
   }
 
@@ -111,9 +115,13 @@
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(SETTINGS_KEY, next);
     }
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(next); } catch (eStr) { return Promise.reject(eStr); }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(SETTINGS_KEY, str);
+    } else {
+      try { localStorage.setItem(SETTINGS_KEY, str); } catch (e) {}
+    }
     return Promise.resolve(next);
   }
 

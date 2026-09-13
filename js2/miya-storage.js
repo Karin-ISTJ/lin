@@ -7,6 +7,102 @@
   var SPILL_BYTES = 49152;
   var LS_PLACEHOLDER = '{"__storedInIdb":true}';
 
+  /* ── 写盘失败上报 ──
+     背景：localStorage.setItem 在配额满（约 5MB）或 Safari 隐私模式下会抛错。
+     各 store 里常见的 try{setItem}catch(e){} 会把失败信号就地掐断，调用方
+     以为「已保存」，界面照常提示成功，刷新后数据消失——用户连复现步骤都
+     写不出来。这里提供一个统一的失败出口：
+       1) 控制台始终打一条告警（带 key 名与字节数，便于定位是哪个 store 撑爆）；
+       2) 节流后提示用户一次（多次失败不刷屏），可通过 global.miyaSuppressStorageFullNotice 关闭；
+       3) 失败信息挂在 global.__miyaLastStorageError，供设置页/诊断面板读取。
+     只做上报，不抛异常——避免把写盘失败升级成中断主流程的崩溃。 */
+  var fullNoticeShownAt = 0;
+  var FULL_NOTICE_GAP = 30000;
+  var failStreak = 0;
+
+  function countLsUsage() {
+    var total = 0;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        var v = localStorage.getItem(k);
+        total += (String(k || '').length + String(v || '').length) * 2; /* UTF-16 */
+      }
+    } catch (e) { return null; }
+    return total;
+  }
+
+  function warnToConsole(key, err) {
+    try {
+      console.warn('[miya-storage] 写盘失败，数据未落盘。key=' + String(key || '') +
+        '，已用≈' + (Math.round((countLsUsage() || 0) / 1024)) + 'KB，错误=' +
+        ((err && err.name) || 'unknown'));
+    } catch (e) { /* 控制台不可用就算了，绝不再抛 */ }
+  }
+
+  function notifyUserOnce(key) {
+    if (global.miyaSuppressStorageFullNotice) return;
+    var now = Date.now();
+    if (now - fullNoticeShownAt < FULL_NOTICE_GAP) return;
+    fullNoticeShownAt = now;
+    var msg = '存储空间已满，刚才的改动没能保存。请到「设置 → 存储」清理或导出备份后再试。';
+    try {
+      if (typeof global.miyaToast === 'function') { global.miyaToast(msg); return; }
+    } catch (e) { /* 落到下面的兜底 */ }
+    /* 兜底：自己弹一个轻提示，不依赖任何上层的 UI 组件是否已就绪 */
+    try {
+      var div = document.createElement('div');
+      div.className = 'ins-toast';
+      div.style.zIndex = '9600';
+      div.textContent = msg;
+      document.body.appendChild(div);
+      setTimeout(function () { try { div.remove(); } catch (e2) {} }, 4000);
+    } catch (e3) { /* DOM 都不可用就只能靠控制台了 */ }
+  }
+
+  global.miyaNotifyStorageFull = function (key, err) {
+    failStreak += 1;
+    global.__miyaLastStorageError = {
+      key: String(key || ''),
+      name: (err && err.name) || 'unknown',
+      message: (err && err.message) || '',
+      at: Date.now(),
+      streak: failStreak
+    };
+    warnToConsole(key, err);
+    notifyUserOnce(key);
+    try {
+      if (typeof global.miyaPerfMark === 'function') {
+        global.miyaPerfMark('storage_full:' + String(key || ''));
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  /* 写成功时复位计数，避免「曾经失败过」永远赖在诊断面板上 */
+  global.miyaNotifyStorageRecovered = function () {
+    if (failStreak > 0) failStreak = 0;
+    if (global.__miyaLastStorageError) global.__miyaLastStorageError = null;
+  };
+
+  global.miyaLsUsageBytes = countLsUsage;
+
+  /**
+   * 统一的 localStorage 写入封装：成功返回 true，失败上报并返回 false。
+   * 各 store 的兜底分支（没有 IDB 可用的极端情况）应改调这个，
+   * 而不是自己写 try{setItem}catch(e){}。
+   */
+  global.miyaSafeLsSet = function (key, str) {
+    if (!key) return false;
+    try {
+      localStorage.setItem(key, str);
+      global.miyaNotifyStorageRecovered();
+      return true;
+    } catch (e) {
+      return global.miyaNotifyStorageFull(key, e);
+    }
+  };
+
   /** 内存热缓存：bootstrap / 写入后立即可用，供 miyaSyncReadJsonKey 同步读 */
   global.__miyaKvMem = global.__miyaKvMem || Object.create(null);
 
@@ -119,19 +215,62 @@
     return undefined;
   }
 
-  function writeLsMirror(key, value) {
+  /* mirrorWarned：同一个 key 只上报一次镜像失败。
+     镜像只是加速冷启动的副本，写不进去并不丢数据；若每轮都弹提示
+     会变成骚扰，反而掩盖了真正的主存储失败。 */
+  var mirrorWarned = Object.create(null);
+
+  /**
+   * 写 localStorage 镜像。
+   * opts.idbConfirmed —— 调用方是否已确认「数据本体确实进了 IDB」。
+   *   只有在 IDB 成功的前提下，配额满时写占位符才是诚实的
+   *   （占位符的语义是「去 IDB 取」）。
+   *   若 IDB 也失败了，占位符就是假消息：下次冷启动会按占位符
+   *   去 IDB 找一份根本不存在的数据，用户看到的是「数据凭空消失，
+   *   且本地像是存过」。这种「错误的成功标记」比单纯写失败更难查。
+   */
+  function writeLsMirror(key, value, opts) {
+    var idbConfirmed = !!(opts && opts.idbConfirmed);
     var str = '';
     try { str = JSON.stringify(value); } catch (e) { return false; }
     try {
       if (utf8Bytes(str) > SPILL_BYTES) {
+        /* 大对象本来就走占位符，但前提是 IDB 里真有那份数据 */
         localStorage.setItem(key, LS_PLACEHOLDER);
       } else {
         localStorage.setItem(key, str);
       }
       return true;
     } catch (e2) {
-      if (e2 && (e2.name === 'QuotaExceededError' || e2.code === 22)) {
-        try { localStorage.setItem(key, LS_PLACEHOLDER); return true; } catch (e3) {}
+      var isQuota = e2 && (e2.name === 'QuotaExceededError' || e2.code === 22);
+      if (isQuota) {
+        if (idbConfirmed) {
+          try {
+            /* 数据本体在 IDB 里，镜像降级为「去 IDB 取」的标记。
+               这是预期内的降级，不算失败。 */
+            localStorage.setItem(key, LS_PLACEHOLDER);
+            return true;
+          } catch (e3) {
+            if (!mirrorWarned[key]) {
+              mirrorWarned[key] = true;
+              console.warn('[miya-storage] localStorage 镜像写入失败（数据已存 IDB）。key=' + key);
+            }
+            return false;
+          }
+        }
+        /* IDB 也没写成：绝不能留下「已存 IDB」的假标记。
+           宁可让这个 key 在本地为空，也不要骗下一次冷启动。 */
+        if (!mirrorWarned[key]) {
+          mirrorWarned[key] = true;
+          global.miyaNotifyStorageFull(key, e2);
+        }
+        return false;
+      }
+      /* 非配额类错误（如隐私模式整体禁用）：即便 IDB 成功，
+         也要留一句，避免下次冷启动镜像与 IDB 对不上时无从查起。 */
+      if (!mirrorWarned[key]) {
+        mirrorWarned[key] = true;
+        global.miyaNotifyStorageFull(key, e2);
       }
       return false;
     }
@@ -245,22 +384,21 @@
     try {
       await kvPut(k, value);
       try { await global.miyaWidgetKvIdbDelete(k); } catch (eDel) {}
-      writeLsMirror(k, value);
+      writeLsMirror(k, value, { idbConfirmed: true });
       return true;
     } catch (eIdb) {
       var ok = await global.miyaWidgetKvIdbPut(k, value);
       if (ok) {
-        writeLsMirror(k, value);
+        writeLsMirror(k, value, { idbConfirmed: true });
         return true;
       }
       var str = '';
-      try { str = JSON.stringify(value); } catch (e) { return false; }
-      try {
-        localStorage.setItem(k, str);
-        return true;
-      } catch (e2) {
-        return false;
+      try { str = JSON.stringify(value); } catch (e) {
+        /* 序列化失败（循环引用等）也要留痕，否则同样是「静默保存失败」 */
+        return global.miyaNotifyStorageFull(k, e);
       }
+      /* 三条路都走不通（无 IDB + 配额满）——必须说出来，不能再 return false 了事 */
+      return global.miyaSafeLsSet(k, str);
     }
   };
 
@@ -272,18 +410,49 @@
     var k = String(key || '');
     if (!k) return false;
     memSet(k, value);
-    writeLsMirror(k, value);
+    /* 注意：此处 IDB 写入还没发生，无法断定数据已在 IDB。
+       所以先写一份「诚实」的镜像——若配额满就明确记为失败，
+       而不是抢先写下 __storedInIdb 占位符。等 putOnce 成功后再
+       补写占位符（见下），那时占位符才是真的。
+       原实现无条件先写占位符，等于在 IDB 失败时留下了假标记。 */
+    writeLsMirror(k, value, { idbConfirmed: false });
     function putOnce() {
       return kvPut(k, value).catch(function () {
         return global.miyaWidgetKvIdbPut(k, value).then(function (ok) {
           if (ok) return true;
           throw new Error('kv_flush_failed');
         });
+      }).then(function (r) {
+        /* 数据这次确实进了 IDB —— 此时补写占位符才是诚实的。
+           若镜像此前因配额满没写成功，这里重试一次；
+           重试仍失败说明 local 镜像确实存不下，但数据在 IDB，不算丢。 */
+        try {
+          var s = JSON.stringify(value);
+          if (utf8Bytes(s) > SPILL_BYTES) writeLsMirror(k, value, { idbConfirmed: true });
+          else localSetPlaceholderIfMissing(k);
+        } catch (e) {}
+        return r;
       });
     }
-    putOnce().catch(function () {
+
+    /* 镜像缺失（或为占位符）时补一个占位符，标记「去 IDB 取」 */
+    function localSetPlaceholderIfMissing(key) {
+      try {
+        var cur = localStorage.getItem(key);
+        if (cur === LS_PLACEHOLDER) return true;
+        localStorage.setItem(key, LS_PLACEHOLDER);
+        return true;
+      } catch (e) { return false; }
+    }
+    /* 同步刷盘是最关键的一条路径：pagehide / visibilitychange 时调用，
+       此后进程可能随时被系统杀掉。所以这里失败的代价是「写入彻底丢失」，
+       必须上报——原实现重试后直接 .catch(function(){}) 吞掉，
+       导致「内存里明明有，重开后却没有」这种最不可排查的现象。 */
+    putOnce().catch(function (e1) {
       setTimeout(function () {
-        putOnce().catch(function () {});
+        putOnce().catch(function (e2) {
+          global.miyaNotifyStorageFull(k, e2 || e1);
+        });
       }, 40);
     });
     return true;
@@ -608,65 +777,6 @@
     return blob;
   };
 
-  global.miyaClearNamedDbStore = function (dbName, storeName) {
-    var dn = String(dbName || '');
-    var sn = String(storeName || '');
-    if (!dn || !sn) return Promise.resolve();
-    return new Promise(function (resolve, reject) {
-      var req;
-      try { req = indexedDB.open(dn, 1); } catch (e) { reject(e); return; }
-      req.onerror = function () { reject(req.error); };
-      req.onupgradeneeded = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(sn)) db.createObjectStore(sn);
-      };
-      req.onsuccess = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(sn)) { resolve(); return; }
-        var tx = db.transaction(sn, 'readwrite');
-        tx.objectStore(sn).clear();
-        tx.oncomplete = function () { resolve(); };
-        tx.onerror = function () { reject(tx.error); };
-      };
-    });
-  };
-
-  global.miyaPutNamedDbKey = function (dbName, storeName, key, value) {
-    var dn = String(dbName || '');
-    var sn = String(storeName || '');
-    if (!dn || !sn) return Promise.resolve();
-    return new Promise(function (resolve, reject) {
-      var req;
-      try { req = indexedDB.open(dn, 1); } catch (e) { reject(e); return; }
-      req.onerror = function () { reject(req.error); };
-      req.onupgradeneeded = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(sn)) db.createObjectStore(sn);
-      };
-      req.onsuccess = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(sn)) {
-          var v = db.version + 1;
-          db.close();
-          var req2 = indexedDB.open(dn, v);
-          req2.onupgradeneeded = function () { req2.result.createObjectStore(sn); };
-          req2.onsuccess = function () {
-            var tx = req2.result.transaction(sn, 'readwrite');
-            tx.objectStore(sn).put(value, String(key));
-            tx.oncomplete = function () { resolve(); };
-            tx.onerror = function () { reject(tx.error); };
-          };
-          req2.onerror = function () { reject(req2.error); };
-          return;
-        }
-        var tx = db.transaction(sn, 'readwrite');
-        tx.objectStore(sn).put(value, String(key));
-        tx.oncomplete = function () { resolve(); };
-        tx.onerror = function () { reject(tx.error); };
-      };
-    });
-  };
-
   function openNamedDbReadwrite(dbName, storeName) {
     var dn = String(dbName || '');
     var sn = String(storeName || '');
@@ -795,188 +905,11 @@
    * 游标导出 blob store 到 zip：索引 JSON + 二进制（STORE）。
    * 不转 base64。返回 { index, bytes }。
    */
-  global.miyaExportIdbBlobStoreToZip = function (zip, dbName, storeName, mediaDir, onProgress) {
-    onProgress = typeof onProgress === 'function' ? onProgress : function () {};
-    mediaDir = String(mediaDir || ('media/' + dbName)).replace(/\/$/, '');
-    return openNamedDbReadonly(dbName, storeName).then(function (db) {
-      if (!db.objectStoreNames.contains(storeName)) {
-        onProgress(0, 0);
-        return { index: {}, bytes: 0 };
-      }
-      return global.miyaCountIdbStoreEntries(dbName, storeName).then(function (total) {
-        return new Promise(function (resolve, reject) {
-          var tx = db.transaction(storeName, 'readonly');
-          var store = tx.objectStore(storeName);
-          var cur = store.openCursor();
-          var index = {};
-          var count = 0;
-          var bytes = 0;
-          var chain = Promise.resolve();
-
-          cur.onsuccess = function (ev) {
-            var c = ev.target.result;
-            if (!c) {
-              chain.then(function () {
-                onProgress(total, total);
-                resolve({ index: index, bytes: bytes });
-              }).catch(reject);
-              return;
-            }
-            var key = String(c.key);
-            var val = c.value;
-            c.continue();
-            chain = chain.then(function () {
-              var enc = global.miyaEncodeBackupMediaKey(key);
-              var path = mediaDir + '/' + enc + '.bin';
-              return global.miyaSerializeIdbBlobValueToMediaRef(val, path, function (p, blob) {
-                zip.file(p, blob, { compression: 'STORE' });
-                bytes += blob && blob.size ? blob.size : 0;
-              }).then(function (serialized) {
-                if (serialized != null) index[key] = serialized;
-                count += 1;
-                onProgress(count, total);
-                if (count % 2 === 0) return exportYield(0);
-              });
-            });
-          };
-          cur.onerror = function () { reject(cur.error); };
-        });
-      });
-    }).catch(function () {
-      onProgress(0, 0);
-      return { index: {}, bytes: 0 };
-    });
-  };
-
   /**
    * 按体积上限分片导出 blob store（默认 18MB，适配 iOS）。
    * 优先写入 STORE builder；无 builder 时回退 JSZip。
    * onChunk(builderOrZip, index, meta) — builder 时需调用方 finish；JSZip 时为 JSZip 实例。
    */
-  global.miyaExportIdbBlobStoreChunked = function (dbName, storeName, mediaDir, maxBytes, onChunk, onProgress) {
-    onProgress = typeof onProgress === 'function' ? onProgress : function () {};
-    onChunk = typeof onChunk === 'function' ? onChunk : function () { return Promise.resolve(); };
-    maxBytes = maxBytes > 0 ? maxBytes : (18 * 1024 * 1024);
-    mediaDir = String(mediaDir || ('media/' + dbName)).replace(/\/$/, '');
-    var useStore = typeof global.miyaZipCreateStoreBuilder === 'function';
-
-    function getAllKeys() {
-      return openNamedDbReadonly(dbName, storeName).then(function (db) {
-        if (!db.objectStoreNames.contains(storeName)) return [];
-        return new Promise(function (resolve, reject) {
-          var tx = db.transaction(storeName, 'readonly');
-          var req = tx.objectStore(storeName).getAllKeys();
-          req.onsuccess = function () { resolve(req.result || []); };
-          req.onerror = function () { reject(req.error); };
-        });
-      }).catch(function () { return []; });
-    }
-
-    function getOne(key) {
-      return openNamedDbReadonly(dbName, storeName).then(function (db) {
-        if (!db.objectStoreNames.contains(storeName)) return null;
-        return new Promise(function (resolve, reject) {
-          var tx = db.transaction(storeName, 'readonly');
-          var req = tx.objectStore(storeName).get(key);
-          req.onsuccess = function () { resolve(req.result); };
-          req.onerror = function () { reject(req.error); };
-        });
-      }).catch(function () { return null; });
-    }
-
-    return getAllKeys().then(function (keys) {
-      var total = keys.length;
-      if (!total) {
-        onProgress(0, 0);
-        return { chunks: 0, total: 0 };
-      }
-      var pack = null;
-      var index = {};
-      var chunkBytes = 0;
-      var chunkIndex = 0;
-      var finishedChunks = 0;
-      var i = 0;
-
-      function ensurePack() {
-        if (pack) return pack;
-        if (useStore) {
-          pack = { kind: 'store', builder: global.miyaZipCreateStoreBuilder() };
-        } else if (global.JSZip) {
-          pack = { kind: 'jszip', zip: new global.JSZip() };
-        } else {
-          throw new Error('zip_builder_missing');
-        }
-        return pack;
-      }
-
-      function addMedia(path, blob) {
-        var p = ensurePack();
-        if (p.kind === 'store') return p.builder.addFile(path, blob);
-        p.zip.file(path, blob, { compression: 'STORE' });
-        return Promise.resolve();
-      }
-
-      function flushChunk() {
-        if (!pack) return Promise.resolve();
-        var keyCount = Object.keys(index).length;
-        if (!keyCount) {
-          pack = null;
-          index = {};
-          chunkBytes = 0;
-          return Promise.resolve();
-        }
-        var thisPack = pack;
-        var thisIndex = index;
-        var thisChunk = chunkIndex;
-        pack = null;
-        index = {};
-        chunkBytes = 0;
-        chunkIndex += 1;
-        finishedChunks += 1;
-        var handle = thisPack.kind === 'store' ? thisPack.builder : thisPack.zip;
-        return Promise.resolve(onChunk(handle, thisIndex, {
-          kind: thisPack.kind,
-          chunkIndex: thisChunk,
-          keys: keyCount,
-          done: i,
-          total: total
-        }));
-      }
-
-      function next() {
-        if (i >= keys.length) {
-          return flushChunk().then(function () {
-            onProgress(total, total);
-            return { chunks: finishedChunks, total: total };
-          });
-        }
-        var key = keys[i];
-        return getOne(key).then(function (val) {
-          var enc = global.miyaEncodeBackupMediaKey(String(key));
-          var path = mediaDir + '/' + enc + '.bin';
-          var addedSize = 0;
-          return global.miyaSerializeIdbBlobValueToMediaRef(val, path, function (p, blob) {
-            addedSize = blob && blob.size ? blob.size : 0;
-            return addMedia(p, blob);
-          }).then(function (serialized) {
-            if (serialized != null) index[String(key)] = serialized;
-            chunkBytes += addedSize;
-            i += 1;
-            onProgress(i, total);
-            val = null;
-            var shouldFlush = chunkBytes >= maxBytes && Object.keys(index).length > 0;
-            var step = shouldFlush ? flushChunk() : Promise.resolve();
-            return step.then(function () {
-              return exportYield(0);
-            }).then(next);
-          });
-        });
-      }
-
-      return next();
-    });
-  };
-
   /** 逐条序列化 blob，避免 Promise.all 并行读入大量 base64 导致移动端 OOM 闪退 */
   global.miyaExportNamedDbBlobs = function (dbName, storeName) {
     return global.miyaKvExportNamedDbKv(dbName, storeName).then(function (raw) {
@@ -1017,80 +950,6 @@
   }
 
   /** 游标逐条写入 JSON 片段，不在内存中堆积整库对象 */
-  global.miyaAppendJsonObjectFromIdbCursor = function (parts, fieldName, dbName, storeName, serializeFn) {
-    serializeFn = serializeFn || function (v) { return Promise.resolve(v); };
-    return openNamedDbReadonly(dbName, storeName).then(function (db) {
-      if (!db.objectStoreNames.contains(storeName)) return false;
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(storeName, 'readonly');
-        var store = tx.objectStore(storeName);
-        var cur = store.openCursor();
-        var started = false;
-        var first = true;
-        var chain = Promise.resolve();
-        var count = 0;
-
-        cur.onsuccess = function (ev) {
-          var c = ev.target.result;
-          if (!c) {
-            chain.then(function () {
-              if (started) parts.push('}');
-              resolve(started);
-            }).catch(reject);
-            return;
-          }
-          var key = String(c.key);
-          var val = c.value;
-          c.continue();
-          chain = chain.then(function () {
-            if (!started) {
-              parts.push(',', JSON.stringify(fieldName), ':{');
-              started = true;
-            }
-            return serializeFn(val).then(function (serialized) {
-              if (!first) parts.push(',');
-              first = false;
-              var js;
-              try { js = JSON.stringify(serialized); } catch (e) { js = 'null'; }
-              parts.push(JSON.stringify(key), ':', js);
-              count += 1;
-              if (count % 4 === 0) return exportYield();
-            });
-          });
-        };
-        cur.onerror = function () { reject(cur.error); };
-      });
-    });
-  };
-
-  global.miyaAppendKvIdbToJsonParts = function (parts, fieldName) {
-    return openKvDb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(KV_STORE, 'readonly');
-        var store = tx.objectStore(KV_STORE);
-        var cur = store.openCursor();
-        var first = true;
-        parts.push(',', JSON.stringify(fieldName), ':{');
-        cur.onsuccess = function (ev) {
-          var c = ev.target.result;
-          if (!c) {
-            parts.push('}');
-            resolve();
-            return;
-          }
-          if (!first) parts.push(',');
-          first = false;
-          var k = String(c.key);
-          var v;
-          try { v = JSON.stringify(c.value); } catch (e) { v = 'null'; }
-          parts.push(JSON.stringify(k), ':', v);
-          c.continue();
-        };
-        cur.onerror = function () { reject(cur.error); };
-      });
-    });
-  };
-
   /** 统计指定 IDB store 条目数，用于备份进度条 */
   global.miyaCountIdbStoreEntries = function (dbName, storeName) {
     return openNamedDbReadonly(dbName, storeName).then(function (db) {
@@ -1104,58 +963,7 @@
     }).catch(function () { return 0; });
   };
 
-  /** 游标逐条导出 IDB store 为 JSON 字符串，支持进度回调 */
-  global.miyaExportIdbStoreToJsonString = function (dbName, storeName, serializeFn, onProgress) {
-    serializeFn = serializeFn || function (v) { return Promise.resolve(v); };
-    onProgress = typeof onProgress === 'function' ? onProgress : function () {};
-    return openNamedDbReadonly(dbName, storeName).then(function (db) {
-      if (!db.objectStoreNames.contains(storeName)) {
-        onProgress(0, 0);
-        return '{}';
-      }
-      return global.miyaCountIdbStoreEntries(dbName, storeName).then(function (total) {
-        return new Promise(function (resolve, reject) {
-          var tx = db.transaction(storeName, 'readonly');
-          var store = tx.objectStore(storeName);
-          var cur = store.openCursor();
-          var parts = ['{'];
-          var first = true;
-          var count = 0;
-          var chain = Promise.resolve();
-
-          cur.onsuccess = function (ev) {
-            var c = ev.target.result;
-            if (!c) {
-              chain.then(function () {
-                parts.push('}');
-                onProgress(total, total);
-                resolve(parts.join(''));
-              }).catch(reject);
-              return;
-            }
-            var key = String(c.key);
-            var val = c.value;
-            c.continue();
-            chain = chain.then(function () {
-              return serializeFn(val).then(function (serialized) {
-                if (!first) parts.push(',');
-                first = false;
-                var js;
-                try { js = JSON.stringify(serialized); } catch (e) { js = 'null'; }
-                parts.push(JSON.stringify(key), ':', js);
-                count += 1;
-                onProgress(count, total);
-                if (count % 4 === 0) return exportYield();
-              });
-            });
-          };
-          cur.onerror = function () { reject(cur.error); };
-        });
-      });
-    });
-  };
-
-  /** 同 miyaExportIdbStoreToJsonString，但返回 Blob（不 join 成巨型字符串） */
+  /** 游标逐条导出 IDB store，返回 Blob（不 join 成巨型字符串，避免大库撑爆内存）。 */
   global.miyaExportIdbStoreToJsonBlob = function (dbName, storeName, serializeFn, onProgress) {
     serializeFn = serializeFn || function (v) { return Promise.resolve(v); };
     onProgress = typeof onProgress === 'function' ? onProgress : function () {};

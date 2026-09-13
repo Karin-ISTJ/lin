@@ -55,9 +55,13 @@
   }
 
   function saveBanks() {
-    try {
-      localStorage.setItem(BANKS_KEY, JSON.stringify(loadBanks()));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(loadBanks()); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(BANKS_KEY, str);
+    } else {
+      try { localStorage.setItem(BANKS_KEY, str); } catch (e) {}
+    }
   }
 
   function normalizeBank(raw) {
@@ -204,9 +208,13 @@
   }
 
   function saveSessions() {
-    try {
-      localStorage.setItem(SESSIONS_KEY, JSON.stringify(loadSessions()));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(loadSessions()); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(SESSIONS_KEY, str);
+    } else {
+      try { localStorage.setItem(SESSIONS_KEY, str); } catch (e) {}
+    }
   }
 
   function normalizePrizes(raw) {

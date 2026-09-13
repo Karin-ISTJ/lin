@@ -61,7 +61,11 @@
         global.miyaWriteLsJsonKey(SHOW_TIMESTAMPS_KEY, !!val);
         return;
       }
-      localStorage.setItem(SHOW_TIMESTAMPS_KEY, val ? '1' : '0');
+      if (typeof global.miyaSafeLsSet === 'function') {
+        global.miyaSafeLsSet(SHOW_TIMESTAMPS_KEY, val ? '1' : '0');
+      } else {
+        localStorage.setItem(SHOW_TIMESTAMPS_KEY, val ? '1' : '0');
+      }
     } catch (e) {}
   }
 

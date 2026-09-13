@@ -4,6 +4,33 @@
 (function (global) {
   'use strict';
 
+  /*
+   * 流式断线韧性。
+   *
+   * 背景：SSE 读取时 reader.read() 一旦 reject（弱网抖动、中转站掐连接、
+   * 服务端超时断开），旧实现会让整个 Promise 失败，已经收进 contentAcc 的
+   * 正文被一起丢掉——用户看到气泡打到一半突然消失，然后报错。
+   *
+   * ── 为什么去掉了「退避续读」 ──
+   * 之前的实现是「中断后退避 400ms/800ms，再调一次 pump() 继续读」。
+   * 但 pump() 首句就是 reader.read()，用的是**同一个已经出错的 reader**。
+   * 实测（Node ReadableStream）：流被 error 之后，同一个 reader 的 read()
+   * 会立刻 reject 同一个错误，重试多少次都一样。于是那 1.2 秒退避完全是
+   * 白等，最后仍然只能部分收尾——等于用 1.2 秒延迟换了个空。
+   *
+   * 真正的续读必须**重新发起 fetch**（并让服务端支持断点续传），成本与
+   * 正确性都需单独评估，这里不做。
+   *
+   * 现在的策略：
+   *   1) 有内容 → 立即以已收内容收尾，标记 partial，不浪费用户时间；
+   *      无内容 → 抛错，让上层走既有的整体重试。
+   *   2) 空闲超时：只要超过 STREAM_IDLE_TIMEOUT_MS 没收到任何数据就主动
+   *      断开并按上面的策略收尾。注意这**不是**请求级超时——长回复本就会
+   *      持续几十秒，请求级一刀切会误杀正常的长生成。
+   * 只对「读流过程」生效；HTTP 非 2xx、解析失败等仍按原样抛错。
+   */
+  var STREAM_IDLE_TIMEOUT_MS = 60000;  /* 多久没收到数据算「卡死」 */
+
     function extractJsonObject(text) {
     var t = String(text || '').trim();
     var fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -139,12 +166,6 @@
     return body || reasoning;
   }
 
-  function delayMs(ms) {
-    return new Promise(function (resolve) {
-      setTimeout(resolve, Math.max(0, Number(ms) || 0));
-    });
-  }
-
   function extractStreamDelta(obj) {
     if (!obj || typeof obj !== 'object') return { content: '', reasoning: '' };
     var ch = obj.choices && obj.choices[0];
@@ -195,6 +216,21 @@
         try { reqOpts.onTruncated(); } catch (e) {}
       }
       if (reqOpts.throwOnTruncate) return Promise.reject(new Error('输出被截断'));
+      return null;
+    }
+
+    /* 流式读被中断（断线 / 空闲超时）时通知调用方：
+       这段内容是真的，但没说完。上层据此提示用户，
+       避免把半句话当成完整发言存进历史。 */
+    function markPartial(err) {
+      if (typeof reqOpts.onPartial === 'function') {
+        try {
+          reqOpts.onPartial({
+            reason: (err && err.name === 'StreamIdleTimeout') ? 'idle_timeout' : 'disconnected',
+            message: String((err && err.message) || '流式中断')
+          });
+        } catch (e) {}
+      }
       return null;
     }
 
@@ -286,28 +322,93 @@
           if (d.reasoning) racc += d.reasoning;
         } catch (e) {}
       }
+      /* 中断收尾：以已收内容为准，并标记 partial。
+         为什么不退避续读了：同一个 reader 出错后不会复活，
+         重试只会白等（详见文件顶部说明）。 */
+      function finishText(err) {
+        if (buf.trim()) { try { consume(buf); } catch (e) {} }
+        var text = String(acc || '').trim();
+        var reasoning = String(racc || '').trim();
+        if (!text && reasoning) text = reqOpts.contentOnly ? '' : reasoning;
+        if (reqOpts.contentOnly && text && eng && typeof eng.stripThinkingForApi === 'function') {
+          text = eng.stripThinkingForApi(text);
+        }
+        if (!text) {
+          /* 什么都没收到，谈不上「部分内容」，交给上层重试 */
+          throw (err || new Error('API 返回为空'));
+        }
+        if (fr === 'length') notifyTruncated();
+        /* 标记这是被中断的半截回复，让上层能提示用户，
+           而不是把半句话当正常发言存进历史。 */
+        markPartial(err);
+        return text;
+      }
+      /* done 分支与「正常读完」共用一份收尾逻辑 */
+      function finishDone() {
+        if (buf.trim()) consume(buf);
+        var text = String(acc || '').trim();
+        var reasoning = String(racc || '').trim();
+        if (!text && reasoning) text = reqOpts.contentOnly ? '' : reasoning;
+        if (reqOpts.contentOnly && text && eng && typeof eng.stripThinkingForApi === 'function') {
+          text = eng.stripThinkingForApi(text);
+        }
+        if (!text && fr === 'length' && !reqOpts.skipLengthCheck) {
+          throw new Error('输出被截断');
+        }
+        /* 流正常结束但一个字都没解析出来（例如对端其实是 JSON 不是 SSE），
+           必须抛错让上层走既有重试，不能静默返回空串。
+           旧实现在这个分支会返回空串，被上层当成「空回复」再重试一次，
+           白白多花一次请求。 */
+        if (!text) throw new Error('API 返回为空');
+        if (fr === 'length') notifyTruncated();
+        return text;
+      }
       return (function pump() {
-        return reader.read().then(function (r) {
-          if (r.done) {
-            if (buf.trim()) consume(buf);
-            var text = String(acc || '').trim();
-            var reasoning = String(racc || '').trim();
-            if (!text && reasoning) text = reqOpts.contentOnly ? '' : reasoning;
-            if (reqOpts.contentOnly && text && eng && typeof eng.stripThinkingForApi === 'function') {
-              text = eng.stripThinkingForApi(text);
+        var idleTimer = null;
+        function clearIdle() {
+          if (idleTimer != null) { clearTimeout(idleTimer); idleTimer = null; }
+        }
+        /* 空闲超时看门狗：每收到一块数据就重置。
+           只判断「有没有进展」，不限制总时长——长回复本就会持续很久。 */
+        var stalled = false;
+        function armIdle() {
+          clearIdle();
+          idleTimer = setTimeout(function () {
+            stalled = true;
+            if (global.console && console.warn) {
+              console.warn('[miya] 流式空闲超时（' + STREAM_IDLE_TIMEOUT_MS + 'ms 无数据），以已收内容收尾');
             }
-            if (!text && fr === 'length' && !reqOpts.skipLengthCheck) {
-              throw new Error('输出被截断');
-            }
-            if (text && fr === 'length') notifyTruncated();
-            return text;
+            try { reader.cancel(); } catch (e) { /* 尽力而为 */ }
+          }, STREAM_IDLE_TIMEOUT_MS);
+        }
+        function step() {
+          if (stalled) {
+            var e = new Error('流式空闲超时');
+            e.name = 'StreamIdleTimeout';
+            return finishText(e);
           }
-          buf += decoder.decode(r.value, { stream: true });
-          var lines = buf.split('\n');
-          buf = lines.pop() || '';
-          lines.forEach(consume);
-          return pump();
-        });
+          armIdle();
+          return reader.read().then(function (r) {
+            clearIdle();
+            if (r.done) return finishDone();
+            buf += decoder.decode(r.value, { stream: true });
+            var lines = buf.split('\n');
+            buf = lines.pop() || '';
+            lines.forEach(consume);
+            return step();
+          }, function (err) {
+            clearIdle();
+            /* 用户主动中止 / 请求级超时 → 原样抛出，
+               不做部分收尾（用户知道自己点了停止）。 */
+            var aborted = !!(err && (err.name === 'AbortError' || err.name === 'TimeoutError'));
+            if (aborted) throw err;
+            if (global.console && console.warn) {
+              console.warn('[miya] 流式中断，以已收内容收尾：', err && err.message);
+            }
+            return finishText(err);
+          });
+        }
+        return step();
       })();
     }
 
@@ -515,20 +616,64 @@
           if (delta.reasoning) reasoningAcc += delta.reasoning;
         } catch (e) { /* ignore partial SSE */ }
       }
-      function pump() {
-        return reader.read().then(function (result) {
-          if (result.done) {
-            if (sseBuf.trim()) consumeSseLine(sseBuf);
-            return finalizeAccum(contentAcc, reasoningAcc, finishReason);
-          }
-          sseBuf += decoder.decode(result.value, { stream: true });
-          var parts = sseBuf.split('\n');
-          sseBuf = parts.pop() || '';
-          parts.forEach(consumeSseLine);
-          return pump();
-        });
+      /* 中断收尾：把已收内容交给 finalizeAccum 走正常后处理，并标记 partial。
+         注意此时 finishReason 大概是空串，所以不会被当成「max_tokens 截断」误报。
+         去掉了退避续读——同一个 reader 出错后不会复活，重试只是白等。 */
+      function finishPartial(err) {
+        if (sseBuf.trim()) { try { consumeSseLine(sseBuf); } catch (e) {} }
+        markPartial(err);
+        return finalizeAccum(contentAcc, reasoningAcc, finishReason);
       }
-      return pump();
+      return (function pump() {
+        var idleTimer = null;
+        var stalled = false;
+        function clearIdle() {
+          if (idleTimer != null) { clearTimeout(idleTimer); idleTimer = null; }
+        }
+        function armIdle() {
+          clearIdle();
+          idleTimer = setTimeout(function () {
+            stalled = true;
+            if (global.console && console.warn) {
+              console.warn('[miya] 流式空闲超时（' + STREAM_IDLE_TIMEOUT_MS + 'ms 无数据），以已收内容收尾');
+            }
+            try { reader.cancel(); } catch (e) { /* 尽力而为 */ }
+          }, STREAM_IDLE_TIMEOUT_MS);
+        }
+        function step() {
+          if (stalled) {
+            var e = new Error('流式空闲超时');
+            e.name = 'StreamIdleTimeout';
+            if (!String(contentAcc || '').length && !String(reasoningAcc || '').length) throw e;
+            return finishPartial(e);
+          }
+          armIdle();
+          return reader.read().then(function (result) {
+            clearIdle();
+            if (result.done) {
+              if (sseBuf.trim()) consumeSseLine(sseBuf);
+              return finalizeAccum(contentAcc, reasoningAcc, finishReason);
+            }
+            sseBuf += decoder.decode(result.value, { stream: true });
+            var parts = sseBuf.split('\n');
+            sseBuf = parts.pop() || '';
+            parts.forEach(consumeSseLine);
+            return step();
+          }, function (err) {
+            clearIdle();
+            /* 用户主动中止/超时 → 原样抛出，不做部分收尾 */
+            var aborted = !!(err && (err.name === 'AbortError' || err.name === 'TimeoutError'));
+            if (aborted) throw err;
+            /* 无内容可保 → 真失败，交给上层整体重试 */
+            if (!String(contentAcc || '').length && !String(reasoningAcc || '').length) throw err;
+            if (global.console && console.warn) {
+              console.warn('[miya] 流式中断，以已收内容收尾：', err && err.message);
+            }
+            return finishPartial(err);
+          });
+        }
+        return step();
+      })();
     });
   }
 

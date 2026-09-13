@@ -322,7 +322,32 @@
         var aps = apStore();
         if (!aps) return { slotItems: [] };
         var contactId = resolveContactIdFromInput(chatId, contact);
-        var sessions = aps.exportForMemory(chatId, contactId);
+        /*
+         * 排除「当前正在进行的会话」。
+         *
+         * exportForMemory 会按 contactId 取回该角色的**全部**会话，其中就包括
+         * 用户此刻正在玩的那一场。而那一场的正文本来就已经在本轮请求的历史区里
+         * （appendSessionHistory 负责拼进去）。若不排除，同一段正文会被**再一次**
+         * 格式化进「记忆档案」块，造成两个后果：
+         *   1) 白烧 token —— 同一段文字本轮付费两次；
+         *   2) 提示缓存每轮必然重建 —— 该块位于历史之前的前缀区，而它每轮都会
+         *      多追加一条「本场刚生成的消息」，前缀被改写，缓存 100% 失效。
+         * 记忆块的立意是「补上那些不在当前上下文里的过往」，本场内容无需它补。
+         */
+        var activeSessionId = '';
+        try {
+            if (typeof aps.getActiveSession === 'function') {
+                var activeSess = aps.getActiveSession(chatId);
+                activeSessionId = String((activeSess && activeSess.id) || '');
+            }
+        } catch (eActive) {}
+        var sessions = (aps.exportForMemory(chatId, contactId) || []).filter(function (sess) {
+            if (!sess) return false;
+            /* 未封口的会话即当前场，一律排除 */
+            if (!sess.closedAt) return false;
+            if (activeSessionId && String(sess.id) === activeSessionId) return false;
+            return true;
+        });
         var limit = clampInt(memoryCount, 1, 500, 40);
         var items = [];
         sessions.forEach(function (sess) {

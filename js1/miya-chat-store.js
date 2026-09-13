@@ -124,6 +124,39 @@
         return chatDbPromise;
     }
 
+    /**
+     * 媒体库（miya-chat-media / blobs）写失败上报。
+     *
+     * 这里是独立于 miya-storage.js 的第二套 IndexedDB，存头像/图片/语音的二进制。
+     * 历史上 idbPut 失败只 reject，而绝大多数调用方用 .catch(function(){}) 收尾，
+     * 于是「头像没存上」和「头像本来就没设置」在界面上完全一样，没有任何线索。
+     *
+     * 本函数只做留痕与通知，不改变 Promise 语义（仍是 reject），
+     * 避免影响调用方已有的错误分支。
+     */
+    var mediaWriteWarned = {};
+    function notifyMediaWriteFailed(key, err) {
+        var name = (err && err.name) || 'unknown';
+        var msg = (err && err.message) || '';
+        console.warn('[miyaChatStore] 媒体写入失败，二进制未落盘。key=' + String(key || '') +
+            '，错误=' + name + (msg ? ('(' + msg + ')') : ''));
+        /* 同一个 key 只提醒一次，避免批量上传时刷屏 */
+        var k = String(key || '');
+        if (!mediaWriteWarned[k]) {
+            mediaWriteWarned[k] = true;
+            try {
+                if (typeof global.miyaNotifyStorageFull === 'function') {
+                    global.miyaNotifyStorageFull('media:' + k, err);
+                }
+            } catch (eN) {}
+        }
+        try {
+            global.__miyaLastMediaWriteError = {
+                key: k, name: name, message: msg, at: Date.now()
+            };
+        } catch (eR) {}
+    }
+
     function idbPut(key, value) {
         return openDb().then(function (db) {
             return new Promise(function (resolve, reject) {
@@ -131,9 +164,20 @@
                 tx.objectStore(STORE).put(value, key);
                 tx.oncomplete = function () { resolve(key); };
                 tx.onerror = function () {
-                    reject(tx.error || new Error('idb_write_failed'));
+                    var err = tx.error || new Error('idb_write_failed');
+                    notifyMediaWriteFailed(key, err);
+                    reject(err);
+                };
+                tx.onabort = function () {
+                    var err = tx.error || new Error('idb_write_aborted');
+                    notifyMediaWriteFailed(key, err);
+                    reject(err);
                 };
             });
+        }, function (err) {
+            /* openDb 失败（隐私模式 / 配额满 / 库被占用）——同样不能静默 */
+            notifyMediaWriteFailed(key, err);
+            throw err;
         });
     }
 
@@ -357,9 +401,18 @@
 
     function writeEmergencyMeta(snapshot) {
         if (!snapshot) return;
+        var str = '';
+        try { str = JSON.stringify(snapshot); } catch (eStr) { return; }
         try {
-            sessionStorage.setItem(META_EMERGENCY_SS, JSON.stringify(snapshot));
-        } catch (e) {}
+            sessionStorage.setItem(META_EMERGENCY_SS, str);
+        } catch (e) {
+            /* 这是「元数据救援快照」——正常落盘路径出问题时靠它兜底。
+               连它都写不进去，说明恢复手段已经用尽，必须留痕，
+               否则用户只会看到角色设定莫名回退，却查不到任何原因。 */
+            try {
+                console.warn('[miya-chat-store] 应急元数据快照写入失败: ' + ((e && e.name) || 'unknown'));
+            } catch (e2) {}
+        }
     }
 
     /** 落盘守卫：占位符水合失败期间禁止把空壳/稀疏数据写回，避免冲掉真实 IDB */
@@ -2787,14 +2840,26 @@
                 global.miyaSyncFlushJsonKey(META_BACKUP_LS, normalized);
             }
         } else {
+            /* 走到这里说明同步刷盘出口不可用（pagehide 之类），
+               只剩 IDB 异步写。会话元数据一旦丢，角色卡/世界书绑定
+               会整个错位，所以两条路都不能静默。 */
+            var str = '';
             try {
-                var str = JSON.stringify(normalized);
-                if (str.length > META_LS_SOFT_MAX) {
-                    localStorage.setItem(META_LS, JSON.stringify({ __storedInIdb: true }));
-                } else {
-                    localStorage.setItem(META_LS, str);
+                str = JSON.stringify(normalized);
+            } catch (eStr) {
+                if (typeof global.miyaNotifyStorageFull === 'function') {
+                    global.miyaNotifyStorageFull(META_LS, eStr);
                 }
-            } catch (e2) {}
+                return;
+            }
+            var payload = str.length > META_LS_SOFT_MAX
+                ? JSON.stringify({ __storedInIdb: true })
+                : str;
+            if (typeof global.miyaSafeLsSet === 'function') {
+                global.miyaSafeLsSet(META_LS, payload);
+            } else {
+                try { localStorage.setItem(META_LS, payload); } catch (e2) {}
+            }
             kvPut(normalized).catch(function () {});
             if (metaRichness(normalized) > 0) {
                 kvPutBackup(normalized).catch(function () {});

@@ -92,7 +92,13 @@
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(KEY, cache).then(function () { return cache; });
     }
-    try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch (e) {}
+    var gsStr = '';
+    try { gsStr = JSON.stringify(cache); } catch (eStr) { return Promise.resolve(cache); }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(KEY, gsStr);
+    } else {
+      try { localStorage.setItem(KEY, gsStr); } catch (e) {}
+    }
     return Promise.resolve(cache);
   }
 

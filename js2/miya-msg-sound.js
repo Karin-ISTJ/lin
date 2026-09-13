@@ -49,9 +49,13 @@
   }
 
   function saveSettings() {
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(settings); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(SETTINGS_KEY, str);
+    } else {
+      try { localStorage.setItem(SETTINGS_KEY, str); } catch (e) {}
+    }
   }
 
   function loadSettings() {

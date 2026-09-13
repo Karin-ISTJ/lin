@@ -23,9 +23,13 @@
   }
 
   function persist(theme) {
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch (e) { /* ignore */ }
+    /* 主题是纯字符串，不需要 JSON.stringify；失败时同样要上报，
+       否则用户换了主题、下次打开又变回去，只会以为是「主题有 bug」。 */
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(STORAGE_KEY, String(theme));
+    } else {
+      try { localStorage.setItem(STORAGE_KEY, String(theme)); } catch (e) {}
+    }
   }
 
   function applyClasses(theme) {

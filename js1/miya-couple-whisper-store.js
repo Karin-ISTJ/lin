@@ -124,9 +124,13 @@
       global.miyaWriteLsJsonKey(LS_KEY, cache || defaultState()).catch(function () {});
       return;
     }
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(cache || defaultState()));
-    } catch (e) {}
+    var str = '';
+    try { str = JSON.stringify(cache || defaultState()); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(LS_KEY, str);
+    } else {
+      try { localStorage.setItem(LS_KEY, str); } catch (e) {}
+    }
   }
 
   function getRoomSettings(contactId) {

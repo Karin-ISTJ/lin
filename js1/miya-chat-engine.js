@@ -2866,7 +2866,23 @@
             }
         }
 
-        buildPerTurnOnlineInjectBlocks(chat, contact, settings, {
+        /*
+         * 每轮固定注入块（场景锁定、格式提醒等）。
+         *
+         * 这些块的内容**每轮都发、且每轮都一样**，所以它们本身不该破坏缓存。
+         * 但如果把它们 append 在历史之后，位置就会随历史增长而**逐轮后移**：
+         * 第 2 轮它前面有 4 条历史，第 5 轮它前面有 10 条——它在整个请求里的
+         * 偏移每轮都在变，于是它之前的内容虽然没动，服务商看到的却是
+         * 「前缀每一轮都不一样」，提示缓存 100% 重建。
+         *
+         * 实测（真机浏览器，线上四连轮）：修复前命中率 0%。
+         *
+         * 修法：锚定到历史区起点之前（onlineHistoryStart 已在上面记好），
+         * 让这些块跟在「模式/预设/记忆」之后、历史之前。
+         * 位置固定 → 前缀稳定 → 缓存可命中；语义上它们本就是「本轮规则」，
+         * 放在历史前同样成立，且不再挡在生成末端。
+         */
+        var perTurnBlocks = buildPerTurnOnlineInjectBlocks(chat, contact, settings, {
             callMode: !!opts.callMode,
             appointmentMode: !!opts.appointmentMode,
             isOffline: !!opts.isOffline,
@@ -2875,9 +2891,17 @@
             isRegenerate: !!opts.isRegenerate,
             htmlMode: !!htmlMode,
             history: sliceAppend
-        }).forEach(function (block) {
-            apiMessages.push({ role: 'system', content: block });
         });
+        if (perTurnBlocks && perTurnBlocks.length) {
+            var injectAt = (typeof onlineHistoryStart === 'number' && onlineHistoryStart >= 0)
+                ? onlineHistoryStart
+                : apiMessages.length;
+            var perTurnMsgs = perTurnBlocks.map(function (block) {
+                return { role: 'system', content: block };
+            });
+            /* splice 展开传参，保持与原 push 顺序一致 */
+            apiMessages.splice.apply(apiMessages, [injectAt, 0].concat(perTurnMsgs));
+        }
 
         var last = apiMessages[apiMessages.length - 1];
         var extra = String(userText || '').trim();
@@ -3910,9 +3934,23 @@
                    所以这里恒为 false。ST 预设里的「流式」开关只影响文案展示，
                    不再对外宣称可切换——详见 miya-st-prompt-presets-app.js 的摘要文案。 */
                 reqPayload.stream = false;
+                /* 缓存探针：记录本轮前缀，与上一轮比对，判断提示缓存能否命中。
+                   纯观测，不改请求内容；失败静默。 */
+                try {
+                    if (global.miyaCacheProbe && global.miyaCacheProbe.trackRequest) {
+                        global.miyaCacheProbe.trackRequest(slice, reqPayload.messages);
+                    }
+                } catch (eCache) {}
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1, genSignal).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
+                    /* 响应里的缓存用量（服务商有返回才记录） */
+                    try {
+                        if (global.miyaCacheProbe && global.miyaCacheProbe.parseCacheUsage) {
+                            var cu = global.miyaCacheProbe.parseCacheUsage(completion.data);
+                            if (cu && global.miyaCacheProbe.attachUsage) global.miyaCacheProbe.attachUsage(cu);
+                        }
+                    } catch (eUsage) {}
                     return completion;
                 });
             }

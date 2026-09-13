@@ -22,6 +22,10 @@
     document.body.style.backgroundColor = '#FFFFFF';
   }
 
+  /* 读失败与「确实没有数据」必须区分开：
+     saveSoftUi 是「读-改-写」，若读失败被当成空对象，
+     Object.assign({}, patch) 会把盘上原有的其它字段一并抹掉。
+     所以这里用 ok 标记，写之前先确认读是真的成功了。 */
   function readSoftUi() {
     try {
       var raw = localStorage.getItem(SOFT_UI_KEY);
@@ -31,9 +35,35 @@
     }
   }
 
+  /** 带成功标记的读取：{ ok, data } */
+  function readSoftUiSafe() {
+    try {
+      var raw = localStorage.getItem(SOFT_UI_KEY);
+      if (raw == null) return { ok: true, data: {} };   /* 确实没存过，空是真相 */
+      return { ok: true, data: JSON.parse(raw) };
+    } catch (e) {
+      return { ok: false, data: null };                 /* 读失败，内容未知 */
+    }
+  }
+
   function saveSoftUi(patch) {
-    var next = Object.assign(readSoftUi(), patch || {});
-    try { localStorage.setItem(SOFT_UI_KEY, JSON.stringify(next)); } catch (e) { /* ignore */ }
+    var got = readSoftUiSafe();
+    if (!got.ok) {
+      /* 读失败时不能拿 {} 去合并再写回——那等于用「只剩这一项」
+         覆盖掉盘上原有的完整设置。宁可这次少存一项，也不清空别人。 */
+      try {
+        console.warn('[miya-chat-app] 个人资料读盘失败，本次跳过写入以免覆盖已有设置');
+      } catch (eW) {}
+      return null;
+    }
+    var next = Object.assign({}, got.data, patch || {});
+    var softStr = '';
+    try { softStr = JSON.stringify(next); } catch (eStr) { return next; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(SOFT_UI_KEY, softStr);
+    } else {
+      try { localStorage.setItem(SOFT_UI_KEY, softStr); } catch (e) {}
+    }
     return next;
   }
 

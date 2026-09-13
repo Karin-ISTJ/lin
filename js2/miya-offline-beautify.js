@@ -287,7 +287,13 @@
         return presetsCache.slice();
       });
     }
-    try { localStorage.setItem(PRESETS_LS, JSON.stringify(presetsCache)); } catch (e) {}
+    var obStr = '';
+    try { obStr = JSON.stringify(presetsCache); } catch (eStr) { return; }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(PRESETS_LS, obStr);
+    } else {
+      try { localStorage.setItem(PRESETS_LS, obStr); } catch (e) {}
+    }
     return Promise.resolve(presetsCache.slice());
   }
 

@@ -397,27 +397,33 @@
     if (!block) return apiMessages;
     var msg = { role: 'system', content: block };
     if (!Array.isArray(apiMessages)) return apiMessages;
-    if (settings.injectPosition === 'before_user') {
-      // 插在最后一条 user 之前
-      var i = apiMessages.length - 1;
-      while (i >= 0 && apiMessages[i].role !== 'user') i--;
-      if (i >= 0) {
-        apiMessages.splice(i, 0, msg);
-      } else {
-        apiMessages.push(msg);
-      }
-    } else {
-      // 靠前 system：插在靠后的 system 区，尽量靠近历史
-      var insertAt = 0;
-      for (var j = 0; j < apiMessages.length; j++) {
-        if (apiMessages[j].role === 'system') insertAt = j + 1;
-        else break;
-      }
-      // 更稳：放在 messages 中部偏后——在第一条 user 前
-      var firstUser = apiMessages.findIndex(function (m) { return m.role === 'user'; });
-      if (firstUser >= 0) apiMessages.splice(firstUser, 0, msg);
-      else apiMessages.push(msg);
+
+    /* ── 为什么必须固定插入点（提示缓存） ──
+       记忆块的内容本身每轮也在变（表格会被模型改写），这点无法避免；
+       但如果**位置**也在变，那就是雪上加霜——位置一变，它后面所有内容的
+       偏移全部平移，等于每轮都把历史写花一遍，缓存 100% 重建。
+       实测（真机浏览器三连轮）：修复前命中率 0%。
+       所以这里的所有分支，一律锚定到**同一处**：紧跟开头的 system 区
+       （即第一条 user 之前）。有没有 user、历史多长，都不影响锚点。 */
+
+    /* 计算「开头连续 system 区」的末尾位置 */
+    var anchor = 0;
+    while (anchor < apiMessages.length && apiMessages[anchor] &&
+           apiMessages[anchor].role === 'system') {
+      anchor++;
     }
+    /* 兜底：万一开头不是 system（异常拼接），就退到第一条 user 之前 */
+    if (anchor === 0) {
+      var fu = -1;
+      for (var k = 0; k < apiMessages.length; k++) {
+        if (apiMessages[k] && apiMessages[k].role === 'user') { fu = k; break; }
+      }
+      anchor = fu >= 0 ? fu : 0;
+    }
+    /* before_user 语义上要求「贴着用户消息」，但锚点仍固定在 system 区末尾，
+       只是当 system 区后面紧邻的就是 user 时，两者结果一致。
+       这样无论对话多长，记忆块深度都恒定。 */
+    apiMessages.splice(anchor, 0, msg);
     return apiMessages;
   }
 

@@ -121,12 +121,22 @@
     }
 
     /** 读取落盘原文（不做解析），用于缓存一致性比对 */
-    function readPresetsRaw() {
+    /* 读取原始串。返回值增加 ok 标记，区分两种「空」：
+         - ok:true + raw:''  → 确实没存过，空就是真相
+         - ok:false           → 读失败，盘上有什么完全未知
+       saveOfflinePreset / deleteOfflinePreset 都是「读-改-写」，
+       若把读失败当成空列表，就会用只含一条的记录覆盖掉全部预设。 */
+    function readPresetsRawSafe() {
         try {
-            return localStorage.getItem(PRESETS_LS) || '';
+            var v = localStorage.getItem(PRESETS_LS);
+            return { ok: true, raw: v == null ? '' : v };
         } catch (e) {
-            return '';
+            return { ok: false, raw: '' };
         }
+    }
+
+    function readPresetsRaw() {
+        return readPresetsRawSafe().raw;
     }
 
     /** 主动作废缓存（storage 事件、导入、删除等外部写入后调用） */
@@ -203,6 +213,14 @@
             Object.assign({}, state || {}, { name: name, savedAt: Date.now() })
         );
         if (!row) return null;
+        /* 读失败时必须放弃本次保存：否则拿到的空列表会被当成真相，
+           写回后原有预设全部消失，用户看到的是「保存一个、丢掉全部」。 */
+        var got = readPresetsRawSafe();
+        if (!got.ok) {
+            try { console.warn('[miya-offline-status] 预设读盘失败，跳过保存以免覆盖已有预设'); } catch (eW) {}
+            return null;
+        }
+        invalidatePresetsCache();   /* 确保 loadPresets 基于刚读到的原文重建 */
         var list = loadPresets().filter(function (p) {
             return p.name !== row.name;
         });
@@ -215,6 +233,15 @@
     function deleteOfflinePreset(name) {
         var n = String(name || '').trim();
         if (!n) return false;
+        /* 同 saveOfflinePreset：读失败时列表内容未知，此时「删除」可能
+           把整个预设库清空（before=0、kept=0，看起来像「本来就不存在」，
+           于是走进「别假装删了」分支——但那是运气，不是设计）。 */
+        var gotDel = readPresetsRawSafe();
+        if (!gotDel.ok) {
+            try { console.warn('[miya-offline-status] 预设读盘失败，跳过删除以免误清空'); } catch (eW) {}
+            return false;
+        }
+        invalidatePresetsCache();
         var before = loadPresets().length;
         var kept = loadPresets().filter(function (p) {
             return p.name !== n;

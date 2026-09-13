@@ -3,6 +3,11 @@
 
     var USER_MSG_JOIN = '\n\n';
 
+    /* 流式空闲超时：多久没收到数据算「卡死」。
+       离线是长文生成，不能设请求级总时长（会误杀正常的长回复），
+       所以只在「持续无进展」时判定，每收到一块数据就重置。 */
+    var STREAM_IDLE_TIMEOUT_MS = 60000;
+
     function eng() {
         return global.miyaChatEngine;
     }
@@ -908,6 +913,59 @@
         return c.appointmentStream !== false;
     }
 
+    /**
+     * 读取 ST「生成参数」面板里的采样设置。
+     * 线下与线上共用同一套 ST 预设，线上（miya-chat-engine.js 的
+     * getStGenerationSettings）已经在用；线下此前完全没读，属遗漏。
+     * 读不到时返回空对象，由各处自行回退，行为与旧版一致。
+     */
+    function getStGenerationSettings() {
+        try {
+            var st = global.miyaStPromptPresetsStore;
+            if (st && typeof st.getActiveGeneration === 'function') {
+                return st.getActiveGeneration() || {};
+            }
+        } catch (e) { /* ignore */ }
+        return {};
+    }
+
+    /** 温度：ST 优先，其次 API 配置，最后兜底 1（与线上取值顺序一致）。 */
+    function appointmentTemperature(cfg, stGen) {
+        var g = stGen && typeof stGen === 'object' ? stGen : {};
+        if (g.temperature != null && Number.isFinite(Number(g.temperature))) {
+            return Number(g.temperature);
+        }
+        var c = cfg && typeof cfg === 'object' ? cfg : {};
+        if (c.temperature != null && Number.isFinite(Number(c.temperature))) {
+            return Number(c.temperature);
+        }
+        return 1;
+    }
+
+    /**
+     * 把 ST 生成参数映射到 OpenAI 兼容请求体。
+     * 只在本轮确实有值时上送，缺省项不下发（沿用网关默认），
+     * 与线上 miya-chat-engine.js 的处理保持一致。
+     * 注意：不处理 stream —— 线下流式由「输出方式」下拉单独控制。
+     */
+    function applyStGenerationToPayload(payload, stGen) {
+        if (!payload || typeof payload !== 'object') return payload;
+        var g = stGen && typeof stGen === 'object' ? stGen : {};
+        if (g.maxTokens != null && Number.isFinite(Number(g.maxTokens)) && Number(g.maxTokens) > 0) {
+            payload.max_tokens = Math.floor(Number(g.maxTokens));
+        }
+        if (g.topP != null && Number.isFinite(Number(g.topP))) {
+            payload.top_p = Number(g.topP);
+        }
+        if (g.frequencyPenalty != null && Number.isFinite(Number(g.frequencyPenalty))) {
+            payload.frequency_penalty = Number(g.frequencyPenalty);
+        }
+        if (g.presencePenalty != null && Number.isFinite(Number(g.presencePenalty))) {
+            payload.presence_penalty = Number(g.presencePenalty);
+        }
+        return payload;
+    }
+
     function normalizeMessageContent(content) {
         if (content == null) return '';
         if (typeof content === 'string') return content;
@@ -1333,32 +1391,103 @@
             var contentAcc = '';
             var reasoningAcc = '';
 
-            function pump() {
-                return reader.read().then(function (result) {
-                    if (result.done) {
-                        var display = emitDisplay(contentAcc, reasoningAcc);
-                        return { raw: display, data: null };
-                    }
-                    buffer += decoder.decode(result.value, { stream: true });
-                    var parts = buffer.split('\n');
-                    buffer = parts.pop() || '';
-                    parts.forEach(function (line) {
-                        var trimmed = line.trim();
-                        if (!trimmed || trimmed === 'data: [DONE]') return;
-                        if (trimmed.indexOf('data:') === 0) trimmed = trimmed.slice(5).trim();
-                        if (!trimmed || trimmed === '[DONE]') return;
-                        try {
-                            var obj = JSON.parse(trimmed);
-                            var delta = extractStreamParts(obj);
-                            if (delta.reasoning) reasoningAcc += delta.reasoning;
-                            if (delta.content) contentAcc += delta.content;
-                            if (delta.reasoning || delta.content) emitDisplay(contentAcc, reasoningAcc);
-                        } catch (e) {}
-                    });
-                    return pump();
-                });
+            /* 读流中断韧性。
+               线下是长文生成，中途断一次就丢掉整段回复代价很大，
+               所以这里以已收内容收尾，并标记 partial 让上层提示用户。
+               注意：不再是「退避续读」——同一个 reader 出错后不会复活，
+               重试只会白等 1.2 秒（实测：重试拿到的永远是同一个错误）。 */
+            function hasAny() {
+                return !!(String(contentAcc || '').length || String(reasoningAcc || '').length);
             }
-            return pump();
+            function finishPartial(err) {
+                if (buffer.trim()) {
+                    var tailLine = buffer.trim();
+                    if (tailLine.indexOf('data:') === 0) tailLine = tailLine.slice(5).trim();
+                    if (tailLine && tailLine !== '[DONE]') {
+                        try {
+                            var tailObj = JSON.parse(tailLine);
+                            var tailDelta = extractStreamParts(tailObj);
+                            if (tailDelta.reasoning) reasoningAcc += tailDelta.reasoning;
+                            if (tailDelta.content) contentAcc += tailDelta.content;
+                        } catch (eTail) { /* 半截行，忽略 */ }
+                    }
+                }
+                if (typeof handlers.onPartial === 'function') {
+                    try {
+                        handlers.onPartial({
+                            reason: (err && err.name === 'StreamIdleTimeout') ? 'idle_timeout' : 'disconnected',
+                            message: String((err && err.message) || '流式中断')
+                        });
+                    } catch (eCb) {}
+                }
+                var partial = emitDisplay(contentAcc, reasoningAcc);
+                return { raw: partial, data: null, partial: true };
+            }
+
+            return (function pump() {
+                var idleTimer = null;
+                var stalled = false;
+                function clearIdle() {
+                    if (idleTimer != null) { clearTimeout(idleTimer); idleTimer = null; }
+                }
+                /* 空闲超时看门狗：每收到一块数据就重置。
+                   只判断「有没有进展」，不限制总时长——长文生成本就会持续很久。 */
+                function armIdle() {
+                    clearIdle();
+                    idleTimer = setTimeout(function () {
+                        stalled = true;
+                        if (global.console && console.warn) {
+                            console.warn('[miya] 线下流式空闲超时（' + STREAM_IDLE_TIMEOUT_MS + 'ms 无数据），以已收内容收尾');
+                        }
+                        try { reader.cancel(); } catch (e) { /* 尽力而为 */ }
+                    }, STREAM_IDLE_TIMEOUT_MS);
+                }
+                function step() {
+                    if (stalled) {
+                        var idleErr = new Error('流式空闲超时');
+                        idleErr.name = 'StreamIdleTimeout';
+                        if (!hasAny()) throw idleErr;
+                        return finishPartial(idleErr);
+                    }
+                    armIdle();
+                    return reader.read().then(function (result) {
+                        clearIdle();
+                        if (result.done) {
+                            var display = emitDisplay(contentAcc, reasoningAcc);
+                            return { raw: display, data: null };
+                        }
+                        buffer += decoder.decode(result.value, { stream: true });
+                        var parts = buffer.split('\n');
+                        buffer = parts.pop() || '';
+                        parts.forEach(function (line) {
+                            var trimmed = line.trim();
+                            if (!trimmed || trimmed === 'data: [DONE]') return;
+                            if (trimmed.indexOf('data:') === 0) trimmed = trimmed.slice(5).trim();
+                            if (!trimmed || trimmed === '[DONE]') return;
+                            try {
+                                var obj = JSON.parse(trimmed);
+                                var delta = extractStreamParts(obj);
+                                if (delta.reasoning) reasoningAcc += delta.reasoning;
+                                if (delta.content) contentAcc += delta.content;
+                                if (delta.reasoning || delta.content) emitDisplay(contentAcc, reasoningAcc);
+                            } catch (e) {}
+                        });
+                        return step();
+                    }, function (err) {
+                        clearIdle();
+                        /* 用户主动中止（停止生成）→ 原样抛出，不做部分收尾 */
+                        var aborted = !!(err && (err.name === 'AbortError' || err.name === 'TimeoutError'));
+                        if (aborted) throw err;
+                        /* 无内容可保 → 真失败 */
+                        if (!hasAny()) throw err;
+                        if (global.console && console.warn) {
+                            console.warn('[miya] 线下流式中断，以已收内容收尾：', err && err.message);
+                        }
+                        return finishPartial(err);
+                    });
+                }
+                return step();
+            })();
         });
     }
 
@@ -1585,6 +1714,8 @@
             return Promise.reject(new Error('api_not_configured'));
         }
         if (handlers.onStatus) handlers.onStatus('coming');
+        /* ST 生成参数在进入异步前读取一次，保证本轮请求参数稳定 */
+        var stGen = getStGenerationSettings();
         /* 先让「书写中」上屏，再拼 prompt，避免按发送瞬间卡死 */
         return yieldToPaint().then(function () {
             var built = buildApiMessages(chatId, sessionId, '', {});
@@ -1597,8 +1728,16 @@
             var payload = {
                 model: model,
                 messages: built.messages,
-                temperature: cfg.temperature != null ? Number(cfg.temperature) : 1,
+                temperature: appointmentTemperature(cfg, stGen),
             };
+            /* 与线上 miya-chat-engine.js 保持一致：把 ST「生成参数」内的
+               max_tokens / top_p / 频率惩罚 / 存在惩罚 一并送出。
+               v38 修复：此前线下只发 model/messages/temperature，top_p 从未上送，
+               网关按默认 top_p=1.0 走全词表采样；在高温下会采样到极低概率尾部，
+               表现为正文与思维链「同时」喷出中英俄阿等多语种无意义碎片。
+               （换模型/换中转站偶尔转好，只是因为对方默认值恰好兜住了缺失参数，
+               并非用户的 Top P 设置真的生效了。） */
+            applyStGenerationToPayload(payload, stGen);
             var useStream = appointmentStreamEnabled(cfg);
             var pluginCtx = {
                 scope: 'offline',
@@ -1620,6 +1759,13 @@
                 built.messages = ctxOut.messages;
                 payload.messages = ctxOut.messages;
             }
+            /* 缓存探针：在 messages 定稿之后记录前缀，与上一轮比对。
+               与线上引擎同一套口径，纯观测、不改请求。 */
+            try {
+                if (global.miyaCacheProbe && global.miyaCacheProbe.trackRequest) {
+                    global.miyaCacheProbe.trackRequest(cfg, payload.messages);
+                }
+            } catch (eCache) {}
             return fetchAppointmentCompletion(
                 url,
                 headers,
@@ -1627,6 +1773,9 @@
                 {
                     onLine: handlers.onLine,
                     onDelta: handlers.onDelta,
+                    /* 把 onPartial 透传进流式读取层，
+                       断线/空闲超时后能通知上层「这段没写完」。 */
+                    onPartial: handlers.onPartial,
                     signal: handlers.signal
                 },
                 useStream
@@ -1643,6 +1792,14 @@
                     }
                 } catch (eMtOff) {}
                 var apiData = completion && completion.data != null ? completion.data : null;
+                /* 缓存探针：把服务商返回的缓存用量补记到本轮留档上。
+                   与线上引擎同一套字段兼容逻辑；无该字段时静默跳过。 */
+                try {
+                    if (global.miyaCacheProbe && global.miyaCacheProbe.parseCacheUsage) {
+                        var cuOff = global.miyaCacheProbe.parseCacheUsage(apiData);
+                        if (cuOff && global.miyaCacheProbe.attachUsage) global.miyaCacheProbe.attachUsage(cuOff);
+                    }
+                } catch (eUsageOff) {}
                 var parsed = parseAppointmentResponse(fullRaw, apiData);
                 var thinking = String(parsed.thinking || '').trim();
                 var htmlMode = !!built.htmlMode;

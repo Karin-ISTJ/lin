@@ -2361,7 +2361,13 @@
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(CUSTOM_META_KEY, payload);
     }
-    try { localStorage.setItem(CUSTOM_META_KEY, JSON.stringify(payload)); } catch (e) {}
+    var metaStr = '';
+    try { metaStr = JSON.stringify(payload); } catch (eStr) { return Promise.resolve(false); }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(CUSTOM_META_KEY, metaStr);
+    } else {
+      try { localStorage.setItem(CUSTOM_META_KEY, metaStr); } catch (e) {}
+    }
     return Promise.resolve(true);
   }
 
@@ -2421,7 +2427,13 @@
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(LAYOUT_MODE_KEY, next);
     }
-    try { localStorage.setItem(LAYOUT_MODE_KEY, next); } catch (e) {}
+    /* 布局模式丢了会导致整屏桌面「变成固定布局」，用户只会说
+       「我的自定义桌面没了」——所以这条写入失败也必须能查到。 */
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(LAYOUT_MODE_KEY, next);
+    } else {
+      try { localStorage.setItem(LAYOUT_MODE_KEY, next); } catch (e) {}
+    }
     return Promise.resolve(true);
   }
 
@@ -2459,7 +2471,17 @@
     if (typeof global.miyaWriteLsJsonKey === 'function') {
       return global.miyaWriteLsJsonKey(CUSTOM_PRESETS_KEY, customPresetsCache);
     }
-    try { localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customPresetsCache)); } catch (e) {}
+    var presetsStr = '';
+    try {
+      presetsStr = JSON.stringify(customPresetsCache);
+    } catch (eStr) {
+      return Promise.resolve(customPresetsCache.slice());
+    }
+    if (typeof global.miyaSafeLsSet === 'function') {
+      global.miyaSafeLsSet(CUSTOM_PRESETS_KEY, presetsStr);
+    } else {
+      try { localStorage.setItem(CUSTOM_PRESETS_KEY, presetsStr); } catch (e) {}
+    }
     return Promise.resolve(true);
   }
 

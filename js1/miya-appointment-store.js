@@ -1301,12 +1301,19 @@
             }
             return cache;
         }
-        try {
-            localStorage.setItem(LS_KEY, JSON.stringify(cache));
-            if (stateRichness(cache) > 0) {
-                localStorage.setItem(LS_BACKUP_KEY, JSON.stringify(cache));
+        /* 纪念日数据：主 key 与备份 key 都要确认写成功，
+           失败必须上报——否则用户看到「已保存」，重开后纪念日凭空消失。 */
+        var apptStr = '';
+        try { apptStr = JSON.stringify(cache); } catch (eStr) { return cache; }
+        var apptSet = function (k) {
+            if (typeof global.miyaSafeLsSet === 'function') {
+                global.miyaSafeLsSet(k, apptStr);
+            } else {
+                try { localStorage.setItem(k, apptStr); } catch (e) {}
             }
-        } catch (e) {}
+        };
+        apptSet(LS_KEY);
+        if (stateRichness(cache) > 0) apptSet(LS_BACKUP_KEY);
         return cache;
     }
 

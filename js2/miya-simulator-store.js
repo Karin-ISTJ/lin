@@ -1649,6 +1649,13 @@
     return cache;
   }
 
+  /* 单 key 写入：优先走 miya-storage 的统一出口（失败会上报，
+     且能看到是哪个 key / 多少字节撑爆的），没有则退化为裸写。 */
+  function setOneKey(k, str) {
+    if (typeof global.miyaSafeLsSet === 'function') return !!global.miyaSafeLsSet(k, str);
+    try { localStorage.setItem(k, str); return true; } catch (e) { return false; }
+  }
+
   function writeSnapshotToAllKeys(snapshot) {
     if (!snapshot) return Promise.resolve(false);
     var payload = snapshot;
@@ -1658,25 +1665,56 @@
       tasks.push(global.miyaWriteLsJsonKey(LS_KEY, payload));
       tasks.push(global.miyaWriteLsJsonKey(LS_BACKUP_KEY, payload));
     }
+    /* 三个 key 任一写失败都说明「这份快照没能完整落盘」。
+       只要有一条成功，内存里的数据在下次冷启动就还能捞回来，
+       所以不算彻底丢；三条全失败才是真的丢，那时必须告警。 */
+    function writeAllKeys(str) {
+      /* 三份快照一起写：任意一份成功都够下次冷启动捞回数据。
+         这里逐份尝试是刻意的——某个 key 恰好卡在配额边界时，
+         不该让另外两份一起陪葬。 */
+      var okList = [];
+      var okCount = 0;
+      [LS_KEY, LS_BACKUP_KEY, LS_KEY_LEGACY].forEach(function (k) {
+        var ok = setOneKey(k, str);
+        okList.push({ key: k, ok: ok });
+        if (ok) okCount += 1;
+      });
+      /* 冗余度降级留痕：写成功 1~2 份时数据仍在，但「保险」变薄了。
+         此时不弹用户提示（数据没丢，不该吓用户），只记控制台 + 状态位，
+         方便排查「为什么冷启动偶尔读到旧快照」。 */
+      if (okCount > 0 && okCount < 3) {
+        var failed = okList.filter(function (r) { return !r.ok; }).map(function (r) { return r.key; });
+        console.warn('[miya-simulator-store] 快照冗余度下降：仅 ' + okCount + '/3 个 key 写入成功，' +
+          '失败=' + failed.join(',') + '（数据未丢，但备份份数减少）');
+        try {
+          global.__miyaSimulatorRedundancy = {
+            okCount: okCount, failed: failed, at: Date.now()
+          };
+        } catch (eR) {}
+      }
+      return okCount;
+    }
+
     return Promise.all(tasks).then(function () {
       var str = '';
       try { str = JSON.stringify(payload); } catch (eStr) { return false; }
-      try { localStorage.setItem(LS_KEY, str); } catch (e1) {}
-      try { localStorage.setItem(LS_BACKUP_KEY, str); } catch (e2) {}
-      try { localStorage.setItem(LS_KEY_LEGACY, str); } catch (e3) {}
+      var written = writeAllKeys(str);
+      if (written === 0) return false;
       _lastPersistedRichness = stateRichness(payload);
       return true;
     }).catch(function () {
-      try {
-        var str2 = JSON.stringify(payload);
-        localStorage.setItem(LS_KEY, str2);
-        localStorage.setItem(LS_BACKUP_KEY, str2);
-        localStorage.setItem(LS_KEY_LEGACY, str2);
-        _lastPersistedRichness = stateRichness(payload);
-        return true;
-      } catch (e4) {
+      var str2 = '';
+      try { str2 = JSON.stringify(payload); } catch (eStr2) { return false; }
+      var written2 = writeAllKeys(str2);
+      if (written2 === 0) {
+        /* IDB 与 localStorage 全军覆没：数据这次是真的没存下来 */
+        if (typeof global.miyaNotifyStorageFull === 'function') {
+          global.miyaNotifyStorageFull(LS_KEY, new Error('simulator snapshot lost'));
+        }
         return false;
       }
+      _lastPersistedRichness = stateRichness(payload);
+      return true;
     });
   }
 
@@ -1716,10 +1754,13 @@
     stripPersistedGenerating(cache);
     var str = '';
     try { str = JSON.stringify(cache); } catch (eStr) { return; }
-    try { localStorage.setItem(LS_KEY, str); } catch (e1) {}
-    try { localStorage.setItem(LS_BACKUP_KEY, str); } catch (e2) {}
-    try { localStorage.setItem(LS_KEY_LEGACY, str); } catch (e3) {}
-    _lastPersistedRichness = stateRichness(cache);
+    /* setOneKey 内部已用统一的 miyaSafeLsSet 出口，失败会自动上报，
+       这里不再重复打扰用户；只需保证 _lastPersistedRichness
+       不会被错误地更新成「存成功了」。 */
+    var written = [LS_KEY, LS_BACKUP_KEY, LS_KEY_LEGACY].reduce(function (n, k) {
+      return n + (setOneKey(k, str) ? 1 : 0);
+    }, 0);
+    if (written > 0) _lastPersistedRichness = stateRichness(cache);
   }
 
   function saveScriptDecorState() {

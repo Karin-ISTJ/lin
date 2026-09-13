@@ -1393,10 +1393,6 @@
     syncChatTimestampFontScale(theme || global.miyaGetTheme());
   };
 
-  global.miyaGetAppFontSize = function (appKey, theme) {
-    return getAppFontSize(theme || global.miyaGetTheme(), appKey);
-  };
-
   global.miyaFormatFontSizeLabel = formatFontSizeLabel;
   global.miyaFontSizesEqual = fontSizesEqual;
   global.miyaSizeToFontScale = sizeToFontScale;
@@ -1463,21 +1459,6 @@
     return presetsCache.slice();
   };
 
-  global.miyaSavePreset = function (name) {
-    var theme = global.miyaGetTheme();
-    var preset = {
-      id: genId('preset'),
-      name: String(name || '未命名').trim() || '未命名',
-      savedAt: Date.now(),
-      theme: JSON.parse(JSON.stringify(theme))
-    };
-    var list = global.miyaGetPresets();
-    list.push(preset);
-    presetsCache = list;
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(list));
-    return preset;
-  };
-
   global.miyaLoadPreset = function (id) {
     var found = global.miyaGetPresets().filter(function (p) { return p.id === id; })[0];
     if (!found || !found.theme) return Promise.resolve(false);
@@ -1485,12 +1466,6 @@
     if (presetTheme.icons) presetTheme.icons = normalizeIcons(presetTheme.icons);
     global.miyaSetTheme(presetTheme);
     return global.miyaApplyTheme(presetTheme).then(function () { return true; });
-  };
-
-  global.miyaDeletePreset = function (id) {
-    var list = global.miyaGetPresets().filter(function (p) { return p.id !== id; });
-    presetsCache = list;
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(list));
   };
 
   var fontPresetsCache = null;
@@ -1532,32 +1507,11 @@
     localStorage.setItem(FONT_PRESETS_KEY, JSON.stringify(fontPresetsCache));
   };
 
-  global.miyaSetWallpaper = function (ref) {
-    global.miyaSetTheme({ wallpaper: ref });
-    return global.miyaApplyTheme();
-  };
-
   global.miyaSetIcon = function (key, ref) {
     var theme = global.miyaGetTheme();
     var icons = Object.assign({}, theme.icons || {});
     if (ref) icons[key] = ref; else delete icons[key];
     global.miyaSetTheme({ icons: icons });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetPolaroid = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var pol = Object.assign({}, theme.polaroids || {});
-    if (ref) pol[key] = ref; else delete pol[key];
-    global.miyaSetTheme({ polaroids: pol });
-    return global.miyaApplyTheme();
-  };
-
-  global.miyaSetMemoAva = function (key, ref) {
-    var theme = global.miyaGetTheme();
-    var avas = Object.assign({}, theme.memoAvas || {});
-    if (ref) avas[key] = ref; else delete avas[key];
-    global.miyaSetTheme({ memoAvas: avas });
     return global.miyaApplyTheme();
   };
 
@@ -1584,31 +1538,10 @@
   global.miyaAPP_KEYS = APP_KEYS;
   global.miyaPOLAROID_KEYS = POLAROID_KEYS;
 
-  function collectMediaIds(theme, bag) {
-    bag = bag || {};
-    if (!theme) return bag;
-    function add(ref) {
-      if (!ref) return;
-      var id = typeof ref === 'string' ? ref : (ref.id || null);
-      if (id && id.indexOf('miya_') === 0) bag[id] = true;
-    }
-    add(theme.wallpaper);
-    add(theme.profileBg);
-    add(theme.weekcalBg);
-    add(theme.playerCover);
-    add(theme.playerBg);
-    add(theme.fontId);
-    Object.keys(theme.icons || {}).forEach(function (k) { add(theme.icons[k]); });
-    Object.keys(theme.polaroids || {}).forEach(function (k) { add(theme.polaroids[k]); });
-    Object.keys(theme.memoAvas || {}).forEach(function (k) { add(theme.memoAvas[k]); });
-    Object.keys(theme.p2Tiles || {}).forEach(function (k) { add(theme.p2Tiles[k]); });
-    Object.keys(theme.p2Widgets || {}).forEach(function (k) { add(theme.p2Widgets[k]); });
-    Object.keys(theme.p3Tiles || {}).forEach(function (k) { add(theme.p3Tiles[k]); });
-    Object.keys(theme.p3Widgets || {}).forEach(function (k) { add(theme.p3Widgets[k]); });
-    Object.keys(theme.p4Tiles || {}).forEach(function (k) { add(theme.p4Tiles[k]); });
-    Object.keys(theme.p4Widgets || {}).forEach(function (k) { add(theme.p4Widgets[k]); });
-    return bag;
-  }
+  /* 注：原 collectMediaIds(theme, bag) 仅服务于已废弃的 miyaExportDecorPack
+     （旧版装饰包导出），随该函数一并于 v37 批次 5 移除；它内部残留的
+     p2Tiles/p3Tiles/p4Tiles 等 P2/P3/P4 键也一并清掉。
+     当前生效的是下方的 collectCustomMediaIds。 */
 
   function blobToDataUrl(blob) {
     return new Promise(function (resolve, reject) {
@@ -1764,29 +1697,6 @@
     });
   };
 
-  global.miyaExportDecorPack = function () {
-    var theme = JSON.parse(JSON.stringify(global.miyaGetTheme()));
-    var ids = Object.keys(collectMediaIds(theme, {}));
-    return Promise.all(ids.map(function (id) {
-      return mediaGet(id).then(function (rec) {
-        if (!rec) return null;
-        return serializeMediaRecord(rec).then(function (s) { return s ? { id: id, data: s } : null; });
-      });
-    })).then(function (rows) {
-      var media = {};
-      rows.forEach(function (row) {
-        if (row) media[row.id] = row.data;
-      });
-      return JSON.stringify({
-        miyaDecorPack: true,
-        version: 1,
-        exportedAt: Date.now(),
-        theme: theme,
-        media: media
-      }, null, 2);
-    });
-  };
-
   global.miyaImportDecorPack = function (jsonStr) {
     var data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
     if (!data || !data.theme) throw new Error('invalid pack');
@@ -1803,10 +1713,6 @@
       global.miyaSetTheme(t);
       return global.miyaApplyTheme(t);
     });
-  };
-
-  global.miyaExportThemeMediaDb = function () {
-    return global.miyaExportNamedDbBlobs(MEDIA_DB, MEDIA_STORE);
   };
 
   global.miyaImportThemeMediaDb = function (src) {
