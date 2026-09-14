@@ -20,9 +20,12 @@
   var ALL_APPS = CUSTOM_GRID_APPS.concat(DEFAULT_DOCK);
   var CUSTOM_ICON_KEYS = ALL_APPS.slice();
 
-  var MIN_DOCK = 1;
+  /* 程序坞允许为空：用户可以把它整个清空，不再强制塞回一个图标。
+     下限 0 表示「空 dock 是合法状态」，normalizeLayout 不会再去网格里拽一个上来。 */
+  var MIN_DOCK = 0;
   var MAX_DOCK = 4;
   var DOCK_METRICS = {
+    0: { gap: 0, pad: 0 },
     1: { gap: 0, pad: 16 },
     2: { gap: 26, pad: 16 },
     3: { gap: 22, pad: 18 },
@@ -2129,8 +2132,15 @@
       }
     });
 
+    /*
+     * 程序坞不再自动补位。
+     * 以前 MIN_DOCK 是 1，用户把最后一个图标拖出 dock，归一化就会
+     * 从网格里再拽一个上来 —— 看起来像「底下那栏死活删不掉」。
+     * 现在 MIN_DOCK = 0，空 dock 完全合法，这里保留结构只为将来
+     * 若调整下限时仍能工作。
+     */
     var dockCount = countDockApps(dockSlots);
-    if (dockCount < MIN_DOCK) {
+    if (MIN_DOCK > 0 && dockCount < MIN_DOCK) {
       for (var pi2 = 0; pi2 < pages.length && dockCount < MIN_DOCK; pi2++) {
         pages[pi2].items = pages[pi2].items.filter(function (item) {
           if (item.kind !== 'app' || dockCount >= MIN_DOCK) return true;
@@ -4023,6 +4033,8 @@
     var showEmpty = shouldShowEmptySlot('dock');
     dock.classList.toggle('foot__dock--compact', !showEmpty);
     dock.classList.toggle('foot__dock--full', showEmpty);
+    /* 全部槽位为空且不在编辑态 → 整条 dock 收起（用户可以把底部栏完全清掉） */
+    dock.classList.toggle('foot__dock--empty', !showEmpty && countDockApps(dockSlots) === 0);
     updateDockLayoutMetrics(dock, dockSlots);
 
     for (var i = 0; i < DOCK_SLOT_COUNT; i++) {

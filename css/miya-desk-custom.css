@@ -373,6 +373,29 @@ html.miya-custom-desk-icon-frameless .foot__dock--custom .foot__dock-btn.has-cus
   display: none;
 }
 
+/* 程序坞被清空（所有槽位都空且不在编辑态）时整条收起，
+   不再留一条空白玻璃条占着底部空间。
+   注意：这里不复用上面的 opacity 过渡，否则收起过程中会先按
+   过渡初值绘一帧（安卓上表现为底部闪一下白条）。干脆直接消失。 */
+.foot__dock--custom.foot__dock--empty {
+  min-height: 0;
+  max-height: 0;
+  height: 0;
+  padding-block: 0;
+  margin-block: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transform: scaleY(0);
+  transition: none;
+}
+
+/* 空 dock 状态下槽位也要彻底不占位，否则 4×58px 仍把底栏撑高 */
+.foot__dock--custom.foot__dock--empty .foot__dock-slot {
+  display: none;
+}
+
 .foot__dock-slot__empty-inner {
   display: flex;
   align-items: center;

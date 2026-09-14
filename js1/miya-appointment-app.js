@@ -26,7 +26,14 @@
         scrollRaf: 0,
         revealRaf: 0,
         paraCount: 0,
-        userPinnedBottom: true
+        /*
+         * 用户是否「贴着底部」。只决定「要不要跟着新内容滚」，
+         * 不代表「可以主动抢滚动位置」。
+         */
+        userPinnedBottom: true,
+        /* 用户在这个场景里是否亲手滚动过。没滚过 = 还没表达过立场，
+           此时绝不主动改 scrollTop，免得正文一生成完就把人拽到最底下。 */
+        userTouchedScroll: false
     };
 
     var SCROLL_PIN_THRESHOLD = 72;
@@ -1773,6 +1780,8 @@
 
     function pinScrollToBottom() {
         streamUi.userPinnedBottom = true;
+        /* 主动贴底（用户按下发送/重回）＝用户已经表态，允许跟随滚动。 */
+        streamUi.userTouchedScroll = true;
     }
 
     function bindScrollPin() {
@@ -1780,13 +1789,43 @@
         if (!sc || ui.view !== 'story') return;
         if (sc._xwScrollPin) return;
         sc._xwScrollPin = true;
+        /* 注意：程序改 scrollTop 也会触发 scroll 事件。
+           所以这里不直接置 userTouchedScroll，而是用 rAF 标记下一帧，
+           把「我们自己的滚动」排除掉，只认用户的真实手势。 */
+        var markSelf = function () {
+            sc._xwScrollSelf = true;
+            requestAnimationFrame(function () {
+                sc._xwScrollSelf = false;
+            });
+        };
+        sc._xwMarkSelfScroll = markSelf;
+        ['touchstart', 'pointerdown', 'wheel', 'keydown'].forEach(function (evt) {
+            sc.addEventListener(
+                evt,
+                function () {
+                    streamUi.userTouchedScroll = true;
+                },
+                { passive: true }
+            );
+        });
         sc.addEventListener(
             'scroll',
             function () {
+                if (!sc._xwScrollSelf) {
+                    /* 真实滚动（手指/滚轮/键盘）：从此按用户的位置说话。 */
+                    streamUi.userTouchedScroll = true;
+                }
+                if (sc._xwScrollSelf) return; /* 自己滚的，不覆盖用户立场 */
                 streamUi.userPinnedBottom = isScrollNearBottom(sc);
             },
             { passive: true }
         );
+    }
+
+    /* 供程序滚动前调用：标记「接下来这几帧的 scroll 事件是我自己造的」 */
+    function markSelfScroll() {
+        var sc = $('xw-main');
+        if (sc && typeof sc._xwMarkSelfScroll === 'function') sc._xwMarkSelfScroll();
     }
 
     function scheduleStreamScroll() {
@@ -2070,11 +2109,22 @@ function renderWriter() {
     }
 
     function scrollStoryToEnd(force) {
-        if (!force && !streamUi.userPinnedBottom) return;
         var sc = $('xw-main');
         if (!sc) return;
+        /*
+         * 谁都不能在用户没碰过滚动条的情况下动他的位置。
+         * 之前的问题：userPinnedBottom 初值为 true → 正文一生成完
+         * patchStoryBody 立刻带着 force=true 跳到最底，人还在上面看，
+         * 画面自己就滑走了。现在只有用户亲手滚过、且当前确实贴底，
+         * 才跟随；force 也不再绕过这道闸。
+         */
+        if (!streamUi.userTouchedScroll) return;
+        if (!force && !streamUi.userPinnedBottom) return;
+        if (force && !streamUi.userPinnedBottom) return;
         requestAnimationFrame(function () {
-            if (!force && !streamUi.userPinnedBottom) return;
+            if (!streamUi.userTouchedScroll) return;
+            if (!streamUi.userPinnedBottom) return;
+            markSelfScroll();
             sc.scrollTop = sc.scrollHeight;
             streamUi.userPinnedBottom = isScrollNearBottom(sc);
         });
@@ -2116,7 +2166,9 @@ function renderWriter() {
             resetStreamUi();
         }
 
-        if (!opts.streamOnly && streamUi.userPinnedBottom) scrollStoryToEnd(true);
+        if (!opts.streamOnly && streamUi.userTouchedScroll && streamUi.userPinnedBottom) {
+            scrollStoryToEnd(true);
+        }
     }
 
     function syncSessionOnLeave() {
