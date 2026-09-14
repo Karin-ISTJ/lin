@@ -694,12 +694,46 @@
     })();
 
     (function consumeNotifyDeepLink() {
+        /* 判定「这条深链是不是已经处理过了」。
+           不能用 sessionStorage：用户「关闭浏览器再打开」会把它清空，
+           标记失效 → 下次冷启动又消费一遍 → 又跳进角色页。
+           所以用 localStorage 存「已消费的会话 + 时间」，关浏览器后依然存活，
+           才能真正断掉自我延续。 */
+        var CONSUMED_KEY = 'miya-notify-deeplink-consumed-v1';
+        var CONSUMED_TTL = 6 * 60 * 60 * 1000; /* 6 小时，足够覆盖「关了再开」 */
         var hash = String(location.hash || '');
         var m = hash.match(/(?:^|[#&])miya-open-chat=([^&]+)/);
         if (!m) return;
         var chatId = decodeURIComponent(m[1] || '');
         if (!chatId) return;
-        history.replaceState(null, '', location.pathname + location.search);
+
+        /* 立刻抹掉地址上的深链：replaceState 走不通就退化成改 hash。
+           （Via 等壳浏览器对 replaceState 支持不完整，会静默失败，
+             导致 hash 永远黏在地址上、每次冷启动都重新触发。） */
+        try {
+            history.replaceState(null, '', location.pathname + location.search);
+        } catch (e) {}
+        if (String(location.hash || '').indexOf('miya-open-chat') >= 0) {
+            try { location.hash = ''; } catch (e) {}
+        }
+
+        var already = false;
+        try {
+            var raw = localStorage.getItem(CONSUMED_KEY);
+            if (raw) {
+                var rec = JSON.parse(raw);
+                if (rec && rec.cid === chatId && (Date.now() - Number(rec.at || 0)) < CONSUMED_TTL) {
+                    already = true;
+                }
+            }
+            if (!already) {
+                localStorage.setItem(CONSUMED_KEY, JSON.stringify({ cid: chatId, at: Date.now() }));
+            }
+        } catch (e) {}
+
+        /* 同一条深链已经消费过 → 判为残留，不再弹角色页，停在消息列表。 */
+        if (already) return;
+
         setTimeout(function () {
             openChat(chatId);
         }, 300);

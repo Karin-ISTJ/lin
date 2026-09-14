@@ -1,4 +1,4 @@
-var CACHE = 'miya-v117-karin';
+var CACHE = 'miya-v118-karin';
 var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './js1/app.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */
 var STATIC_LIVE = /\.(?:html|css|js|webmanifest|json)$|\/$|miya-icon(?:-\d+)?\.png/;
@@ -100,10 +100,34 @@ self.addEventListener('fetch', function (e) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var data = event.notification.data || {};
+  /* 目标 URL 只拼一次，供「没有可用窗口」时新开使用 */
+  function buildOpenUrl() {
+    var openUrl = data.url || './';
+    if (data.kind === 'weather_care' && data.careId) {
+      openUrl += (openUrl.indexOf('#') >= 0 ? '&' : '#') + 'miya-open-weather-care=' + encodeURIComponent(data.careId);
+    } else if (data.chatId) {
+      openUrl += (openUrl.indexOf('#') >= 0 ? '&' : '#') + 'miya-open-chat=' + encodeURIComponent(data.chatId);
+    }
+    return openUrl;
+  }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      /* 优先挑「地址干净、不带 miya-open-chat 残留」的窗口。
+         背景：某些壳浏览器（如 Via）后台窗口被冻结后仍留在 clients 列表里，
+         而且它对 history.replaceState 支持不完整，上次的 #miya-open-chat=xxx
+         会一直黏在地址上。若直接 focus 这种窗口，用户会看到
+         「一点就跳进上次那个角色」——且关掉浏览器再开依旧复现。
+         所以把带残留 hash 的窗口排到最后，宁可新开一个干净窗口。 */
+      var clean = [], dirty = [];
       for (var i = 0; i < list.length; i++) {
-        var client = list[i];
+        var u = '';
+        try { u = list[i].url || ''; } catch (e) {}
+        if (u.indexOf('miya-open-chat') >= 0 || u.indexOf('miya-open-weather-care') >= 0) dirty.push(list[i]);
+        else clean.push(list[i]);
+      }
+      var ordered = clean.concat(dirty);
+      for (var j = 0; j < ordered.length; j++) {
+        var client = ordered[j];
         client.postMessage({
           type: 'miya-notify-click',
           chatId: data.chatId || '',
@@ -114,13 +138,7 @@ self.addEventListener('notificationclick', function (event) {
         if ('focus' in client) return client.focus();
       }
       if (self.clients.openWindow) {
-        var openUrl = data.url || './';
-        if (data.kind === 'weather_care' && data.careId) {
-          openUrl += (openUrl.indexOf('#') >= 0 ? '&' : '#') + 'miya-open-weather-care=' + encodeURIComponent(data.careId);
-        } else if (data.chatId) {
-          openUrl += (openUrl.indexOf('#') >= 0 ? '&' : '#') + 'miya-open-chat=' + encodeURIComponent(data.chatId);
-        }
-        return self.clients.openWindow(openUrl);
+        return self.clients.openWindow(buildOpenUrl());
       }
     })
   );
