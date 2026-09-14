@@ -1746,6 +1746,38 @@
     return el;
   }
 
+  /**
+   * 列表页值守守卫。
+   *
+   * 打开 App 后，只要用户停在「消息列表」，就持续检查有没有会话被
+   * 自动打开。判据有三条，必须同时成立才会动手关：
+   *   1. 房间确实开着（qq-room-open）且有 chatId
+   *   2. 当前 tab 仍是 msg（说明用户没有主动切到别的页）
+   *   3. 这次进房不是用户点出来的（授权窗口已过期）
+   *
+   * 关键：用户点会话时，openChatById 会先开一个 4 秒的授权窗口
+   * （markUserRoomEntry），所以正常点击绝不会被守卫误伤。
+   */
+  var listGuardTimer = null;
+  function startListGuard(el) {
+    stopListGuard();
+    var ticks = 0;
+    listGuardTimer = setInterval(function () {
+      ticks += 1;
+      /* 最多盯 30 秒：覆盖冷启动后各种延迟回调，之后交还给正常逻辑 */
+      if (ticks > 60) { stopListGuard(); return; }
+      if (!el || !el.classList.contains('is-open')) { stopListGuard(); return; }
+      if (!global.miyaChatRoom || typeof global.miyaChatRoom.guardAutoRoomOpen !== 'function') return;
+      try { global.miyaChatRoom.guardAutoRoomOpen(); } catch (e) {}
+    }, 500);
+  }
+  function stopListGuard() {
+    if (listGuardTimer) {
+      clearInterval(listGuardTimer);
+      listGuardTimer = null;
+    }
+  }
+
   function openChatApp() {
     var el = paintChatAppShell();
     if (!el) return Promise.resolve();
@@ -1763,14 +1795,14 @@
       }
     }
     el.classList.remove('qq-room-open');
-    /* 进 App 时排一次守卫：若有自动化路径（深链 / 通知 / 前台同步）
-       在点图标之后偷偷进房，会被拦回消息列表。等一帧再判，避开
-       open() 内部同步阶段，只拦真正「跟在后面」的自动进房。 */
-    setTimeout(function () {
-      if (global.miyaChatRoom && typeof global.miyaChatRoom.guardAutoRoomOpen === 'function') {
-        global.miyaChatRoom.guardAutoRoomOpen();
-      }
-    }, 260);
+    /* 值守守卫：进 App 后在「消息列表页」期间持续盯着，
+       一旦发现当前 tab 还是 msg、且房间却被自动打开了（用户没点任何会话），
+       就把它关回去。
+       为什么需要持续盯而不是只判一次：自动进房可能来自任意延迟路径
+       （通知回调、前台同步、后台推送、离线消息跟进…），
+       单次 setTimeout 抓不全，用户看到的就是
+       「点聊天图标 → 莫名其妙进了某个角色的会话」。 */
+    startListGuard(el);
 
     currentTab = 'msg';
     el.querySelectorAll('.qq-page').forEach(function (p) {

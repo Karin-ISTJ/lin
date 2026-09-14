@@ -5954,13 +5954,23 @@
    * 进房守卫：把「不是用户主动进房」的会话拦回列表。
    *
    * 授权窗口由 openChatById 打开（见 markUserRoomEntry），
-   * 时间窗内进房一律放行；超时后再出现会话就说明是自动路径偷偷进房，
-   * 直接关掉，避免「点桌面聊天图标 → 直接跳进角色页面」。
-   * 用时间窗而不是 setTimeout 竞速，是为了不和 open() 的异步 settle 抢时序。
+   * 窗口内进房一律放行；窗口外若房间却被打开了，就说明是自动路径
+   * 偷偷进房，直接关掉 —— 避免「点桌面聊天图标 → 直接跳进某个角色会话」。
+   *
+   * 用时间窗而不是布尔标志，是为了不和 open() 的异步 settle 抢时序。
+   * 另外只在「用户停在消息列表」时才拦：如果用户已经通过通知直达进房、
+   * 或主动切到了别的 tab，就不该干预。
    */
   function guardAutoRoomOpen() {
     if (!state.chatId) return;
     if (Date.now() < userRoomEntryUntil) return;
+    /* 用户不在列表页（例如通知直达后停在房间、或切到了联系人/动态），不干预 */
+    var app = $('miya-chat-app');
+    if (app) {
+      var activePage = app.querySelector('.qq-page.is-active');
+      var tab = activePage ? activePage.getAttribute('data-qq-tab') : '';
+      if (tab && tab !== 'msg') return;
+    }
     close();
   }
 
