@@ -208,8 +208,8 @@ html.is-custom-dragging .desk-custom__dock-ic {
 }
 
 .desk-custom__grid .desk-custom__ic .ic__box svg {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
 }
 
 .desk-custom__grid .desk-custom__ic .ic__lbl {
@@ -450,8 +450,8 @@ html.is-custom-dragging .foot__dock-slot--empty .foot__dock-slot__ring {
 }
 
 .foot__dock--custom .desk-custom__dock-ic .foot__dock-btn svg {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
 }
 
 .foot__dock--custom .desk-custom__dock-ic {
@@ -1351,7 +1351,8 @@ html.is-custom-wg-editing .desk-custom-viewport {
   [data-app="memory"],
   [data-app="itinerary"],
   [data-app="couple"],
-  [data-app="fun"]
+  [data-app="fun"],
+  [data-app="set"]
 ) .ic__box.glass {
   background: transparent !important;
   border-color: transparent !important;
@@ -1360,7 +1361,10 @@ html.is-custom-wg-editing .desk-custom-viewport {
   -webkit-backdrop-filter: none !important;
 }
 
-/* ② 网格图标：图形放大到 36px（默认 24px），让实心造型看得清 */
+/* ② 网格图标：26px（默认 24px）。
+   注意：这批图标是「填充式」，笔画宽度随整体缩放同比变化 ——
+   放到 36px 时笔画会粗 1.5 倍，观感发闷；收回到 26px 既保留
+   实心造型的辨识度，笔画粗细也接近原线条图标的观感。 */
 .desk-custom__grid .desk-custom__ic:is(
   [data-app="beauty"],
   [data-app="imagegen"],
@@ -1372,13 +1376,14 @@ html.is-custom-wg-editing .desk-custom-viewport {
   [data-app="memory"],
   [data-app="itinerary"],
   [data-app="couple"],
-  [data-app="fun"]
+  [data-app="fun"],
+  [data-app="set"]
 ) .ic__box svg {
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
 }
 
-/* ③ 程序坞图标（联系人默认在 dock 里）：同样去白底 + 放大 */
+/* ③ 程序坞图标（联系人默认在 dock 里）：同样去白底 + 26px */
 .foot__dock--custom .desk-custom__dock-ic:is(
   [data-app="beauty"],
   [data-app="imagegen"],
@@ -1390,7 +1395,8 @@ html.is-custom-wg-editing .desk-custom-viewport {
   [data-app="memory"],
   [data-app="itinerary"],
   [data-app="couple"],
-  [data-app="fun"]
+  [data-app="fun"],
+  [data-app="set"]
 ) .foot__dock-btn {
   background: transparent !important;
   border-color: transparent !important;
@@ -1410,10 +1416,11 @@ html.is-custom-wg-editing .desk-custom-viewport {
   [data-app="memory"],
   [data-app="itinerary"],
   [data-app="couple"],
-  [data-app="fun"]
+  [data-app="fun"],
+  [data-app="set"]
 ) .foot__dock-btn svg {
-  width: 34px;
-  height: 34px;
+  width: 26px;
+  height: 26px;
 }
 
 /* ④ 移动端主屏对 .ic__box.glass 有强制白底（miya-thermal.css），此处压回去 */
@@ -1428,7 +1435,8 @@ html.is-mobile body.miya-mode-phone:not(.miya-app-open) .desk-custom__grid .desk
   [data-app="memory"],
   [data-app="itinerary"],
   [data-app="couple"],
-  [data-app="fun"]
+  [data-app="fun"],
+  [data-app="set"]
 ) .ic__box.glass {
   background: transparent !important;
   box-shadow: none !important;
