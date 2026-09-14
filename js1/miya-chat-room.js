@@ -3711,8 +3711,7 @@
       if (e) { e.preventDefault(); e.stopPropagation(); }
       var cid = state.chatId;
       if (!cid) { toast('当前没有打开聊天'); return false; }
-      if (state.sending) { toast('正在等待回复…'); return false; }
-      toast('正在准备角色回复…');
+      if (state.sending) { return false; }
       var p = requestAiReply(false, 0, { directButton: true });
       if (p && typeof p.catch === 'function') { p.catch(function (err) {
         console.error('[MiyaChat] direct reply failed', err);

@@ -343,18 +343,40 @@
   function entriesFromStJson(obj) {
     var prompts = Array.isArray(obj.prompts) ? obj.prompts : [];
     var byId = Object.create(null);
+    var byIdList = Object.create(null); // identifier -> [prompt...]（同一 identifier 可重复）
     prompts.forEach(function (p, idx) {
       if (!p || typeof p !== 'object') return;
       var ident = p.identifier != null ? String(p.identifier) : ('__idx_' + idx);
-      byId[ident] = p;
+      if (!byId[ident]) byId[ident] = p; // 保留首个，避免重复 identifier 互相覆盖
+      (byIdList[ident] || (byIdList[ident] = [])).push(p);
       if (p.name) byId['name:' + String(p.name)] = p;
     });
 
+    /* 选择顺序来源。SillyTavern 的 prompt_order 是一组按角色分的块：
+         character_id === 100000 是角色的全局默认预设（真正的模板）；
+         100001 是用户 persona 的覆盖，其它值是具体角色。
+       预设文件里承载「作者排好的顺序」的应当是 100000 那一块。
+       旧实现直接取 prompt_order[0]，一旦用户 persona 段排在前面（很常见），
+       就会拿用户覆盖的顺序当真，导入后条目顺序整个跑偏。
+       策略：优先 100000 → 其次任意「非空 order 且不是 100001」的块
+             → 再退到 100001 → 最后退到第一个非空块。 */
     var orderList = null;
     if (Array.isArray(obj.prompt_order) && obj.prompt_order.length) {
-      // prefer first order block (ST default character)
-      var block = obj.prompt_order[0];
-      if (block && Array.isArray(block.order)) orderList = block.order;
+      var blocks = obj.prompt_order.filter(function (b) {
+        return b && Array.isArray(b.order) && b.order.length;
+      });
+      var pick = null;
+      if (blocks.length) {
+        pick = blocks.filter(function (b) { return Number(b.character_id) === 100000; })[0] || null;
+        if (!pick) {
+          pick = blocks.filter(function (b) { return Number(b.character_id) !== 100001; })[0] || null;
+        }
+        if (!pick) {
+          pick = blocks.filter(function (b) { return Number(b.character_id) === 100001; })[0] || null;
+        }
+        if (!pick) pick = blocks[0];
+      }
+      if (pick) orderList = pick.order;
     }
 
     var entries = [];
@@ -363,7 +385,11 @@
     function pushFromPrompt(p, enabled, order) {
       if (!p) return;
       var ident = p.identifier != null ? String(p.identifier) : '';
-      var key = ident || ('n:' + (p.name || '') + ':' + order);
+      /* 去重键：有 identifier 时用 identifier + 该条在 prompts 数组里的原始下标。
+         同一 identifier 在 ST 预设里可以合法重复（作者会复制条目），
+         只按 identifier 去重会把后面的副本整条吞掉。 */
+      var rawIdx = prompts.indexOf(p);
+      var key = ident ? (ident + '#' + rawIdx) : ('n:' + (p.name || '') + '@' + rawIdx);
       if (used[key]) return;
       used[key] = true;
       var hasContent = String(p.content || '').trim().length > 0;
@@ -398,7 +424,10 @@
       orderList.forEach(function (row, idx) {
         if (!row) return;
         var ident = row.identifier != null ? String(row.identifier) : '';
-        var p = ident ? byId[ident] : null;
+        /* 同一 identifier 若在 prompts 里出现多次，按出现次序依次消费，
+           而不是永远取第一个 —— 否则副本会被整体丢弃。 */
+        var bucket = ident ? byIdList[ident] : null;
+        var p = bucket && bucket.length ? bucket.shift() : (ident ? byId[ident] : null);
         if (!p) {
           // order references missing prompt — skip
           return;
@@ -409,12 +438,11 @@
       // append prompts not listed in order (keep at end, default off if marker)
       prompts.forEach(function (p) {
         if (!p) return;
+        var rawIdx = prompts.indexOf(p);
         var ident = p.identifier != null ? String(p.identifier) : '';
-        var key = ident || '';
-        if (ident && used[ident]) return;
-        if (!ident) {
-          // name-based already handled loosely
-        }
+        /* 与 pushFromPrompt 用同一套去重键，避免「order 里已放过的条目」被重复追加 */
+        var key = ident ? (ident + '#' + rawIdx) : ('n:' + (p.name || '') + '@' + rawIdx);
+        if (used[key]) return;
         pushFromPrompt(p, p.marker ? false : true, entries.length);
       });
     } else {

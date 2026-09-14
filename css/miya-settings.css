@@ -957,12 +957,28 @@
 }
 
 /* ─── Drawer Panels ─── */
-/* 设置已打开时抽屉参与布局但不挡触摸，避免首次进入子页 cold layout */
+/* 未进入任何子页时，抽屉整层必须彻底不可见：
+   之前只设 visibility:hidden + z-index:-1，安卓上会在打开设置的瞬间
+   先按过渡初值绘一帧，左上角白色返回键闪一下才消失。
+   这里同时锁掉 opacity / 子元素可见性 / 过渡，杜绝闪现。 */
 .miya-settings-app.is-open:not(.has-panel):not(.is-panel-returning) .ins-vault-drawer {
   display: flex;
   visibility: hidden;
+  opacity: 0;
   pointer-events: none;
   z-index: -1;
+  transition: none;
+}
+
+.miya-settings-app.is-open:not(.has-panel):not(.is-panel-returning) .ins-vault-drawer * {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 抽屉可见时把子元素恢复回来，避免上面的兜底规则误伤面板内容 */
+.miya-settings-app.has-panel .ins-vault-drawer *,
+.miya-settings-app.is-panel-returning .ins-vault-drawer * {
+  visibility: visible;
 }
 
 /* 预热对话 API 面板布局：抽屉临时可见以便浏览器完成真实排版 */
