@@ -28,6 +28,9 @@
   var GROUP_HISTORY_SCROLL_THRESHOLD = 140;
   var userPinnedBottom = true;
   var SHOW_TIMESTAMPS_KEY = 'miya-chat-show-timestamps-v1';
+  /* 「用户主动进房」授权窗口的截止时间戳。由 markUserRoomEntry() 打开，
+     进房守卫读它判断这次进房是不是用户点出来的。 */
+  var userRoomEntryUntil = 0;
 
   function afterNextPaint() {
     return new Promise(function (resolve) {
@@ -1069,6 +1072,18 @@
     }
   }
 
+  /** 把所有已缓存的会话面板复位（不销毁 DOM，仅停止其占用与可见性） */
+  function parkAllChatPanes() {
+    Object.keys(roomChatPanes).forEach(function (k) {
+      var entry = roomChatPanes[k];
+      if (!entry || !entry.pane) return;
+      try {
+        if (String(state.chatId) === String(k)) snapshotChatPane(k);
+        entry.pane.hidden = true;
+      } catch (e) {}
+    });
+  }
+
   function isChatPaneCached(chatId) {
     var entry = roomChatPanes[String(chatId)];
     return !!(
@@ -1240,6 +1255,7 @@
       var hvKeep = roomEl.querySelector('#mc-hv-panel');
       roomEl.innerHTML = roomInnerHtml();
       if (hvKeep) roomEl.appendChild(hvKeep);
+      parkAllChatPanes();
       roomChatPanes = {};
       roomOpenGen += 1;
       groupRenderGen += 1;
@@ -5724,7 +5740,7 @@
     if (state.chatId) parkActiveChatPane();
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
-    state.chatId = null;
+    state.chatId = chatId;
     state.avatars = {};
     state.quoteRef = null;
     state.narrationMode = false;
@@ -5770,6 +5786,10 @@
 
   function open(chatId, opts) {
     opts = opts && typeof opts === 'object' ? opts : {};
+    /* 只有「App 真的开着、且已进房」时，这次 open 才算「续开同一个会话」。
+       冷启动（刷新 / 从桌面重新进入）时 state.chatId 一定为 null，
+       于是任何持久化残留的下次都不该被当成「续开」，必须按全新会话处理。 */
+    var wasOpenSameChat = !!(state.chatId && String(state.chatId) === String(chatId));
     store = global.miyaChatStore;
     engine = global.miyaChatEngine;
     if (!store || !chatId) return Promise.resolve();
@@ -5817,6 +5837,15 @@
     scheduleRoomViewportReset('open');
     /* 先 quiet-pin，后续贴底跳过昂贵 scrollIntoView / 双回流 */
     armQuietPinBottom(1200);
+
+    /* 冷启动（state.chatId 原本为空）时绝不能吃内存缓存：
+       roomChatPanes 是模块级缓存，一旦残留的 chatId 与它撞上，
+       旧气泡会直接上屏，用户看到的就是「刷新后又自动进了角色页面」。 */
+    if (cached && !wasOpenSameChat) {
+      parkAllChatPanes();
+      roomChatPanes = {};
+      cached = false;
+    }
 
     if (cached) {
       showRoomLoading(false);
@@ -5921,6 +5950,20 @@
     return openPaint.catch(function () {});
   }
 
+  /**
+   * 进房守卫：把「不是用户主动进房」的会话拦回列表。
+   *
+   * 授权窗口由 openChatById 打开（见 markUserRoomEntry），
+   * 时间窗内进房一律放行；超时后再出现会话就说明是自动路径偷偷进房，
+   * 直接关掉，避免「点桌面聊天图标 → 直接跳进角色页面」。
+   * 用时间窗而不是 setTimeout 竞速，是为了不和 open() 的异步 settle 抢时序。
+   */
+  function guardAutoRoomOpen() {
+    if (!state.chatId) return;
+    if (Date.now() < userRoomEntryUntil) return;
+    close();
+  }
+
   function close() {
     var closingChatId = state.chatId;
     var tts = global.MiyaChatVoiceTts;
@@ -5990,6 +6033,17 @@
 
   function getOpenChatId() { return state.chatId; }
 
+  /**
+   * 打开「用户主动进房」授权窗口。
+   * 只有真正由用户点击触发的进房路径才能调用它；
+   * 进房守卫在窗口期内放行、窗口期外一律拦回列表。
+   */
+  function markUserRoomEntry(ms) {
+    var span = Number(ms);
+    if (!Number.isFinite(span) || span <= 0) span = 3000;
+    userRoomEntryUntil = Date.now() + span;
+  }
+
   function patchMessageBubble(msgId) {
     var sc = $('qq-room-scroll');
     if (!sc || !state.chatId || !store || !msgId) return;
@@ -6033,6 +6087,8 @@
     refresh: refresh,
     refreshAllAvatars: refreshAllAvatars,
     getOpenChatId: getOpenChatId,
+    markUserRoomEntry: markUserRoomEntry,
+    guardAutoRoomOpen: guardAutoRoomOpen,
     toast: toast,
     requestAiReply: requestAiReply,
     handleSend: handleSend,

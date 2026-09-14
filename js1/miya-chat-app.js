@@ -1473,6 +1473,13 @@
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
 
+    /* 标记「用户主动进房」：打开一个授权时间窗，
+       窗口内 miya-chat-room 的进房守卫放行；窗口外的自动进房会被拦回列表。
+       用时间窗而非布尔标志，是为了不和 open() 的异步 settle 抢时序。 */
+    if (typeof global.miyaChatRoom.markUserRoomEntry === 'function') {
+      global.miyaChatRoom.markUserRoomEntry(4000);
+    }
+
     function doOpen() {
       return global.miyaChatRoom.open(chatId, opts).catch(function () {
         if (app) app.classList.remove('qq-room-open');
@@ -1756,6 +1763,14 @@
       }
     }
     el.classList.remove('qq-room-open');
+    /* 进 App 时排一次守卫：若有自动化路径（深链 / 通知 / 前台同步）
+       在点图标之后偷偷进房，会被拦回消息列表。等一帧再判，避开
+       open() 内部同步阶段，只拦真正「跟在后面」的自动进房。 */
+    setTimeout(function () {
+      if (global.miyaChatRoom && typeof global.miyaChatRoom.guardAutoRoomOpen === 'function') {
+        global.miyaChatRoom.guardAutoRoomOpen();
+      }
+    }, 260);
 
     currentTab = 'msg';
     el.querySelectorAll('.qq-page').forEach(function (p) {

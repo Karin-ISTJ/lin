@@ -324,6 +324,15 @@
       if (window.miyaWorldbookApp && window.miyaWorldbookApp.open) window.miyaWorldbookApp.open();
     },
     chat: function () {
+      /* 点桌面聊天图标 = 从消息列表开始，不是续开上次的会话。
+         这里显式清掉任何残留在房间里的 chatId，再打开 App 壳。
+         冷启动（刷新 / 重开浏览器）时残留值一定为 null，所以
+         任何能自动进房的路径都必然发生在「点图标之后」，
+         由 miya-chat-room 的进房守卫兜底拦回列表。 */
+      if (window.miyaChatRoom && typeof window.miyaChatRoom.getOpenChatId === 'function' &&
+          window.miyaChatRoom.getOpenChatId() && typeof window.miyaChatRoom.close === 'function') {
+        try { window.miyaChatRoom.close(); } catch (e) {}
+      }
       if (window.miyaChatApp && window.miyaChatApp.open) window.miyaChatApp.open();
     },
     contacts: function () {
@@ -530,7 +539,7 @@
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=70').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=72').then(function (reg) {
         try { reg.update(); } catch (e) {}
       }).catch(function () {});
     });
