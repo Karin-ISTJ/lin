@@ -208,8 +208,8 @@ html.is-custom-dragging .desk-custom__dock-ic {
 }
 
 .desk-custom__grid .desk-custom__ic .ic__box svg {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
 }
 
 .desk-custom__grid .desk-custom__ic .ic__lbl {
@@ -450,8 +450,8 @@ html.is-custom-dragging .foot__dock-slot--empty .foot__dock-slot__ring {
 }
 
 .foot__dock--custom .desk-custom__dock-ic .foot__dock-btn svg {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
 }
 
 .foot__dock--custom .desk-custom__dock-ic {
@@ -1361,10 +1361,10 @@ html.is-custom-wg-editing .desk-custom-viewport {
   -webkit-backdrop-filter: none !important;
 }
 
-/* ② 网格图标：26px（默认 24px）。
-   注意：这批图标是「填充式」，笔画宽度随整体缩放同比变化 ——
-   放到 36px 时笔画会粗 1.5 倍，观感发闷；收回到 26px 既保留
-   实心造型的辨识度，笔画粗细也接近原线条图标的观感。 */
+/* ② 网格图标：18px（默认 18px）。
+   注意：这批新图标是「填充式」，图形几乎撑满 1024 画布（占 85%~118%），
+   视觉重量约为原线条图标的两倍。放到 26px 时实际视觉≈28px，明显偏粗；
+   收到 18px 后，视觉体量与原来 24px 的线条图标基本相当。 */
 .desk-custom__grid .desk-custom__ic:is(
   [data-app="beauty"],
   [data-app="imagegen"],
@@ -1379,11 +1379,11 @@ html.is-custom-wg-editing .desk-custom-viewport {
   [data-app="fun"],
   [data-app="set"]
 ) .ic__box svg {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
 }
 
-/* ③ 程序坞图标（联系人默认在 dock 里）：同样去白底 + 26px */
+/* ③ 程序坞图标（联系人默认在 dock 里）：同样去白底 + 18px */
 .foot__dock--custom .desk-custom__dock-ic:is(
   [data-app="beauty"],
   [data-app="imagegen"],
@@ -1419,8 +1419,8 @@ html.is-custom-wg-editing .desk-custom-viewport {
   [data-app="fun"],
   [data-app="set"]
 ) .foot__dock-btn svg {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
 }
 
 /* ④ 移动端主屏对 .ic__box.glass 有强制白底（miya-thermal.css），此处压回去 */
