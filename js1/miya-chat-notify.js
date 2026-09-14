@@ -670,6 +670,12 @@
             if (!room || typeof room.getOpenChatId !== 'function') return;
             var cid = room.getOpenChatId();
             if (!cid) return;
+            /* 只在「聊天 App 确实开着会话」时才同步刷新。
+               否则用户已经在桌面上、残留的 chatId 会把角色聊天室又弹出来。 */
+            var app = document.getElementById('miya-chat-app');
+            if (!app || !app.classList.contains('is-open') || !app.classList.contains('qq-room-open')) {
+                return;
+            }
             if (typeof room.open === 'function') {
                 room.open(cid, { toBottom: true, forceRefresh: true }).catch(function () {});
             } else if (typeof room.refresh === 'function') {

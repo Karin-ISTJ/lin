@@ -1743,6 +1743,20 @@
     var el = paintChatAppShell();
     if (!el) return Promise.resolve();
     /* 先亮壳再等 store，避免白等整库水合 */
+
+    /* 复位上一次残留的会话状态。
+       场景：用户看过某个角色的会话后没点「返回」就把 App 切到后台 / 回桌面
+       （手机上按 Home 或手势返回），此时 miyaChatRoom 的 state.chatId 不会被清掉。
+       下次再从桌面点「聊天」，就会直接落进那个角色聊天室、跳过消息列表。
+       这里主动关掉残留会话，保证每次进 App 都是从列表页开始。 */
+    if (global.miyaChatRoom && typeof global.miyaChatRoom.getOpenChatId === 'function' &&
+        global.miyaChatRoom.getOpenChatId()) {
+      if (typeof global.miyaChatRoom.close === 'function') {
+        try { global.miyaChatRoom.close(); } catch (e) {}
+      }
+    }
+    el.classList.remove('qq-room-open');
+
     currentTab = 'msg';
     el.querySelectorAll('.qq-page').forEach(function (p) {
       p.classList.toggle('is-active', p.getAttribute('data-qq-tab') === 'msg');
