@@ -13,7 +13,7 @@
   var CUSTOM_GRID_APPS = [
     'set', 'book', 'memory', 'chat', 'beauty', 'stpreset',
     'couple', 'itinerary',
-    'notes', 'fun'
+    'notes', 'fun', 'imagegen'
   ];
 
   var DEFAULT_DOCK = ['contacts'];
@@ -42,7 +42,7 @@
     set: '设置', book: '世界书',
     memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设', store: '线下',
     couple: '情侣空间', itinerary: '行程轨迹',
-    notes: '日记', fun: '娱乐',
+    notes: '日记', fun: '娱乐', imagegen: '生图',
     weather: '天气', apps: '应用',
     contacts: '联系人', pen: '模拟器'
   };
