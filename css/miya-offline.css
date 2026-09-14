@@ -488,32 +488,14 @@
   border: 1px solid rgba(0, 0, 0, 0.14);
 }
 
-.xw-scene__band {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  margin-bottom: 20px;
-  border-radius: 16px;
-  overflow: hidden;
-  min-height: 88px;
-  background: var(--xw-paper) center/cover no-repeat;
-  background-image: linear-gradient(120deg, rgba(255, 255, 255, 0.92), rgba(247, 247, 245, 0.88)), var(--xw-face, none);
-}
+/* 正片上方场景横幅（.xw-scene__band 系列）已移除：角色名/头像顶栏已有，重复占位挤压正文。
+   随之失效的 --xw-face 变量与 .xw-scene__face / .xw-scene__with / .xw-scene__meta 一并清掉。 */
 
-.xw-scene__band-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.55) 100%);
-  pointer-events: none;
-}
-
-.xw-scene__face {
-  position: relative;
-  z-index: 1;
-  width: 52px;
-  height: 52px;
+/* 手帐主题顶栏的两枚头像：宽度/圆形/白边由 korean 主题定义，
+   这里补上非韩系主题下的兜底尺寸，避免头像塌成原始大小。 */
+.xw-cast-faces .xw-journal-bar__ava {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #fff;
@@ -528,47 +510,19 @@
   flex-shrink: 0;
 }
 
-.xw-cast-faces .xw-scene__face,
 .xw-cast-faces .xw-journal-bar__ava,
 .xw-cast-faces .xw-cast-face {
   margin-left: -10px;
 }
 
-.xw-cast-faces .xw-scene__face:first-child,
 .xw-cast-faces .xw-journal-bar__ava:first-child,
 .xw-cast-faces .xw-cast-face:first-child {
   margin-left: 0;
 }
 
-.xw-cast-faces[data-n="1"] .xw-scene__face,
 .xw-cast-faces[data-n="1"] .xw-journal-bar__ava,
 .xw-cast-faces[data-n="1"] .xw-cast-face {
   margin-left: 0;
-}
-
-.xw-scene__band-copy {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-}
-
-.xw-scene__with {
-  margin: 0 0 4px;
-  font-size: 13px;
-  color: var(--xw-soft);
-}
-
-.xw-scene__with strong {
-  font-weight: 400;
-  color: var(--xw-ink);
-  font-size: 15px;
-}
-
-.xw-scene__meta {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.55;
-  color: var(--xw-soft);
 }
 
 .xw-script-col {
@@ -1812,4 +1766,39 @@
   letter-spacing: 0.02em;
   min-width: 3.5em;
   text-align: center;
+}
+
+/* ── 生成中：发送钮变「停止」 ──
+   与线上聊天室（.qq-room__send.is-stop）同款语义：图标换实心方块、
+   颜色转暖红提示这是「中断」而非「发送」。两套输入栏都要覆盖到：
+   · 非手帐主题 → .xw-writer__go
+   · 手帐主题   → .xw-journal-writer__send
+   生成中按钮保持可点，否则用户没法中断。 */
+#miya-offline-app .xw-writer__go.is-stop {
+  background: #c0403c;
+  color: #fff;
+}
+#miya-offline-app .xw-writer__go.is-stop:active {
+  transform: scale(0.94);
+}
+#miya-offline-app .xw-writer__go.is-stop svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  margin: 0 auto;
+}
+
+#miya-offline-app .xw-journal-writer__send.is-stop {
+  background: #c0403c;
+  color: #fff;
+}
+#miya-offline-app .xw-journal-writer__send.is-stop:active {
+  opacity: 0.82;
+  transform: scale(0.94);
+}
+#miya-offline-app .xw-journal-writer__send.is-stop svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  margin: 0 auto;
 }

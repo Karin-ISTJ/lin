@@ -2083,23 +2083,6 @@ html.is-mobile.miya-custom-desk-icon-frameless body.miya-mode-phone:not(.miya-ap
   align-items: center;
 }
 
-.miya-worldbook-app .ins-wb-search {
-  flex: 1;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 2px;
-  padding: 10px 12px;
-  font: inherit;
-  font-size: 13px;
-  background: var(--ins-surface);
-  color: var(--ins-ink);
-  box-shadow: var(--ins-shadow);
-}
-
-.ins-wb-search::placeholder {
-  color: var(--ins-ink-dim);
-  opacity: 0.75;
-}
-
 .ins-wb-filters {
   display: flex;
   gap: 6px;

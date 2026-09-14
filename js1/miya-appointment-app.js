@@ -81,6 +81,9 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5L10.2 14.2" ' + _I + '/><path d="M21.5 3.5L14.8 21l-3.3-7.5L4 10.2 21.5 3.5z" ' + _I + '/></svg>';
     var ICON_RESEND =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.4-5.7" ' + _I + '/><path d="M19.5 12a7.5 7.5 0 0 1-12.4 5.7" ' + _I + '/><path d="M16.5 3.8V7h-3.2M7.5 20.2V17h3.2" ' + _I + '/></svg>';
+    /* 生成中：发送钮变实心方块（与线上聊天室同款语义） */
+    var ICON_STOP =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"/></svg>';
 
     function $(id) {
         return document.getElementById(id);
@@ -289,10 +292,6 @@
     function applyOfflineContactAvatar(contact, img, url) {
         if (!contact || !img || !url || isSvgAvatarSrc(url)) return;
         img.src = url;
-        var scene = img.closest('.xw-scene');
-        if (scene && img.classList.contains('xw-scene__face')) {
-            scene.style.setProperty('--xw-face', 'url(' + url + ')');
-        }
     }
 
     function hydrateOfflineContactAvatar(contact, img) {
@@ -328,7 +327,7 @@
 
         var contact = activeContact();
         root.querySelectorAll(
-            '.xw-journal-bar__ava, .xw-scene__face, img.xw-chat__ava[data-ap-role-ava="1"]'
+            '.xw-journal-bar__ava, img.xw-chat__ava[data-ap-role-ava="1"]'
         ).forEach(function (img) {
             var cid = String(img.getAttribute('data-ap-cast-cid') || '').trim();
             var faceContact = cid && st.findContact ? st.findContact(cid) : contact;
@@ -665,17 +664,14 @@
         if (sendBtn) sendBtn.disabled = true;
         pinScrollToBottom();
         scrollStoryToEnd(true);
+        beginWriterGeneration();
         runStream(
             Promise.resolve()
                 .then(function () {
                     return eng.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
                 })
                 .finally(function () {
-                    if (input) {
-                        input.disabled = false;
-                        input.focus();
-                    }
-                    if (sendBtn) sendBtn.disabled = false;
+                    endWriterGeneration();
                 })
         );
     }
@@ -1913,17 +1909,6 @@
             });
     }
 
-    function patchStoryMeta() {
-        var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
-        var charCount = msgs.reduce(function (n, m) {
-            return n + String(m.content || '').length;
-        }, 0);
-        var shots = document.querySelector('[data-xw-stat-shots]');
-        var chars = document.querySelector('[data-xw-stat-chars]');
-        if (shots) shots.textContent = String(msgs.length) + ' 镜';
-        if (chars) chars.textContent = String(charCount) + ' 字';
-    }
-
     function renderStory() {
         var st = chatStore();
         var chat = st && st.findChat(ui.chatId);
@@ -1937,7 +1922,6 @@
                 : [{ contactId: (contact && contact.id) || ui.contactId, chatId: ui.chatId }]
         );
         if (!castContacts.length && contact) castContacts = [contact];
-        var name = castDisplayName(castContacts, 6) || ellipsizeChars(characterRealName(contact), 6);
         var primaryFace = castContacts[0] || contact;
         var ava = esc(contactAvatar(primaryFace));
         var sceneTitle = String((sess && sess.title) || '').trim() || '未命名场景';
@@ -1978,26 +1962,15 @@
                 : '') +
             '</article>';
 
+        /*
+         * 正片上方不再放宽屏卡片（原 xw-scene__band：角色头像横条 + 开镜时间 / 镜数 / 字数）。
+         * 角色名、头像在顶栏（手帐）与状态行里已经有，这里重复占位反而把正文挤下去，
+         * 所以整块移除，正文直接从卷宗条 / 正文列开始。
+         */
         return (
             '<div class="xw-scene' + (isJournalTheme() ? ' xw-scene--journal' : '') + '"' +
             (isJournalTheme() ? ' style="--xw-stream-face:url(' + ava + ')"' : '') + '>' +
             ribbon +
-            (isJournalTheme()
-                ? ''
-                : '<header class="xw-scene__band" style="--xw-face:url(' + ava + ')">' +
-                  '<div class="xw-scene__band-shade" aria-hidden="true"></div>' +
-                  castFacesHtml(castContacts, 'xw-scene__face', 2) +
-                  '<div class="xw-scene__band-copy">' +
-                  '<p class="xw-scene__with">与 <strong title="' +
-                  escAttr(castDisplayName(castContacts)) +
-                  '">' +
-                  esc(name) +
-                  '</strong></p>' +
-                  '<p class="xw-scene__meta" id="xw-scene-meta">' +
-                  '开镜 ' + esc(formatTs(sess.createdAt)) +
-                  ' · ' +
-                  '<span data-xw-stat-shots>' + String(msgs.length) + ' 镜</span> ' +
-                  '<span data-xw-stat-chars>' + String(charCount) + ' 字</span></p></div></header>') +
             '<div class="xw-script-col">' + scriptInner + '</div></div>'
         );
     }
@@ -2106,6 +2079,100 @@ function renderWriter() {
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
             ICON_SEND + '</button></footer>'
         );
+    }
+
+    /*
+     * 生成态开关：输入框锁住，发送钮由「发送」变为「停止」。
+     *
+     * 与线上聊天室（miya-chat-room.js 的 setSendButtonGenerating）保持同一套
+     * 语义和观感：is-stop 类 + 实心方块图标 + aria-label「停止生成」。
+     * 生成中按钮必须保持可点，否则用户没法中断。
+     */
+    function setWriterGenerating(on) {
+        var input = $('xw-writer-input');
+        var send = $('xw-writer-go');
+        if (input) input.disabled = !!on;
+        if (!send) return;
+        if (on) {
+            send.classList.add('is-stop');
+            send.disabled = false;
+            send.setAttribute('aria-label', '停止生成');
+            send.setAttribute('title', '停止生成');
+            send.innerHTML = ICON_STOP;
+        } else {
+            send.classList.remove('is-stop');
+            send.disabled = false;
+            send.setAttribute('aria-label', '发送');
+            send.setAttribute('title', '发送');
+            send.innerHTML = ICON_SEND;
+        }
+    }
+
+    /* 当前是否处于「生成中」，供发送钮点击时判定走发送还是走停止 */
+    function isWriterGenerating() {
+        var app = document.getElementById('miya-offline-app');
+        return !!(app && app.classList.contains('xw-generating'));
+    }
+
+    /*
+     * 停止线下生成。
+     *
+     * 引擎侧早就备好了 MiyaAppointmentEngine.stopAppointment(chatId, sessionId)，
+     * 内部会走 MiyaGenerationLifecycle.stop('offline:'+key) 并按 '::' 规则清理
+     * replyInFlight 忙碌标记——只是一直没有界面接上去。这里把它接出来。
+     * 直接调引擎方法而不是自己拼 key，避免和引擎的键规则（'::'）写岔。
+     */
+    function stopOfflineGeneration() {
+        var eng = apEngine();
+        var stopped = false;
+        if (eng && typeof eng.stopAppointment === 'function') {
+            try {
+                eng.stopAppointment(ui.chatId, ui.sessionId);
+                stopped = true;
+            } catch (e) { /* 停不掉也要把 UI 放回可交互，别把人卡住 */ }
+        } else {
+            var genLife = global.MiyaGenerationLifecycle;
+            if (genLife && typeof genLife.stop === 'function') {
+                try {
+                    genLife.stop('offline:' + String(ui.chatId || '') + '::' + String(ui.sessionId || ''), { reason: 'user' });
+                    stopped = true;
+                } catch (e2) {}
+            }
+        }
+        if (stopped) toast('已停止生成');
+        /* 交给 runStream 的 finally 收尾；这里只兜底恢复 UI，避免引擎没抛错时一直锁着 */
+        var app = document.getElementById('miya-offline-app');
+        if (app) app.classList.remove('xw-generating');
+        setWriterGenerating(false);
+        restoreWriterInput();
+    }
+
+    /* 统一的「生成中」包裹：管开头、管收尾，5 个调用点共用 */
+    function beginWriterGeneration() {
+        var app = document.getElementById('miya-offline-app');
+        if (app) app.classList.add('xw-generating');
+        setWriterGenerating(true);
+    }
+
+    function endWriterGeneration() {
+        var app = document.getElementById('miya-offline-app');
+        if (app) app.classList.remove('xw-generating');
+        setWriterGenerating(false);
+        var input = $('xw-writer-input');
+        if (input && !input.disabled) {
+            try { input.focus(); } catch (e) {}
+        }
+    }
+
+    /* 生成结束时统一把输入框交还给用户（原来 5 处各写了一遍） */
+    function restoreWriterInput() {
+        var input = $('xw-writer-input');
+        if (input) {
+            input.disabled = false;
+            try { input.focus(); } catch (e) {}
+        }
+        var send = $('xw-writer-go');
+        if (send) send.disabled = false;
     }
 
     function scrollStoryToEnd(force) {
@@ -2395,7 +2462,6 @@ function renderWriter() {
                 ui.status = 'idle';
                 resetStreamUi();
                 patchStoryBody();
-                patchStoryMeta();
             })
             .catch(function (err) {
                 ui.status = 'idle';
@@ -2403,7 +2469,16 @@ function renderWriter() {
                 ui.streamingRaw = '';
                 resetStreamUi();
                 patchStoryBody();
-                patchStoryMeta();
+                /* 用户主动停止：不是故障，别弹「没连上」吓人 */
+                var genLife = global.MiyaGenerationLifecycle;
+                var isAbort = !!(err && (
+                    err.name === 'AbortError' ||
+                    err.message === 'aborted' ||
+                    err.message === 'abort' ||
+                    err.code === 'aborted' ||
+                    (genLife && genLife.isAbortError && genLife.isAbortError(err))
+                ));
+                if (isAbort) return;
                 if (err && err.message === 'api_not_configured') toast('请先在「设置」里填好 API');
                 else if (err && err.message === 'session_not_found') toast('会话无效，请返回重选角色');
                 else if (err && err.message === 'busy') toast('请稍候');
@@ -2476,11 +2551,11 @@ function renderWriter() {
             render();
         } else {
             patchStoryBody();
-            patchStoryMeta();
         }
 
         /* 先进入 runStream 显示「书写中」，再启动 completion，避免同步拼 prompt 卡住首帧 */
         var handlers = streamHandlers();
+        beginWriterGeneration();
         runStream(
             Promise.resolve()
                 .then(function () {
@@ -2490,9 +2565,7 @@ function renderWriter() {
                     return eng.sendAppointment(ui.chatId, ui.sessionId, text, handlers);
                 })
                 .finally(function () {
-                    input.disabled = false;
-                    if (sendBtn) sendBtn.disabled = false;
-                    input.focus();
+                    endWriterGeneration();
                 })
         );
     }
@@ -2526,22 +2599,18 @@ function renderWriter() {
             apStore().deleteMessage(ui.chatId, ui.sessionId, m.id);
         });
         patchStoryBody();
-        patchStoryMeta();
         var input = $('xw-writer-input');
         if (input) input.disabled = true;
         var sendBtn = $('xw-writer-go');
         if (sendBtn) sendBtn.disabled = true;
+        beginWriterGeneration();
         runStream(
             Promise.resolve()
                 .then(function () {
                     return eng.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
                 })
                 .finally(function () {
-                    if (input) {
-                        input.disabled = false;
-                        input.focus();
-                    }
-                    if (sendBtn) sendBtn.disabled = false;
+                    endWriterGeneration();
                 })
         );
     }
@@ -3115,7 +3184,6 @@ function renderWriter() {
         if (msg.role === 'user') {
             var text = msg.content;
             deleteFromMessage(msg.id);
-            patchStoryMeta();
             if (autoSend) {
                 var eng = apEngine();
                 if (!eng || eng.isBusy(ui.chatId, ui.sessionId)) {
@@ -3126,17 +3194,14 @@ function renderWriter() {
                 if (input) input.disabled = true;
                 var sendBtn = $('xw-writer-go');
                 if (sendBtn) sendBtn.disabled = true;
+                beginWriterGeneration();
                 runStream(
                     Promise.resolve()
                         .then(function () {
                             return eng.sendAppointment(ui.chatId, ui.sessionId, text, streamHandlers());
                         })
                         .finally(function () {
-                            if (input) {
-                                input.disabled = false;
-                                input.focus();
-                            }
-                            if (sendBtn) sendBtn.disabled = false;
+                            endWriterGeneration();
                         })
                 );
             } else {
@@ -3153,7 +3218,6 @@ function renderWriter() {
         if (msg.role === 'assistant') {
             var roundStartId = assistantRoundStartId(sess, msg);
             deleteFromMessage(roundStartId);
-            patchStoryMeta();
             var eng2 = apEngine();
             if (!eng2 || eng2.isBusy(ui.chatId, ui.sessionId)) {
                 toast('请稍候');
@@ -3163,17 +3227,14 @@ function renderWriter() {
             if (input2) input2.disabled = true;
             var sendBtn2 = $('xw-writer-go');
             if (sendBtn2) sendBtn2.disabled = true;
+            beginWriterGeneration();
             runStream(
                 Promise.resolve()
                     .then(function () {
                         return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
                     })
                     .finally(function () {
-                        if (input2) {
-                            input2.disabled = false;
-                            input2.focus();
-                        }
-                        if (sendBtn2) sendBtn2.disabled = false;
+                        endWriterGeneration();
                     })
             );
         }
@@ -3628,7 +3689,14 @@ function renderWriter() {
                 }
             });
         }
-        if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+        if (sendBtn) sendBtn.addEventListener('click', function () {
+            /* 生成中按钮已变成「停止」：点击即中断，不再走发送 */
+            if (sendBtn.classList.contains('is-stop') || isWriterGenerating()) {
+                stopOfflineGeneration();
+                return;
+            }
+            sendMessage();
+        });
 
         var quickRedo = $('xw-writer-undo');
         if (quickRedo) quickRedo.addEventListener('click', quickRedoLastAssistant);

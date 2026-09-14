@@ -7,7 +7,6 @@
   var currentTab = 'msg';
   var storeReady = null;
   var avatarUrlCache = {};
-  var msgSearchQuery = '';
   var chatSwipeOpen = null;
   var chatSwipeDrag = null;
   var CHAT_SWIPE_ACTION_W = 84;
@@ -535,122 +534,6 @@
     chain.then(run);
   }
 
-  function buildContactSearchBlob(contact, archiveRow) {
-    var parts = [
-      contact.name,
-      contact.remarkName,
-      contact.relationship
-    ];
-    if (archiveRow) {
-      parts.push(archiveRow.name, archiveRow.persona, archiveRow.gender, archiveRow.age);
-      if (Array.isArray(archiveRow.tags)) parts.push(archiveRow.tags.join(' '));
-    }
-    return parts.join(' ').toLowerCase();
-  }
-
-  function collectSearchableContacts() {
-    var st = getStore();
-    var cs = global.miyaContactsStore;
-    if (!st) return [];
-
-    var results = [];
-    var seenArchiveIds = {};
-    var lookup = st.buildContactsTabLookup ? st.buildContactsTabLookup() : null;
-    var chatByContact = lookup && lookup.chatByContact ? lookup.chatByContact : null;
-
-    (st.getContacts('all') || []).forEach(function (contact) {
-      var archiveRow = null;
-      if (cs && contact.chronicleId && cs.findCharacter) {
-        archiveRow = cs.findCharacter(contact.chronicleId);
-      }
-      var chat = chatByContact ? chatByContact[contact.id] : st.findChatByContact(contact.id);
-      var name = contact.remarkName || contact.name || (archiveRow && archiveRow.name) || '未命名';
-      var sub = (archiveRow && archiveRow.persona) || contact.relationship || '';
-      results.push({
-        contactId: contact.id,
-        chatId: chat ? chat.id : '',
-        archiveId: contact.chronicleId || '',
-        name: name,
-        sub: sub,
-        avatar: resolveContactAvatarUrl(contact) || findArchiveAvatar(contact) || (archiveRow && archiveRow.avatar) || '',
-        avatarContactId: contact.id,
-        searchBlob: buildContactSearchBlob(contact, archiveRow)
-      });
-      if (contact.chronicleId) seenArchiveIds[contact.chronicleId] = true;
-    });
-
-    if (cs && cs.getState) {
-      var archive = cs.getState();
-      (archive.characters || []).forEach(function (ch) {
-        if (seenArchiveIds[ch.id]) return;
-        results.push({
-          contactId: '',
-          chatId: '',
-          archiveId: ch.id,
-          name: ch.name || '未命名',
-          sub: ch.persona || '',
-          avatar: ch.avatar || '',
-          avatarContactId: '',
-          searchBlob: [ch.name, ch.persona, ch.gender, ch.age, (ch.tags || []).join(' ')].join(' ').toLowerCase()
-        });
-      });
-    }
-
-    return results;
-  }
-
-  function filterContactsByQuery(query) {
-    var q = query.trim().toLowerCase();
-    if (!q) return [];
-    return collectSearchableContacts().filter(function (row) {
-      return row.searchBlob.indexOf(q) >= 0;
-    });
-  }
-
-  function renderMsgSearch() {
-    var box = $('qq-msg-search-results');
-    var list = $('qq-chat-list');
-    if (!box || !list) return;
-
-    var q = msgSearchQuery.trim();
-    if (!q) {
-      box.hidden = true;
-      box.innerHTML = '';
-      list.hidden = false;
-      return;
-    }
-
-    var hits = filterContactsByQuery(q);
-    list.hidden = true;
-    box.hidden = false;
-
-    if (!hits.length) {
-      box.innerHTML = '<div class="qq-search-empty">没有找到「' + esc(q) + '」相关联系人</div>';
-      return;
-    }
-
-    box.innerHTML = hits.map(function (row) {
-      var avaAttr = row.avatarContactId
-        ? ' data-avatar-contact="' + esc(row.avatarContactId) + '"'
-        : '';
-      var avaSrc = row.avatarContactId
-        ? avatarFallback(row.name)
-        : (row.avatar || avatarFallback(row.name));
-      return '<button type="button" class="qq-contact-row qq-search-hit"' +
-        (row.chatId ? ' data-chat-id="' + esc(row.chatId) + '"' : '') +
-        (row.contactId ? ' data-contact-id="' + esc(row.contactId) + '"' : '') +
-        (row.archiveId ? ' data-archive-id="' + esc(row.archiveId) + '"' : '') + '>' +
-        '<img class="qq-contact-row__ava" src="' + avaSrc + '" alt=""' + avaAttr + '>' +
-        '<span class="qq-contact-row__main">' +
-          '<span class="qq-contact-row__name">' + esc(row.name) + '</span>' +
-          (row.sub ? '<span class="qq-contact-row__sub">' + esc(String(row.sub).slice(0, 48)) + '</span>' : '') +
-        '</span>' +
-        '<span class="qq-contact-row__chevron">›</span>' +
-      '</button>';
-    }).join('');
-    hydrateAvatarsIn(box);
-  }
-
   function buildGroupListAvatar(chat, st, name) {
     var gg = global.MiyaChatGroup;
     if (gg && typeof gg.renderGroupListAvatarHtml === 'function') {
@@ -712,16 +595,6 @@
       list.innerHTML = '<div class="qq-chat-empty">加载中…</div>';
       return;
     }
-    if (msgSearchQuery.trim()) {
-      renderMsgSearch();
-      return;
-    }
-    var box = $('qq-msg-search-results');
-    if (box) {
-      box.hidden = true;
-      box.innerHTML = '';
-    }
-    list.hidden = false;
     var prevAvatars = captureAvatarSrcMap(list);
     Object.keys(prevAvatars).forEach(function (key) {
       avatarUrlCache[key] = prevAvatars[key];
@@ -1460,16 +1333,9 @@
     renderAll();
   }
 
-  function clearMsgSearch() {
-    msgSearchQuery = '';
-    var input = $('qq-msg-search');
-    if (input) input.value = '';
-  }
-
   function openChatById(chatId, opts) {
     if (!chatId || !global.miyaChatRoom) return Promise.resolve();
     opts = opts && typeof opts === 'object' ? opts : {};
-    clearMsgSearch();
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
 
@@ -1550,19 +1416,6 @@
     });
   }
 
-  function bindMsgSearch() {
-    function onSearchInput(input) {
-      msgSearchQuery = input.value || '';
-      if (msgSearchQuery.trim()) renderMsgSearch();
-      else renderChats();
-    }
-    var input = $('qq-msg-search');
-    if (input && !input.dataset.searchBound) {
-      input.dataset.searchBound = '1';
-      input.addEventListener('input', function () { onSearchInput(input); });
-    }
-  }
-
   function bindAvatarHome(root) {
     if (!root) return;
     root.querySelectorAll('[data-qq-avatar-home]').forEach(function (el) {
@@ -1579,7 +1432,6 @@
     app.dataset.chatBound = '1';
 
     bindAvatarHome(app);
-    bindMsgSearch();
     bindSoftMineInlineEdit();
 
     app.querySelectorAll('.soft-topbar__back').forEach(function (btn) {

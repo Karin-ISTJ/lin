@@ -546,6 +546,149 @@
     return lines.join('\n');
   }
 
+  /*
+   * ── 设置面板渲染 ──
+   *
+   * 探针本身只做观测、不碰 DOM；这一节是在「看到数据」的需求加进来之后补的，
+   * 逻辑上仍然只读不写：所有内容都来自 summarize()，面板不参与任何缓存判定。
+   * 挂载点由设置 App 提供（#miya-st-panel-cache-probe 的 .st-form），
+   * 这里只负责把数据填进去，不处理导航与生命周期。
+   */
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function fmtTime(ts) {
+    try {
+      return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return '--:--'; }
+  }
+
+  function fmtNum(n) {
+    var v = Number(n) || 0;
+    if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+    if (v >= 1000) return (v / 1000).toFixed(1) + 'k';
+    return String(v);
+  }
+
+  var REASON_LABEL = {
+    modified: '历史被改写',
+    inserted: '中间插入',
+    removed: '中间删除',
+    unknown: '结构变化'
+  };
+
+  /*
+   * 渲染面板主体。返回 HTML 字符串交给设置 App 塞进容器。
+   * 不返回 Node，避免和设置 App 的 innerHTML 用法冲突。
+   */
+  function renderPanelHtml() {
+    var s;
+    try {
+      s = summarize(12);
+    } catch (e) {
+      return '<p class="miya-cache-probe__empty">读取探针数据出错：' + escHtml(e && e.message) + '</p>';
+    }
+
+    if (!s.rounds) {
+      return '' +
+        '<div class="miya-cache-probe__empty">' +
+          '<p class="miya-cache-probe__empty-title">还没有记录</p>' +
+          '<p class="miya-cache-probe__empty-desc">' +
+            '探针需要至少两轮请求才能比对前缀。给任一位角色连发两条消息，再回来看。' +
+          '</p>' +
+        '</div>';
+    }
+
+    var rateColor = s.hitRate >= 90 ? 'is-good' : (s.hitRate >= 60 ? 'is-warn' : 'is-bad');
+
+    var html = '';
+    html += '<div class="miya-cache-probe__hero ' + rateColor + '">' +
+      '<div class="miya-cache-probe__rate">' + s.hitRate + '<em>%</em></div>' +
+      '<div class="miya-cache-probe__rate-label">缓存命中率（最近 ' + s.rounds + ' 轮）</div>' +
+      '<div class="miya-cache-probe__split">' +
+        '<span class="miya-cache-probe__hit">命中 ' + s.hits + '</span>' +
+        '<span class="miya-cache-probe__miss">未命中 ' + s.misses + '</span>' +
+      '</div>' +
+    '</div>';
+
+    /* 服务商用量（有则显示） */
+    if (s.hasUsageData) {
+      html += '<div class="miya-cache-probe__stats">' +
+        '<div class="miya-cache-probe__stat">' +
+          '<div class="miya-cache-probe__stat-value">' + fmtNum(s.cacheReadTokens) + '</div>' +
+          '<div class="miya-cache-probe__stat-label">缓存读 token</div>' +
+        '</div>' +
+        '<div class="miya-cache-probe__stat">' +
+          '<div class="miya-cache-probe__stat-value">' + fmtNum(s.promptTokens) + '</div>' +
+          '<div class="miya-cache-probe__stat-label">输入 token</div>' +
+        '</div>' +
+        '<div class="miya-cache-probe__stat">' +
+          '<div class="miya-cache-probe__stat-value">' + s.usageSamples + '</div>' +
+          '<div class="miya-cache-probe__stat-label">有效样本</div>' +
+        '</div>' +
+      '</div>';
+    } else {
+      html += '<p class="miya-cache-probe__note">' +
+        '服务商未返回缓存字段，以下结论仅依据本地前缀比对（这已足够判断前缀是否被污染）。' +
+      '</p>';
+    }
+
+    /* 探针自身异常：必须显式说，否则命中率不可信 */
+    if (s.probeErrors) {
+      html += '<div class="miya-cache-probe__alert is-bad">' +
+        '<strong>探针自身出错 ' + s.probeErrors + ' 次</strong>' +
+        '<span>最近一次：' + escHtml(s.lastProbeError) + '</span>' +
+        '<span>受影响的轮次未计入统计，上面的命中率偏低，请先排查探针。</span>' +
+      '</div>';
+    }
+
+    if (s.windowCapped) {
+      html += '<p class="miya-cache-probe__note">' +
+        '留档已达上限（' + MAX_ROUNDS + ' 轮），更早的轮次已被丢弃，命中率只反映最近窗口。' +
+      '</p>';
+    }
+
+    /* 结论区 */
+    if (!s.issues.length) {
+      html += '<div class="miya-cache-probe__alert is-good">' +
+        '<strong>消息序列稳定</strong>' +
+        '<span>最近这些轮的前缀都能命中缓存，没有多余开销。</span>' +
+      '</div>';
+    } else {
+      html += '<div class="st-section-label">缓存失效明细</div>';
+      html += '<div class="miya-cache-probe__issues">';
+      s.issues.slice(-5).reverse().forEach(function (it) {
+        html += '<div class="miya-cache-probe__issue">' +
+          '<div class="miya-cache-probe__issue-head">' +
+            '<span class="miya-cache-probe__issue-time">' + fmtTime(it.at) + '</span>' +
+            '<span class="miya-cache-probe__issue-tag">' +
+              escHtml(REASON_LABEL[it.reason] || '结构变化') +
+            '</span>' +
+            '<span class="miya-cache-probe__issue-pos">第 ' + (it.sameCount + 1) + ' 条起</span>' +
+          '</div>' +
+          '<p class="miya-cache-probe__issue-hint">' + escHtml(it.hint) + '</p>' +
+        '</div>';
+      });
+      html += '</div>';
+      html += '<p class="miya-cache-probe__note">' +
+        '版本更新、改人设、动世界书开关、always 记忆改动之后的第一轮出现未命中是正常的；' +
+        '连续多轮未命中才说明有问题。' +
+      '</p>';
+    }
+
+    return html;
+  }
+
+  /* 面板打开时调用：把内容填进容器 */
+  function renderPanel() {
+    var host = document.getElementById('miya-st-cache-probe-body');
+    if (!host) return;
+    host.innerHTML = renderPanelHtml();
+  }
+
   global.miyaCacheProbe = {
     trackRequest: trackRequest,
     parseCacheUsage: parseCacheUsage,
@@ -553,6 +696,8 @@
     summarize: summarize,
     report: report,
     clear: clear,
-    loadRounds: loadRounds
+    loadRounds: loadRounds,
+    renderPanel: renderPanel,
+    renderPanelHtml: renderPanelHtml
   };
 })(typeof window !== 'undefined' ? window : self);

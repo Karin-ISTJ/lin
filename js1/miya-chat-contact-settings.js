@@ -6,7 +6,7 @@
 
   var store = null;
   var pageEl = null;
-  var state = { chatId: null, searchQuery: '', formDraft: null, wbSortOpen: false, zoneOpen: {} };
+  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {} };
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
@@ -1048,38 +1048,6 @@
     return store.getRecentVisibleMessages(chatId, 1).total || 0;
   }
 
-  function searchMessageHits(chatId, query) {
-    if (!store || !chatId || !query) return [];
-    var meta = store.getMeta ? store.getMeta() : null;
-    var arr = meta && meta.messagesByChat && meta.messagesByChat[chatId];
-    if (!Array.isArray(arr)) return [];
-    var q = String(query).toLowerCase();
-    var hits = [];
-    var i;
-    for (i = arr.length - 1; i >= 0; i--) {
-      var m = arr[i];
-      if (!m || m.deleted || m.offlineMeet) continue;
-      if (String(m.content || '').toLowerCase().indexOf(q) < 0) continue;
-      hits.push(m);
-      if (hits.length >= 60) break;
-    }
-    hits.reverse();
-    return hits;
-  }
-
-  function renderSearchHits(c) {
-    var q = state.searchQuery.trim().toLowerCase();
-    if (!q) return '<p class="mi-empty-hint">输入关键词查找历史消息</p>';
-    var hits = searchMessageHits(state.chatId, q);
-    if (!hits.length) return '<p class="mi-empty-hint">没有找到相关记录</p>';
-    return hits.map(function (m) {
-      return '<article class="mi-hit">' +
-        '<span class="mi-hit__tag">' + (m.role === 'user' ? '我' : 'Ta') + '</span>' +
-        '<p>' + esc(String(m.content || '').slice(0, 180)) + '</p>' +
-      '</article>';
-    }).join('');
-  }
-
   function renderPage() {
     var c = ctx();
     if (!c || !c.contact) return '<div class="mi-empty-hint">会话不存在</div>';
@@ -1311,10 +1279,6 @@
 
       renderZone('data', '数据管理', '聊天记录、导入导出与删除',
         subBlock('聊天记录', '共 ' + msgCount + ' 条', formCard(
-          '<div class="st-card st-set-search-card">' +
-            '<input type="search" class="ins-text-input mi-set-search" data-mq-set-search placeholder="搜消息内容…" value="' + esc(state.searchQuery) + '" autocomplete="off" spellcheck="false">' +
-          '</div>' +
-          '<div class="mi-hits" data-mq-set-hits>' + renderSearchHits(c) + '</div>' +
           '<div class="st-card mi-set-action-card">' +
             '<button type="button" class="st-card-row" data-mq-set-export>' +
               '<div class="st-card-row-left"><div><div class="st-card-label">导出 JSON</div></div></div>' +
@@ -1891,7 +1855,6 @@
     }
 
     state.chatId = chatId;
-    state.searchQuery = '';
     state.wbSortOpen = false;
     state.zoneOpen = {};
     ensurePage();
@@ -2281,15 +2244,6 @@
       if (e.target.closest('[data-mq-set-ctx-toggle]')) {
         toggleContextUsageDetail(false);
         return;
-      }
-    });
-
-    pageEl.addEventListener('input', function (e) {
-      if (e.target.matches('[data-mq-set-search]')) {
-        state.searchQuery = e.target.value;
-        var box = pageEl.querySelector('[data-mq-set-hits]');
-        var c = ctx();
-        if (box && c) box.innerHTML = renderSearchHits(c);
       }
     });
 

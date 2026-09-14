@@ -4,7 +4,6 @@
   var store = global.miyaContactsStore;
   var relStore = global.miyaContactsRelationshipStore;
   var filterGroupId = 'all';
-  var searchQuery = '';
   var editingId = null;
   var draftAvatar = null;
   var keyboardInsetBound = false;
@@ -142,13 +141,7 @@
   }
 
   function filteredCharacters() {
-    var rows = store.listCharacters(filterGroupId);
-    var q = searchQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(function (c) {
-      var blob = [c.name, c.persona, c.gender, c.age, (c.tags || []).join(' ')].join(' ').toLowerCase();
-      return blob.indexOf(q) >= 0;
-    });
+    return store.listCharacters(filterGroupId);
   }
 
   function renderVolumes() {
@@ -701,14 +694,6 @@
     $('miya-ct-editor-back').addEventListener('click', closeEditor);
     $('miya-ct-save').addEventListener('click', saveEditor);
     $('miya-ct-delete').addEventListener('click', deleteEditing);
-
-    var searchEl = $('miya-ct-search');
-    if (searchEl) {
-      searchEl.addEventListener('input', function () {
-        searchQuery = this.value || '';
-        renderGrid();
-      });
-    }
 
     $('miya-ct-portrait').addEventListener('click', function () {
       $('miya-ct-avatar-file').click();

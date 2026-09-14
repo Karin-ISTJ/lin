@@ -295,28 +295,6 @@
   box-shadow: var(--st-shadow-md);
 }
 
-.miya-worldbook-app .st-wb-search-card {
-  padding: 0 16px;
-}
-
-.miya-worldbook-app .ins-wb-search {
-  width: 100%;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  padding: 14px 0;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--st-text-primary);
-  box-shadow: none;
-  outline: none;
-}
-
-.miya-worldbook-app .ins-wb-search::placeholder {
-  color: var(--st-text-muted);
-}
-
 /* ─── Group Chips ─── */
 .miya-worldbook-app .st-wb-group-bar {
   margin-bottom: 4px;

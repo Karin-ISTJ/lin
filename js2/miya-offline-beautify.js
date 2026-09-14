@@ -15,7 +15,6 @@
     '#miya-offline-app .xw-bg,',
     '#miya-offline-app .xw-bg__mesh,',
     '#miya-offline-app .xw-bg__dots { pointer-events: none !important; }',
-    '#miya-offline-app .xw-scene__band-shade { pointer-events: none !important; }',
     '#miya-offline-app button,',
     '#miya-offline-app [role="button"],',
     '#miya-offline-app a,',

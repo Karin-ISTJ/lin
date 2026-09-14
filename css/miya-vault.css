@@ -457,30 +457,6 @@
   margin-bottom: 0;
 }
 
-.ins-vault--folio .ins-wb-search {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--vf-line);
-  border-radius: 0;
-  background: transparent;
-  padding: 8px 0;
-  font-family: var(--vf-ui);
-  font-size: 13px;
-  font-weight: 300;
-  letter-spacing: 0.02em;
-  box-shadow: none;
-  color: var(--vf-ink);
-}
-
-.ins-vault--folio .ins-wb-search::placeholder {
-  color: var(--vf-faint);
-}
-
-.ins-vault--folio .ins-wb-search:focus {
-  outline: none;
-  border-bottom-color: var(--vf-accent);
-}
-
 .ins-wb-filters {
   display: flex;
   align-items: center;

@@ -536,7 +536,7 @@
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=77').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=81').then(function (reg) {
         try { reg.update(); } catch (e) {}
       }).catch(function () {});
     });

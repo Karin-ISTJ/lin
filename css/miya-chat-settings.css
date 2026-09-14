@@ -433,16 +433,9 @@
   text-align: center;
   padding: 10px 8px;
 }
-.mi-set-page .mi-set-search {
-  margin-bottom: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
-.mi-set-page .mi-set-search:focus {
-  background: transparent;
-  box-shadow: none;
-}
+
+/* mi-search / 消息检索 UI 已随「搜消息内容」功能一并移除 */
+
 
 .mi-set-page .ins-inline-field {
   display: grid;
@@ -565,7 +558,6 @@
   border: 1px solid var(--st-border);
   box-shadow: var(--st-shadow-md);
 }
-.mi-set-page .st-set-search-card { padding: 8px 12px; }
 .mi-set-page .st-card-row {
   display: flex;
   align-items: center;
@@ -1290,52 +1282,6 @@
 .mi-inline-nums--wide .mi-input { flex: 1; min-width: 0; width: auto; text-align: center; }
 .mi-inline-nums__sep { color: var(--mi-sub); }
 
-.mi-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: #f5f5f7;
-  margin-bottom: 12px;
-}
-.mi-search svg { width: 18px; height: 18px; color: var(--mi-sub); flex-shrink: 0; }
-.mi-search__input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 15px;
-  outline: none;
-  font-family: var(--mi-font);
-}
-
-.mi-hits {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 240px;
-  overflow-y: auto;
-  margin-bottom: 12px;
-}
-.mi-hit {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #f9f9f9;
-  border: 1px solid var(--mi-line);
-  animation: mi-hit-in 0.3s var(--mi-ease) both;
-}
-@keyframes mi-hit-in {
-  from { opacity: 0; transform: translateX(-6px); }
-  to { opacity: 1; transform: none; }
-}
-.mi-hit__tag {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--mi-pink);
-  letter-spacing: 0.05em;
-}
-.mi-hit p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--mi-ink); }
-
 .mi-action-list { border-radius: 14px; overflow: hidden; border: 1px solid var(--mi-line); }
 .mi-action-list__btn {
   display: block;
@@ -1375,11 +1321,6 @@
   margin: 0 0 14px;
 }
 .mi-set-page .mi-emo-bind-list .mi-emo-bind-row.is-disabled .st-toggle-in-form__text strong { opacity: 0.42; }
-.mi-set-page .mi-hits .mi-hit {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: var(--st-border);
-}
-.mi-set-page .mi-hits .mi-hit__tag { color: var(--st-accent-warm); }
 .mi-set-page .mi-ctx-stats {
   background: rgba(0, 0, 0, 0.02);
   border-color: var(--st-border);

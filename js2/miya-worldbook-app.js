@@ -9,7 +9,6 @@
      这样以后调整兜底容器的策略时，只需要改 store 一处。 */
   var filterScope = 'all';
   var filterGroupId = 'all';
-  var searchQuery = '';
   var editingId = null;
   var collapsedGroups = {};
 
@@ -111,20 +110,10 @@
 
   function filteredEntries() {
     var rows = store.listEntries();
-    var q = searchQuery.trim().toLowerCase();
     return rows.filter(function (entry) {
       if (filterScope !== 'all' && entry.scope !== filterScope) return false;
       /* 不再按分卷横向筛选，全部在手风琴中展示 */
-      if (!q) return true;
-      var g = store.getGroup(entry.groupId);
-      var blob = [
-        entry.name,
-        entry.content,
-        (entry.keywords || []).join(' '),
-        (entry.boundRoleIds || []).join(' '),
-        g && g.name
-      ].join(' ').toLowerCase();
-      return blob.indexOf(q) >= 0;
+      return true;
     });
   }
 
@@ -598,11 +587,6 @@
     $('miya-wb-save').addEventListener('click', saveEditor);
     $('miya-wb-delete').addEventListener('click', deleteEditing);
 
-    $('miya-wb-search').addEventListener('input', function () {
-      searchQuery = $('miya-wb-search').value || '';
-      renderList();
-    });
-
     app.querySelectorAll('[data-wb-filter]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         filterScope = btn.getAttribute('data-wb-filter') || 'all';
@@ -810,8 +794,6 @@
     Promise.all([store.whenReady(), ensureContactsReady()]).then(function () {
       filterScope = 'all';
       filterGroupId = 'all';
-      searchQuery = '';
-      if ($('miya-wb-search')) $('miya-wb-search').value = '';
       syncFilterUi();
       closeEditor();
       app.removeAttribute('hidden');

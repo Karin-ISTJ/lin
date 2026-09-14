@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="css/miya-apps.css?v=31">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=28">
+  <link rel="stylesheet" href="css/miya-settings.css?v=29">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=9">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
@@ -42,7 +42,7 @@
   <link rel="stylesheet" href="css/miya-chat-settings.css?v=40">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=5">
   <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=10">
-  <link rel="stylesheet" href="css/miya-offline.css?v=57">
+  <link rel="stylesheet" href="css/miya-offline.css?v=59">
   <link rel="stylesheet" href="css/miya-offline-themes.css?v=39">
   <link rel="stylesheet" href="css/miya-chat-call.css?v=1">
   <link rel="stylesheet" href="css/miya-chat-notify.css?v=6">
@@ -747,6 +747,13 @@
             </div>
             <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
           </button>
+          <button type="button" class="st-card-row" data-st-nav="miya-st-panel-cache-probe">
+            <div class="st-card-row-left">
+              <div class="st-card-icon st-card-icon--gray"><img class="mi-ico-img " src="img/icons/clock.svg" alt="" width="18" height="18"></div>
+              <div><div class="st-card-label">缓存探针</div><div class="st-card-desc">提示缓存命中率与前缀污染排查</div></div>
+            </div>
+            <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
+          </button>
         </div>
 
         <div class="st-feature-card">
@@ -1050,6 +1057,28 @@
           <div class="ins-storage-actions" id="miya-st-storage-clear"></div>
         </div>
       </div>
+      <div class="ins-vault-panel" id="miya-st-panel-cache-probe" data-panel-title="缓存探针">
+        <div class="st-form">
+          <p class="ins-vault-note" id="miya-st-cache-probe-note">
+            提示缓存命中部分通常只按 10% 计价。能否命中，取决于本轮请求前缀是否与上轮逐字节相同。
+          </p>
+          <div id="miya-st-cache-probe-body"></div>
+          <div class="st-form-card">
+            <button type="button" class="st-card-row" id="miya-st-cache-probe-refresh">
+              <div class="st-card-row-left">
+                <div class="st-card-icon st-card-icon--gray"><img class="mi-ico-img " src="img/icons/refresh-ccw-01.svg" alt="" width="18" height="18"></div>
+                <div><div class="st-card-label">刷新</div><div class="st-card-desc">重新读取最近记录</div></div>
+              </div>
+            </button>
+            <button type="button" class="st-card-row" id="miya-st-cache-probe-clear">
+              <div class="st-card-row-left">
+                <div class="st-card-icon st-card-icon--warm"><img class="mi-ico-img " src="img/icons/trash-01.svg" alt="" width="18" height="18"></div>
+                <div><div class="st-card-label">清空记录</div><div class="st-card-desc">删除已留档的比对轮次</div></div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <input type="file" class="ins-file" id="miya-st-backup-file" accept=".zip,.json,application/zip,application/json" multiple>
@@ -1093,10 +1122,6 @@
             <p class="st-header-sub">管理注入模型的设定片段与关键词</p>
           </header>
 
-          <div class="st-section-label">检索</div>
-          <div class="st-card st-wb-search-card">
-            <input type="search" class="ins-wb-search" id="miya-wb-search" placeholder="检索标题、关键词或正文…" autocomplete="off" spellcheck="false">
-          </div>
           <div class="st-wb-io-bar mi-ico-bar">
             <button type="button" class="mi-ico-btn" id="miya-wb-group-add-btn" data-wb-group-add title="新建世界书" aria-label="新建世界书">
               <img src="img/icons/plus.svg" alt="" width="18" height="18">
@@ -1448,10 +1473,6 @@
             </div>
             <div class="fg-greeting__polaroid" aria-hidden="true"></div>
           </div>
-          <div class="soft-search fg-hide-when-green">
-            <img class="mi-ico-img soft-search__icon" src="img/icons/search-lg.svg" alt="" width="18" height="18">
-            <input type="search" id="qq-msg-search" placeholder="搜索" autocomplete="off" spellcheck="false">
-          </div>
           <div class="soft-filters ins-hide-when-white fg-hide-when-green" role="tablist" aria-label="消息筛选">
             <button type="button" class="soft-filter is-active" data-soft-msg-filter="all">全部</button>
             <button type="button" class="soft-filter" data-soft-msg-filter="unread">未读</button>
@@ -1462,7 +1483,6 @@
             </button>
           </div>
           <div class="soft-stories ins-hide-when-white fg-hide-when-green" id="soft-stories-row"></div>
-          <div class="qq-search-results" id="qq-msg-search-results" hidden></div>
           <div class="qq-chat-list" id="qq-chat-list"></div>
         </div>
       </div>
@@ -1512,9 +1532,6 @@
           <div class="soft-topbar__actions">
             <button type="button" class="soft-topbar__icon fg-hide-when-green" aria-label="添加联系人">
               <img class="mi-ico-img" src="img/icons/plus.svg" alt="" width="18" height="18">
-            </button>
-            <button type="button" class="soft-topbar__icon fg-chrome" aria-label="搜索联系人">
-              <img class="mi-ico-img" src="img/icons/search-lg.svg" alt="" width="18" height="18">
             </button>
           </div>
         </header>
@@ -3807,7 +3824,7 @@
 
   <script defer src="js2/miya-storage.js?v=15"></script>
   <script defer src="js2/miya-perf.js?v=3"></script>
-  <script defer src="js2/miya-cache-probe.js?v=2"></script>
+  <script defer src="js2/miya-cache-probe.js?v=3"></script>
   <script defer src="js2/miya-lazy-boot.js?v=25"></script>
   <script defer src="js1/miya-bg-timer.js?v=1"></script>
   <script defer src="js2/miya-zip-store.js?v=4"></script>
@@ -3820,19 +3837,19 @@
   <script defer src="js1/miya-beautify-app.js?v=40"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=6"></script>
-  <script defer src="js2/miya-settings-app.js?v=62"></script>
+  <script defer src="js2/miya-settings-app.js?v=63"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
   <script defer src="js2/miya-worldbook-doc-import.js?v=5"></script>
   <script defer src="js1/miya-beautify-doc-import.js?v=3"></script>
   <script defer src="js2/miya-tavern-card-import.js?v=5"></script>
-  <script defer src="js1/miya-contacts-app.js?v=9"></script>
+  <script defer src="js1/miya-contacts-app.js?v=10"></script>
   <script defer src="js2/miya-worldbook-st.js?v=6"></script>
   <script defer src="js2/miya-worldbook-store.js?v=14"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=5"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=15"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=21"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=22"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=5"></script>
   <script defer src="js1/miya-chat-store.js?v=55"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>
@@ -3862,12 +3879,12 @@
   <script defer src="js1/miya-chat-group-ledger.js?v=2"></script>
   <script defer src="js1/miya-chat-group-settings.js?v=20"></script>
   <script defer src="js1/miya-appointment-store.js?v=43"></script>
-  <script defer src="js2/miya-offline-source-ref.js?v=5"></script>
-  <script defer src="js2/miya-offline-beautify.js?v=16"></script>
+  <script defer src="js2/miya-offline-source-ref.js?v=6"></script>
+  <script defer src="js2/miya-offline-beautify.js?v=17"></script>
   <script defer src="js2/miya-offline-text-decor.js?v=1"></script>
   <script defer src="js1/miya-appointment-memory.js?v=9"></script>
   <script defer src="js1/miya-appointment-engine.js?v=50"></script>
-  <script defer src="js1/miya-appointment-app.js?v=49"></script>
+  <script defer src="js1/miya-appointment-app.js?v=51"></script>
   <script defer src="js1/miya-chat-heartvoice-templates.js?v=16"></script>
   <script defer src="js1/miya-chat-heartvoice.js?v=11"></script>
   <script defer src="js2/miya-offline-status.js?v=8"></script>
@@ -3879,7 +3896,7 @@
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=6"></script>
   <script defer src="js1/miya-chat-me.js?v=27"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=61"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=62"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=3"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=4"></script>
@@ -3888,7 +3905,7 @@
   <script defer src="js1/miya-chat-room.js?v=49"></script>
   <script defer src="js1/miya-chat-settings-panel.js?v=13"></script>
   <script defer src="js1/miya-chat-ui-theme.js?v=4"></script>
-  <script defer src="js1/miya-chat-app.js?v=48"></script>
+  <script defer src="js1/miya-chat-app.js?v=49"></script>
   <script defer src="js2/miya-weather-store.js?v=4"></script>
   <script defer src="js2/miya-weather-bridge.js?v=8"></script>
   <script defer src="js2/miya-itinerary-store.js?v=6"></script>
@@ -3907,6 +3924,6 @@
   <script defer src="miya-auth/auth.js?v=5"></script>
   <script defer src="js2/miya-st-prompt-presets-store.js?v=31"></script>
   <script defer src="js2/miya-st-prompt-presets-app.js?v=31"></script>
-  <script defer src="js1/app.js?v=83"></script>
+  <script defer src="js1/app.js?v=86"></script>
 </body>
 </html>

@@ -36,7 +36,6 @@
   --qq-divider: var(--mc-line);
   --qq-red: #444444;
   --qq-badge: var(--mc-accent);
-  --qq-search-bg: transparent;
   --qq-tabbar-h: var(--mc-dock-h);
   --qq-safe-t: var(--mc-safe-t);
   --qq-safe-b: var(--mc-safe-b);
@@ -79,30 +78,6 @@
   -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
 .qq-statusbar { display: none !important; }
-
-/* ── 搜索 ── */
-.qq-search { flex-shrink: 0; padding: 0 20px 16px; }
-.qq-search__bar {
-  display: flex; align-items: center;
-  height: 44px; padding: 0 14px;
-  border: 1px solid var(--mc-ink);
-  background: var(--mc-surface);
-  color: var(--mc-ink-faint);
-  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
-}
-.qq-search__bar--input { padding: 0; border: 1px solid var(--mc-ink); }
-.qq-search__input {
-  flex: 1; min-width: 0; height: 44px; border: none; background: transparent;
-  font: inherit; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--mc-ink); padding: 0 14px; outline: none; -webkit-appearance: none;
-}
-.qq-search__input::placeholder { color: var(--mc-ink-faint); }
-.qq-search-results { padding: 0 20px; }
-.qq-search-results[hidden] { display: none !important; }
-.qq-search-empty {
-  padding: 48px 24px; text-align: center;
-  font-family: var(--mc-display); font-size: 20px; color: var(--mc-ink-faint);
-}
 
 /* ── 会话列表 ── */
 .qq-page--msg .qq-page__scroll {

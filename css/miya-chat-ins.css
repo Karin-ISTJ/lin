@@ -270,39 +270,6 @@
   color: #8A7868;
 }
 
-/* ── 搜索 ── */
-.soft-search {
-  position: relative;
-  margin-bottom: 10px;
-}
-
-.soft-search input {
-  width: 100%;
-  height: 42px;
-  border: none;
-  border-radius: var(--soft-r-pill);
-  background: var(--soft-surface-2);
-  box-shadow: var(--soft-shadow);
-  padding: 0 16px 0 40px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 300;
-  color: var(--soft-ink);
-  outline: none;
-}
-
-.soft-search input::placeholder { color: var(--soft-ink-3); }
-
-.soft-search__icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 17px;
-  height: 17px;
-  color: var(--soft-ink-3);
-  pointer-events: none;
-}
 
 /* ── 筛选 ── */
 .soft-filters {
@@ -1226,30 +1193,6 @@
 .theme-soft .noir-header-area,
 .theme-soft .noir-tab-bar,
 .theme-soft .noir-chat-search { display: none !important; }
-
-.theme-soft .qq-search-hit {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: var(--soft-r);
-  background: var(--soft-surface-2);
-  box-shadow: var(--soft-shadow);
-  margin-bottom: 8px;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  color: inherit;
-}
-
-.theme-soft .qq-search-empty {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--soft-ink-3);
-  font-size: 14px;
-}
 
 /* ── 覆盖 miya-chat.css 基础变量 ── */
 .miya-chat-app.theme-soft,
