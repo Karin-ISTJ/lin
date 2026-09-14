@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="css/miya-apps.css?v=30">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=25">
+  <link rel="stylesheet" href="css/miya-settings.css?v=27">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=9">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
@@ -926,21 +926,6 @@
             </div>
           </section>
 
-          <section class="st-form-section" id="miya-st-ig-openai-block">
-            <h4 class="st-form-section__title">OpenAI 兼容</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-ig-oa-base">网关地址</label>
-              <input type="text" class="ins-text-input" id="miya-st-ig-oa-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false">
-              <label class="ins-field-label" for="miya-st-ig-oa-key">密钥</label>
-              <div class="ins-inline-field">
-                <input type="password" class="ins-text-input" id="miya-st-ig-oa-key" placeholder="sk-…" autocomplete="off">
-                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-fetch" title="拉取模型">⟳</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-ig-oa-model">模型</label>
-              <select class="ins-select" id="miya-st-ig-oa-model"><option value="">选择模型</option></select>
-            </div>
-          </section>
-
           <section class="st-form-section" id="miya-st-ig-novelai-block" hidden>
             <h4 class="st-form-section__title">NovelAI</h4>
             <div class="st-form-card ins-form-block">
@@ -1018,6 +1003,33 @@
               <div class="miya-ig-test-wrap miya-ig-free-wrap" id="miya-st-ig-free-preview">
                 <div class="miya-ig-test miya-ig-test--idle"><p>输入描述后点击「生成图片」</p></div>
               </div>
+            </div>
+          </section>
+
+          <section class="st-form-section" id="miya-st-ig-openai-block">
+            <h4 class="st-form-section__title">OpenAI 兼容</h4>
+            <div class="st-form-card ins-form-block">
+              <label class="ins-field-label" for="miya-st-ig-oa-base">网关地址</label>
+              <input type="text" class="ins-text-input" id="miya-st-ig-oa-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false">
+              <label class="ins-field-label" for="miya-st-ig-oa-key">密钥</label>
+              <div class="ins-inline-field">
+                <input type="password" class="ins-text-input" id="miya-st-ig-oa-key" placeholder="sk-…" autocomplete="off">
+                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-fetch" title="拉取模型">⟳</button>
+              </div>
+              <label class="ins-field-label" for="miya-st-ig-oa-model">模型</label>
+              <select class="ins-select" id="miya-st-ig-oa-model"><option value="">选择模型</option></select>
+              <!-- 接口预设：与「对话 API」面板同款（下拉载入 + ✓ 保存 + × 删除） -->
+              <label class="ins-field-label" for="miya-st-ig-oa-preset-pick">载入预设</label>
+              <div class="ins-inline-field">
+                <select class="ins-select" id="miya-st-ig-oa-preset-pick"><option value="">选择已存预设</option></select>
+                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-preset-delete" title="删除预设">×</button>
+              </div>
+              <label class="ins-field-label" for="miya-st-ig-oa-preset-name">预设名称</label>
+              <div class="ins-inline-field">
+                <input type="text" class="ins-text-input" id="miya-st-ig-oa-preset-name" placeholder="例如：中转·gpt-image-1" maxlength="64">
+                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-preset-save" title="保存预设">✓</button>
+              </div>
+              <p class="st-form-hint">仅保存 OpenAI 兼容接口的网关、密钥与模型</p>
             </div>
           </section>
 
@@ -3862,7 +3874,7 @@
   <script defer src="js2/miya-lockscreen.js?v=10"></script>
   <script defer src="js1/miya-beautify-app.js?v=29"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
-  <script defer src="js2/miya-image-gen.js?v=5"></script>
+  <script defer src="js2/miya-image-gen.js?v=6"></script>
   <script defer src="js2/miya-settings-app.js?v=61"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>

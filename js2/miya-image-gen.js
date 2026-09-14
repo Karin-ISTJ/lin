@@ -1225,6 +1225,215 @@
     });
   }
 
+  /* ─── OpenAI 兼容接口预设（独立存储，只存网关/密钥/模型） ───
+     与上面的「生图预设」互不影响：那个存整套生图配置，这个只存接口三元组，
+     方便在多个中转/供应商之间快速切换，交互对齐「对话 API」面板。 */
+  var OA_PRESETS_KEY = 'miya-image-gen-oa-presets-v1';
+  var MAX_OA_PRESETS = 24;
+  var oaPresetsCache = null;
+  var oaPresetsReady = null;
+
+  async function loadOaPresetsArr() {
+    if (typeof global.miyaReadLsJsonKey === 'function') {
+      var v = await global.miyaReadLsJsonKey(OA_PRESETS_KEY, []);
+      return Array.isArray(v) ? v : [];
+    }
+    try {
+      var raw = JSON.parse(localStorage.getItem(OA_PRESETS_KEY) || '[]');
+      return Array.isArray(raw) ? raw : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function saveOaPresetsArr(arr) {
+    if (typeof global.miyaWriteLsJsonKey === 'function') {
+      return !!(await global.miyaWriteLsJsonKey(OA_PRESETS_KEY, arr));
+    }
+    try {
+      localStorage.setItem(OA_PRESETS_KEY, JSON.stringify(arr));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function readOaForm() {
+    function val(id) {
+      var el = document.getElementById(id);
+      return el ? trim(el.value) : '';
+    }
+    return {
+      baseUrl: val('miya-st-ig-oa-base'),
+      apiKey: val('miya-st-ig-oa-key'),
+      model: val('miya-st-ig-oa-model')
+    };
+  }
+
+  function commitOaPresetsCache(list) {
+    oaPresetsCache = Array.isArray(list) ? list.slice() : [];
+    renderOaPresetOptions(oaPresetsCache);
+    return oaPresetsCache;
+  }
+
+  function ensureOaPresetsReady() {
+    if (oaPresetsCache != null) {
+      renderOaPresetOptions(oaPresetsCache);
+      return Promise.resolve(oaPresetsCache);
+    }
+    if (oaPresetsReady) return oaPresetsReady;
+    oaPresetsReady = loadOaPresetsArr().then(function (list) {
+      return commitOaPresetsCache(list);
+    }).catch(function () {
+      return commitOaPresetsCache([]);
+    });
+    return oaPresetsReady;
+  }
+
+  function renderOaPresetOptions(list) {
+    var pick = document.getElementById('miya-st-ig-oa-preset-pick');
+    if (!pick) return;
+    var names = (list || []).map(function (p) { return p && p.name ? String(p.name) : ''; }).filter(Boolean);
+    var namesKey = names.join('\0');
+    if (pick.dataset.presetNames === namesKey) return;
+    var current = pick.value;
+    pick.innerHTML = '<option value="">选择已存预设</option>';
+    names.forEach(function (name) {
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      pick.appendChild(opt);
+    });
+    if (current && names.indexOf(current) >= 0) pick.value = current;
+    pick.dataset.presetNames = namesKey;
+  }
+
+  function findOaPresetByName(list, name) {
+    var label = trim(name);
+    if (!label) return null;
+    return (list || []).filter(function (x) { return x && x.name === label; })[0] || null;
+  }
+
+  function saveOaPreset() {
+    var nameEl = document.getElementById('miya-st-ig-oa-preset-name');
+    var label = nameEl ? trim(nameEl.value) : '';
+    if (!label) {
+      toast('请输入预设名称');
+      return Promise.resolve(false);
+    }
+    var snap = readOaForm();
+    if (!snap.baseUrl && !snap.apiKey && !snap.model) {
+      toast('请先填写接口信息');
+      return Promise.resolve(false);
+    }
+    /* 注意：exists 必须在两个 then 都能访问到的外层作用域声明。
+       之前它写在第一个 then 的回调里，第二个 then 里引用会抛 ReferenceError，
+       被下面的 catch 捕获后统一报「保存失败」——数据其实已写入，
+       表现为「提示失败但列表里确实多了这条预设」。 */
+    var existedBefore = false;
+    return ensureOaPresetsReady().then(function (list) {
+      existedBefore = !!findOaPresetByName(list, label);
+      var next = (list || []).filter(function (x) { return x && x.name !== label; });
+      if (!existedBefore && next.length >= MAX_OA_PRESETS) {
+        toast('接口预设最多 ' + MAX_OA_PRESETS + ' 个');
+        return false;
+      }
+      next.push({ name: label, openai: snap, savedAt: Date.now() });
+      return saveOaPresetsArr(next).then(function (ok) {
+        if (!ok) throw new Error('save_failed');
+        return next;
+      });
+    }).then(function (result) {
+      if (!result) return false;
+      commitOaPresetsCache(result);
+      var pick = document.getElementById('miya-st-ig-oa-preset-pick');
+      if (pick) pick.value = label;
+      toast(existedBefore ? '接口预设已覆盖' : '接口预设已保存');
+      return true;
+    }).catch(function () {
+      toast('接口预设保存失败');
+      return false;
+    });
+  }
+
+  function applyOaPresetRow(row) {
+    if (!row || !row.openai) return;
+    var oa = row.openai;
+    function set(id, v) {
+      var el = document.getElementById(id);
+      if (el) el.value = v == null ? '' : String(v);
+    }
+    set('miya-st-ig-oa-base', oa.baseUrl);
+    set('miya-st-ig-oa-key', oa.apiKey);
+    // 模型可能不在当前下拉里（预设存的是文本），补一项再选中，避免静默回退
+    var modelSel = document.getElementById('miya-st-ig-oa-model');
+    var model = trim(oa.model);
+    if (modelSel && model) {
+      var has = Array.prototype.some.call(modelSel.options, function (o) { return o.value === model; });
+      if (!has) {
+        var opt = document.createElement('option');
+        opt.value = model;
+        opt.textContent = model;
+        modelSel.appendChild(opt);
+      }
+      modelSel.value = model;
+    }
+    var nameEl = document.getElementById('miya-st-ig-oa-preset-name');
+    if (nameEl) nameEl.value = row.name || '';
+  }
+
+  function loadOaPreset() {
+    var pick = document.getElementById('miya-st-ig-oa-preset-pick');
+    var label = pick ? trim(pick.value) : '';
+    if (!label) {
+      toast('请先选择要载入的预设');
+      return Promise.resolve(false);
+    }
+    return ensureOaPresetsReady().then(function (list) {
+      var row = findOaPresetByName(list, label);
+      if (!row) {
+        toast('预设不存在');
+        return false;
+      }
+      applyOaPresetRow(row);
+      toast('已载入「' + label + '」');
+      return true;
+    }).catch(function () {
+      toast('预设载入失败');
+      return false;
+    });
+  }
+
+  function deleteOaPreset() {
+    var pick = document.getElementById('miya-st-ig-oa-preset-pick');
+    var label = pick ? trim(pick.value) : '';
+    if (!label) {
+      toast('请先选择要删除的预设');
+      return Promise.resolve(false);
+    }
+    return ensureOaPresetsReady().then(function (list) {
+      if (!findOaPresetByName(list, label)) {
+        toast('预设不存在');
+        return false;
+      }
+      var next = (list || []).filter(function (x) { return x && x.name !== label; });
+      return saveOaPresetsArr(next).then(function (ok) {
+        if (!ok) throw new Error('save_failed');
+        return next;
+      });
+    }).then(function (result) {
+      if (!result) return false;
+      commitOaPresetsCache(result);
+      var pick2 = document.getElementById('miya-st-ig-oa-preset-pick');
+      if (pick2 && pick2.value === label) pick2.value = '';
+      toast('接口预设已删除');
+      return true;
+    }).catch(function () {
+      toast('接口预设删除失败');
+      return false;
+    });
+  }
+
   function readSettingsForm() {
     function val(id) {
       var el = document.getElementById(id);
@@ -1525,6 +1734,18 @@
         saveFreeGenerationToAlbum();
         return;
       }
+      if (t.closest('#miya-st-ig-oa-preset-save')) {
+        saveOaPreset();
+        return;
+      }
+      if (t.closest('#miya-st-ig-oa-preset-delete')) {
+        deleteOaPreset();
+        return;
+      }
+      if (t.closest('#miya-st-ig-oa-preset-pick')) {
+        loadOaPreset();
+        return;
+      }
     });
 
     root.addEventListener('change', function (e) {
@@ -1543,6 +1764,7 @@
   function onSettingsPanelOpen() {
     bindSettingsPanelEvents();
     ensurePresetsReady();
+    ensureOaPresetsReady();
     syncSettingsFormFromConfig();
     /* 上次会话残留的结果图没有对应的内存 blob（刷新后必然拿不到），
        留着会让人以为「点了保存却没反应」，所以每次进面板都清回待输入状态。 */
@@ -1578,6 +1800,9 @@
     runFreeGeneration: runFreeGeneration,
     saveFreeGenerationToAlbum: saveFreeGenerationToAlbum,
     resetFreeGenPreview: resetFreeGenPreview,
+    saveOaPreset: saveOaPreset,
+    loadOaPreset: loadOaPreset,
+    deleteOaPreset: deleteOaPreset,
     onSettingsPanelOpen: onSettingsPanelOpen,
     syncSettingsFormFromConfig: syncSettingsFormFromConfig,
     ensurePresetsReady: ensurePresetsReady,
