@@ -1759,6 +1759,41 @@
    * （markUserRoomEntry），所以正常点击绝不会被守卫误伤。
    */
   var listGuardTimer = null;
+
+  /**
+   * 进房点击锁。
+   *
+   * 用途：进 App 后的一个短暂静默期内，只允许「用户主动进房」这一条路，
+   * 其余任何落在会话行上的点击一律吞掉。
+   *
+   * 为什么需要它：armOpenClickGuard 的透明遮罩依赖 DOM 覆盖，
+   * 在部分壳浏览器里会被后挂载的层盖住而失效。这里从事件层拦截，
+   * 不依赖渲染，更稳。
+   *
+   * 判据：如果距离开 App 不足 ROOM_ENTRY_LOCK_MS，且这次点击
+   * 不是紧接着「桌面图标那一次触摸」（通过 timeStamp 无法区分，
+   * 因此退化为：静默期内一律吞掉会话行点击）。用户可以稍等
+   * 半秒再点，体验损失极小，但彻底消灭幽灵跳转。
+   */
+  var ROOM_ENTRY_LOCK_MS = 500;
+  function armRoomEntryClickLock(el) {
+    if (!el) return;
+    el._miyaRoomEntryLockUntil = Date.now() + ROOM_ENTRY_LOCK_MS;
+    if (el._miyaRoomEntryLockBound) return;
+    el._miyaRoomEntryLockBound = true;
+    /* 捕获阶段拦截，抢在 App 自身的委托 click 之前 */
+    el.addEventListener('click', function (e) {
+      var until = Number(el._miyaRoomEntryLockUntil || 0);
+      if (!until || Date.now() > until) return;
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (!t.closest('.qq-chat-item') && !t.closest('.qq-contact-row')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    }, true);
+  }
+
   function startListGuard(el) {
     stopListGuard();
     var ticks = 0;
@@ -1795,6 +1830,24 @@
       }
     }
     el.classList.remove('qq-room-open');
+    /* 幽灵点击防护（项目里其他 8 个 App 都有，唯独聊天漏了）。
+
+       安卓 / 壳浏览器上，点桌面图标的「那一次触摸」会在图标下方位置
+       补发一个 ghost click。聊天 App 是全屏铺开的，列表第一行会话的
+       位置经常正好压在桌面图标的位置上，于是这个补发的点击就落到了
+       「第一个会话行」→ 直接进房。
+
+       这完美解释了「总是跳转到第一个会话行」这个规律：
+       不是某个 chatId 残留，而是物理位置撞上了。
+
+       用法与其他 App 一致：在 App 壳上盖一层透明遮罩 420ms，
+       把这段时间内的所有点击吞掉。 */
+    if (typeof global.miyaArmOpenClickGuard === 'function') {
+      try { global.miyaArmOpenClickGuard(el); } catch (e) {}
+    }
+    /* 额外兜底：进 App 后的静默期内，直接忽略列表区的一切点击。
+       遮罩依赖 DOM 层级，壳浏览器上偶有失效；这是第二道闸。 */
+    armRoomEntryClickLock(el);
     /* 值守守卫：进 App 后在「消息列表页」期间持续盯着，
        一旦发现当前 tab 还是 msg、且房间却被自动打开了（用户没点任何会话），
        就把它关回去。
