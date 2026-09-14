@@ -1330,3 +1330,106 @@ html.is-custom-wg-editing .desk-custom-viewport {
 .ins-tile-mosaic.is-custom-layout-only {
   display: grid !important;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Karin 图标皮肤 v1 —— 11 个实心图标（去白底 + 放大）
+   仅作用于下列应用，其余图标保持原有玻璃方块 + 线条风格。
+   应用键：beauty 美化 / imagegen 生图 / chat 聊天 / book 世界书
+          stpreset ST预设 / notes 日记 / contacts 联系人 / memory 记忆
+          itinerary 行程轨迹 / couple 情侣空间 / fun 娱乐
+   ══════════════════════════════════════════════════════════════ */
+
+/* ① 网格图标：去掉白色玻璃底，实心图形直接贴壁纸 */
+.desk-custom__grid .desk-custom__ic:is(
+  [data-app="beauty"],
+  [data-app="imagegen"],
+  [data-app="chat"],
+  [data-app="book"],
+  [data-app="stpreset"],
+  [data-app="notes"],
+  [data-app="contacts"],
+  [data-app="memory"],
+  [data-app="itinerary"],
+  [data-app="couple"],
+  [data-app="fun"]
+) .ic__box.glass {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ② 网格图标：图形放大到 36px（默认 24px），让实心造型看得清 */
+.desk-custom__grid .desk-custom__ic:is(
+  [data-app="beauty"],
+  [data-app="imagegen"],
+  [data-app="chat"],
+  [data-app="book"],
+  [data-app="stpreset"],
+  [data-app="notes"],
+  [data-app="contacts"],
+  [data-app="memory"],
+  [data-app="itinerary"],
+  [data-app="couple"],
+  [data-app="fun"]
+) .ic__box svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* ③ 程序坞图标（联系人默认在 dock 里）：同样去白底 + 放大 */
+.foot__dock--custom .desk-custom__dock-ic:is(
+  [data-app="beauty"],
+  [data-app="imagegen"],
+  [data-app="chat"],
+  [data-app="book"],
+  [data-app="stpreset"],
+  [data-app="notes"],
+  [data-app="contacts"],
+  [data-app="memory"],
+  [data-app="itinerary"],
+  [data-app="couple"],
+  [data-app="fun"]
+) .foot__dock-btn {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.foot__dock--custom .desk-custom__dock-ic:is(
+  [data-app="beauty"],
+  [data-app="imagegen"],
+  [data-app="chat"],
+  [data-app="book"],
+  [data-app="stpreset"],
+  [data-app="notes"],
+  [data-app="contacts"],
+  [data-app="memory"],
+  [data-app="itinerary"],
+  [data-app="couple"],
+  [data-app="fun"]
+) .foot__dock-btn svg {
+  width: 34px;
+  height: 34px;
+}
+
+/* ④ 移动端主屏对 .ic__box.glass 有强制白底（miya-thermal.css），此处压回去 */
+html.is-mobile body.miya-mode-phone:not(.miya-app-open) .desk-custom__grid .desk-custom__ic:is(
+  [data-app="beauty"],
+  [data-app="imagegen"],
+  [data-app="chat"],
+  [data-app="book"],
+  [data-app="stpreset"],
+  [data-app="notes"],
+  [data-app="contacts"],
+  [data-app="memory"],
+  [data-app="itinerary"],
+  [data-app="couple"],
+  [data-app="fun"]
+) .ic__box.glass {
+  background: transparent !important;
+  box-shadow: none !important;
+}

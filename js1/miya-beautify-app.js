@@ -119,43 +119,6 @@
     });
   }
 
-  function buildIconGrid() {
-    var gridApps = $('miya-bf-icon-grid');
-    var gridExtra = $('miya-bf-extra-grid');
-    if (!gridApps || !gridExtra) return;
-
-    function appendItem(grid, key) {
-      var item = document.createElement('article');
-      item.className = 'ins-icon-pick';
-      item.innerHTML =
-        '<button type="button" class="ins-icon-pick__btn" data-bf-pick="' + key + '">' +
-          '<span class="ins-icon-pick__preview" data-bf-preview="' + key + '">' +
-            '<span class="ins-icon-pick__glyph" data-bf-glyph="' + key + '">' + defaultIconGlyph(key) + '</span>' +
-          '</span>' +
-          '<span class="ins-icon-pick__name">' + (ICON_LABELS[key] || key) + '</span>' +
-        '</button>' +
-        '<button type="button" class="ins-chip ins-chip--dim ins-icon-pick__reset" data-bf-clear="' + key + '">恢复默认</button>';
-      grid.appendChild(item);
-    }
-
-    gridApps.innerHTML = '';
-    gridExtra.innerHTML = '';
-    if (gridP2Icons) gridP2Icons.innerHTML = '';
-    if (gridP2Widgets) gridP2Widgets.innerHTML = '';
-    if (gridP3Icons) gridP3Icons.innerHTML = '';
-    if (gridP3Widgets) gridP3Widgets.innerHTML = '';
-    if (gridP4Icons) gridP4Icons.innerHTML = '';
-    if (gridP4Widgets) gridP4Widgets.innerHTML = '';
-    (global.miyaAPP_KEYS || []).forEach(function (k) { appendItem(gridApps, k); });
-    (global.miyaPOLAROID_KEYS || []).concat([
-      'profile_bg', 'profile_ava', 'weekcal_bg',
-      'memo_ava_1', 'memo_ava_2'
-    ]).forEach(function (k) {
-      appendItem(gridExtra, k);
-    });
-    refreshIconPreviews();
-  }
-
   function buildCustomIconGrid() {
     var grid = $('miya-bf-custom-icon-grid');
     if (!grid) return;
@@ -838,8 +801,6 @@
       }
       closeBeautifyApp();
     });
-
-    buildIconGrid();
     buildCustomIconGrid();
     buildCustomWidgetGallery();
     syncUiFromTheme();
@@ -1510,7 +1471,6 @@
       : null;
     app.removeAttribute('hidden');
     switchBeautifyTab('scene');
-    buildIconGrid();
     buildCustomIconGrid();
     buildCustomWidgetGallery();
     syncUiFromTheme();
