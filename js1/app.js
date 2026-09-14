@@ -484,9 +484,6 @@
     if (window.miyaLockscreen && window.miyaLockscreen.showIfNeeded) {
       window.miyaLockscreen.showIfNeeded();
     }
-    if (window.miyaUpdateNotice && window.miyaUpdateNotice.onEntryStep) {
-      window.miyaUpdateNotice.onEntryStep('splash');
-    }
     finishPhoneBoot();
   }
 
@@ -539,7 +536,7 @@
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=75').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=77').then(function (reg) {
         try { reg.update(); } catch (e) {}
       }).catch(function () {});
     });

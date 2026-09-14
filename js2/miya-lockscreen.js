@@ -158,9 +158,6 @@
     overlayEl.hidden = true;
     document.body.classList.remove('miya-lock-active');
     clearDigits();
-    if (global.miyaUpdateNotice && global.miyaUpdateNotice.onLockDismissed) {
-      global.miyaUpdateNotice.onLockDismissed();
-    }
     if (global.MiyaChatBackground && typeof global.MiyaChatBackground.kickScan === 'function') {
       global.MiyaChatBackground.kickScan();
     }
