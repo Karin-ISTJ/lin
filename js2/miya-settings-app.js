@@ -108,6 +108,9 @@
   var panelClosing = false;
   // 从聊天页的联系人设置进入对话 API 时，API 页返回应回到联系人设置，而不是设置主页。
   var returnToChatContactSettings = false;
+  // 从桌面图标直达某个子页时，该子页的返回应整体关闭设置层回到桌面。
+  // 记录“本次打开是由桌面直达的目标面板 id”，翻页后自动失效。
+  var pendingCloseOnPanelBack = null;
   var apiConfigCache = null;
   var apiConfigHydrated = false;
   var apiPresetsCache = null;
@@ -1281,6 +1284,11 @@
     }
     setTopTitle(panel ? panel.getAttribute('data-panel-title') || '设置' : '设置');
     syncTopbarSaveButton(panelId);
+    /* 只有「进入设置的那一刻」由调用方标记的来源才有效。
+       一旦在设置内部再翻页，就不再是桌面直达语境，返回应回设置主页。 */
+    if (pendingCloseOnPanelBack && pendingCloseOnPanelBack !== panelId) {
+      pendingCloseOnPanelBack = null;
+    }
   }
 
   /* 顶栏右侧保存按钮：只在下面这些面板里出现。
@@ -2077,30 +2085,13 @@
         closeSettingsApp();
         return;
       }
+      // 从桌面图标进来的子页：返回直接退出设置层回桌面，不回设置主页。
+      if (pendingCloseOnPanelBack && active && active.id === pendingCloseOnPanelBack) {
+        pendingCloseOnPanelBack = null;
+        closeSettingsApp();
+        return;
+      }
       showMainList();
-    });
-
-    onClick('miya-st-clear-chat-app-beautify', function () {
-      dialog({
-        mode: 'confirm',
-        title: '清除聊天 App 美化',
-        message: '将恢复默认橙主题，并清除当前自定义 CSS 与装饰。预设库不受影响，是否继续？',
-        confirmText: '清除',
-        cancelText: '取消'
-      }).then(function (ok) {
-        if (!ok) return;
-        var mod = global.MiyaChatAppBeautify;
-        if (!mod || typeof mod.clearCustomBeautify !== 'function') {
-          toast('美化模块未加载，请刷新页面');
-          return;
-        }
-        try {
-          mod.clearCustomBeautify();
-          toast('已清除聊天 App 美化');
-        } catch (err) {
-          toast('清除失败');
-        }
-      });
     });
 
     app.querySelectorAll('[data-st-nav]').forEach(function (row) {
@@ -2393,6 +2384,9 @@
       fromChatContactSettings = !!(document.querySelector('[data-mq-set-body]') && document.querySelector('[data-mq-set-back]') && document.querySelector('.miya-chat-app.mi-set-open'));
     }
     returnToChatContactSettings = chatApiPanelIds.indexOf(panelId) !== -1 && fromChatContactSettings;
+    /* 从桌面图标直达的子页：返回应当整体退出设置层，回到桌面，
+       而不是退回设置主页（用户从桌面进来的，就该回桌面）。 */
+    pendingCloseOnPanelBack = options.fromDesk ? (panelId || null) : null;
     panelClosing = false;
     app.classList.remove('is-panel-returning');
     app.classList.add('is-open');

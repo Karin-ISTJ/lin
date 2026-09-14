@@ -382,7 +382,8 @@
     },
     imagegen: function () {
       if (window.miyaSettingsApp && window.miyaSettingsApp.open) {
-        window.miyaSettingsApp.open('miya-st-panel-imagegen');
+        /* fromDesk：从桌面图标直达，返回时应退出设置层回桌面 */
+        window.miyaSettingsApp.open('miya-st-panel-imagegen', { fromDesk: true });
       }
     },
   };
