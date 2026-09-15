@@ -1553,14 +1553,35 @@
         if (!m || !Array.isArray(m.swipes) || m.swipes.length < 2) return;
         var sid = Number(m.swipeId);
         if (!Number.isFinite(sid)) sid = m.swipes.length - 1;
-        sid = Math.max(0, Math.min(m.swipes.length - 1, sid + delta));
-        var content = String(m.swipes[sid] || '');
+        var next = Math.max(0, Math.min(m.swipes.length - 1, sid + delta));
+        /*
+         * 候选序号被截在两端（0 或末尾）时不做无谓的写盘与重绘。
+         * 以前这里照样往下走，于是「已经在最早一版还一直点 ‹」
+         * 会反复写 localStorage —— 用户体感就是「点了半天没反应」。
+         */
+        if (next === sid) return;
+        var content = String(m.swipes[next] || '');
         aps.updateMessage(ui.chatId, ui.sessionId, msgId, {
             content: content,
-            swipeId: sid,
+            swipeId: next,
             swipes: m.swipes
         });
-        renderStory();
+        /*
+         * ⚠️ 这里原来写的是 renderStory()。
+         *
+         * renderStory() 是「**返回一段 HTML 字符串**」的构造函数，
+         * 它自己不碰 DOM —— 收下它的人才会把字符串塞进页面。
+         * 单独调它一句，等于辛辛苦苦改了数据、然后把渲染结果随手扔掉：
+         * 界面上一个字都不会变。
+         *
+         * 这正是用户报的「‹ › 出现了，点了没反应」的第二重原因
+         * （第一重是这两枚按钮压根没绑上事件，见 bindFloorToolsDelegate）。
+         * 两个缺陷叠在一起，才会出现「按钮在、点了却纹丝不动」。
+         *
+         * 正解是走 patchStoryBody()：它会比对稳定 key、就地重写
+         * mol-story-body，而且不会把输入框里的草稿清掉。
+         */
+        patchStoryBody();
     }
 
     function messageBlockHtml(m, canEdit) {
@@ -1743,6 +1764,28 @@
         return esc(para).replace(/\n/g, '<br>');
     }
 
+    /**
+     * 内容指纹 —— 只用于判断「要不要重绘」，不进任何持久化数据。
+     *
+     * 为什么不能只记长度：模型对着同一份上下文重答时，
+     * 「他停了一下，把茶杯放回桌上」和「他顿了一顿，将茶杯放回桌上」
+     * 这类改写**长度经常一模一样**。旧实现只把 content.length 放进 key，
+     * 于是内容真的换了、key 却纹丝不动，patchStoryBody 判定「无变化」
+     * —— 直接跳过重建，用户看到的就是「点了刷新，内容还是之前的」。
+     *
+     * 这里改用「长度 + 逐字符累积哈希」。不需要密码学强度，
+     * 只要对「等长但不同内容」敏感即可；30 位十进制累加和
+     * 不会溢出（30 * 0xFFFF * 长度，长度上万也只到 2e9 量级）。
+     */
+    function contentFingerprint(text) {
+        var s = String(text || '');
+        var sum = 0;
+        for (var i = 0; i < s.length; i++) {
+            sum = (sum + s.charCodeAt(i) * (i + 1)) % 2147483647;
+        }
+        return s.length + '.' + sum.toString(36);
+    }
+
     function computeStableStoryKey(msgs) {
         var m = msgs || [];
         var last = m.length ? m[m.length - 1] : null;
@@ -1754,7 +1797,16 @@
                   '|' +
                   String(last.editedAt || '') +
                   '|' +
-                  String(last.content || '').length
+                  /*
+                   * 用内容指纹而不是长度（见 contentFingerprint 的说明）。
+                   * 这里同时还要带上 swipeId：切候选时 content 换、swipeId 也换，
+                   * 两个信号互为备份，避免「等长候选」把重绘整个吃掉。
+                   */
+                  contentFingerprint(last.content) +
+                  '|' +
+                  String(last.swipeId == null ? '' : last.swipeId) +
+                  '|' +
+                  (Array.isArray(last.swipes) ? String(last.swipes.length) : '0')
                 : '') +
             /*
              * 注意：summaryList 不再进稳定 key。
@@ -3204,7 +3256,28 @@ function renderWriter() {
          * 候选数量由引擎侧的 SWIPE_MAX 封顶，不会无限膨胀。
          */
         var hadSwipes = trailingAssistantHasSwipes(msgs);
-        round.forEach(function (m) {
+        /*
+         * ⚠️ 只软删「要覆盖的那一层」，不能删整轮。
+         *
+         * 旧实现是 round.forEach(...) —— 把末轮**所有** assistant 楼层一起软删。
+         * 但引擎写回时只会复活其中一层（replaceTargetId 指向的那个），
+         * 于是「连续两层及以上角色回复」的场次一刷就净亏楼层：
+         *
+         *   1:user  2:assistant  3:assistant  4:assistant
+         *   点刷新 → 2、3、4 全软删 → 引擎只写回第 2 层
+         *   结果 → 只剩 2 层，第 3、4 层的内容永久消失
+         *
+         * 用户看到的正是「上一楼生成的内容被吞了」。
+         *
+         * 为什么 round 会多于一层：重发（redoFromMessage）走的是
+         * regenerateAppointment，它把新内容并进**已有那层**的 swipes 而不新增楼层；
+         * 多角色/多段落回复、或历史数据里本来就挨着两条 assistant，都会让
+         * 末轮出现连续多层。这不是异常数据，是正常可达的状态。
+         *
+         * 现在明确：软删范围 == 写回范围 == 只有 replaceTargetId 那一层。
+         */
+        var victim = targetAsst;
+        if (victim) {
             /*
              * 用 softDeleteForRegenerate 而不是普通 deleteMessage：
              * 它会在清空正文之前，把当前这一版存成候选锚点（swipes[0]）。
@@ -3214,11 +3287,11 @@ function renderWriter() {
              */
             var store = apStore();
             if (store && typeof store.softDeleteForRegenerate === 'function') {
-                store.softDeleteForRegenerate(ui.chatId, ui.sessionId, m.id);
+                store.softDeleteForRegenerate(ui.chatId, ui.sessionId, victim.id);
             } else {
-                store.deleteMessage(ui.chatId, ui.sessionId, m.id);
+                store.deleteMessage(ui.chatId, ui.sessionId, victim.id);
             }
-        });
+        }
         patchStoryBody();
         var input = $('xw-writer-input');
         if (input) input.disabled = true;
@@ -3903,7 +3976,24 @@ function renderWriter() {
             runStream(
                 Promise.resolve()
                     .then(function () {
-                        return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
+                        /*
+                         * ⚠️ 必须把「要写回哪一层」显式交给引擎。
+                         *
+                         * 上面刚用 removeMessagesFrom(startIdx) 把这一轮整段软删了，
+                         * 而引擎在不给 replaceTargetId 时会回退成「倒着找最后一条
+                         * 还活着的 assistant」—— 被删掉的这几层它看不见，
+                         * 于是一路向上摸到**更早的、不相干**的一层，把新内容写进去。
+                         *
+                         * 用户报的「第九层的内容跳到第七层，把第七层换了」
+                         * 就是这么来的：点第 9 层的重发 → 第 8、9 层被软删 →
+                         * 引擎摸到第 6 层 → 第 6 层原本的内容被覆盖掉。
+                         *
+                         * 传 replaceTargetId 之后，引擎会直读原始数组（不看 deleted）
+                         * 精确命中被点的那一层，内容写回原位。
+                         */
+                        return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers(), {
+                            replaceTargetId: msg.id
+                        });
                     })
                     .catch(function (err) {
                         restoreMessageSnapshot(snap);
@@ -4229,6 +4319,33 @@ function renderWriter() {
                 }
                 return;
             }
+            /*
+             * 楼层里的候选切换键 ‹ ›。
+             *
+             * 这两枚按钮以前是在 bindEvents() 里用 querySelectorAll 逐个绑的，
+             * 于是踩了和上面同一个坑：render() 之后确实紧跟一次 bindEvents()，
+             * 但**生成结束时走的是 patchStoryBody()** —— 它只重写
+             * mol-story-body 的 innerHTML，并不会重跑 bindEvents()。
+             * 结果就是：刚生成完那一层新渲染出来的 ‹ › 是「裸」的，
+             * 没有任何监听器，点下去毫无反应。
+             *
+             * 而复现条件其实很常见：点「刷新楼层 / 重回」生成一版新的 →
+             * runStream 收尾调 patchStoryBody() → 这一层的切换键当场变成摆设。
+             * 用户看到的正是「‹ › 出现了，但点了没反应」。
+             *
+             * 放进委托里，DOM 换多少次都照样生效。
+             */
+            var swipeBtn = e.target && e.target.closest
+                ? e.target.closest('[data-ap-swipe-prev],[data-ap-swipe-next]')
+                : null;
+            if (swipeBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                var prevId = swipeBtn.getAttribute('data-ap-swipe-prev');
+                if (prevId != null) applyOfflineSwipe(prevId, -1);
+                else applyOfflineSwipe(swipeBtn.getAttribute('data-ap-swipe-next'), 1);
+                return;
+            }
             var hideBtn = e.target && e.target.closest ? e.target.closest('[data-ap-floor-hide]') : null;
             if (hideBtn) {
                 e.stopPropagation();
@@ -4282,12 +4399,15 @@ function renderWriter() {
                 setFloorRange(scopeInput ? scopeInput.value : '', 'show');
             });
         }
-        document.querySelectorAll('[data-ap-swipe-prev]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) { e.stopPropagation(); applyOfflineSwipe(btn.getAttribute('data-ap-swipe-prev'), -1); });
-        });
-        document.querySelectorAll('[data-ap-swipe-next]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) { e.stopPropagation(); applyOfflineSwipe(btn.getAttribute('data-ap-swipe-next'), 1); });
-        });
+        /*
+         * 候选切换键 ‹ › 的绑定已整体挪进 bindFloorToolsDelegate() 的事件委托。
+         *
+         * 原来在这里用 querySelectorAll 逐个绑。问题在于本函数只在 render()
+         * 之后被调用一次，而生成结束走的是 patchStoryBody() —— 它只重写
+         * mol-story-body 的 innerHTML，不会重跑 bindEvents()。
+         * 于是「刷新楼层」刚生成出来的那一层，它的 ‹ › 是裸的、点了没反应。
+         * 挪进委托后 DOM 换多少次都照样生效，这里不再重复绑定。
+         */
         document.querySelectorAll('[data-ap-export-txt]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineText(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-txt'))); }); });
         document.querySelectorAll('[data-ap-export-json]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineJson(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-json'))); }); });
         var nc = $('xw-new-offline-chat'); if (nc) nc.addEventListener('click', newOfflineChat);
