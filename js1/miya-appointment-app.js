@@ -33,21 +33,7 @@
         userPinnedBottom: true,
         /* 用户在这个场景里是否亲手滚动过。没滚过 = 还没表达过立场，
            此时绝不主动改 scrollTop，免得正文一生成完就把人拽到最底下。 */
-        userTouchedScroll: false,
-        /*
-         * 用户的「跟随意图」：他最后一次亲手滚动时，是不是停在底部。
-         *
-         * 与 userPinnedBottom 的区别很关键：
-         *   userPinnedBottom 表达「此刻在哪」，内容增长后就会过时；
-         *   userIntendsFollowBottom 表达「他想不想跟最新」，是意图，不过时。
-         *
-         * 生成结束时内容会从流式片段变成完整正文、高度骤增。
-         * 若那时才去量「此刻是否贴底」，本来贴着底的用户也会被判成不贴底，
-         * 于是真正的跟随被误伤；反之若直接用可能过期的 pinned=true，
-         * 又会把静看的用户拽下去。用意图就同时避开这两个坑。
-         * 只在真实手势滚动时更新，程序滚动不参与。
-         */
-        userIntendsFollowBottom: false
+        userTouchedScroll: false
     };
 
     var SCROLL_PIN_THRESHOLD = 72;
@@ -1792,8 +1778,6 @@
         streamUi.userPinnedBottom = true;
         /* 主动贴底（用户按下发送/重回）＝用户已经表态，允许跟随滚动。 */
         streamUi.userTouchedScroll = true;
-        /* 这是明确的「我要看最新」意图，后续生成可以继续跟随。 */
-        streamUi.userIntendsFollowBottom = true;
     }
 
     function bindScrollPin() {
@@ -1829,41 +1813,9 @@
                 }
                 if (sc._xwScrollSelf) return; /* 自己滚的，不覆盖用户立场 */
                 streamUi.userPinnedBottom = isScrollNearBottom(sc);
-                /*
-                 * 意图要等手势停下来再结算，不能在滚动过程中就地采信。
-                 *
-                 * 原因：一次下滑手势会产生很多个 scroll 事件。页面短的时候，
-                 * 中途某一帧可能恰好「贴底」，若当场就把意图记成 true，
-                 * 用户明明只是滑了一小段、最终停在半空，也会被当成「要跟最新」，
-                 * 生成结束就被拽到底。
-                 *
-                 * 所以这里只吊销意图（离开底部就立刻停止跟随），
-                 * 而把「确立意图」交给手势结束后的 settle 判定。
-                 */
-                streamUi.userIntendsFollowBottom = false;
-                scheduleFollowIntentSettle(sc);
             },
             { passive: true }
         );
-    }
-
-    var followIntentTimer = 0;
-
-    /*
-     * 滚动停稳后，按「最终停留位置」确立跟随意图。
-     * 只有真正停在底部（阈值内）才算「用户要跟最新」。
-     */
-    function scheduleFollowIntentSettle(sc) {
-        if (followIntentTimer) clearTimeout(followIntentTimer);
-        followIntentTimer = setTimeout(function () {
-            followIntentTimer = 0;
-            if (!sc || !sc.isConnected) return;
-            /* 程序滚动不参与意图判定 */
-            if (sc._xwScrollSelf) return;
-            if (!streamUi.userTouchedScroll) return;
-            streamUi.userIntendsFollowBottom = isScrollNearBottom(sc);
-            streamUi.userPinnedBottom = streamUi.userIntendsFollowBottom;
-        }, 160);
     }
 
     /* 供程序滚动前调用：标记「接下来这几帧的 scroll 事件是我自己造的」 */
@@ -2227,26 +2179,18 @@ function renderWriter() {
         var sc = $('xw-main');
         if (!sc) return;
         /*
-         * 「跟随最新」的判据：用户碰过滚动条 + 他**打算**待在底部。
-         *
-         * 为什么不能只看 userPinnedBottom：它只在真实滚动事件里更新，
-         * 而程序自己的滚动会被 markSelfScroll 标记后跳过更新。
-         * 于是「用户滚到底 → 内容继续增长 → 用户没再动」这种情况下，
-         * pinned 会停留在一个过期的 true，把人硬拽到新底部。
-         *
-         * 为什么也不能「滚之前重新量一次」：本函数在内容已重绘之后才被调用，
-         * 那时页面已经被新内容撑高，用户原本贴底的位置自然不再贴底 ——
-         * 真·跟随的用户会被误判成「不跟随」。
-         *
-         * 正确做法：用「重绘前」记下的意图（streamUi.userIntendsFollowBottom）。
-         * 该值在每次真实滚动时按当时的内容高度结算，代表用户的真实意图，
-         * 不受后续内容增长影响。
+         * 谁都不能在用户没碰过滚动条的情况下动他的位置。
+         * 之前的问题：userPinnedBottom 初值为 true → 正文一生成完
+         * patchStoryBody 立刻带着 force=true 跳到最底，人还在上面看，
+         * 画面自己就滑走了。现在只有用户亲手滚过、且当前确实贴底，
+         * 才跟随；force 也不再绕过这道闸。
          */
         if (!streamUi.userTouchedScroll) return;
-        if (!streamUi.userIntendsFollowBottom) return;
+        if (!force && !streamUi.userPinnedBottom) return;
+        if (force && !streamUi.userPinnedBottom) return;
         requestAnimationFrame(function () {
             if (!streamUi.userTouchedScroll) return;
-            if (!streamUi.userIntendsFollowBottom) return;
+            if (!streamUi.userPinnedBottom) return;
             markSelfScroll();
             sc.scrollTop = sc.scrollHeight;
             streamUi.userPinnedBottom = isScrollNearBottom(sc);
@@ -2289,12 +2233,7 @@ function renderWriter() {
             resetStreamUi();
         }
 
-        /*
-         * 只有用户「想跟最新」时才在重绘后贴底。
-         * 判据用意图（userIntendsFollowBottom）而不是此刻位置
-         * （userPinnedBottom）——重绘已经把内容撑高，此刻位置必然失真。
-         */
-        if (!opts.streamOnly && streamUi.userTouchedScroll && streamUi.userIntendsFollowBottom) {
+        if (!opts.streamOnly && streamUi.userTouchedScroll && streamUi.userPinnedBottom) {
             scrollStoryToEnd(true);
         }
     }

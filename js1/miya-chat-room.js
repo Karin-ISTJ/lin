@@ -31,30 +31,6 @@
   /* 「用户主动进房」授权窗口的截止时间戳。由 markUserRoomEntry() 打开，
      进房守卫读它判断这次进房是不是用户点出来的。 */
   var userRoomEntryUntil = 0;
-  /*
-   * 房间本次被打开的时间戳。参与「进房事件」的标识，
-   * 让守卫能区分「同一次进房的重复轮询」和「用户重新进了一次房」。
-   */
-  var roomOpenedAt = 0;
-  /*
-   * 已审核过的「进房事件」标识（chatId@进房时刻）。
-   *
-   * 守卫只对「房间从关到开」的那一次跳变做一次判断，判完即记账：
-   * 同一个事件重复轮询直接放行，用户待多久都不再重审。
-   * 这从根上避免了「停留超过某个时长就被判成自动进房」的误杀。
-   */
-  var guardReviewedRoomKey = '';
-  /*
-   * 用户是否在这个房间里表过态。
-   *
-   * 只要他滚动过、碰过输入框、点过气泡，就说明这个房间是
-   * 「他自己在用」的，守卫不再干预。进房时复位，关房时复位。
-   */
-  var userEngagedRoom = false;
-
-  function markRoomEngaged() {
-    userEngagedRoom = true;
-  }
 
   function afterNextPaint() {
     return new Promise(function (resolve) {
@@ -758,24 +734,6 @@
     stack.querySelectorAll('.qq-room__chat-pane').forEach(bindPaneScroll);
     var sc = $('qq-room-scroll');
     if (sc) bindPaneScroll(sc);
-    bindRoomEngagement();
-  }
-
-  /*
-   * 把「用户在房间里动过」这件事记下来。
-   *
-   * 守卫只在用户零交互时才可能关房，所以这里要覆盖所有能证明「人在用」的动作：
-   * 触摸/指针/滚轮/按键，以及任何一次点击。用捕获阶段 + passive 监听，
-   * 不拦截也不改变原有事件流，纯记账。
-   */
-  function bindRoomEngagement() {
-    if (!roomEl || roomEl.dataset.engageBound) return;
-    roomEl.dataset.engageBound = '1';
-    ['touchstart', 'pointerdown', 'wheel', 'keydown'].forEach(function (evt) {
-      roomEl.addEventListener(evt, markRoomEngaged, { passive: true, capture: true });
-    });
-    /* 点击同样算交互；用捕获阶段，避免被内部 stopPropagation 吃掉 */
-    roomEl.addEventListener('click', markRoomEngaged, true);
   }
 
   function buildToolbarHtml(isGroup) {
@@ -946,8 +904,6 @@
     sc.addEventListener('scroll', function () {
       if (!state.chatId) return;
       if (sc.id !== 'qq-room-scroll') return;
-      /* 用户在房间里滚过 = 明确在场，守卫从此不再关这个房间 */
-      markRoomEngaged();
       var m = scrollMetrics(sc);
       if (m) {
         if (m.nearBottom) userPinnedBottom = true;
@@ -5840,12 +5796,6 @@
     ensureRoomRoot();
     purgeDetachedChatPanes();
     resetRoomViewportLayout(false);
-    /*
-     * 记下本次进房时刻，并清空上一次的「用户在场」标记。
-     * 续开同一个会话时不清 —— 用户本来就在里面，不该被当成新进房重新计时。
-     */
-    roomOpenedAt = Date.now();
-    if (!wasOpenSameChat) userEngagedRoom = false;
     if (state.chatId && String(state.chatId) !== String(chatId)) {
       parkActiveChatPane();
     }
@@ -6003,72 +5953,25 @@
   /**
    * 进房守卫：把「不是用户主动进房」的会话拦回列表。
    *
-   * 目标场景只有一个：点桌面聊天图标后，被自动路径偷偷带进某个角色会话。
+   * 授权窗口由 openChatById 打开（见 markUserRoomEntry），
+   * 窗口内进房一律放行；窗口外若房间却被打开了，就说明是自动路径
+   * 偷偷进房，直接关掉 —— 避免「点桌面聊天图标 → 直接跳进某个角色会话」。
    *
-   * 关键认识：这个问题**不可能用超时来判断**。
-   * 一个真实用户完全可能进房后一动不动地看几分钟（手机放桌上、正在读长文），
-   * 而幽灵进房也可能发生在进房后的任意时刻。任何「等 N 秒就认为不是用户点的」
-   * 都会误杀前者 —— 早期版本正是如此：授权窗口只有 4 秒，用户停留超过 4 秒
-   * 就被踢回列表，停留越久越必然触发。
-   *
-   * 正确的判据是**状态转移**，不是时间：
-   *   - 只有「房间从关到开」的那一次跳变，才是需要审核的事件；
-   *   - 审核一次就收工。之后无论用户待多久、动不动，都不再重审。
-   * 这样「用户静静看聊天」和「幽灵进房」在时序上就分开了：
-   * 前者只会在用户点击时发生一次跳变且已获授权；后者会在无人点击时跳变。
-   *
-   * 判据（在跳变那一刻）：
-   *   1. 在授权窗口内 → 用户点出来的，放行。
-   *   2. 用户已在房间里表过态（滚动 / 输入 / 点击）→ 放行。
-   *   3. 用户已切到别的 tab → 不干预。
-   *   4. 否则认定为幽灵进房 → 关掉一次。
-   *
-   * 关掉之后本模块会把这次跳变标记为「已处置」，重复轮询不会反复关，
-   * 也不会因为用户重新点开而被旧状态影响。
+   * 用时间窗而不是布尔标志，是为了不和 open() 的异步 settle 抢时序。
+   * 另外只在「用户停在消息列表」时才拦：如果用户已经通过通知直达进房、
+   * 或主动切到了别的 tab，就不该干预。
    */
   function guardAutoRoomOpen() {
-    if (!state.chatId) {
-      /* 房间已关：本次跳变结束，允许下一次进房重新审核 */
-      guardReviewedRoomKey = '';
-      return;
-    }
-    /*
-     * 状态转移判据：同一个房间只审一次。
-     * 这是修掉「停留几秒被踢」的核心 —— 审过一次就不再动它，
-     * 用户待多久都不会被二次判定。
-     */
-    var roomKey = String(state.chatId) + '@' + String(roomOpenedAt || 0);
-    if (guardReviewedRoomKey === roomKey) return;
-    guardReviewedRoomKey = roomKey;
-
-    /* 1. 授权窗口内：用户点出来的 */
+    if (!state.chatId) return;
     if (Date.now() < userRoomEntryUntil) return;
-    /* 2. 用户已在房间里表过态 */
-    if (userEngagedRoom) return;
-    /* 3. 用户不在列表页（通知直达 / 切到了联系人、动态） */
+    /* 用户不在列表页（例如通知直达后停在房间、或切到了联系人/动态），不干预 */
     var app = $('miya-chat-app');
     if (app) {
       var activePage = app.querySelector('.qq-page.is-active');
       var tab = activePage ? activePage.getAttribute('data-qq-tab') : '';
       if (tab && tab !== 'msg') return;
     }
-    /* 4. 幽灵进房：无人点击、无交互、却停在列表 —— 关掉，回到列表页 */
     close();
-  }
-
-  /**
-   * 房间确已稳定打开后，由列表页值守调用一次即可收工。
-   *
-   * 这里不关任何东西，只做「确认」：
-   * 用户在房间里 → 后续不再需要值守。真正的关房判定仍然只在
-   * guardAutoRoomOpen() 里，且必须满足「用户零交互」。
-   * 拆成独立函数是为了让调用方语义清晰，也方便日后单独加判据。
-   */
-  function guardSettleRoomEntry() {
-    if (!state.chatId) return;
-    /* 房间开着本身就是「已稳定」的证据，把进房时刻按当下刷新，
-       让宽限期从「确认存在」这一刻重新计算，避免慢启动被误杀。 */
-    roomOpenedAt = Date.now();
   }
 
   function close() {
@@ -6081,11 +5984,6 @@
     showRoomLoading(false);
     parkActiveChatPane();
     roomPinBottomUntil = 0;
-    /* 关房即清场：下一次进房重新计时，用户在场标记也归零 */
-    roomOpenedAt = 0;
-    userEngagedRoom = false;
-    /* 关房即清掉已审标识：下一次进房是新事件，要重新审核 */
-    guardReviewedRoomKey = '';
     cancelStaggerReveal();
     closeMsgMenu();
     exitMultiSelectMode();
@@ -6201,8 +6099,6 @@
     getOpenChatId: getOpenChatId,
     markUserRoomEntry: markUserRoomEntry,
     guardAutoRoomOpen: guardAutoRoomOpen,
-    guardSettleRoomEntry: guardSettleRoomEntry,
-    markRoomEngaged: markRoomEngaged,
     toast: toast,
     requestAiReply: requestAiReply,
     handleSend: handleSend,

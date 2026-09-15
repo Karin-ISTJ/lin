@@ -1052,15 +1052,6 @@
      * 系统主提示：角色资料、世界书、记忆/感知与线上格式等基础上下文。
      * ST 预设会在 buildApiMessages 中作为最前面的规则层注入。
      */
-    /* buildSystemPrompt 最近一次的分段结果（由调用方在拼接后取走挂到 message 上） */
-    var lastSystemSections = null;
-
-    function takeLastSystemSections() {
-        var s = lastSystemSections;
-        lastSystemSections = null;
-        return s;
-    }
-
     function buildSystemPrompt(input) {
         var cfg = input && typeof input === 'object' ? input : {};
         var contact = cfg.contact;
@@ -1069,63 +1060,45 @@
         var history = cfg.history || [];
         var contextText = String(cfg.contextText || '').trim();
         var parts = [];
-        /* 同步记录每个 section 的名称与字数，供「Token 来源分布」把主系统提示拆开看。
-           主系统提示原本是一整块拼出来的，不记这个就只能看到「系统主提示」一个总数。 */
-        var sections = [];
         var aw = global.MiyaChatAwareness;
 
-        function push(label, text) {
-            if (!text) return;
-            var s = String(text);
-            parts.push(s);
-            sections.push({ name: label, chars: s.length });
-        }
-
         appendLayerList(parts, cfg.worldbookFrontLayers);
-        if (cfg.worldbookFrontLayers && cfg.worldbookFrontLayers.length) {
-            sections.push({ name: '世界书 · 前置层', chars: sumLayerChars(cfg.worldbookFrontLayers) });
-        }
 
         var globalP = getGlobalPrompt();
-        if (globalP) push('全局提示词', '【全局提示词】\n' + globalP);
+        if (globalP) parts.push('【全局提示词】\n' + globalP);
 
-        push('对话模式', buildChatModeBlock(contact, profile));
+        parts.push(buildChatModeBlock(contact, profile));
 
         var userBlock = renderProfileBlock(profile);
-        push('我的档案', userBlock);
+        if (userBlock) parts.push(userBlock);
 
         var avatarBlock = buildAvatarRecognitionBlock(chatSettings, contact, profile);
-        push('头像识别', avatarBlock);
+        if (avatarBlock) parts.push(avatarBlock);
         appendDynamicAvatarContextBlock(parts, chatSettings, contact, profile);
         appendAlbumContextBlock(parts, profile, contact, chatSettings);
 
         if (aw) {
             var relLine = aw.buildRelationshipLine(chatSettings, contact);
-            push('关系描述', relLine);
+            if (relLine) parts.push(relLine);
             var netBlock = aw.buildChronicleRelationshipBlock(contact);
-            push('角色关系网', netBlock);
+            if (netBlock) parts.push(netBlock);
         }
 
         buildAwarenessBlocks(chatSettings, contact, profile, history).forEach(function (b) {
-            push('认知层', b);
+            parts.push(b);
         });
 
         var wbLayers = Array.isArray(cfg.worldbookLayers)
             ? cfg.worldbookLayers
             : buildWorldbookLayers(contact, contextText);
         appendLayerList(parts, wbLayers);
-        if (wbLayers && wbLayers.length) {
-            sections.push({ name: '世界书 · 命中层', chars: sumLayerChars(wbLayers) });
-        }
 
         var capBlock = buildPromptCapabilitiesBlock(chatSettings);
-        push('能力开关', capBlock);
+        if (capBlock) parts.push(capBlock);
 
-        push('线上运转规则', buildOnlineRulesBundle(contact, chatSettings));
+        parts.push(buildOnlineRulesBundle(contact, chatSettings));
 
-        var joined = parts.filter(Boolean).join('\n\n');
-        lastSystemSections = sections;
-        return joined;
+        return parts.filter(Boolean).join('\n\n');
     }
 
   /**
@@ -1302,9 +1275,6 @@
                 out.push({
                     role: role,
                     content: body,
-                    /* name 是预设条目的显示名（如「角色设定」），「Token 来源分布」靠它
-                       才能告诉用户「占比最大的 ST 条目到底是哪一条」。原来没带，补上。 */
-                    name: String(entry.name || '').trim(),
                     position: entryPosition,
                     injection_position: entryPosition === 'back' ? 1 : 0,
                     injection_depth: Number.isFinite(Number(entry.injection_depth)) ? Math.max(0, Number(entry.injection_depth)) : 4,
@@ -1331,63 +1301,13 @@
      * Depth 0 = immediately after the latest history message; depth 4 = four
      * history messages from the end, matching ST's in-chat concept.
      */
-    /*
-     * ST 预设条目的来源标记。
-     *
-     * 背景：buildStPresetMessages 里每条都带着 name / identifier / position / depth，
-     * 但注入 apiMessages 时只留了 {role, content}，条目名被丢掉了 —— 结果「Token 来源分布」
-     * 只能笼统地说「ST 预设」，看不出到底是哪一条占了上下文。
-     *
-     * 这里把来源信息挂在 message 的非标准字段 __src 上，一路带到 buildPromptSourceBreakdown。
-     * __src 是纯本地字段，发 API 前由 stripInternalFields 剥离，不会进入 request body。
-     */
-    var INTERNAL_MSG_FIELDS = ['__src', '__genSection'];
-
-    function stTaggedMessage(m) {
-        var name = String((m && m.name) || '').trim();
-        var ident = String((m && m.identifier) || '').trim();
-        var pos = m && m.position === 'back' ? 'back' : 'front';
-        var depth = Number.isFinite(Number(m && m.injection_depth)) ? Number(m.injection_depth) : null;
-        return {
-            role: m && (m.role === 'user' || m.role === 'assistant') ? m.role : 'system',
-            content: (m && m.content) || '',
-            __src: {
-                key: 'st_preset',
-                label: PROMPT_SOURCE_LABELS.st_preset || 'ST 预设',
-                name: name || ident || '未命名条目',
-                identifier: ident,
-                position: pos,
-                depth: depth
-            }
-        };
-    }
-
-    /** 剥离本地私有字段，确保发往 API 的 body 保持标准三字段 */
-    function stripInternalFields(messages) {
-        if (!Array.isArray(messages)) return messages;
-        return messages.map(function (m) {
-            if (!m || typeof m !== 'object') return m;
-            var hasInternal = false;
-            var i;
-            for (i = 0; i < INTERNAL_MSG_FIELDS.length; i++) {
-                if (m[INTERNAL_MSG_FIELDS[i]] !== undefined) { hasInternal = true; break; }
-            }
-            if (!hasInternal) return m;
-            var out = {};
-            Object.keys(m).forEach(function (k) {
-                if (INTERNAL_MSG_FIELDS.indexOf(k) < 0) out[k] = m[k];
-            });
-            return out;
-        });
-    }
-
     function injectStInChatMessages(apiMessages, historyStart, stEntries) {
         if (!Array.isArray(apiMessages) || !Array.isArray(stEntries) || !stEntries.length) return;
         var historyEnd = apiMessages.length;
         var historyLength = Math.max(0, historyEnd - historyStart);
         if (!historyLength) {
             stEntries.forEach(function (m) {
-                apiMessages.push(stTaggedMessage(m));
+                apiMessages.push({ role: m.role, content: m.content });
             });
             return;
         }
@@ -1409,7 +1329,7 @@
             });
             var idx = Math.max(historyStart, historyEnd - Math.min(depth, historyLength));
             var msgs = group.map(function (m) {
-                return stTaggedMessage(m);
+                return { role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system', content: m.content };
             });
             apiMessages.splice(idx, 0, ...msgs);
             historyEnd += msgs.length;
@@ -1943,7 +1863,6 @@
     var PROMPT_SOURCE_LABELS = {
         system_lead: '前置系统指令',
         system_main: '系统主提示（人设/档案/规则）',
-        st_preset: 'ST 预设',
         worldbook: '世界书（嵌入系统提示）',
         summary: '对话总结记忆',
         char_memory: '角色长期记忆',
@@ -1998,34 +1917,12 @@
                 tokens: estimateTokensFromText(text),
                 preview: text.slice(0, 160)
             };
-            /* 主系统提示带 __genSection（内部各段），无论走标记还是关键词分支都要带上，
-               否则「系统主提示」这一组在面板里展不开具体构成。 */
-            if (msg && Array.isArray(msg.__genSection) && msg.__genSection.length) {
-                out.genSection = msg.__genSection;
-            }
             if (extra && typeof extra === 'object') {
                 Object.keys(extra).forEach(function (k) {
                     out[k] = extra[k];
                 });
             }
             return out;
-        }
-        /* 优先用构建期打上的标记：比关键词猜测准，且能带上 ST 条目名。
-           __src 由 injectStInChatMessages / 主系统提示拼接处写入。 */
-        if (msg && msg.__src && msg.__src.key) {
-            var src = msg.__src;
-            var tagged = row(src.key, {
-                name: src.name || '',
-                identifier: src.identifier || '',
-                position: src.position || '',
-                depth: src.depth == null ? null : src.depth
-            });
-            tagged.label = src.label || PROMPT_SOURCE_LABELS[src.key] || src.key;
-            if (msg.__genSection && msg.__genSection.length) {
-                tagged.genSection = msg.__genSection;
-                tagged.isMainSystem = true;
-            }
-            return tagged;
         }
         if (role === 'user') {
             if (/^（请从新的一轮继续|^（请主动发一条|^（通话中：/.test(text)) {
@@ -2108,15 +2005,12 @@
             if (src.isMainSystem && wbChars > 0 && src.chars > wbChars) {
                 var mainChars = src.chars - wbChars;
                 var wbTokens = estimateTokensFromCharCount(wbChars);
-                /* 拆出世界书那部分后，剩下的主系统正文仍要带上分段信息，
-                   否则「系统主提示」在面板里就永远展不开内部构成。 */
                 rawItems.push({
                     key: 'system_main',
                     label: PROMPT_SOURCE_LABELS.system_main,
                     chars: mainChars,
                     tokens: estimateTokensFromCharCount(mainChars),
-                    preview: src.preview,
-                    genSection: src.genSection || null
+                    preview: src.preview
                 });
                 rawItems.push({
                     key: 'worldbook',
@@ -2168,45 +2062,6 @@
             g.tokens += Number(item.tokens) || 0;
             g.count += 1;
             g.items.push(item);
-        });
-
-        /*
-         * 子项聚合：让「ST 预设」不再是一个笼统的总数，而是能点开看到
-         * 具体哪一条（条目名）占了多少。主系统提示则拆成内部各段。
-         * 同名条目会合并累加（ST 预设允许重名副本）。
-         */
-        Object.keys(groupedMap).forEach(function (k) {
-            var g = groupedMap[k];
-            var subMap = Object.create(null);
-            var order = [];
-            g.items.forEach(function (item) {
-                var subs = [];
-                if (Array.isArray(item.genSection) && item.genSection.length) {
-                    item.genSection.forEach(function (sec) {
-                        subs.push({ name: String(sec.name || '未命名段'), chars: Number(sec.chars) || 0 });
-                    });
-                } else if (item.name) {
-                    subs.push({ name: String(item.name), chars: Number(item.chars) || 0 });
-                }
-                subs.forEach(function (s) {
-                    var subKey = s.name;
-                    if (!subMap[subKey]) {
-                        subMap[subKey] = { name: s.name, chars: 0, tokens: 0, count: 0 };
-                        order.push(subKey);
-                    }
-                    subMap[subKey].chars += s.chars;
-                    subMap[subKey].tokens += estimateTokensFromCharCount(s.chars);
-                    subMap[subKey].count += 1;
-                });
-            });
-            var subItems = order
-                .map(function (n) { return subMap[n]; })
-                .sort(function (a, b) { return (b.chars || 0) - (a.chars || 0); });
-            /* 只有一项且与组名重复时不必展示子项；字数全为 0 的也没意义 */
-            var totalSub = subItems.reduce(function (n, s) { return n + s.chars; }, 0);
-            g.subItems = (subItems.length > 1 || (subItems[0] && subItems[0].name !== g.label)) && totalSub > 0
-                ? subItems
-                : [];
         });
 
         var grouped = Object.keys(groupedMap)
@@ -2724,8 +2579,6 @@
                   worldbookFrontLayers: wbBundle.frontLayers,
                   worldbookLayers: wbBundle.layers
               });
-        /* 主系统提示的分段明细：仅非通话路径有，通话走独立构造函数不记分段 */
-        var systemSections = opts.callMode ? null : takeLastSystemSections();
 
         if (wbBundle.meta) {
             var systemLayers = []
@@ -2785,19 +2638,7 @@
             }
         }
 
-        /* front 预设逐条打来源标记（原来直接 concat 原始对象，条目名丢了）；
-           主系统提示单独挂 __genSection + __src，让分类不依赖消息位置，
-           这样即使 front 预设把主系统挤到第二个位置也能认出来。 */
-        var frontTagged = stPresetFrontMessages.map(function (m) { return stTaggedMessage(m); });
-        var mainSystemMsg = {
-            role: 'system',
-            content: systemContent,
-            __src: { key: 'system_main', label: PROMPT_SOURCE_LABELS.system_main, name: '' }
-        };
-        if (systemSections && systemSections.length) {
-            mainSystemMsg.__genSection = systemSections;
-        }
-        var apiMessages = frontTagged.concat([mainSystemMsg]);
+        var apiMessages = stPresetFrontMessages.concat([{ role: 'system', content: systemContent }]);
         var awInject = global.MiyaChatAwareness;
         var summaryBlock =
             awInject && typeof awInject.buildSummaryContextBlock === 'function'
@@ -4079,12 +3920,9 @@
                     Authorization: 'Bearer ' + slice.apiKey
                 };
                 var stGen = getStGenerationSettings();
-                /* built.messages 上挂着 __src / __genSection 等本地来源标记，
-                   是纯前端用于「Token 来源分布」的，绝不能进 request body —— 这里剥掉。 */
-                var apiSafeMessages = stripInternalFields(built.messages);
                 var reqPayload = {
                     model: slice.model,
-                    messages: apiSafeMessages,
+                    messages: built.messages,
                     temperature: stGen.temperature != null ? Number(stGen.temperature) : slice.temperature
                 };
                 if (stGen.maxTokens != null && Number(stGen.maxTokens) > 0) reqPayload.max_tokens = Math.floor(Number(stGen.maxTokens));
@@ -4096,9 +3934,23 @@
                    所以这里恒为 false。ST 预设里的「流式」开关只影响文案展示，
                    不再对外宣称可切换——详见 miya-st-prompt-presets-app.js 的摘要文案。 */
                 reqPayload.stream = false;
+                /* 缓存探针：记录本轮前缀，与上一轮比对，判断提示缓存能否命中。
+                   纯观测，不改请求内容；失败静默。 */
+                try {
+                    if (global.miyaCacheProbe && global.miyaCacheProbe.trackRequest) {
+                        global.miyaCacheProbe.trackRequest(slice, reqPayload.messages);
+                    }
+                } catch (eCache) {}
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1, genSignal).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
                     completion._usedSecondaryApi = !!usedSecondary;
+                    /* 响应里的缓存用量（服务商有返回才记录） */
+                    try {
+                        if (global.miyaCacheProbe && global.miyaCacheProbe.parseCacheUsage) {
+                            var cu = global.miyaCacheProbe.parseCacheUsage(completion.data);
+                            if (cu && global.miyaCacheProbe.attachUsage) global.miyaCacheProbe.attachUsage(cu);
+                        }
+                    } catch (eUsage) {}
                     return completion;
                 });
             }
@@ -4750,21 +4602,6 @@
                     activeHeartVoiceMsgId: isGroupReply ? '' : (lastMsgId || firstMsgId || '')
                 };
                 chatPatch.lastTokenUsage = localUsage;
-                /* 记录「这一次真实发送」的来源分布快照。
-                   buildPromptSourceBreakdown 传入的是 built.messages（真正发往 API 的数组）
-                   与 built.worldbookMeta（本轮世界书命中信息），因此结果就是本轮实际分布，
-                   而非下一次请求的预估。聊天设置里的「Token 来源分布」优先读这份快照。 */
-                chatPatch.lastPromptBreakdown = (function () {
-                    try {
-                        var bd = buildPromptSourceBreakdown(built.messages, built.worldbookMeta);
-                        if (!bd) return null;
-                        bd.replyMsgId = lastMsgId || firstMsgId || '';
-                        bd.isGroupReply = isGroupReply;
-                        return bd;
-                    } catch (eBd) {
-                        return null;
-                    }
-                })();
                 if (!isGroupReply && hvParsed.extractedOk && hvParsed.extracted && lastMsgId) {
                     var hvEntry = {
                         id: 'hv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),

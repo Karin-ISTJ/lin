@@ -1169,17 +1169,14 @@
   border: 1px solid var(--mi-line);
 }
 .mi-ctx-src-row {
-  display: block;
-  padding: 7px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-.mi-ctx-src-row:last-child { border-bottom: none; }
-.mi-ctx-src-row__top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
+.mi-ctx-src-row:last-child { border-bottom: none; }
 .mi-ctx-src-row__label {
   flex: 1;
   min-width: 0;
@@ -1207,114 +1204,6 @@
   font-size: 10px;
   font-weight: 500;
   color: var(--mi-sub);
-}
-/* 占比：排在最前，用主色强调，一眼看出谁占大头 */
-.mi-ctx-src-row__pct {
-  display: block;
-  margin-bottom: 1px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--st-accent, #b08d57);
-  font-variant-numeric: tabular-nums;
-}
-/* 横向占比条：底槽 + 按宽度伸缩的填充 */
-.mi-ctx-src-row__bar {
-  margin-top: 5px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-.mi-ctx-src-row__bar > i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--st-accent, #b08d57) 62%, #fff),
-    var(--st-accent, #b08d57));
-  transition: width 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-/* 无占比数据时（例如上一轮消耗前的占位行）不画条 */
-.mi-ctx-src-row--plain { padding: 6px 0; }
-
-/* ── 具体条目子项（点箭头才展开） ─────────────────────────────
-   用途：让「ST 预设」「系统主提示」这类分组能点开看内部构成，
-   回答「占比最大的到底是哪一条」。子进度条以父项字数为分母。 */
-.mi-ctx-src-row--foldable .mi-ctx-src-row__top { align-items: center; }
-.mi-ctx-src-row__caret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-left: 5px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.42);
-  cursor: pointer;
-  vertical-align: middle;
-  transition: transform 0.22s ease, background 0.18s ease, color 0.18s ease;
-}
-.mi-ctx-src-row__caret:hover { background: rgba(0, 0, 0, 0.1); color: rgba(0, 0, 0, 0.66); }
-.mi-ctx-src-row.is-open > .mi-ctx-src-row__top .mi-ctx-src-row__caret {
-  transform: rotate(90deg);
-  color: var(--st-accent, #b08d57);
-}
-.mi-ctx-src-kids {
-  margin: 7px 0 3px 9px;
-  padding: 3px 0 3px 10px;
-  border-left: 2px solid color-mix(in srgb, var(--st-accent, #b08d57) 26%, transparent);
-}
-.mi-ctx-src-kids[hidden] { display: none; }
-.mi-ctx-src-kid {
-  display: grid;
-  grid-template-columns: 34px 1fr auto;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 0;
-}
-/* 迷你条：只占 34px 宽，用长度表达组内相对大小 */
-.mi-ctx-src-kid__bar {
-  display: block;
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-.mi-ctx-src-kid__bar > i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--st-accent, #b08d57) 72%, #fff);
-}
-.mi-ctx-src-kid__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.72);
-}
-.mi-ctx-src-kid__name > em {
-  margin-left: 4px;
-  font-style: normal;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.34);
-}
-.mi-ctx-src-kid__val {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.42);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.mi-ctx-src-kid__val > i {
-  margin-left: 5px;
-  font-style: normal;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--st-accent, #b08d57) 78%, #000 10%);
 }
 .mi-ctx-detail-pop {
   display: none;

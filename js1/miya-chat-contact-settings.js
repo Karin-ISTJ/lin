@@ -10,8 +10,6 @@
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
-  /* 「Token 来源分布」里已展开具体条目的来源 key，重绘后按此恢复展开态 */
-  var ctxOpenSrcRows = Object.create(null);
 
   var LANG_OPTS = [
     { v: 'auto', label: '自动' },
@@ -741,85 +739,6 @@
     if (!eng || typeof eng.buildApiMessages !== 'function') {
       return { error: 'engine_missing' };
     }
-    var chatRow = store && store.findChat ? store.findChat(chatId) : null;
-    /* 优先显示「刚生成那一次」的真实分布快照（引擎在生成完成时写入 chat.lastPromptBreakdown）。
-       只有在还没有任何生成记录时，才回落到实时预估（下一条会发什么）。 */
-    var snapshot = chatRow && chatRow.lastPromptBreakdown ? chatRow.lastPromptBreakdown : null;
-    if (snapshot && Array.isArray(snapshot.grouped) && snapshot.grouped.length) {
-      return collectContextUsageFromSnapshot(snapshot, chatRow, eng);
-    }
-    return collectContextUsageLive(chatId, chatRow, eng);
-  }
-
-  /** 由引擎写入的「本轮真实发送」快照构造面板数据 */
-  function collectContextUsageFromSnapshot(snapshot, chatRow, eng) {
-    var grouped = snapshot.grouped.map(function (g) {
-      return {
-        key: g.key,
-        label: g.label || g.key,
-        chars: Number(g.chars) || 0,
-        tokens: Number(g.tokens) || 0,
-        count: Number(g.count) || 0,
-        subItems: Array.isArray(g.subItems) ? g.subItems : []
-      };
-    });
-    var totalChars = Number(snapshot.promptChars) || 0;
-    if (!totalChars) {
-      grouped.forEach(function (g) { totalChars += g.chars || 0; });
-    }
-    var totalTokens = Number(snapshot.promptTokens) || 0;
-    if (!totalTokens) {
-      grouped.forEach(function (g) { totalTokens += g.tokens || 0; });
-    }
-    var wbRow = null;
-    var i;
-    for (i = 0; i < grouped.length; i++) {
-      if (grouped[i].key === 'worldbook') { wbRow = grouped[i]; break; }
-    }
-    var usage = chatRow && chatRow.lastTokenUsage ? chatRow.lastTokenUsage : null;
-    var activeThinking = chatRow && chatRow.activeThinking ? String(chatRow.activeThinking).trim() : '';
-    var thinkingChars = activeThinking.length;
-    var thinkingTokens =
-      eng && typeof eng.estimateTokensFromText === 'function'
-        ? eng.estimateTokensFromText(activeThinking)
-        : Math.max(0, Math.ceil(thinkingChars / 1.6));
-    var completionChars = usage
-      ? Number(usage.completion_chars != null ? usage.completion_chars : usage.completion_tokens) || 0
-      : 0;
-    var completionTokens =
-      eng && typeof eng.estimateTokensFromCharCount === 'function'
-        ? eng.estimateTokensFromCharCount(completionChars)
-        : Math.max(0, Math.ceil(completionChars / 1.6));
-    return {
-      fromSnapshot: true,
-      snapshotAt: Number(snapshot.updatedAt) || 0,
-      estimatedTokens: totalTokens,
-      totalChars: totalChars,
-      systemChars: 0,
-      historyChars: 0,
-      worldbookChars: wbRow ? wbRow.chars : 0,
-      worldbookCount: Number(snapshot.worldbookMatched) || 0,
-      worldbookInSystem: snapshot.worldbookInSystem !== false,
-      worldbookEmptyMatched: 0,
-      entries: [],
-      totalInStore:
-        global.miyaWorldbookStore && typeof global.miyaWorldbookStore.listEntries === 'function'
-          ? global.miyaWorldbookStore.listEntries().length
-          : 0,
-      roleIds: [],
-      breakdown: { grouped: grouped, sources: [], promptChars: totalChars, promptTokens: totalTokens },
-      summaryInject: null,
-      lastTokenUsage: usage,
-      activeThinking: activeThinking,
-      thinkingChars: thinkingChars,
-      thinkingTokens: thinkingTokens,
-      completionChars: completionChars,
-      completionTokens: completionTokens,
-      messageCount: grouped.reduce(function (n, g) { return n + (g.count || 0); }, 0)
-    };
-  }
-
-  function collectContextUsageLive(chatId, chatRow, eng) {
     var usageSettings = buildContextUsageSettings(chatId);
     var built = eng.buildApiMessages(chatId, '', {
       chatSettings: usageSettings || undefined
@@ -840,8 +759,10 @@
         : null;
     /* 对话总结记忆：只认实际注入的 system 块，禁止分类误伤导致虚高 */
     var summaryMeasured = forceSummaryBreakdownFromMessages(breakdown, built.messages, eng);
-    var lastUsage = chatRow && chatRow.lastTokenUsage ? chatRow.lastTokenUsage : null;
-    var activeThinking = chatRow && chatRow.activeThinking ? String(chatRow.activeThinking).trim() : '';
+      opInjected && opInspect.block.length > opInjected.length + 32;
+    var chat = store && store.findChat ? store.findChat(chatId) : null;
+    var lastUsage = chat && chat.lastTokenUsage ? chat.lastTokenUsage : null;
+    var activeThinking = chat && chat.activeThinking ? String(chat.activeThinking).trim() : '';
     var thinkingChars = activeThinking.length;
     var thinkingTokens =
       eng && typeof eng.estimateTokensFromText === 'function'
@@ -866,8 +787,6 @@
       summaryInject.actualPreview = summaryMeasured.preview;
     }
     return {
-      fromSnapshot: false,
-      snapshotAt: 0,
       estimatedTokens: pm.estimated_prompt_tokens || (breakdown && breakdown.promptTokens) || 0,
       totalChars: pm.total_prompt_chars || (breakdown && breakdown.promptChars) || 0,
       systemChars: pm.system_chars || 0,
@@ -915,76 +834,17 @@
     return '无法计算上下文用量';
   }
 
-  /* 来源分布行：左侧来源名 + 右侧数值，底部一条按占比伸缩的条形。
-     totalChars 用于换算百分比；为 0 时条形退化为空，不会出现 NaN 宽度。 */
-  /** 快照时间：今天只显示时分，跨天带日期 */
-  function formatCtxTime(ts) {
-    var t = Number(ts) || 0;
-    if (t <= 0) return '';
-    var d = new Date(t);
-    if (isNaN(d.getTime())) return '';
-    var now = new Date();
-    var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
-      return '今天 ' + hm;
-    }
-    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
-  }
-
-  function renderContextSourceRow(label, chars, tokens, sub, pct, subItems, rowKey) {
-    var hasPct = typeof pct === 'number' && isFinite(pct) && pct > 0;
-    var barPct = hasPct ? Math.max(pct, 1.2) : 0;   /* 极小占比也留一丝可见宽度 */
-    var kids = Array.isArray(subItems) ? subItems : [];
-    var hasKids = kids.length > 0;
-    var kidsId = 'mi-ctx-src-kids-' + (ctxSrcKidSeq++);
-    var keyAttr = rowKey ? esc(rowKey) : '';
-    var isOpen = !!(rowKey && ctxOpenSrcRows[rowKey]);
-    /* 子项占比按「父项字数」为分母：这样点开看到的是这一组内部的构成 */
-    var kidTotal = kids.reduce(function (n, k) { return n + (Number(k.chars) || 0); }, 0);
-    var kidRows = hasKids
-      ? '<div class="mi-ctx-src-kids" id="' + kidsId + '"' + (isOpen ? '' : ' hidden') + '>' +
-          kids.map(function (k) {
-            var kPct = kidTotal > 0 ? (Number(k.chars) || 0) / kidTotal * 100 : 0;
-            return '<div class="mi-ctx-src-kid">' +
-              '<span class="mi-ctx-src-kid__bar"><i style="width:' + Math.max(kPct, 0.6).toFixed(2) + '%"></i></span>' +
-              '<span class="mi-ctx-src-kid__name">' + esc(k.name || '未命名') +
-                ((Number(k.count) || 1) > 1 ? '<em>×' + k.count + '</em>' : '') +
-              '</span>' +
-              '<span class="mi-ctx-src-kid__val">' + esc(formatNum(k.chars)) + ' 字' +
-                '<i>' + kPct.toFixed(1) + '%</i>' +
-              '</span>' +
-            '</div>';
-          }).join('') +
-        '</div>'
-      : '';
-    var caret = hasKids
-      ? '<button type="button" class="mi-ctx-src-row__caret" data-mq-set-ctx-kids="' + kidsId + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '" aria-label="展开具体条目">' +
-          '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        '</button>'
-      : '';
-    return '<div class="mi-ctx-src-row' + (hasPct ? '' : ' mi-ctx-src-row--plain') +
-        (hasKids ? ' mi-ctx-src-row--foldable' : '') + (isOpen ? ' is-open' : '') + '"' +
-        (keyAttr ? ' data-mq-set-ctx-row="' + keyAttr + '"' : '') + '>' +
-      '<div class="mi-ctx-src-row__top">' +
-        '<span class="mi-ctx-src-row__label">' + esc(label) +
-          (sub ? '<span class="mi-ctx-src-row__sub">' + esc(sub) + '</span>' : '') +
-        '</span>' +
-        '<span class="mi-ctx-src-row__val">' +
-          (hasPct ? '<span class="mi-ctx-src-row__pct">' + pct.toFixed(1) + '%</span>' : '') +
-          esc(formatNum(chars)) + ' 字' +
-          '<span class="mi-ctx-src-row__tok">≈ ' + esc(formatNum(tokens)) + ' tok</span>' +
-          caret +
-        '</span>' +
-      '</div>' +
-      (hasPct
-        ? '<div class="mi-ctx-src-row__bar"><i style="width:' + barPct.toFixed(2) + '%"></i></div>'
-        : '') +
-      kidRows +
+  function renderContextSourceRow(label, chars, tokens, sub) {
+    return '<div class="mi-ctx-src-row">' +
+      '<span class="mi-ctx-src-row__label">' + esc(label) +
+        (sub ? '<span class="mi-ctx-src-row__sub">' + esc(sub) + '</span>' : '') +
+      '</span>' +
+      '<span class="mi-ctx-src-row__val">' +
+        esc(formatNum(chars)) + ' 字' +
+        '<span class="mi-ctx-src-row__tok">≈ ' + esc(formatNum(tokens)) + ' tok</span>' +
+      '</span>' +
     '</div>';
   }
-
-  /* 子项折叠容器的 id 序号，保证同一面板内唯一 */
-  var ctxSrcKidSeq = 1;
 
   function renderWorldbookEntryList(entries) {
     if (!entries || !entries.length) {
@@ -1005,7 +865,6 @@
     var grouped = snapshot.breakdown && Array.isArray(snapshot.breakdown.grouped)
       ? snapshot.breakdown.grouped
       : [];
-    var totalForPct = Number(snapshot.totalChars) || 0;
     var promptRows = grouped.map(function (g) {
       var sub = g.count > 1 ? '×' + g.count : '';
       if (g.key === 'summary' && snapshot.summaryInject) {
@@ -1022,28 +881,23 @@
           (si.shotInjected || 0) +
           (si.shotSkipped ? '（跳过已并入 ' + si.shotSkipped + '）' : '');
       }
-      var pct = totalForPct > 0 ? (Number(g.chars) || 0) / totalForPct * 100 : 0;
-      return renderContextSourceRow(g.label, g.chars, g.tokens, sub, pct, g.subItems, g.key);
+      return renderContextSourceRow(g.label, g.chars, g.tokens, sub);
     }).join('');
 
     var roundRows = '';
-    var roundTotal = (Number(snapshot.completionChars) || 0) + (Number(snapshot.thinkingChars) || 0);
     if (snapshot.completionChars > 0) {
       roundRows += renderContextSourceRow(
         '上轮模型完整回复（API 返回原文）',
         snapshot.completionChars,
         snapshot.completionTokens,
-        '含思维链/正文/心声标签',
-        roundTotal > 0 ? snapshot.completionChars / roundTotal * 100 : 0
+        '含思维链/正文/心声标签'
       );
     }
     if (snapshot.thinkingChars > 0) {
       roundRows += renderContextSourceRow(
         '思维链',
         snapshot.thinkingChars,
-        snapshot.thinkingTokens,
-        '',
-        roundTotal > 0 ? snapshot.thinkingChars / roundTotal * 100 : 0
+        snapshot.thinkingTokens
       );
     }
     if (!roundRows) {
@@ -1064,13 +918,8 @@
         '</header>' +
         '<div class="mi-ctx-detail-pop__body">' +
           '<section class="mi-ctx-detail__section">' +
-            '<h4 class="mi-ctx-detail__heading">' + (snapshot.fromSnapshot
-              ? '刚生成那次 · Prompt 注入' +
-                (snapshot.snapshotAt ? '（' + esc(formatCtxTime(snapshot.snapshotAt)) + '）' : '')
-              : '下次请求 · Prompt 注入（' + esc(formatNum(snapshot.messageCount || 0)) + ' 条 message）') + '</h4>' +
-            '<p class="mi-ctx-detail__hint">' + (snapshot.fromSnapshot
-              ? '这是上一条消息真实发往 API 时的上下文构成快照，按来源字符数从多到少排列，条形长度即占比。Token 为本地粗算（中文约 1.6 字/token，与 API 账单可能略有出入）。'
-              : '以下为当前设置下，下一条消息将发往 API 的上下文构成（还没有生成记录，先给预估）。字符数按实际 request body 统计；Token 为本地粗算（中文约 1.6 字/token，与 API 账单可能略有出入）。') + '</p>' +
+            '<h4 class="mi-ctx-detail__heading">下次请求 · Prompt 注入（' + esc(formatNum(snapshot.messageCount || 0)) + ' 条 message）</h4>' +
+            '<p class="mi-ctx-detail__hint">以下为当前设置下，下一条消息将发往 API 的上下文构成。字符数按实际 request body 统计；Token 为本地粗算（中文约 1.6 字/token，与 API 账单可能略有出入）。「对话总结记忆」只统计以【长期记忆·对话总结】开头的系统块：已并入合卷的分镜不应再出现。</p>' +
               (snapshot.summaryInject
               ? '<p class="mi-ctx-inject' +
                 ((snapshot.summaryInject.actualInjectedChars || snapshot.summaryInject.contentChars || 0) > 5000
@@ -1101,10 +950,7 @@
           '<section class="mi-ctx-detail__section">' +
             '<h4 class="mi-ctx-detail__heading">世界书命中条目</h4>' +
             wbNote +
-            (snapshot.fromSnapshot
-              ? '<p class="mi-empty-hint mi-empty-hint--inline">快照模式只记录命中数量（' +
-                esc(formatNum(snapshot.worldbookCount)) + ' 条），条目清单请以世界书页为准</p>'
-              : renderWorldbookEntryList(snapshot.entries)) +
+            renderWorldbookEntryList(snapshot.entries) +
           '</section>' +
           '<section class="mi-ctx-detail__section">' +
             '<h4 class="mi-ctx-detail__heading">上一轮 · 模型回复消耗</h4>' +
@@ -1123,16 +969,13 @@
     var injectNote = snapshot.worldbookCount > 0
       ? '世界书命中 ' + formatNum(snapshot.worldbookCount) + ' 条'
       : '世界书未命中';
-    var timeNote = snapshot.fromSnapshot && snapshot.snapshotAt
-      ? ' · ' + formatCtxTime(snapshot.snapshotAt)
-      : ' · 预估';
     return '<div class="mi-ctx-panel" data-mq-set-ctx-panel>' +
       '<button type="button" class="mi-ctx-stats mi-ctx-stats--clickable" data-mq-set-ctx-toggle aria-expanded="' + (open ? 'true' : 'false') + '">' +
         '<div class="mi-ctx-stat mi-ctx-stat--main">' +
-          '<span class="mi-ctx-stat__label">' + (snapshot.fromSnapshot ? '上次发送' : 'Prompt 注入') + '</span>' +
+          '<span class="mi-ctx-stat__label">Prompt 注入</span>' +
           '<strong class="mi-ctx-stat__val">' + esc(formatNum(snapshot.totalChars)) + '<span class="mi-ctx-stat__unit"> 字</span></strong>' +
         '</div>' +
-        '<p class="mi-ctx-stat__sub">≈ ' + esc(formatNum(snapshot.estimatedTokens)) + ' token · ' + esc(injectNote) + timeNote + '</p>' +
+        '<p class="mi-ctx-stat__sub">≈ ' + esc(formatNum(snapshot.estimatedTokens)) + ' token · ' + esc(injectNote) + '</p>' +
         '<p class="mi-ctx-stat__note">' + (open ? '再次点击收起明细' : '点击查看 Token 来源分区') + '</p>' +
       '</button>' +
       renderContextUsageDetailPop(snapshot, open) +
@@ -1152,16 +995,19 @@
     var detailOpen = isContextUsageDetailOpen();
     box.innerHTML = '<p class="mi-empty-hint">正在计算…</p>';
     var chatId = state.chatId;
-    /* 依赖就绪后直接计算。原实现在此处引用了从未定义的 opMod（严格模式下抛
-       ReferenceError），再被 catch 吞掉并显示「世界书加载失败，请刷新后重试」——
-       这是本面板长期不可用的真正原因。依赖加载已由 ensureContextUsageDeps 覆盖。 */
     ensureContextUsageDeps().then(function () {
       if (!state.chatId || String(state.chatId) !== String(chatId)) return;
-      var snap = collectContextUsage(chatId);
-      box.innerHTML = renderContextUsageBody(snap, detailOpen);
+      var loadChain = opMod && typeof opMod.ensureLoaded === 'function'
+        ? opMod.ensureLoaded()
+        : Promise.resolve();
+      return loadChain.then(function () {
+        if (!state.chatId || String(state.chatId) !== String(chatId)) return;
+        var snap = collectContextUsage(chatId);
+        box.innerHTML = renderContextUsageBody(snap, detailOpen);
+      });
     }).catch(function () {
       if (!pageEl || String(state.chatId) !== String(chatId)) return;
-      box.innerHTML = '<p class="mi-empty-hint">上下文用量计算失败，请刷新后重试</p>';
+      box.innerHTML = '<p class="mi-empty-hint">世界书加载失败，请刷新后重试</p>';
     });
   }
 
@@ -1268,15 +1114,6 @@
           )
         )) +
         subBlock('主动消息', '由角色自行判断何时联系你', renderLifeLikeSection(s))
-      ) +
-
-      /* Token 来源分布：排在「基础」之后，方便生成完随手查看。
-         优先展示「刚生成那次」真实发往 API 的上下文构成（引擎写的 chat.lastPromptBreakdown 快照），
-         没有生成记录时才回落到「下一条预估」。按来源字符数从多到少排列，条形长度即占比。 */
-      renderZone('ctxsource', 'Token 来源分布', '这次正文的上下文来自哪 · 谁占最多',
-        subBlock('来源占比', '按字符数从多到少排列，条形长度为占比', formCard(
-          '<div class="mi-ctx-usage" data-mq-set-ctx-usage><p class="mi-empty-hint">正在计算…</p></div>'
-        ))
       ) +
 
       renderZone('look', '外观与背景', '壁纸、CSS 主题与预设',
@@ -1402,6 +1239,12 @@
         subBlock('生图', (global.MiyaImageGen && global.MiyaImageGen.isGlobalEnabled && global.MiyaImageGen.isGlobalEnabled())
           ? '角色文字图将调用生图 API'
           : '请先在设置中启用生图 API', renderImageGenBlock(s))
+      ) +
+
+      renderZone('model', '上下文用量', '查看下一次请求的 Token 分区来源',
+        subBlock('上下文用量', '点按卡片查看 Token 分区来源', formCard(
+          '<div class="mi-ctx-usage" data-mq-set-ctx-usage><p class="mi-empty-hint">正在计算…</p></div>'
+        ))
       ) +
 
       renderZone('wallet', '钱包', '角色独立余额 · ' + esc(roleBalFmt),
@@ -2400,27 +2243,6 @@
 
       if (e.target.closest('[data-mq-set-ctx-toggle]')) {
         toggleContextUsageDetail(false);
-        return;
-      }
-
-      /* 展开 / 收起某个来源的具体条目。默认收起，点箭头才看，
-         这样面板不会因为条目多而变得很长。展开状态随后被 render 保留。 */
-      var kidsBtn = e.target.closest('[data-mq-set-ctx-kids]');
-      if (kidsBtn) {
-        var kidsEl = pageEl.querySelector('#' + kidsBtn.getAttribute('data-mq-set-ctx-kids'));
-        if (kidsEl) {
-          var willOpen = kidsEl.hidden;
-          kidsEl.hidden = !willOpen;
-          kidsBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-          var rowEl = kidsBtn.closest('.mi-ctx-src-row');
-          if (rowEl) rowEl.classList.toggle('is-open', willOpen);
-          /* 记下展开的组，重绘后恢复（切换上下文设置会触发重算） */
-          var rowKey = rowEl ? rowEl.getAttribute('data-mq-set-ctx-row') : '';
-          if (rowKey) {
-            if (willOpen) ctxOpenSrcRows[rowKey] = true;
-            else delete ctxOpenSrcRows[rowKey];
-          }
-        }
         return;
       }
     });

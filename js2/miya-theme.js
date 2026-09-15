@@ -8,11 +8,7 @@
   var FONT_PRESETS_KEY = 'miya-font-presets-v1';
   var MAX_FONT_PRESETS = 12;
 
-  /* 只列「桌面上真实存在图标」的 key：本表用于按 [data-app=key] 给图标贴自定义背景图。
-     原含 store（线下）与 pen（模拟器）：两者桌面均无图标，查不到元素，恒为空转；
-     且 pen 对应的模拟器功能已整体移除，故一并剔除。
-     注意：字体目标表 APP_FONT_TARGETS 独立维护，不依赖本数组。 */
-  var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'contacts'];
+  var APP_KEYS = ['memo', 'set', 'book', 'memory', 'chat', 'beauty', 'store', 'contacts', 'pen'];
   var POLAROID_KEYS = ['polaroid_1', 'polaroid_2', 'polaroid_3'];
   var MEDIA_KEYS = APP_KEYS.concat(POLAROID_KEYS).concat([
     'memo_ava_1', 'memo_ava_2',
