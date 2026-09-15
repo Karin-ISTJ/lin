@@ -3,6 +3,17 @@
 
     var USER_MSG_JOIN = '\n\n';
 
+    /*
+     * 两段**独立**用户发言之间的分隔标记。
+     *
+     * 只在「多个不同楼层的 user 因为中间角色回复被删而变成相邻」时才会用到。
+     * 正常的单条 user 完全不经过它，所以对日常请求零影响。
+     *
+     * 用一句明确的说明而非空行：空行只是排版，模型照样会把两段当同一轮读；
+     * 写出「以下是新的发言」才能让它理解这是前后两轮。
+     */
+    var USER_TURN_DIVIDER = '（以下是用户的新一条发言）';
+
     /* 流式空闲超时：多久没收到数据算「卡死」。
        离线是长文生成，不能设请求级总时长（会误杀正常的长回复），
        所以只在「持续无进展」时判定，每收到一块数据就重置。 */
@@ -597,7 +608,45 @@
         var ranges = sessionSummaryRanges(session);
         function flushUser() {
             if (!buf.length) return;
-            apiMessages.push({ role: 'user', content: buf.join(USER_MSG_JOIN) });
+            /*
+             * 只有一条：原样送出，一个字节都不动（最常见的路径）。
+             */
+            if (buf.length === 1) {
+                apiMessages.push({ role: 'user', content: buf[0] });
+                buf = [];
+                return;
+            }
+            /*
+             * ⚠️ 多条 user 被合并时，必须标出「这是两段独立发言」。
+             *
+             * 背景：appendSessionHistory 会把相邻的 user 合成一条 —— 这在
+             * 「用户连着补了两句」时是对的（SillyTavern 也是这个语义），
+             * 但一旦中间夹着的角色回复被**删掉**，两条本来隔着对话的用户
+             * 发言就会变成相邻、继而粘成一条：
+             *
+             *   删前：user:问题A / assistant:回复A / user:问题B
+             *   删掉回复A → user:问题A / user:问题B  → "问题A\n\n问题B"
+             *
+             * 对模型而言，这读起来像**一次发言里说了两件事**，而不是
+             * 「问了A、得到了回答、又问了B」。用户体感就是
+             * 「我明明删了那一楼，生成出来的却还是跟删除前一模一样」——
+             * 因为被删掉的回复所对应的**上下文关系**并没有跟着消失，
+             * 两句提问仍然黏在一起被当成同一轮。
+             *
+             * 怎么判断「是不是两次发言」：一个楼层只会往 buf 里 push 一次
+             * （下面 user 分支一次调用），所以 buf.length > 1 就等价于
+             * 「这些内容来自不同楼层」= 两次独立发言。不需要额外记来源。
+             *
+             * 分隔符用一句极短的说明而不是空行：空行模型不敏感，
+             * 一眼扫过去还是连着的；明确写出「以下是新的发言」它才会
+             * 把两段当成前后两轮来读。
+             */
+            var parts = [];
+            for (var bi = 0; bi < buf.length; bi++) {
+                if (bi > 0) parts.push(USER_TURN_DIVIDER);
+                parts.push(buf[bi]);
+            }
+            apiMessages.push({ role: 'user', content: parts.join('\n') });
             buf = [];
         }
         (messages || []).forEach(function (m, i) {

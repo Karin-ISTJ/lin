@@ -3838,6 +3838,20 @@ function renderWriter() {
     }
 
 
+    /**
+     * 「从这一层开始，往后全删」。
+     *
+     * ⚠️ 目前已无调用者 —— 保留是因为它的语义本身没错，只是**不适合重发**。
+     *
+     * 重发（redoFromMessage）曾经用它，出过两个问题：
+     *   ① 它把被点的那条 user 自己也删了，调用方只好再 addMessage 一遍，
+     *      于是 prompt 里同一条提问出现两次；
+     *   ② 它与 removeMessagesFrom() 职责重叠，容易选错。
+     * 现在重发统一走 removeMessagesFrom(idx + 1)，区间是明确的。
+     *
+     * 如果以后要加「从这里截断对话」这类功能，可以直接用它；
+     * 但凡涉及「重发 / 重答」，请用 removeMessagesFrom()。
+     */
     function deleteFromMessage(msgId) {
         var sess = apStore().getSession(ui.chatId, ui.sessionId);
         if (!sess) return;
@@ -3916,7 +3930,35 @@ function renderWriter() {
         if (msg.role === 'user') {
             var text = msg.content;
             var userSnap = snapshotMessagesFrom(sess, idx);
-            deleteFromMessage(msg.id);
+            /*
+             * ⚠️ 只删「这一层之后」的楼层，**这一层本身要留着**。
+             *
+             * 原来调的是 deleteFromMessage(msg.id)，它从 idx 开始删 ——
+             * 把被点的那条 user 自己也删了。然后下面 sendAppointment 会
+             * 在末尾 addMessage 一条**新的** user，内容就是原文。
+             *
+             * 于是 prompt 里出现两份同样的内容：
+             *
+             *   deleteFromMessage 删掉 user:问题A
+             *     → 库里只剩 … / assistant:回复X
+             *   sendAppointment 追加 user:问题A
+             *     → 历史变成 … / assistant:回复X / user:问题A
+             *   而 buildApiMessages 又会因为「当前轮 user 是最后一条」再收一次尾
+             *
+             * 更糟的是当这条提问后面还跟着同类的 user 楼层时
+             * （用户连发过几句、或删过中间的角色层），
+             * appendSessionHistory 会把它们粘成一条，模型读到的是
+             * 「问题A、问题A」这种原地重复 —— 直接后果就是
+             * 重答出来的内容跟被删掉的那一版高度雷同。
+             *
+             * 保留原层、只删它**之后**的楼层，得到的上下文才是干净的：
+             * 这条 user 就是当前轮，它以前的内容是历史，它以后的内容被清空待重写。
+             * 这正是「从这一楼重新回答」应有的语义。
+             */
+            if (!removeMessagesFrom(idx + 1)) {
+                toast('重发中断：没能清掉后面的楼层');
+                return;
+            }
             if (autoSend) {
                 var eng = apEngine();
                 if (!eng || eng.isBusy(ui.chatId, ui.sessionId)) {
@@ -3931,7 +3973,20 @@ function renderWriter() {
                 runStream(
                     Promise.resolve()
                         .then(function () {
-                            return eng.sendAppointment(ui.chatId, ui.sessionId, text, streamHandlers());
+                            /*
+                             * 用 runAppointmentCompletion 而不是 sendAppointment。
+                             *
+                             * 这条 user 楼层**已经在库里了**，不能再 addMessage 一遍
+                             * —— 那会凭空多出一条同内容楼层，也正是「删了楼再重发
+                             * 结果还是老样子」的成因之一。runAppointmentCompletion
+                             * 不写 user、只生成 assistant，正是这里要的语义：
+                             * 「上下文已经摆好，请接着答」。
+                             */
+                            return eng.runAppointmentCompletion(
+                                ui.chatId,
+                                ui.sessionId,
+                                streamHandlers()
+                            );
                         })
                         .catch(function (err) {
                             restoreMessageSnapshot(userSnap);
