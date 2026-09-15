@@ -53,10 +53,22 @@
     return [String(raw).trim()].filter(Boolean);
   }
 
+  /*
+   * Token 估算统一走 MiyaToken（js2/miya-token.js）单一来源。
+   *
+   * 本文件原来内联了一份 cjk/1.8 + rest/4 的公式，与
+   * js2/miya-memory-table-engine.js 里的那份逐字相同（复制粘贴产物），
+   * 而 js1/miya-chat-engine.js 又是第三套口径（length / 1.6），
+   * 同一段文本两边能差 150%。现在三处收敛到同一实现。
+   *
+   * 保留 estimateTokens 这个名字：本模块对外导出它，调用方按旧名取用。
+   * 兜底：万一 MiyaToken 尚未加载，退回等价的内联实现，行为完全一致。
+   */
   function estimateTokens(text) {
+    var t = global.MiyaToken;
+    if (t && typeof t.fromText === 'function') return t.fromText(text);
     var s = String(text || '');
     if (!s) return 0;
-    // 中英混合粗估：约 1 token ≈ 2 汉字 或 4 英文字符
     var cjk = (s.match(/[\u3400-\u9fff]/g) || []).join('').length;
     var rest = s.length - cjk;
     return Math.max(1, Math.ceil(cjk / 1.8 + rest / 4));

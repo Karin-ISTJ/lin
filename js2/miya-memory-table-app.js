@@ -72,7 +72,11 @@
       '> AI 读取</label>' +
       '<label class="miya-mt-check"><input type="checkbox" id="miya-mt-write" ' +
       (s.isAiWrite ? 'checked' : '') +
-      '> AI 写入</label>';
+      '> AI 写入</label>' +
+      '<label class="miya-mt-check" title="关闭后仅保留最小语法约束，每轮少约 300 tokens">' +
+      '<input type="checkbox" id="miya-mt-detailed" ' +
+      (s.detailedWriteRules !== false ? 'checked' : '') +
+      '> 详细写入规则</label>';
     function bind(id, key) {
       var el = $(id);
       if (!el) return;
@@ -86,6 +90,7 @@
     bind('miya-mt-en', 'enabled');
     bind('miya-mt-read', 'isAiRead');
     bind('miya-mt-write', 'isAiWrite');
+    bind('miya-mt-detailed', 'detailedWriteRules');
   }
 
   function renderTabs(tables) {
@@ -298,7 +303,15 @@
       text = ctx.result.raw;
     }
     if (!text) return;
-    eng.processAssistantReply(chatId, text);
+    var res = eng.processAssistantReply(chatId, text);
+    /*
+     * 把「写入未生效」摆到用户眼前。
+     *
+     * 为什么需要：模型写了 tableEdit，但格式坏了 / 表序号越界时，旧实现
+     * 只往 console 打一行就完事。用户看到的是模型「说了要记」、表格却
+     * 没变，只能反复重试。给一句提示，至少知道是记忆写入失败而非剧情问题。
+     */
+    if (res && res.notice) toast(res.notice);
   }
 
   global.MiyaMemoryTableApp = {

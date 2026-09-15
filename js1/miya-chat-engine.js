@@ -1870,17 +1870,37 @@
     }
 
 
+    /*
+     * Token 估算统一走 MiyaToken（js2/miya-token.js）单一来源。
+     *
+     * 本处原为 Math.ceil(s.length / 1.6) —— 把所有字符一律按 1/1.6 折算，
+     * 英文会被显著高估（100 字符英文得 63，而按 4 字符/token 应为 25），
+     * 且与世界书、记忆表所用的口径不一致，导致「面板显示」与「预算裁剪」
+     * 对同一个 prompt 给出不同的数字。
+     *
+     * 现在与另两处共用同一实现（中英分别折算）。影响：上下文面板显示的
+     * token 数会比以前略低（中文约 -11%，英文显著下降），这是修正高估，
+     * 不是把内容算少了。
+     *
+     * 兜底：MiyaToken 尚未加载时退回等价的内联实现。
+     */
     function estimateTokensFromText(text) {
+        var t = global.MiyaToken;
+        if (t && typeof t.fromText === 'function') return t.fromText(text);
         var s = String(text || '');
         if (!s) return 0;
-        return Math.max(1, Math.ceil(s.length / 1.6));
+        var cjk = (s.match(/[\u3400-\u9fff]/g) || []).join('').length;
+        var rest = s.length - cjk;
+        return Math.max(1, Math.ceil(cjk / 1.8 + rest / 4));
     }
 
     /** 仅知字符数、无正文时的 token 估算（勿把数字转成字符串再估） */
     function estimateTokensFromCharCount(charCount) {
+        var t = global.MiyaToken;
+        if (t && typeof t.fromCharCount === 'function') return t.fromCharCount(charCount);
         var n = Number(charCount);
         if (!Number.isFinite(n) || n <= 0) return 0;
-        return Math.max(1, Math.ceil(n / 1.6));
+        return Math.max(1, Math.ceil(n / 4));
     }
 
     function estimateMessagesTokens(messages) {

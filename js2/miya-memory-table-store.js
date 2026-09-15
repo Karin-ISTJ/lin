@@ -19,7 +19,14 @@
       isAiWrite: true,
       injectPosition: 'system', // system | before_user
       maxRowsPerTable: 40,
-      tokenSoftLimit: 1800
+      tokenSoftLimit: 1800,
+      /*
+       * 详细写入规则：教模型「分表职责 / insert 还是 update / 什么不该记」。
+       * 默认开启 —— 没有它，模型会把所有东西无脑 insertRow，40 行上限很快
+       * 被同一角色的重复行刷满，早期设定被截断挤出，等于把记忆弄丢。
+       * 代价是每轮多约 300 tokens，追求极致省 token 的用户可关掉退回简版。
+       */
+      detailedWriteRules: true
     };
   }
 
