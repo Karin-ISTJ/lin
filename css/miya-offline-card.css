@@ -1,0 +1,280 @@
+/* ── 线下楼层 · 通用卡片（可复用 / 自适应原卡） ─────────────────
+   配色原则：
+     1. 一律引用线下主题已有变量（--xw-*），于是自动跟随
+        博物馆 / 手账 / 自定义 等任意皮肤。
+     2. 变量缺失时用 var(--x, 兜底) 给出极简中性样式，
+        不会因为某个主题没定义某个变量就渲染成透明或黑块。
+     3. 边框/底色都走「半透明叠加」，让原卡的背景透出来，不抢风头。
+   ──────────────────────────────────────────────────────────── */
+
+.xwc {
+  /* 本卡片的局部变量：全部从线下主题推导，没有就退化到中性值 */
+  --xwc-line: var(--xw-hair, rgba(127, 127, 127, 0.22));
+  --xwc-ink: var(--xw-ink, currentColor);
+  --xwc-soft: var(--xw-soft, rgba(127, 127, 127, 0.72));
+  --xwc-accent: var(--xw-gold, var(--xw-ink, currentColor));
+  --xwc-panel: var(--xw-paper, transparent);
+
+  margin: 8px 0 2px;
+  padding: 0;
+  font-family: var(--xw-serif, inherit);
+  font-size: inherit;
+  line-height: 1.55;
+  color: var(--xwc-ink);
+  /* 让原卡背景透出来 */
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* 长内容（长名字/长 URL）不撑破容器 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ── 顶部身份 ── */
+.xwc__profile {
+  padding: 8px 10px;
+  border: 1px solid var(--xwc-line);
+  border-radius: 10px;
+  background: var(--xwc-panel);
+  /* 用背景色叠加而不是纯色，保证在深色主题下也有层次 */
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
+}
+
+.xwc__profile-name {
+  font-size: 1.04em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--xwc-ink);
+}
+
+.xwc__profile-meta {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.xwc__meta-chip {
+  font-size: 0.74em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--xwc-line);
+  color: var(--xwc-soft);
+  white-space: nowrap;
+}
+
+.xwc__quote {
+  margin: 7px 0 0;
+  padding: 4px 0 1px 9px;
+  border-left: 2px solid var(--xwc-accent);
+  font-size: 0.88em;
+  color: var(--xwc-soft);
+  font-style: italic;
+}
+
+/* ── 置顶条 ── */
+.xwc__pin-wrap {
+  display: block;
+}
+
+.xwc__item--pinned {
+  border: 1px solid var(--xwc-line);
+  border-left: 3px solid var(--xwc-accent);
+  border-radius: 10px;
+  background: var(--xwc-panel);
+  padding: 8px 10px;
+}
+
+/* ── 分区 ── */
+.xwc__sec {
+  border: 1px solid var(--xwc-line);
+  border-radius: 10px;
+  background: var(--xwc-panel);
+  padding: 8px 10px 2px;
+}
+
+.xwc__sec-title {
+  margin: 0 0 6px;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--xwc-soft);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 标题后接一条细线，让分区边界更清楚（用当前文字色，自动适配深浅主题） */
+.xwc__sec-title::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--xwc-line);
+}
+
+.xwc__sec-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 5px;
+}
+
+/* ── 通用条目 ── */
+.xwc__item {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--xwc-line);
+}
+
+.xwc__item:last-child {
+  border-bottom: 0;
+}
+
+.xwc__item-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xwc__item-title {
+  font-size: 0.96em;
+  font-weight: 600;
+  color: var(--xwc-ink);
+}
+
+.xwc__tag {
+  font-size: 0.72em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--xwc-line);
+  color: var(--xwc-soft);
+  white-space: nowrap;
+}
+
+.xwc__item-desc {
+  margin-top: 3px;
+  font-size: 0.86em;
+  color: var(--xwc-soft);
+}
+
+.xwc__item-body {
+  margin-top: 5px;
+  font-size: 0.88em;
+  color: var(--xwc-ink);
+  opacity: 0.9;
+}
+
+.xwc__item-cue {
+  margin-top: 4px;
+  font-size: 0.82em;
+  color: var(--xwc-accent);
+}
+
+.xwc__item-emoji {
+  font-size: 1.1em;
+  margin-right: 6px;
+}
+
+.xwc__item--pinned .xwc__item-emoji {
+  float: left;
+}
+
+/* ── 人物 ── */
+.xwc__item--npc,
+.xwc__item--reply {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.xwc__item--npc .xwc__item-main,
+.xwc__item--reply .xwc__item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.xwc__ava {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--xwc-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--xwc-panel);
+}
+
+.xwc__ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.xwc__ava--txt {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--xwc-soft);
+}
+
+/* ── 待办 ── */
+.xwc__item--todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.xwc__dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-top: 0.52em;
+  border-radius: 50%;
+  background: var(--xwc-accent);
+}
+
+.xwc__todo-text {
+  font-size: 0.9em;
+  color: var(--xwc-ink);
+}
+
+/* ── 键值行 ── */
+.xwc__row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 0.84em;
+}
+
+.xwc__row-k {
+  flex: 0 0 auto;
+  color: var(--xwc-soft);
+}
+
+.xwc__row-v {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--xwc-ink);
+}
+
+/* ── 窄屏微调 ── */
+@media (max-width: 420px) {
+  .xwc {
+    gap: 8px;
+  }
+  .xwc__sec,
+  .xwc__profile,
+  .xwc__item--pinned {
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 10px;
+  }
+  .xwc__ava {
+    width: 30px;
+    height: 30px;
+  }
+}

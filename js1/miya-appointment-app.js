@@ -1275,6 +1275,15 @@
 
     function journalBodyHtml(m) {
         if (m.renderAsHtml) return buildHtmlPanelHtml(m.htmlRaw || m.content);
+
+        /*
+         * 通用卡片：回复里带 <card>…</card>（兼容旧卡的 <gourmet_journal>）时，
+         * 把那一段渲染成卡片，正文其余部分照常走排版。
+         * 卡片是内联 DOM 而非 iframe，所以能直接继承线下主题的 CSS 变量。
+         */
+        var cardHtml = offlineCardHtmlFor(m.content);
+        if (cardHtml) return cardHtml;
+
         var paras = splitStoryParagraphs(m.content);
         if (!paras.length) return '';
         if (!resolveTextDecor()) {
@@ -1297,6 +1306,43 @@
             .filter(Boolean)
             .join('<br><br>');
         return html ? '<div class="xw-chat__text">' + html + '</div>' : '';
+    }
+
+    /**
+     * 若消息里含卡片标记，返回「正文 + 卡片」的 HTML；否则返回 ''。
+     * 正文在前、卡片在后，符合跑楼层时「先读剧情、再看状态」的习惯。
+     */
+    function offlineCardHtmlFor(rawContent) {
+        var api = global.MiyaOfflineCard;
+        if (!api || typeof api.hasCardBlock !== 'function') return '';
+        var text = String(rawContent || '');
+        if (!api.hasCardBlock(text)) return '';
+        var parts = api.extractCardParts(text);
+        if (!parts.length) return '';
+        var first = parts[0];
+        var cardBody = '';
+        try {
+            cardBody = api.renderCardBody(first.body || '');
+        } catch (e) {
+            cardBody = '';
+        }
+        var rest = [first.before, first.after].filter(Boolean).join('\n').trim();
+        var restHtml = '';
+        if (rest) {
+            var paras = splitStoryParagraphs(rest);
+            var decor = resolveTextDecor() && global.MiyaOfflineTextDecor;
+            if (decor && typeof decor.decorateJournalBody === 'function') {
+                restHtml = decor.decorateJournalBody(paras);
+            } else {
+                var flat = paras
+                    .map(function (para) { return esc(String(para || '').trim()).replace(/\n/g, '<br>'); })
+                    .filter(Boolean)
+                    .join('<br><br>');
+                restHtml = flat ? '<div class="xw-chat__text">' + flat + '</div>' : '';
+            }
+        }
+        if (!restHtml && !cardBody) return '';
+        return restHtml + cardBody;
     }
 
     function journalMessageBlockHtml(m, canEdit, thinkingHtml) {
@@ -1415,12 +1461,16 @@
         if (m.renderAsHtml) {
             lines = buildHtmlPanelHtml(m.htmlRaw || m.content);
         } else {
-            lines = splitStoryParagraphs(m.content)
-                .map(function (para) {
-                    return decorateParagraph(para, m.role);
-                })
-                .filter(Boolean)
-                .join('');
+            /* 通用卡片优先：与手账主题保持一致的渲染结果 */
+            lines = offlineCardHtmlFor(m.content);
+            if (!lines) {
+                lines = splitStoryParagraphs(m.content)
+                    .map(function (para) {
+                        return decorateParagraph(para, m.role);
+                    })
+                    .filter(Boolean)
+                    .join('');
+            }
         }
         if (!lines) return '';
         var swipeBar = offlineSwipeBarHtml(m);

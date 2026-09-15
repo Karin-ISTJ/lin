@@ -2686,29 +2686,6 @@
         return null;
     }
 
-    /*
-     * 消息是否为「普通文本」类型。
-     * store 归一后普通消息的 type 是 'text'，但也有历史数据不带 type。
-     * 这里只做排除法：凡是已被其它卡片认领的类型都返回 false，
-     * 剩下的才允许走手札这类基于正文内容的判定。
-     */
-    var SPECIAL_MSG_TYPES = {
-        image: 1, sticker: 1, voice: 1, location: 1, transfer: 1, html: 1,
-        call_capsule: 1, couple_space_invite: 1, group_red_packet: 1,
-        love_poem: 1, takeout: 1, gift: 1, match_record: 1, sayguess_record: 1,
-        diary_peek_context: 1, diary_peek_notice: 1, system: 1
-    };
-
-    function isPlainTextMessageType(m) {
-        if (!m) return false;
-        if (m.imageDataKey || m.stickerBlobId || m.stickerUrl) return false;
-        if (m.redPacket || m.locationCard || m.takeoutOrder || m.giftParcel) return false;
-        if (m.voiceText || m.groupRedPacket || m.lovePoem || m.matchRecord) return false;
-        var t = String(m.type || '').trim().toLowerCase();
-        if (!t || t === 'text') return true;
-        return !SPECIAL_MSG_TYPES[t];
-    }
-
     function parseDisplayPayload(m) {
         if (!m || m.deleted) {
             return { kind: 'deleted' };
@@ -2718,34 +2695,6 @@
         }
         if (m.type === 'couple_space_invite' && m.coupleSpaceInvite) {
             return { kind: 'couple_space_invite', msg: m };
-        }
-        /*
-         * 「冒险者手札」结构化卡片。
-         * 该格式由世界书条目（底部状态栏）约定输出 <gourmet_journal>...</gourmet_journal>，
-         * 在 SillyTavern 里靠正则脚本替换成 HTML 面板；Karinn 用这里的 kind 分发等价实现。
-         *
-         * 判定放宽：store 会把普通消息的 type 归一成 'text'，所以不能要求 !m.type。
-         * 只排除那些本身就是特殊卡片的类型，避免抢占它们的渲染。
-         */
-        if (m.role === 'assistant' && isPlainTextMessageType(m)) {
-            var journalApi = global.MiyaGourmetJournal;
-            if (journalApi && typeof journalApi.extractJournalParts === 'function') {
-                var journalRaw = String(m.content || '');
-                if (journalApi.hasGourmetJournal(journalRaw)) {
-                    var journalParts = journalApi.extractJournalParts(journalRaw);
-                    if (journalParts.length && journalParts[0].body) {
-                        return {
-                            kind: 'gourmet_journal',
-                            msg: m,
-                            journalBody: journalParts[0].body,
-                            journalRest: (function () {
-                                var p = journalParts[0];
-                                return [p.before, p.after].filter(Boolean).join('\n').trim();
-                            })()
-                        };
-                    }
-                }
-            }
         }
         if (m.type === 'html' || m.renderAsHtml) {
             var htmlApi = global.MiyaChatHtml;

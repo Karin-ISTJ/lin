@@ -2821,26 +2821,6 @@
     );
   }
 
-  /*
-   * 「冒险者手札」卡片。
-   * 数据是 AI 按世界书约定吐出的方括号纯文本，交给模板里的解析器渲染。
-   * 用 Blob + 沙箱 iframe，与 renderHtmlMessageBody 同一套做法：
-   * 卡片自带完整 CSS/JS，隔离在 iframe 里不会污染主页面样式。
-   */
-  function renderGourmetJournalBody(payload, edited) {
-    var api = global.MiyaGourmetJournal;
-    if (!api || typeof api.renderJournalCardHTML !== 'function') {
-      return esc(String(payload.journalBody || '')).replace(/\n/g, '<br>') + edited;
-    }
-    /* 模板是异步取的，这里先预热点，气泡挂载后由 hydrate 真正塞进 iframe */
-    if (typeof api.preloadTemplate === 'function') {
-      try {
-        api.preloadTemplate();
-      } catch (e) {}
-    }
-    return api.renderJournalCardHTML(payload.journalBody || '', esc) + edited;
-  }
-
   function renderBubbleBody(m, opts) {
     opts = opts || {};
     var previewChatId = opts.chatId != null ? opts.chatId : state.chatId;
@@ -2854,9 +2834,6 @@
     var edited = m.edited && m.role !== 'assistant' ? '<span class="qq-room__bubble-edited">已编辑</span>' : '';
     if (payload.kind === 'html') {
       return renderHtmlMessageBody(m, payload, edited);
-    }
-    if (payload.kind === 'gourmet_journal') {
-      return renderGourmetJournalBody(payload, edited);
     }
     var body = '';
     if (payload.kind === 'transfer' && displayMsg.redPacket) body = renderTransferCard(displayMsg, opts);
@@ -3014,19 +2991,15 @@
     var isHtmlMsg = m.type === 'html' || m.renderAsHtml || body.indexOf('qq-room__html-panel') >= 0;
     var isTakeoutCard = body.indexOf('qq-card-to') >= 0;
     var isGrpRpCard = body.indexOf('grp-rp-card') >= 0;
-    /* 冒险者手札是整幅渲染卡（自带 iframe），需要整行铺开，不能挤在文本气泡里 */
-    var isJournalCard = body.indexOf('qq-room__gourmet-journal') >= 0;
     var isCard =
       !isGrpRpCard &&
       (isHtmlMsg ||
-        isJournalCard ||
         body.indexOf('qq-card') >= 0 ||
         body.indexOf('qq-card-img') >= 0 ||
         body.indexOf('qq-card-sticker') >= 0);
     if (isCard) cls += ' qq-room__row--card';
     if (isGrpRpCard) cls += ' qq-room__row--grp-rp';
     if (isHtmlMsg) cls += ' qq-room__row--html';
-    if (isJournalCard) cls += ' qq-room__row--journal';
     if (isTakeoutCard) cls += ' qq-room__row--takeout';
     var bubbleWrap;
     if (isGrpRpCard) {
@@ -3037,7 +3010,6 @@
       if (isCard) {
         bubbleWrapCls += ' qq-room__bubble-wrap--card';
         if (isHtmlMsg) bubbleWrapCls += ' qq-room__bubble-wrap--html';
-        if (isJournalCard) bubbleWrapCls += ' qq-room__bubble-wrap--journal';
         if (isTakeoutCard) bubbleWrapCls += ' qq-room__bubble-wrap--takeout';
       }
       bubbleWrap = '<div class="' + bubbleWrapCls + '">' + bubbleInner + '</div>';
@@ -3172,11 +3144,6 @@
     var htmlApi = global.MiyaChatHtml;
     if (htmlApi && typeof htmlApi.hydrateChatHtmlIframesInContainer === 'function') {
       htmlApi.hydrateChatHtmlIframesInContainer(root);
-    }
-    /* 手札卡片同样是懒填 iframe：挂载后再把模板灌进去 */
-    var gjApi = global.MiyaGourmetJournal;
-    if (gjApi && typeof gjApi.hydrateJournalIframes === 'function') {
-      gjApi.hydrateJournalIframes(root);
     }
   }
 
@@ -5389,17 +5356,6 @@
       if (srcdoc && typeof htmlApi.openChatHtmlFullscreen === 'function') {
         htmlApi.openChatHtmlFullscreen(srcdoc);
       }
-    }, true);
-    /* 手札卡片的全屏查看 */
-    document.addEventListener('click', function (e) {
-      var btn = e.target.closest('[data-miya-gourmet-fs="1"]');
-      if (!btn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      var panel = btn.closest('[data-miya-gourmet-journal="1"]');
-      var gjApi = global.MiyaGourmetJournal;
-      if (!panel || !gjApi || typeof gjApi.openJournalFullscreen !== 'function') return;
-      gjApi.openJournalFullscreen(panel.getAttribute('data-miya-gourmet-body') || '');
     }, true);
   }
 
