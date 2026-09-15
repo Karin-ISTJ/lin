@@ -1759,13 +1759,6 @@
                 built.messages = ctxOut.messages;
                 payload.messages = ctxOut.messages;
             }
-            /* 缓存探针：在 messages 定稿之后记录前缀，与上一轮比对。
-               与线上引擎同一套口径，纯观测、不改请求。 */
-            try {
-                if (global.miyaCacheProbe && global.miyaCacheProbe.trackRequest) {
-                    global.miyaCacheProbe.trackRequest(cfg, payload.messages);
-                }
-            } catch (eCache) {}
             return fetchAppointmentCompletion(
                 url,
                 headers,
@@ -1792,14 +1785,6 @@
                     }
                 } catch (eMtOff) {}
                 var apiData = completion && completion.data != null ? completion.data : null;
-                /* 缓存探针：把服务商返回的缓存用量补记到本轮留档上。
-                   与线上引擎同一套字段兼容逻辑；无该字段时静默跳过。 */
-                try {
-                    if (global.miyaCacheProbe && global.miyaCacheProbe.parseCacheUsage) {
-                        var cuOff = global.miyaCacheProbe.parseCacheUsage(apiData);
-                        if (cuOff && global.miyaCacheProbe.attachUsage) global.miyaCacheProbe.attachUsage(cuOff);
-                    }
-                } catch (eUsageOff) {}
                 var parsed = parseAppointmentResponse(fullRaw, apiData);
                 var thinking = String(parsed.thinking || '').trim();
                 var htmlMode = !!built.htmlMode;

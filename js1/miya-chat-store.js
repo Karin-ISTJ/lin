@@ -1580,6 +1580,66 @@
         };
     }
 
+    /** 上一次真实生成时的 prompt 来源分布快照（由聊天引擎写入） */
+    function normalizePromptBreakdown(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        var grouped = Array.isArray(raw.grouped) ? raw.grouped : [];
+        var rows = [];
+        var i;
+        for (i = 0; i < grouped.length && rows.length < 60; i++) {
+            var g = grouped[i];
+            if (!g || typeof g !== 'object') continue;
+            var key = String(g.key || '').trim().slice(0, 40);
+            if (!key) continue;
+            rows.push({
+                key: key,
+                label: String(g.label || '').slice(0, 80),
+                chars: Math.max(0, Math.floor(Number(g.chars) || 0)),
+                tokens: Math.max(0, Math.floor(Number(g.tokens) || 0)),
+                count: Math.max(0, Math.floor(Number(g.count) || 0)),
+                subItems: normalizePromptSubItems(g.subItems)
+            });
+        }
+        if (!rows.length) return null;
+        rows.sort(function (a, b) {
+            return (b.chars || 0) - (a.chars || 0);
+        });
+        var at = Number(raw.updatedAt);
+        return {
+            grouped: rows,
+            promptChars: Math.max(0, Math.floor(Number(raw.promptChars) || 0)),
+            promptTokens: Math.max(0, Math.floor(Number(raw.promptTokens) || 0)),
+            worldbookMatched: Math.max(0, Math.floor(Number(raw.worldbookMatched) || 0)),
+            worldbookInSystem: raw.worldbookInSystem !== false,
+            replyMsgId: String(raw.replyMsgId || '').slice(0, 60),
+            isGroupReply: !!raw.isGroupReply,
+            updatedAt: Number.isFinite(at) && at > 0 ? at : 0
+        };
+    }
+
+    /** 子项（具体条目 / 主系统提示各段）：条目名 + 字数，用于「占比最大的到底是哪一条」 */
+    function normalizePromptSubItems(raw) {
+        if (!Array.isArray(raw) || !raw.length) return [];
+        var out = [];
+        var i;
+        for (i = 0; i < raw.length && out.length < 80; i++) {
+            var s = raw[i];
+            if (!s || typeof s !== 'object') continue;
+            var name = String(s.name || '').trim().slice(0, 120);
+            if (!name) continue;
+            out.push({
+                name: name,
+                chars: Math.max(0, Math.floor(Number(s.chars) || 0)),
+                tokens: Math.max(0, Math.floor(Number(s.tokens) || 0)),
+                count: Math.max(1, Math.floor(Number(s.count) || 1))
+            });
+        }
+        out.sort(function (a, b) {
+            return (b.chars || 0) - (a.chars || 0);
+        });
+        return out;
+    }
+
     /** 自定义心声字段：禁止短截断（仅极端上限防撑爆） */
     var HEART_VOICE_FIELD_VALUE_MAX = 100000;
     var HEART_VOICE_FIELD_COUNT_MAX = 80;
@@ -1768,6 +1828,7 @@
             lastPromptMeta: normalizePromptMeta(raw && raw.lastPromptMeta),
             lastRawAssistantReply: String((raw && raw.lastRawAssistantReply) || '').slice(0, 600000),
             lastPromptDebug: normalizePromptDebug(raw && raw.lastPromptDebug),
+            lastPromptBreakdown: normalizePromptBreakdown(raw && raw.lastPromptBreakdown),
             lastHeartVoiceParse: normalizeHeartVoiceParse(raw && raw.lastHeartVoiceParse),
             chatSettings: normalizeChatSettings(raw && raw.chatSettings),
             createdAt: Number(raw && raw.createdAt) || Date.now()
