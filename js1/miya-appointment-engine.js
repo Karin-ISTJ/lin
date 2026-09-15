@@ -20,13 +20,64 @@
     var STREAM_IDLE_TIMEOUT_MS = 60000;
 
     /*
-     * 单层楼层最多保留几条 swipe 候选。
+     * 单层楼层的候选上限。
      *
-     * 超出的候选会让整份 swipes 数组被写进 localStorage，
-     * 反复「重回」几十次既撑大存储、又让「当前显示」永远是最后一条，
-     * 用户看到的就成了「点了很多次刷新，内容还是同一个」。
+     * ── 为什么从「固定 8 条」改成「按字符总量」──
+     *
+     * 先确认一个关键事实：**候选内容不进 prompt**。
+     * appendSessionHistory 只读 m.content（也就是当前显示的那一版），
+     * swipes 数组在整条 prompt 构造链路上没有任何读取点。
+     * 实测（真浏览器 + 真引擎，4 个候选共 624 字符）：
+     *
+     *   候选总数 4 条 / 624 字符
+     *   进 prompt 的候选 = 1 条（只有当前显示的那条，作为普通历史楼层）
+     *   其他候选进 prompt = 0 条
+     *
+     * 所以「攒了很多候选」**不会**让后续楼层的请求变大 ——
+     * 用户担心的 token 累积不存在。唯一代价是 localStorage 体积：
+     * 候选是整份文本存着的，反复刷几十次会明显撑大存储。
+     *
+     * 因此上限不该按「条数」切：有的回复 50 字，有的 3000 字，
+     * 8 条对前者太浪费、对后者又太多。按**字符总量**切才贴合真实成本。
+     *
+     * 策略：保留第一条（原始锚点，用来对照）+ 最近若干条，
+     * 从中间开始丢 —— 中间的版本用户基本不会再翻回去看，
+     * 而「最早那版」和「最新几版」是真正会被用到的。
+     *
+     * 40 万字符 ≈ 单层约 30 万汉字，按每次刷新 3000 字算能留一百多条，
+     * 足够用了；真到这个量级，存储压力也该到头了。
      */
-    var SWIPE_MAX = 8;
+    var SWIPE_MAX = 200;
+    var SWIPE_CHAR_LIMIT = 400000;
+
+    /**
+     * 往候选表里追加一条，并按上限裁剪。
+     *
+     * 抽成函数是因为「重回」和「楼层右下角 ›」两条路径都要用到，
+     * 上限规则必须只有一份实现 —— 否则改了一处、另一处会漂。
+     */
+    function pushSwipeCandidate(prevSwipes, content) {
+        var list = Array.isArray(prevSwipes) ? prevSwipes.slice() : [];
+        list.push(String(content || ''));
+        /* 条数上限：先粗筛一道，避免下面那个循环在极端数据上跑太久 */
+        if (list.length > SWIPE_MAX) {
+            list = [list[0]].concat(list.slice(-(SWIPE_MAX - 1)));
+        }
+        /*
+         * 字符总量上限：从**中间**开始丢，保住头部锚点与尾部新候选。
+         * 注意永远至少留 2 条 —— 只有一条的话切换器就不渲染了，
+         * 用户会以为「刷出来的候选被吃了」，比存储超限更难理解。
+         */
+        var totalChars = 0;
+        var i;
+        for (i = 0; i < list.length; i++) totalChars += String(list[i] || '').length;
+        while (list.length > 2 && totalChars > SWIPE_CHAR_LIMIT) {
+            var dropIdx = 1;
+            totalChars -= String(list[dropIdx] || '').length;
+            list.splice(dropIdx, 1);
+        }
+        return list;
+    }
 
     function eng() {
         return global.miyaChatEngine;
@@ -2086,21 +2137,14 @@
                         var prevSwipes = Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
                         if (!prevSwipes.length && lastAsst.content) prevSwipes.push(String(lastAsst.content));
                         /*
-                         * 候选数量必须有上限。
+                         * 追加候选并裁剪。
                          *
-                         * 原实现是无限 push：用户每点一次「重回」就多一条候选，
-                         * 而「当前显示」永远落在最后一条 —— 相机位不变、楼层数不变，
-                         * 于是连着点几次看到的就是「内容一模一样、刷新像没生效」。
-                         * 同时 swipes 会被整份塞进 localStorage，
-                         * 候选堆到几十条之后写盘也会明显变慢。
-                         *
-                         * 这里按 SWIPE_MAX 截断：只保留「最早一条 + 最近几条」，
-                         * 既留住了和原回复对照的锚点，也不让数据无限膨胀。
+                         * 上限规则统一收在 pushSwipeCandidate 里 ——
+                         * 「重回」和「楼层右下角 ›」两条路径共用同一份实现，
+                         * 避免改一处漏一处（见该函数的说明：候选不进 prompt，
+                         * 所以按字符总量而非条数来限）。
                          */
-                        prevSwipes.push(content);
-                        if (prevSwipes.length > SWIPE_MAX) {
-                            prevSwipes = [prevSwipes[0]].concat(prevSwipes.slice(-(SWIPE_MAX - 1)));
-                        }
+                        prevSwipes = pushSwipeCandidate(prevSwipes, content);
                         var swipeId = prevSwipes.length - 1;
                         msg = aps.updateMessage(chatId, sessionId, lastAsst.id, {
                             content: content,

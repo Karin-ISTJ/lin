@@ -1528,43 +1528,125 @@
     }
 
 
+    /**
+     * 楼层右下角的候选切换键。
+     *
+     * 三种形态：
+     *
+     *   只有 1 条内容（还没刷过）  →  只显示 [›]，点它**生成**一个新候选
+     *   有 2 条以上                →  [‹ 2 / 3 ›]，‹ › 用来**翻看**已有候选
+     *   生成中                     →  按钮置灰、禁止重复点击
+     *
+     * 为什么要区分「生成」和「翻看」：
+     * 旧实现是「候选不足两条就什么都不显示」，于是刚生成出来的那一层
+     * 右下角干干净净，用户根本不知道还能再刷一版 —— 想换个说法只能
+     * 去点上方的「重回」，而那个按钮的语义是「让角色重答这一轮」，
+     * 藏得也深。
+     *
+     * 现在把入口摆在这一层自己的右下角：先给一个 [›]，点一下生成；
+     * 攒够两条之后它自然变成 [‹ N/M ›]，继续点 › 还能往上加候选。
+     * 「生成」和「翻看」共用同一个键，是靠**候选数量**自动切换的 ——
+     * 一条时 › 是「再生成一版」，两条以上时 › 是「看下一版」。
+     *
+     * 这个区分对用户是直观的：只有一版的时候，往右意味着「多来几版」；
+     * 有多版的时候，往右意味着「翻到下一版」。
+     */
     function offlineSwipeBarHtml(m) {
         if (!m || m.role !== 'assistant') return '';
+        /*
+         * 空内容不渲染：这一层正在生成中（正文还没落下来），
+         * 或者刚被软删待重写。此时给它一个 › 是没有意义的。
+         */
+        if (!String(m.content || '').trim()) return '';
         var swipes = Array.isArray(m.swipes) ? m.swipes : [];
-        if (swipes.length < 2) return '';
+        /*
+         * 候选表可能还是空的（这一层从没刷过）。
+         * 注意此时**当前正文本身就是第 1 个候选**，只是还没归档进 swipes。
+         * 展示上按「1 条」算，才能正确决定显示单键还是双键。
+         */
+        var total = swipes.length || 1;
         var sid = Number(m.swipeId);
-        if (!Number.isFinite(sid)) sid = swipes.length - 1;
-        sid = Math.max(0, Math.min(swipes.length - 1, Math.floor(sid)));
+        if (!Number.isFinite(sid)) sid = swipes.length ? swipes.length - 1 : 0;
+        sid = Math.max(0, Math.min(total - 1, Math.floor(sid)));
+        var mid = esc(m.id);
+
+        /* 只有一条：单键，语义是「再生成一版」。 */
+        if (total < 2) {
+            return (
+                '<div class="xw-swipe xw-swipe--single" data-ap-swipe="' + mid + '">' +
+                '<button type="button" class="xw-swipe__btn" data-ap-swipe-next="' + mid + '"' +
+                ' aria-label="再生成一版" title="再生成一版">›</button>' +
+                '</div>'
+            );
+        }
+
+        /* 两条以上：完整切换器。 */
         return (
-            '<div class="xw-swipe" data-ap-swipe="' + esc(m.id) + '">' +
-            '<button type="button" class="xw-swipe__btn" data-ap-swipe-prev="' + esc(m.id) + '" aria-label="上一个候选">‹</button>' +
-            '<span class="xw-swipe__idx">' + (sid + 1) + ' / ' + swipes.length + '</span>' +
-            '<button type="button" class="xw-swipe__btn" data-ap-swipe-next="' + esc(m.id) + '" aria-label="下一个候选">›</button>' +
+            '<div class="xw-swipe" data-ap-swipe="' + mid + '">' +
+            '<button type="button" class="xw-swipe__btn" data-ap-swipe-prev="' + mid + '" aria-label="上一个候选">‹</button>' +
+            '<span class="xw-swipe__idx">' + (sid + 1) + ' / ' + total + '</span>' +
+            '<button type="button" class="xw-swipe__btn" data-ap-swipe-next="' + mid + '" aria-label="下一个候选">›</button>' +
             '</div>'
         );
     }
 
+    /**
+     * 处理楼层右下角候选键的点击。
+     *
+     * delta = -1 是 ‹，delta = +1 是 ›。
+     *
+     * 这里是「翻看」与「生成」的分岔口：
+     *
+     *   · 候选 ≥ 2：› 落在已有序号范围内 → 纯翻看，改 content / swipeId 后重绘；
+     *   · 候选 ≥ 2 且当前已在**最后一版**：› 不再是翻看，而是**再生成一版**
+     *     （这与「只有一条时点 ›」是同一件事，只是入口不同）；
+     *   · 候选 < 2：› 只能是生成。
+     *   · ‹ 永远只翻看，不会触发生成。
+     *
+     * 这样处理之后，右下角那一个 › 键就同时承担了「多来一版」和
+     * 「看下一版」两件事，用户不需要去理解两种模式的区别。
+     */
     function applyOfflineSwipe(msgId, delta) {
         var aps = global.MiyaAppointmentStore;
         if (!aps || !ui.chatId || !ui.sessionId) return;
         var sess = aps.getSession(ui.chatId, ui.sessionId);
         if (!sess) return;
         var m = (sess.messages || []).find(function (x) { return x && x.id === msgId; });
-        if (!m || !Array.isArray(m.swipes) || m.swipes.length < 2) return;
+        if (!m) return;
+        var swipes = Array.isArray(m.swipes) ? m.swipes : [];
+        var total = swipes.length || 1;
         var sid = Number(m.swipeId);
-        if (!Number.isFinite(sid)) sid = m.swipes.length - 1;
-        var next = Math.max(0, Math.min(m.swipes.length - 1, sid + delta));
+        if (!Number.isFinite(sid)) sid = swipes.length ? swipes.length - 1 : 0;
+        sid = Math.max(0, Math.min(total - 1, Math.floor(sid)));
+
         /*
-         * 候选序号被截在两端（0 或末尾）时不做无谓的写盘与重绘。
+         * ── 分岔：› 到底该生成还是该翻页 ──
+         *
+         * 只有一版时点 ›：用户想看到「另一版」，去生成。
+         * 有多版且已经看到最后一版时点 ›：同样是「没有更多可翻的了」，
+         *   与其让点击静默失败（旧实现在两端直接 return，体感就是
+         *   按钮坏了），不如理解成「再要一版」。
+         */
+        var wantGenerate = delta > 0 && (total < 2 || sid >= total - 1);
+        if (wantGenerate) {
+            generateSwipeForMessage(m);
+            return;
+        }
+
+        /* ── 以下是纯翻看 ── */
+        if (total < 2) return;
+        var next = Math.max(0, Math.min(total - 1, sid + delta));
+        /*
+         * 候选序号被截在两端时不做无谓的写盘与重绘。
          * 以前这里照样往下走，于是「已经在最早一版还一直点 ‹」
          * 会反复写 localStorage —— 用户体感就是「点了半天没反应」。
          */
         if (next === sid) return;
-        var content = String(m.swipes[next] || '');
+        var content = String(swipes[next] || '');
         aps.updateMessage(ui.chatId, ui.sessionId, msgId, {
             content: content,
             swipeId: next,
-            swipes: m.swipes
+            swipes: swipes
         });
         /*
          * ⚠️ 这里原来写的是 renderStory()。
@@ -1582,6 +1664,83 @@
          * mol-story-body，而且不会把输入框里的草稿清掉。
          */
         patchStoryBody();
+    }
+
+    /**
+     * 给指定楼层**再生成一版**候选。
+     *
+     * 与「重回」（quickRedoLastAssistant）的关系：
+     *   · 重回作用于**末尾那一轮**，入口在上方工具栏；
+     *   · 这个方法作用于**被点的那一层**，入口在楼层自己的右下角。
+     * 底层走的是同一个引擎接口 regenerateAppointment，所以候选的归档、
+     * 上限截断、楼层写回位置这些规则完全一致，不需要两套逻辑。
+     *
+     * 对被点楼层的要求：它必须是 assistant 且不是最后一层之外的怪状态
+     * （比如该层后面还有更新的楼层）。这种情况也允许 —— 重答会就地
+     * 替换这一层的候选，后面的楼层不受影响，因为它们只把这一层
+     * **当前显示的那一版**当作历史，而我们要做的正是把当前这版换掉。
+     */
+    function generateSwipeForMessage(m) {
+        if (!m || m.role !== 'assistant') return;
+        var eng = apEngine();
+        if (!eng) return;
+        if (eng.isBusy(ui.chatId, ui.sessionId)) {
+            toast('等上一镜结束再说');
+            return;
+        }
+        /*
+         * 生成前先把目标层软删 —— 与 quickRedoLastAssistant 同一套时序。
+         *
+         * softDeleteForRegenerate 会在清空正文前把当前这一版归档成
+         * swipes[0] 当对照锚点，所以第一次点 › 之后：
+         *   原内容 → 候选 1，新生成 → 候选 2，切换器随即变成 ‹ 1/2 ›。
+         * 这正是「保留原内容」的实现方式，不需要我们手动拼候选表。
+         */
+        var aps = apStore();
+        if (aps && typeof aps.softDeleteForRegenerate === 'function') {
+            aps.softDeleteForRegenerate(ui.chatId, ui.sessionId, m.id);
+        } else if (aps && typeof aps.deleteMessage === 'function') {
+            aps.deleteMessage(ui.chatId, ui.sessionId, m.id);
+        }
+        patchStoryBody();
+
+        var input = $('xw-writer-input');
+        if (input) input.disabled = true;
+        var sendBtn = $('xw-writer-go');
+        if (sendBtn) sendBtn.disabled = true;
+        beginWriterGeneration();
+        var priorSwipes = Array.isArray(m.swipes) ? m.swipes.length : 0;
+        runStream(
+            Promise.resolve()
+                .then(function () {
+                    return eng.regenerateAppointment(
+                        ui.chatId,
+                        ui.sessionId,
+                        streamHandlers(),
+                        {
+                            replaceTargetId: m.id,
+                            /* 次数直接取候选表长度：候选表就是「刷过几次」的权威记录 */
+                            attempt: Math.max(1, priorSwipes)
+                        }
+                    );
+                })
+                .catch(function (err) {
+                    /*
+                     * 失败要把这一层放回去 —— 上面已经把它软删了。
+                     * 不还原的话，用户点一下 › 遇到网络问题，
+                     * 这一层就凭空消失（正文空、面板也不显示）。
+                     */
+                    if (aps && typeof aps.restoreMessage === 'function') {
+                        aps.restoreMessage(ui.chatId, ui.sessionId, m);
+                    }
+                    patchStoryBody();
+                    toast('没生成出来，已把这一层放回去');
+                    if (global.console && console.warn) console.warn('[swipe] generate failed', err);
+                })
+                .finally(function () {
+                    endWriterGeneration();
+                })
+        );
     }
 
     function messageBlockHtml(m, canEdit) {

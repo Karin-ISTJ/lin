@@ -1975,6 +1975,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * 单键形态（只有一版内容，点 › 生成新候选）。
+ *
+ * 比双键形态稍微显眼一点：它是这一层唯一的「还能再刷一版」入口，
+ * 太隐蔽的话用户根本发现不了这个能力。但不能太张扬 —— 它会出现在
+ * **每一个** assistant 楼层上，做重了整屏都是按钮，非常吵。
+ * 所以只用轻微的背景加深 + 稍高的不透明度来提示「这里可点」。
+ */
+.xw-swipe--single {
+  opacity: 0.5;
+  padding: 2px 3px;
+}
+.xw-swipe--single .xw-swipe__btn {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+.xw-swipe--single:hover,
+.xw-swipe--single:focus-within {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.07);
+}
+
 /* ── 生成中：发送钮变「停止」 ──
    与线上聊天室（.qq-room__send.is-stop）同款语义：图标换实心方块、
    颜色转暖红提示这是「中断」而非「发送」。两套输入栏都要覆盖到：
