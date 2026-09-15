@@ -3298,6 +3298,20 @@ function renderWriter() {
         var sendBtn = $('xw-writer-go');
         if (sendBtn) sendBtn.disabled = true;
         beginWriterGeneration();
+        /*
+         * 重答次数 —— 直接由「这一层现在有几个候选」推出来。
+         *
+         * 为什么需要它：连点两三次「重回」后仍出同一段话，是很常见的抱怨。
+         * 根因是每一轮送出去的 prompt 几乎一模一样，模型没有任何「这是第几次」
+         * 的概念（详见引擎侧 buildRegenerateHintBlock 的说明）。
+         * 把序号带上，至少让「再刷一次」在输入侧是可区分的。
+         *
+         * 这里用候选表长度而不是自己维护计数器：候选表就是「这一层被重答过
+         * 几次」的权威记录，跟随软删/复活/切换候选自动同步，不会漂。
+         * 取 0 时兜底成 1（第一次重答）。
+         */
+        var priorSwipes = targetAsst && Array.isArray(targetAsst.swipes) ? targetAsst.swipes.length : 0;
+        var attempt = Math.max(1, priorSwipes);
         runStream(
             Promise.resolve()
                 .then(function () {
@@ -3305,7 +3319,7 @@ function renderWriter() {
                         ui.chatId,
                         ui.sessionId,
                         streamHandlers(),
-                        { replaceTargetId: replaceTargetId }
+                        { replaceTargetId: replaceTargetId, attempt: attempt }
                     );
                 })
                 .finally(function () {
@@ -3992,7 +4006,14 @@ function renderWriter() {
                          * 精确命中被点的那一层，内容写回原位。
                          */
                         return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers(), {
-                            replaceTargetId: msg.id
+                            replaceTargetId: msg.id,
+                            /*
+                             * 同样带上重答次数：楼层内的「重发」和工具栏的
+                             * 「重回」在语义上是同一件事（让角色把这一轮重答），
+                             * 所以也需要让模型知道「这不是第一次」。
+                             * 候选表长度就是权威计数，见 quickRedoLastAssistant 的说明。
+                             */
+                            attempt: Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0)
                         });
                     })
                     .catch(function (err) {

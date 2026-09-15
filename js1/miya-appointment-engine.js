@@ -399,11 +399,91 @@
         apiMessages.push({ role: 'system', content: block });
     }
 
+    /**
+     * 「重答」提示块 —— 专门用来打破「刷新了但还是同一段话」。
+     *
+     * 起因是一个看上去不像 bug 的 bug：用户点「刷新楼层 / 重回」，
+     * 界面确实变了、候选也真的加了一条，但读起来跟上一版一字不差。
+     *
+     * 根因在输入侧：regenerateAppointment 调 runAppointmentCompletion 时
+     * 传的 userText 是空串，而 buildApiMessages 里那段
+     * 「if (extra) 才追加当前 user」的逻辑不会生效，于是**当前轮 user
+     * 是直接从会话历史里倒着捞出来的上一条 user**。实测两次请求的
+     * 会话段逐字节相同（只少了被软删的末条 assistant），相似度 91%：
+     *
+     *   首次生成：… user:问题X / assistant:角色对上轮的回答
+     *   点刷新后：… user:问题X            ← 末条 assistant 被软删后消失
+     *              + 倒着捞回来的 user:问题X 原地重复一次
+     *
+     * 也就是说，刷新时模型看到的上下文是「问题X … 问题X」中间**没有任何
+     * 角色回复**，而且全篇没有一处告诉它「这是一次重答、请换个写法」。
+     * 对它而言这就是同一次请求，重答当然收敛到同一段话。
+     *
+     * 所以这里补一条显式提示，明确四件事：
+     *   ① 这不是新的一轮，是同一次提问的重答；
+     *   ② 上一条角色回复已被撤回，不要把它当成已发生的事实续写；
+     *   ③ 必须换一条不同的叙事路径，不许照搬上一版措辞与句式；
+     *   ④ 人设、世界书、格式规则一律不变。
+     *
+     * 为什么不靠调 temperature：温度只影响采样随机性，在「输入完全相同」
+     * 的前提下经常照样收敛；而且用户配置好的生成参数不该被我们偷偷改掉。
+     * 真正缺的是**语义信号**，那就补语义信号。
+     *
+     * 位置与「元指令尾」同级（都在当前 user 之前、所有 system 之末），
+     * 这样它离生成点最近，且不会插进历史中间破坏上下文连贯。
+     */
+    function buildRegenerateHintBlock(attempt) {
+        var n = Math.floor(Number(attempt) || 0);
+        var lines = [
+            '【重答要求·本次为同一提问的重新生成】',
+            '上一条角色回复已被撤回，它不再属于本次上下文，请勿把它当作已经发生的事实继续推进。',
+            '本轮必须给出**不同于上一版**的内容：换一个切入点、换一组动作与对白、换一种叙事节奏，',
+            '严禁复用上一版的句子结构、比喻、收尾方式与段落划分。',
+            '但角色的身份、性格、说话习惯、与用户的关系，以及世界书核心设定与格式规则，一律保持不变。',
+            '用户提出的问题与诉求不变，你要做的是给出另一种同样合理的演绎，而不是换一个话题。'
+        ];
+        if (n > 1) {
+            /*
+             * 连续重答时把次数带进去。
+             *
+             * 连点两三次「重回」后仍出同一段话，是很常见的抱怨 ——
+             * 因为每一轮的输入都长得一模一样，模型没有任何「这是第几次」的概念。
+             * 把序号写进提示，至少让「再刷一次」这件事在输入侧是可区分的。
+             */
+            lines.push('这是同一提问的第 ' + String(n) + ' 次重答，请比上一次的差异更明显一些。');
+        }
+        return lines.join('\n');
+    }
+
+    function appendRegenerateHint(apiMessages, attempt) {
+        var block = buildRegenerateHintBlock(attempt);
+        if (!block || !Array.isArray(apiMessages)) return;
+        apiMessages.push({ role: 'system', content: block });
+    }
+
     function htmlApi() {
         return global.MiyaChatHtml || null;
     }
 
-    /** 本轮用户正文：优先参数，否则取会话最后一条 user */
+    /**
+     * 本轮用户正文：优先参数，否则取会话里「最后一次提问」。
+     *
+     * ⚠️ 这里原来只做「倒着找最后一条 user」，在正常发送路径上没问题，
+     * 但在**重答**路径上会取错：重答时 extra 为空，被软删的是末条 assistant，
+     * 历史末尾于是变成「… user:问题X / user:问题X」这种把同一条提问
+     * 原地重复的形态（上一条被捞出来当了当前轮，历史里那条又还在）。
+     *
+     * 更糟的是「末条是 user」的场次：软删后倒着找会一路摸到**更早那一轮**
+     * 的 user，把上一轮的提问当成这一轮的 —— 于是模型答的是另一个话题。
+     *
+     * 所以倒着找时要跳过「紧贴着末尾那一整段重复的连续 user」之前的形态：
+     * 取到最后一条 user 之后，再看它前面是否还有 user；若有，说明末尾这段
+     * 是合并缓冲（appendSessionHistory 会把连续 user 合并成一条），
+     * 直接取该合并段即可 —— 合并段本身就是「最后一次提问」的完整形态。
+     *
+     * 注意：这个函数只负责定位「当前轮讲的是什么」，不负责标记来源。
+     * 「当前轮是重答」这件事由 appendRegenerateHint 显式告知模型。
+     */
     function resolveTurnUserText(messages, extra) {
         var t = String(extra || '').trim();
         if (t) return t;
@@ -416,6 +496,18 @@
             }
         }
         return '';
+    }
+
+    /**
+     * 判断「这一次生成是不是重答」。
+     *
+     * 只看一个信号：handlers.replaceLastAssistant。
+     * regenerateAppointment 会把它置 true，sendAppointment 不会设 ——
+     * 语义边界很干净，不需要额外发明一套标志。
+     */
+    function isRegenerateRun(opts) {
+        var o = opts && typeof opts === 'object' ? opts : {};
+        return !!o.regenerate;
     }
 
     function finalizeAppointmentAssistantBody(parsed, htmlMode) {
@@ -896,6 +988,15 @@
             });
         }
         appendOfflineUserMetaTail(apiMessages, turnUserText);
+        /*
+         * 重答提示：必须在「历史之后、当前 user 之前」，紧贴生成点。
+         *
+         * 「刷新后还是同一段话」的正面修复就在这里 —— 见 buildRegenerateHintBlock
+         * 的详细说明。只在重答路径注入，正常发送完全不受影响。
+         */
+        if (isRegenerateRun(opts)) {
+            appendRegenerateHint(apiMessages, opts.regenerateAttempt);
+        }
 
 
         /* 当前轮 user 永远是最后一条消息：ST/HTML/元指令全部位于 user 之前。 */
@@ -1761,9 +1862,18 @@
         if (handlers.onStatus) handlers.onStatus('coming');
         /* ST 生成参数在进入异步前读取一次，保证本轮请求参数稳定 */
         var stGen = getStGenerationSettings();
+        /*
+         * 本轮是不是「重答」，以及是第几次 —— 必须在进入异步前定下来，
+         * 否则 await 之后再读 handlers 可能已被下一轮改写。
+         */
+        var regenRun = !!handlers.replaceLastAssistant;
+        var regenAttempt = Math.floor(Number(handlers.regenerateAttempt) || 0);
         /* 先让「书写中」上屏，再拼 prompt，避免按发送瞬间卡死 */
         return yieldToPaint().then(function () {
-            var built = buildApiMessages(chatId, sessionId, '', {});
+            var built = buildApiMessages(chatId, sessionId, '', {
+                regenerate: regenRun,
+                regenerateAttempt: regenAttempt
+            });
             if (built.error) throw new Error(built.error);
             var url = baseUrl + '/chat/completions';
             var headers = {
@@ -2050,6 +2160,15 @@
         handlers.replaceLastAssistant = true;
         var targetId = String(regenOpts.replaceTargetId || handlers.replaceTargetId || '').trim();
         if (targetId) handlers.replaceTargetId = targetId;
+        /*
+         * 重答次数：调用方可以不传，默认 1。
+         *
+         * 这个数字只用于给模型一句「这是第 N 次重答，差异再明显一点」，
+         * 不进任何持久化数据，也不改变写入目标楼层。
+         */
+        if (handlers.regenerateAttempt == null) {
+            handlers.regenerateAttempt = Math.max(1, Math.floor(Number(regenOpts.attempt) || 1));
+        }
         if (handlers.onStatus) handlers.onStatus('generating');
         return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
             if (genLife && genLife.finish) genLife.finish('offline:' + key, v);
