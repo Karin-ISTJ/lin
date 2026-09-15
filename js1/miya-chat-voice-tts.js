@@ -174,7 +174,7 @@
 
     function defaultMinimaxTtsSpeechModel(mm) {
         var s = String(mm && mm.model != null ? mm.model : '').trim();
-        return s || 'speech-02-turbo';
+        return s || 'speech-2.8-hd';
     }
 
     function getApiConfigCached() {
@@ -254,7 +254,14 @@
         );
     }
 
-    function voiceTtsCacheMatchesMsg(msg, voiceId, langBoost, storageKey) {
+    /** 语音参数指纹：speed/vol/pitch 任一变化都会产生新缓存键，
+     *  避免「调了音调却仍播旧音频」的错配 */
+    function ttsTuningSignature(mm) {
+        var vs = resolveTtsVoiceSetting(mm);
+        return [vs.speed, vs.vol, vs.pitch].join('_');
+    }
+
+    function voiceTtsCacheMatchesMsg(msg, voiceId, langBoost, storageKey, tuningSig) {
         if (
             !msg ||
             !msg.voiceTtsIdbKey ||
@@ -264,8 +271,10 @@
         ) {
             return false;
         }
-        /* 旧缓存可能没有 model 字段，仍视为命中 */
-        return true;
+        /* 旧缓存没有 tuning 字段：参数为默认档(1_1_0)时仍视为命中，否则重合成 */
+        var want = tuningSig != null ? String(tuningSig) : '1_1_0';
+        var have = msg.voiceTtsTuning != null ? String(msg.voiceTtsTuning) : '1_1_0';
+        return have === want;
     }
 
     function stripVoiceTtsFieldsFromMessage(msg) {
@@ -312,12 +321,29 @@
         }));
     }
 
+    /** 夹紧到 [min,max]；非法值回落到 fallback */
+    function clampNum(v, min, max, fallback) {
+        var n = v != null && v !== '' ? Number(v) : NaN;
+        if (!Number.isFinite(n)) n = Number(fallback);
+        if (!Number.isFinite(n)) n = min;
+        return Math.min(max, Math.max(min, n));
+    }
+
+    /* 语音合成参数口径（与设置界面滑杆一致）：
+       speed 0.5–2.0 / vol 0.1–2.0 / pitch −12–12 */
+    function resolveTtsVoiceSetting(mm, voiceId) {
+        return {
+            voice_id: String(voiceId || '').trim(),
+            speed: clampNum(mm && mm.speed, 0.5, 2, 1),
+            vol: clampNum(mm && mm.vol, 0.1, 2, 1),
+            pitch: Math.round(clampNum(mm && mm.pitch, -12, 12, 0))
+        };
+    }
+
     function fetchMinimaxTtsOnce(base, mm, text, voiceId, languageBoost) {
         var apiKey = String(mm.apiKey || '').trim();
         var groupId = String(mm.groupId || '').trim();
         var model = defaultMinimaxTtsSpeechModel(mm);
-        var speedRaw = mm.speed != null ? Number(mm.speed) : 1;
-        var speed = Number.isFinite(speedRaw) ? Math.min(2, Math.max(0.5, speedRaw)) : 1;
         var url = normalizeMinimaxTtsBaseUrl(base) + '/v1/t2a_v2?GroupId=' + encodeURIComponent(groupId);
         var body = {
             model: model,
@@ -325,12 +351,7 @@
             stream: false,
             language_boost: String(languageBoost || 'auto').trim() || 'auto',
             output_format: 'hex',
-            voice_setting: {
-                voice_id: String(voiceId || '').trim(),
-                speed: speed,
-                vol: 1,
-                pitch: 0
-            },
+            voice_setting: resolveTtsVoiceSetting(mm, voiceId),
             audio_setting: {
                 sample_rate: 32000,
                 bitrate: 128000,
@@ -568,6 +589,7 @@
                                 voiceTtsVoiceId: voiceId,
                                 voiceTtsLanguageBoost: langBoost,
                                 voiceTtsModel: speechModel,
+                                voiceTtsTuning: ttsTuningSignature(mmForReq),
                                 voiceTtsDurationSec: durGuess
                             });
                         })
@@ -601,18 +623,23 @@
                     return;
                 }
                 var speechModel = defaultMinimaxTtsSpeechModel(mm);
-                if (!voiceTtsCacheMatchesMsg(msg, voiceId, langBoost, storageKey)) {
+                var sig = ttsTuningSignature(mm);
+                if (!voiceTtsCacheMatchesMsg(msg, voiceId, langBoost, storageKey, sig)) {
                     delete msg.voiceTtsIdbKey;
                     delete msg.voiceTtsVoiceId;
                     delete msg.voiceTtsLanguageBoost;
                     delete msg.voiceTtsModel;
                     delete msg.voiceTtsDurationSec;
+                    delete msg.voiceTtsTuning;
                 }
                 runSynthesize(Object.assign({}, mm, { model: speechModel }), speechModel);
             });
         }
 
-        if (voiceTtsCacheMatchesMsg(msg, voiceId, langBoost, storageKey)) {
+        /* 这里先按「默认档」做一次乐观命中判断：参数为默认值时命中就走 IDB，
+           否则直接开始合成。真正的参数指纹校验在 startSynthesize 里用实时配置
+           再做一次，确保调过 speed/vol/pitch 之后不会播到旧音频。 */
+        if (voiceTtsCacheMatchesMsg(msg, voiceId, langBoost, storageKey, ttsTuningSignature(null))) {
             idbGetRecord(storageKey)
                 .then(function (stored) {
                     if (!stillCurrent()) {
@@ -764,9 +791,11 @@
                     return idbPutRecord(storageKey, {
                         blob: blob,
                         mime: 'audio/mpeg',
+                        kind: 'tts',
                         voiceId: voiceId,
                         langBoost: langBoost,
                         model: speechModel,
+                        tuning: ttsTuningSignature(mmForReq),
                         durationSec: durGuess,
                         updatedAt: Date.now()
                     })
@@ -795,11 +824,14 @@
 
         idbGetRecord(storageKey)
             .then(function (stored) {
+                var sig = stored && stored.tuning != null ? String(stored.tuning) : '1_1_0';
                 if (
                     stored &&
                     stored.blob &&
+                    stored.kind !== 'user-rec' && /* 别把用户自己的录音当 TTS 缓存播出去 */
                     String(stored.voiceId || '') === String(voiceId) &&
-                    String(stored.langBoost || '') === String(langBoost)
+                    String(stored.langBoost || '') === String(langBoost) &&
+                    sig === ttsTuningSignature(null)
                 ) {
                     if (tryPlayStored(stored)) return;
                 }
@@ -816,6 +848,8 @@
         playPlainText: playPlainText,
         playWhisperLine: playWhisperLine,
         resolveVoiceConfig: resolveVoiceConfig,
+        resolveTtsVoiceSetting: resolveTtsVoiceSetting,
+        ttsTuningSignature: ttsTuningSignature,
         whisperLineIdbKey: whisperLineIdbKey,
         playFromBlob: playVoiceTtsFromBlob,
         chatVoiceTtsIdbKey: chatVoiceTtsIdbKey

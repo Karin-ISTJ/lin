@@ -10,16 +10,6 @@
     apiCore: {
       js: ['js2/miya-api-bridge.js?v=2']
     },
-    simulator: {
-      css: ['css/miya-simulator.css?v=11'],
-      js: [
-        'js2/miya-simulator-store.js?v=14',
-        'js2/miya-simulator-engine.js?v=12',
-        'js2/miya-simulator-narrative.js?v=2',
-        'js2/miya-simulator-play-modules.js?v=7',
-        'js2/miya-simulator-app.js?v=18'
-      ]
-    },
     coupleUi: {
       css: [
         'css/miya-couple.css?v=12',
@@ -72,7 +62,6 @@
   };
 
   var APP_TO_GROUPS = {
-    pen: ['simulator', 'apiCore'],
     couple: ['coupleUi', 'apiCore'],
     notes: ['diaryUi', 'apiCore'],
     itinerary: ['itineraryUi', 'apiCore'],
@@ -173,17 +162,8 @@
   }
 
   function peekSimulatorLastMode() {
-    try {
-      var raw = localStorage.getItem('miya-simulator-v2');
-      if (!raw) raw = localStorage.getItem('miya-simulator-v1');
-      if (!raw) return 'phone';
-      var data = JSON.parse(raw);
-      var mode = data && data.lastMode;
-      if (mode === 'simulator' || mode === 'sim') return 'sim';
-      return 'phone';
-    } catch (e) {
-      return 'phone';
-    }
+    /* 模拟器已移除，恒为小手机模式 */
+    return 'phone';
   }
 
   function prefetchAllIdle() {

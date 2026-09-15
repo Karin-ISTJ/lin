@@ -133,8 +133,7 @@ html.is-mobile .desk--p2,
 html.is-mobile .desk--p3,
 html.is-mobile .qq-room__scroll,
 html.is-mobile #qq-room-scroll,
-html.is-mobile .ncm-scroll,
-html.is-mobile .sim-root {
+html.is-mobile .ncm-scroll {
   contain: layout style;
 }
 

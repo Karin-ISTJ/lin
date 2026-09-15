@@ -1,13 +1,5 @@
 /* miya小手机 — 纯白主屏 */
 
-/* Mode rail CSS is lazy-loaded with simulator; hide outside sim/world to avoid FOUC */
-body:not(.miya-mode-sim):not(.miya-mode-world) .miya-mode-rail,
-.miya-mode-rail[hidden] {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
 :root {
   --white: rgba(255, 255, 255, 0.98);
   --glass-bg: rgba(255, 255, 255, 0.96);
@@ -73,9 +65,6 @@ html.miya-custom-font-active {
   --lt-serif: var(--miya-font);
   --mn-ui: var(--miya-font);
   --mn-display: var(--miya-font);
-  --sim-sans: var(--miya-font);
-  --sim-serif: var(--miya-font);
-  --sim-mono: var(--miya-font);
 }
 
 /* 聊天美化主题在 .miya-chat-app 上重定义 --soft-font / --mc-display，需压过主题局部变量 */
@@ -1175,7 +1164,7 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
    桌面（#miya-phone-layer / .desk-custom-track）的内容由 JS 异步渲染，
    首帧时会先露出空桌面。这里在 body.miya-booting 期间用整屏遮罩盖住，
    等 js1/app.js 的 finishPhoneBoot() 完成后淡出并移除。
-   注意：不能放进 miya-simulator.css，那是懒加载样式表，首帧根本还没到。 */
+   注意：必须放在首屏同步加载的样式表里，懒加载样式表首帧根本还没到。 */
 .miya-bootcover {
   position: fixed;
   inset: 0;

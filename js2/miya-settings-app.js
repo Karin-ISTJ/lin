@@ -32,9 +32,6 @@
   var APPOINTMENT_BACKUP_KEY = 'miya-appointment-v1-backup';
   var OFFLINE_BEAUTIFY_PRESETS_KEY = 'miya-offline-beautify-presets-v1';
   var ITINERARY_KEY = 'miya-itinerary-v1';
-  var SIMULATOR_KEY = 'miya-simulator-v2';
-  var SIMULATOR_KEY_LEGACY = 'miya-simulator-v1';
-  var SIMULATOR_BACKUP_KEY = 'miya-simulator-v2-backup';
   var WEATHER_KEY = 'miya-weather-v1';
   var COUPLE_KEY = 'miya-couple-v1';
   var COUPLE_WHISPER_KEY = 'miya-couple-whisper-v1';
@@ -88,8 +85,7 @@
     },
     { id: 'itinerary', title: '行程轨迹', lsKeys: [ITINERARY_KEY], widgetKvKeys: [ITINERARY_KEY] },
     { id: 'weather', title: '天气', lsKeys: [WEATHER_KEY], widgetKvKeys: [WEATHER_KEY] },
-    { id: 'couple', title: '情侣空间', lsKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY], widgetKvKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY] },
-    { id: 'simulator', title: '人生分镜馆', lsKeys: [SIMULATOR_KEY, SIMULATOR_KEY_LEGACY, SIMULATOR_BACKUP_KEY], widgetKvKeys: [SIMULATOR_KEY, SIMULATOR_BACKUP_KEY] }
+    { id: 'couple', title: '情侣空间', lsKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY], widgetKvKeys: [COUPLE_KEY, COUPLE_WHISPER_KEY] }
   ];
 
   var BACKUP_IDB_STORES_BASE = [
@@ -963,9 +959,6 @@
     if (cat.id === 'chat' && global.MiyaChatAlbum && typeof global.MiyaChatAlbum.invalidateCache === 'function') {
       global.MiyaChatAlbum.invalidateCache();
     }
-    if (cat.id === 'simulator' && global.MiyaSimulatorStore && global.MiyaSimulatorStore.invalidateCache) {
-      global.MiyaSimulatorStore.invalidateCache();
-    }
     if (cat.id === 'diary' && global.miyaDiaryStore && global.miyaDiaryStore.invalidateCache) {
       global.miyaDiaryStore.invalidateCache();
     }
@@ -997,7 +990,6 @@
     if (global.miyaContactsStore && global.miyaContactsStore.invalidateCache) global.miyaContactsStore.invalidateCache();
     if (global.miyaChatStore && global.miyaChatStore.invalidateCache) global.miyaChatStore.invalidateCache();
     if (global.miyaChatGlobalSettings && global.miyaChatGlobalSettings.invalidateCache) global.miyaChatGlobalSettings.invalidateCache();
-    if (global.MiyaSimulatorStore && global.MiyaSimulatorStore.invalidateCache) global.MiyaSimulatorStore.invalidateCache();
     if (global.miyaDiaryStore && global.miyaDiaryStore.invalidateCache) global.miyaDiaryStore.invalidateCache();
     if (global.miyaWeatherStore && global.miyaWeatherStore.invalidateCache) global.miyaWeatherStore.invalidateCache();
     if (global.miyaCoupleStore && global.miyaCoupleStore.invalidateCache) global.miyaCoupleStore.invalidateCache();
@@ -1124,16 +1116,32 @@
     };
   }
 
+  /* 语音合成参数口径：与 miya-chat-voice-tts.js 的 resolveTtsVoiceSetting 保持一致 */
+  function clampNum(v, min, max, fallback) {
+    var n = v != null && v !== '' ? Number(v) : NaN;
+    if (!Number.isFinite(n)) n = Number(fallback);
+    if (!Number.isFinite(n)) n = min;
+    return Math.min(max, Math.max(min, n));
+  }
+
   function readMinimaxForm() {
     var speedEl = $('miya-st-mm-speed');
     var speed = speedEl ? parseFloat(speedEl.value) : 1;
     if (!Number.isFinite(speed)) speed = 1;
     speed = Math.min(2, Math.max(0.5, speed));
+    var volEl = $('miya-st-mm-vol');
+    var vol = volEl ? parseFloat(volEl.value) : 1;
+    vol = clampNum(vol, 0.1, 2, 1);
+    var pitchEl = $('miya-st-mm-pitch');
+    var pitch = pitchEl ? parseFloat(pitchEl.value) : 0;
+    pitch = Math.round(clampNum(pitch, -12, 12, 0));
     return {
       apiKey: ($('miya-st-mm-key') || {}).value ? $('miya-st-mm-key').value.trim() : '',
       groupId: ($('miya-st-mm-group') || {}).value ? $('miya-st-mm-group').value.trim() : '',
       model: ($('miya-st-mm-model') || {}).value || '',
       speed: speed,
+      vol: vol,
+      pitch: pitch,
       ttsPrompt: ($('miya-st-mm-prompt') || {}).value ? $('miya-st-mm-prompt').value.trim() : ''
     };
   }
@@ -1192,6 +1200,12 @@
     mmSpeed = Math.min(2, Math.max(0.5, mmSpeed));
     if ($('miya-st-mm-speed')) $('miya-st-mm-speed').value = String(mmSpeed);
     if ($('miya-st-mm-speed-lbl')) $('miya-st-mm-speed-lbl').textContent = mmSpeed.toFixed(1);
+    var mmVol = clampNum(mm.vol, 0.1, 2, 1);
+    if ($('miya-st-mm-vol')) $('miya-st-mm-vol').value = String(mmVol);
+    if ($('miya-st-mm-vol-lbl')) $('miya-st-mm-vol-lbl').textContent = mmVol.toFixed(1);
+    var mmPitch = Math.round(clampNum(mm.pitch, -12, 12, 0));
+    if ($('miya-st-mm-pitch')) $('miya-st-mm-pitch').value = String(mmPitch);
+    if ($('miya-st-mm-pitch-lbl')) $('miya-st-mm-pitch-lbl').textContent = String(mmPitch);
     if ($('miya-st-mm-prompt')) $('miya-st-mm-prompt').value = mm.ttsPrompt || '';
     fillModelSelect($('miya-st-mm-model'), MINIMAX_MODELS, mm.model);
     syncMainToggles();
@@ -1542,9 +1556,6 @@
     }
     if (global.miyaContactsRelationshipStore && typeof global.miyaContactsRelationshipStore.invalidateCache === 'function') {
       global.miyaContactsRelationshipStore.invalidateCache();
-    }
-    if (global.MiyaSimulatorStore && typeof global.MiyaSimulatorStore.invalidateCache === 'function') {
-      global.MiyaSimulatorStore.invalidateCache();
     }
     if (global.miyaDiaryStore && typeof global.miyaDiaryStore.invalidateCache === 'function') {
       global.miyaDiaryStore.invalidateCache();
@@ -2260,6 +2271,22 @@
     if (mmSpeedIn) {
       mmSpeedIn.addEventListener('input', function () {
         if (mmSpeedLbl) mmSpeedLbl.textContent = parseFloat(mmSpeedIn.value).toFixed(1);
+      });
+    }
+
+    var mmVolIn = $('miya-st-mm-vol');
+    var mmVolLbl = $('miya-st-mm-vol-lbl');
+    if (mmVolIn) {
+      mmVolIn.addEventListener('input', function () {
+        if (mmVolLbl) mmVolLbl.textContent = parseFloat(mmVolIn.value).toFixed(1);
+      });
+    }
+
+    var mmPitchIn = $('miya-st-mm-pitch');
+    var mmPitchLbl = $('miya-st-mm-pitch-lbl');
+    if (mmPitchIn) {
+      mmPitchIn.addEventListener('input', function () {
+        if (mmPitchLbl) mmPitchLbl.textContent = String(parseInt(mmPitchIn.value, 10) || 0);
       });
     }
 

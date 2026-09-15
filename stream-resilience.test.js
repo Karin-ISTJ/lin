@@ -13,7 +13,10 @@
  *   - 用户中止 → 原样抛 AbortError
  *   - 空闲超时看门狗存在
  *   - 不再有退避空转（断线应立即返回，而非白等 1.2 秒）
- *   - 三处实现策略一致
+ *   - 两处实现策略一致
+ *
+ * 注：原第三个被测对象（模拟器引擎 js2/miya-simulator-engine.js）
+ * 已随模拟器模式一并移除，本测试同步收窄到剩余两处实现。
  */
 'use strict';
 
@@ -23,7 +26,6 @@ var path = require('path');
 var ROOT = process.env.PKG_ROOT || __dirname;
 var BRIDGE = path.join(ROOT, 'js2/miya-api-bridge.js');
 var APPT = path.join(ROOT, 'js1/miya-appointment-engine.js');
-var SIM = path.join(ROOT, 'js2/miya-simulator-engine.js');
 
 var pass = 0, fail = 0, failures = [];
 function check(name, got, expect) {
@@ -35,9 +37,8 @@ function section(t) { console.log('\n=== ' + t + ' ==='); }
 
 var bridgeSrc = fs.readFileSync(BRIDGE, 'utf8');
 var apptSrc = fs.readFileSync(APPT, 'utf8');
-var simSrc = fs.readFileSync(SIM, 'utf8');
 
-var all = [['api-bridge', bridgeSrc], ['appointment-engine', apptSrc], ['simulator-engine', simSrc]];
+var all = [['api-bridge', bridgeSrc], ['appointment-engine', apptSrc]];
 
 /* ── 静态审计 ── */
 section('A. 旧的「退避续读」已移除');
@@ -62,9 +63,8 @@ check('api-bridge：支持 onPartial 回调', /reqOpts\.onPartial/.test(bridgeSr
 check('api-bridge：finishPartial 调用 markPartial', /function finishPartial\(err\) \{[\s\S]{0,300}?markPartial\(err\)/.test(bridgeSrc), true);
 check('appointment-engine：支持 handlers.onPartial', /handlers\.onPartial/.test(apptSrc), true);
 check('appointment-engine：返回体带 partial:true', /partial: *true/.test(apptSrc), true);
-check('simulator-engine：支持 handlers.onPartial', /handlers\.onPartial/.test(simSrc), true);
 
-section('D. 三处实现策略一致');
+section('D. 两处实现策略一致');
 all.forEach(function (p) {
   check(p[0] + '：有 err 回调', /reader\.read\(\)\.then\(function[\s\S]{0,3000}?\}, function \(err\)/.test(p[1]), true);
   check(p[0] + '：有 abort 守卫', /AbortError/.test(p[1]), true);

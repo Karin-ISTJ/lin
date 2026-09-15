@@ -1646,17 +1646,43 @@
     }, true);
   }
 
+  /**
+   * 列表页值守守卫。
+   *
+   * 打开 App 后短暂盯着「消息列表」，防止自动路径把会话偷偷打开 ——
+   * 那种幽灵进房的窗口很短（冷启动水合、延迟回调），
+   * 所以这里只需要盯住开头这几秒，不必长驻。
+   *
+   * 早期版本盯满 30 秒，配合「按固定时间窗判断是否用户进房」的守卫，
+   * 结果就是：用户在角色聊天页停留超过授权窗口（4 秒）后，
+   * 被这个 500ms 轮询反复判定为「自动进房」而踢回列表 ——
+   * 停留越久越必然触发。守卫本身已改为按「用户是否在场」判断，
+   * 这里也同步收窄值守时长，只覆盖真正的幽灵进房窗口。
+   */
+  var LIST_GUARD_HOLD_MS = 6000;
   function startListGuard(el) {
     stopListGuard();
-    var ticks = 0;
+    var deadline = Date.now() + LIST_GUARD_HOLD_MS;
     listGuardTimer = setInterval(function () {
-      ticks += 1;
-      /* 最多盯 30 秒：覆盖冷启动后各种延迟回调，之后交还给正常逻辑 */
-      if (ticks > 60) { stopListGuard(); return; }
+      if (Date.now() > deadline) { stopListGuard(); return; }
       if (!el || !el.classList.contains('is-open')) { stopListGuard(); return; }
+      /*
+       * 用户已经进房（房间开着）就不再盯：
+       * 他不在列表页，守卫的职责（防列表页幽灵进房）已经不适用。
+       * 继续轮询只会在边界上误伤正常看聊天的用户。
+       */
+      if (global.miyaChatRoom && typeof global.miyaChatRoom.getOpenChatId === 'function') {
+        if (global.miyaChatRoom.getOpenChatId()) {
+          if (typeof global.miyaChatRoom.guardSettleRoomEntry === 'function') {
+            try { global.miyaChatRoom.guardSettleRoomEntry(); } catch (e) {}
+          }
+          stopListGuard();
+          return;
+        }
+      }
       if (!global.miyaChatRoom || typeof global.miyaChatRoom.guardAutoRoomOpen !== 'function') return;
       try { global.miyaChatRoom.guardAutoRoomOpen(); } catch (e) {}
-    }, 500);
+    }, 400);
   }
   function stopListGuard() {
     if (listGuardTimer) {

@@ -347,11 +347,6 @@
     store: function () {
       if (window.miyaOfflineApp && window.miyaOfflineApp.open) window.miyaOfflineApp.open();
     },
-    pen: function () {
-      if (window.miyaModeSwitch && window.miyaModeSwitch.setMode) {
-        window.miyaModeSwitch.setMode('sim');
-      }
-    },
     itinerary: function () {
       if (window.miyaItineraryApp && window.miyaItineraryApp.open) window.miyaItineraryApp.open();
     },
@@ -416,18 +411,6 @@
         window.miyaLazyEnsureApp(id).then(run).catch(run);
       } else {
         run();
-      }
-      return true;
-    }
-    if (id === 'pen' && window.miyaModeSwitch) {
-      if (window.miyaLazyEnsureApp) {
-        window.miyaLazyEnsureApp('pen').then(function () {
-          window.miyaModeSwitch.setMode('sim');
-        }).catch(function () {
-          window.miyaModeSwitch.setMode('sim');
-        });
-      } else {
-        window.miyaModeSwitch.setMode('sim');
       }
       return true;
     }
