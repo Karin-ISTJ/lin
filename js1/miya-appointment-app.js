@@ -1482,6 +1482,11 @@
                 ? '<span class="xw-chat__deco" aria-hidden="true">' +
                   '<span class="xw-chat__deco-branch"></span></span>'
                 : '';
+        /*
+         * 候选切换键在手帐主题里原来完全缺失 —— 用户刷出来的历史版本
+         * 一个都翻不回去。这里跟素纸主题对齐，补在气泡尾部。
+         */
+        var swipeBar = offlineSwipeBarHtml(m);
         var bubbleInner =
             deco +
             (isUser
@@ -1493,7 +1498,14 @@
             time +
             (isUser ? '<span class="xw-chat__ticks" aria-hidden="true">✓✓</span>' : '') +
             '</time>' +
-            tools;
+            /*
+             * 和素纸主题同一个结构：工具靠左、候选切换靠右，
+             * 由 .xw-chat__foot 这个 flex 行统一管布局。
+             */
+            '<div class="xw-chat__foot">' +
+            tools +
+            swipeBar +
+            '</div>';
         var attrs =
             ' data-ap-msg-id="' + esc(m.id) + '" data-ap-msg-role="' + esc(m.role) + '"' +
             (canEdit ? ' tabindex="0"' : '');
@@ -1603,7 +1615,15 @@
             '<div class="xw-block__lines">' +
             lines +
             '</div>' +
-            swipeBar +
+            /*
+             * 底部一行：左边是「改 / 重发 / 删」，右边是候选切换 ‹ ›。
+             *
+             * 两者必须放进同一个 flex 行里 —— 早先把 swipeBar 单独放在正文下面，
+             * 结果它和 __tools 各占一行、还互相压；而单纯给 swipeBar 加
+             * margin-left:auto 也无效，因为 .xw-block 不是 flex 容器。
+             * 现在由 __foot 这个 flex 行统一管布局：工具靠左，切换键靠右。
+             */
+            '<div class="xw-block__foot">' +
             '<div class="xw-block__tools">' +
             '<button type="button" class="xw-block__tool" data-ap-msg-edit="' +
             esc(m.id) +
@@ -1615,7 +1635,9 @@
             esc(m.id) +
             '" title="删除" aria-label="删除">' +
             ICON_DELETE +
-            '</button></div></div>'
+            '</button></div>' +
+            swipeBar +
+            '</div></div>'
         );
     }
 
@@ -3162,16 +3184,40 @@ function renderWriter() {
             return;
         }
         /*
-         * 已有多候选时，先把这层的 swipes 候选清空再重答。
+         * 这一轮里的 assistant 楼层就是「要覆盖的目标」。
          *
-         * 不清的话，引擎侧 updateMessage 里的
-         *   prevSwipes.push(content)
-         * 会把历史候选无限累积，且视角永远落在「最新」——
-         * 用户既看不到自己刚重答出来的差异，也没法靠左右切换找回旧文本。
+         * 必须显式把 id 交给引擎，不能让它自己找。原因是下面会先软删这一层，
+         * 而引擎的查找逻辑会跳过 deleted 行、一路往上摸到**更早的、不相干**的
+         * 一层 —— 结果新内容写进了别的楼层，用户看到的是「重答跑位了」。
+         */
+        var targetAsst = null;
+        round.forEach(function (m) {
+            if (!targetAsst && m && m.role === 'assistant') targetAsst = m;
+        });
+        var replaceTargetId = targetAsst ? targetAsst.id : '';
+        /*
+         * 不再清空 swipes —— 那正是「刷新后看不到之前内容」的原因。
+         *
+         * 旧实现在这里把这层的候选清光后再重答，等于每刷新一次就丢掉所有历史版本，
+         * 用户只能看到最新那一条。现在保留候选，让引擎把新内容 push 成新候选，
+         * 这样右下角的 ‹ › 就能在「原版 / 以前刷出来的 / 最新」之间来回翻。
+         * 候选数量由引擎侧的 SWIPE_MAX 封顶，不会无限膨胀。
          */
         var hadSwipes = trailingAssistantHasSwipes(msgs);
         round.forEach(function (m) {
-            apStore().deleteMessage(ui.chatId, ui.sessionId, m.id);
+            /*
+             * 用 softDeleteForRegenerate 而不是普通 deleteMessage：
+             * 它会在清空正文之前，把当前这一版存成候选锚点（swipes[0]）。
+             * 否则第一次刷新就把原版弄丢了 —— 候选表只剩新刷出来那一条，
+             * 右下角的 ‹ › 因为「不足两条候选」根本不渲染，用户也就
+             * 「看不到之前的内容、也没有切换键」。
+             */
+            var store = apStore();
+            if (store && typeof store.softDeleteForRegenerate === 'function') {
+                store.softDeleteForRegenerate(ui.chatId, ui.sessionId, m.id);
+            } else {
+                store.deleteMessage(ui.chatId, ui.sessionId, m.id);
+            }
         });
         patchStoryBody();
         var input = $('xw-writer-input');
@@ -3182,15 +3228,20 @@ function renderWriter() {
         runStream(
             Promise.resolve()
                 .then(function () {
-                    return eng.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
+                    return eng.regenerateAppointment(
+                        ui.chatId,
+                        ui.sessionId,
+                        streamHandlers(),
+                        { replaceTargetId: replaceTargetId }
+                    );
                 })
                 .finally(function () {
                     endWriterGeneration();
                 })
         );
         if (hadSwipes) {
-            /* 明确告知：这次是覆盖重答，不是又叠了一个候选。 */
-            toast('已重新书写这一镜');
+            /* 明确告知：这次是又加了一个候选，可以用 ‹ › 翻回去看。 */
+            toast('已刷新，用右下角 ‹ › 翻看各个版本');
         }
     }
 

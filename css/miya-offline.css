@@ -675,6 +675,24 @@
   transition: opacity 0.2s;
 }
 
+/*
+ * 楼层底部一行：工具靠左、候选切换靠右。
+ * 用 margin-left:auto 把后面的 .xw-swipe 推到最右 —— 这里是 flex 容器，
+ * auto 外边距才生效（放在 .xw-block 上是不行的，它不是 flex）。
+ */
+.xw-block__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  /* 切换键常在，所以这一行本身不能被 hover 隐藏 */
+  min-height: 0;
+}
+/* 工具组在这个 flex 行里不再需要自己的上边距 */
+.xw-block__foot .xw-block__tools {
+  margin-top: 0;
+}
+/* 悬停整层时工具出现；切换键常显，不参与隐藏 */
 .xw-block:hover .xw-block__tools,
 .xw-block:focus-within .xw-block__tools { opacity: 1; }
 
@@ -1902,32 +1920,59 @@
   color: #1A1A1A !important;
 }
 
-/* 线下楼层 Swipe 候选切换 */
+/* 线下楼层 Swipe 候选切换
+ *
+ * v66：由「居中占满一行」改为「楼层右下角的小胶囊」。
+ * 位置上贴着这一层的右下角，视觉上归属这一层（提示「这里有几个版本」），
+ * 又不打断阅读节奏。父级 .xw-block__foot 是 flex 行，
+ * margin-left:auto 把它顶到最右端。
+ */
 .xw-swipe {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
-  padding: 4px 0;
-  opacity: 0.78;
+  gap: 2px;
+  /* 推到同一行的最右侧 */
+  margin-left: auto;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.045);
+  opacity: 0.72;
+  transition: opacity 0.18s ease;
+}
+/* 悬停/触摸时整条变清晰，平时压低存在感 */
+.xw-swipe:hover,
+.xw-swipe:focus-within {
+  opacity: 1;
 }
 .xw-swipe__btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.05);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
+  padding: 0;
+  /* 让 ‹ › 字形在圆形里视觉居中 */
+  padding-bottom: 1px;
 }
-.xw-swipe__btn:active { transform: scale(0.94); }
+.xw-swipe__btn:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+.xw-swipe__btn:active { transform: scale(0.92); }
 .xw-swipe__idx {
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  min-width: 3.5em;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  min-width: 3.2em;
   text-align: center;
+  opacity: 0.85;
+  /* 序号等宽，避免 1/10 与 10/10 切换时胶囊宽度跳动 */
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── 生成中：发送钮变「停止」 ──

@@ -2083,7 +2083,7 @@
             syncMessageToOnlineMirrors(chatId, sess.messages[idx]);
             return sess.messages[idx];
         },
-        deleteMessage: function (chatId, sessionId, messageId) {
+        deleteMessage: function (chatId, sessionId, messageId, extra) {
             var sess = store.getSession(chatId, sessionId);
             if (!sess) return null;
             /*
@@ -2111,10 +2111,10 @@
                  * 脏数据里若有两行同 id，第二条就漏掉了 —— 而收尾的
                  * _dedupeMessages 保留的是靠后那条，于是「删完反而剩一条活的」。
                  */
-                last = store._patchAllById(chatId, sessionId, messageId, {
+                last = store._patchAllById(chatId, sessionId, messageId, Object.assign({
                     deleted: true,
                     content: ''
-                });
+                }, extra || {}));
             });
             /*
              * 清掉重复的死行：软删本身不动数组长度，重复行会一直躺在
@@ -2145,6 +2145,44 @@
             if (!touched) return null;
             store._writeSession(sess);
             return last;
+        },
+        /*
+         * 「重回/刷新楼层」专用软删：删之前先把当前正文存成候选锚点。
+         *
+         * 为什么不能直接用 deleteMessage：
+         * 重回的时序是「先软删那一层 → 再让引擎重答」，而 deleteMessage 会
+         * 把 content 清成 ''（普通删除应该这样，楼层不该再显示旧文本）。
+         * 但引擎随后要读 lastAsst.content 来补第一条候选：
+         *     var prevSwipes = lastAsst.swipes || [];
+         *     if (!prevSwipes.length && lastAsst.content) prevSwipes.push(content);
+         * 内容已被清空，这句就永远不成立 —— 于是**第一次刷新**时候选表里
+         * 只有新刷出来那一条（swipes.length === 1），而右下角的 ‹ › 需要
+         * 「至少两条候选」才渲染（offlineSwipeBarHtml 里的 swipes.length < 2）。
+         * 用户的体感正是：刷新后既没有切换键，原来的内容也再也找不回来了。
+         * 第二次之后能翻，是因为那时 swipes 里已经有上一轮留下的文本。
+         *
+         * 所以这里在清空正文之前，先把它归档进 swipes[0] 当作对照锚点，
+         * 这样「原版 / 历次刷新 / 最新」三者从第一次起就都在。
+         */
+        softDeleteForRegenerate: function (chatId, sessionId, messageId) {
+            var sess = store.getSession(chatId, sessionId);
+            if (!sess || !Array.isArray(sess.messages)) return null;
+            var row = null;
+            for (var i = 0; i < sess.messages.length; i++) {
+                if (sess.messages[i] && sess.messages[i].id === messageId) {
+                    row = sess.messages[i];
+                    break;
+                }
+            }
+            if (!row) return null;
+            var text = String(row.content || '').trim();
+            var swipes = Array.isArray(row.swipes) ? row.swipes.slice() : [];
+            /*
+             * 锚点只在「候选表还是空的、且当前有正文」时补一次。
+             * 已经有候选说明历次刷新都归档过了，再补会把自己重复塞进去。
+             */
+            if (!swipes.length && text) swipes.push(text);
+            return store.deleteMessage(chatId, sessionId, messageId, { swipes: swipes });
         },
         syncAllSessionsToChat: function (chatId, contactId) {
             var cid = String(contactId || '').trim();

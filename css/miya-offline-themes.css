@@ -870,6 +870,30 @@
   opacity: 1;
 }
 
+/*
+ * 气泡尾部一行：托管「工具 + 候选切换」。
+ *
+ * 手帐主题里 .xw-chat__tools 是绝对定位钉在气泡右上角的，
+ * 所以这一行不能当普通 flex 用 —— 它只需要负责把 ‹ › 靠右放好。
+ * 工具是 absolute 的，不占流，于是 .xw-swipe 的 margin-left:auto
+ * 直接把它推到这个 flex 行的最右端。
+ */
+.miya-offline-app.xw-theme-korean .xw-chat__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+}
+/* 手帐主题下切换键再小一号、颜色跟气泡文字走 */
+.miya-offline-app.xw-theme-korean .xw-swipe {
+  margin-left: auto;
+  background: rgba(0, 0, 0, 0.05);
+}
+/* 我发的消息里不显示（那里没有候选） */
+.miya-offline-app.xw-theme-korean .xw-chat--mine .xw-swipe {
+  display: none;
+}
+
 .miya-offline-app.xw-theme-korean .xw-chat .xw-block__tool {
   width: 32px;
   height: 32px;

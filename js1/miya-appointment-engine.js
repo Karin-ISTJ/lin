@@ -1868,12 +1868,59 @@
                 /* 线下 Swipe：若 handlers.replaceLastAssistant，则把上一层助手回复并入候选 */
                 var msg = null;
                 if (handlers.replaceLastAssistant && typeof aps.updateMessage === 'function') {
-                    var sessMsgs = (aps.getMessages && aps.getMessages(chatId, sessionId)) || [];
+                    /*
+                     * ⚠️ 这里原来写的是 aps.getMessages(chatId, sessionId)。
+                     * 但 aps 是 MiyaAppointmentStore，它上面根本没有 getMessages
+                     * 这个方法（那个名字属于 miyaChatStore）。于是 `aps.getMessages &&`
+                     * 永远短路成 undefined，sessMsgs 恒为 []，循环找不到 lastAsst，
+                     * 整段「并入候选」的逻辑一次都没执行过 —— 表现就是：
+                     *   · 刷新楼层只会在末尾多一条新内容，swipes 从来没被写过
+                     *   · offlineSwipeBarHtml 要求 swipes.length >= 2，于是 ‹ › 切换键
+                     *     永远不出现，用户看不到自己其实刷出过好几个版本
+                     *
+                     * 正确的名字是 getSessionMessages(chatId, sessionId)，
+                     * 它已经滤掉 deleted 和空内容，正是这里需要的语义。
+                     */
+                    var sessMsgs =
+                        (typeof aps.getSessionMessages === 'function' &&
+                            aps.getSessionMessages(chatId, sessionId)) ||
+                        [];
                     var lastAsst = null;
-                    for (var li = sessMsgs.length - 1; li >= 0; li--) {
-                        if (sessMsgs[li] && !sessMsgs[li].deleted && sessMsgs[li].role === 'assistant') {
-                            lastAsst = sessMsgs[li];
-                            break;
+                    /*
+                     * 优先用调用方显式指定的目标楼层。
+                     *
+                     * 为什么要这个入口：「重回」的时序是「先软删那一层，再让引擎重答」。
+                     * 软删之后 getSessionMessages 会把目标层滤掉，于是下面那段
+                     * 「倒着找最后一条 assistant」会一路往上，摸到**更早的、不相干**的
+                     * 一层，把新候选合并进那一层 —— 用户看到的是「重答的内容跑到别的楼层去了」。
+                     * 所以调用方必须能说清「就是这一层」。
+                     */
+                    var targetId = String(handlers.replaceTargetId || '').trim();
+                    if (targetId) {
+                        /*
+                         * 显式指定时直接按 id 取，不看 deleted ——
+                         * 因为「重回」恰恰要求的就是把内容写回那条已被软删的行。
+                         * 用 getSession 直读原始数组，绕开过滤。
+                         */
+                        var rawSess = aps.getSession(chatId, sessionId);
+                        var rawMsgs = (rawSess && rawSess.messages) || [];
+                        for (var ti = 0; ti < rawMsgs.length; ti++) {
+                            if (rawMsgs[ti] && String(rawMsgs[ti].id) === targetId) {
+                                lastAsst = rawMsgs[ti];
+                                break;
+                            }
+                        }
+                    }
+                    /*
+                     * 只在上面的显式指定没命中时，才回退到「倒着找最后一条 assistant」。
+                     * 顺序不能反：回退逻辑一旦覆盖掉显式目标，就会重新写错楼层。
+                     */
+                    if (!lastAsst) {
+                        for (var li = sessMsgs.length - 1; li >= 0; li--) {
+                            if (sessMsgs[li] && !sessMsgs[li].deleted && sessMsgs[li].role === 'assistant') {
+                                lastAsst = sessMsgs[li];
+                                break;
+                            }
                         }
                     }
                     if (lastAsst) {
@@ -1902,7 +1949,17 @@
                             renderAsHtml: !!finalized.renderAsHtml,
                             htmlRaw: finalized.renderAsHtml ? (finalized.htmlRaw || content) : '',
                             swipes: prevSwipes,
-                            swipeId: swipeId
+                            swipeId: swipeId,
+                            /*
+                             * 必须显式把 deleted 置回 false。
+                             *
+                             * 「重回」是「先软删那一层、再让引擎重答」，所以这里的
+                             * lastAsst 是一条 deleted:true 的行。旧代码没带这个字段，
+                             * normalizeMessage 沿用了旧值 true —— 于是内容写进去了、
+                             * deleted 还挂着，界面上这一层依然不显示，用户看到的是
+                             * 「点重回之后楼层直接消失了」。
+                             */
+                            deleted: false
                         }) || lastAsst;
                     }
                 }
@@ -1972,8 +2029,18 @@
         });
     }
 
-    function regenerateAppointment(chatId, sessionId, handlers) {
+    /*
+     * 重答最后一场（「重回」/「刷新楼层」）。
+     *
+     * opts.replaceTargetId：显式指定「要覆盖哪一层」。
+     *   调用方（quickRedoLastAssistant）是先软删目标层再调这里，
+     *   带上这个 id 引擎才能精确写回那一层，而不是一路往上摸到更早的楼层。
+     *   不传也能跑（回退到「找最后一条还活着的 assistant」），但一旦
+     *   调用方软删过目标层，就必然写错位置，所以「重回」路径必须传。
+     */
+    function regenerateAppointment(chatId, sessionId, handlers, opts) {
         handlers = handlers && typeof handlers === 'object' ? handlers : {};
+        var regenOpts = opts && typeof opts === 'object' ? opts : {};
         var key = String(chatId) + '::' + String(sessionId);
         if (replyInFlight[key]) return Promise.reject(new Error('busy'));
         replyInFlight[key] = true;
@@ -1981,6 +2048,8 @@
         var genCtl = genLife && genLife.begin ? genLife.begin('offline:' + key, { kind: 'offline', regenerate: true }) : null;
         if (genCtl && genCtl.signal) handlers.signal = genCtl.signal;
         handlers.replaceLastAssistant = true;
+        var targetId = String(regenOpts.replaceTargetId || handlers.replaceTargetId || '').trim();
+        if (targetId) handlers.replaceTargetId = targetId;
         if (handlers.onStatus) handlers.onStatus('generating');
         return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
             if (genLife && genLife.finish) genLife.finish('offline:' + key, v);
