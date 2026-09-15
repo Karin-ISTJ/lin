@@ -1215,9 +1215,11 @@
   overflow: visible;
 }
 
+/* 展开按钮靠右：卡片头部右侧本来就是「发送」，
+   这枚按钮跟着右对齐，视线从正文末尾自然落到同一侧，不用来回扫。 */
 .xw-opening-pick__more {
-  display: inline-block;
-  margin-top: 8px;
+  display: block;
+  margin: 8px 0 0 auto;
   padding: 3px 10px;
   border: 1px solid rgba(0, 0, 0, 0.14);
   border-radius: 999px;
@@ -1706,7 +1708,7 @@
 .xw-journal-bar__ico:active{background:rgba(0,0,0,.055);transform:scale(.96)}
 .xw-journal-bar__ico svg{width:100%;height:100%}
 
-/* v40: 楼层范围隐藏 —— 顶栏右上角的范围输入框（3-8 一次切换第 3~8 层） */
+/* v40: 楼层范围隐藏 —— 顶栏右上角的范围输入框（0-1 一次切换第 0~1 层） */
 .xw-journal-bar__right{display:flex;align-items:center;gap:4px;margin-left:auto;flex:0 0 auto;min-width:0}
 .xw-journal-bar__right .xw-journal-bar__tools{margin-left:0}
 .xw-floor-scope{display:flex;align-items:center;gap:2px;height:30px;padding:0 4px 0 8px;border:1px solid currentColor;border-radius:9px;opacity:.72;flex:0 0 auto}

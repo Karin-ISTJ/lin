@@ -938,7 +938,7 @@
             '<div class="xw-floor-scope">' +
             '<input type="text" class="xw-floor-scope__input" id="xw-floor-scope-input"' +
             ' inputmode="numeric" autocomplete="off" spellcheck="false"' +
-            ' placeholder="3-8" title="填楼层范围，如 3-8 或 5（支持 3-8,11）"' +
+            ' placeholder="0-1" title="填楼层范围，如 0-1 或 5（支持 0-1,11）"' +
             ' aria-label="楼层范围">' +
             '<button type="button" class="xw-floor-scope__go xw-floor-scope__go--hide" id="xw-floor-scope-hide"' +
             ' title="隐藏范围内楼层（不参与生成）" aria-label="隐藏范围内楼层">' + ICON_EYE_OFF + '</button>' +
