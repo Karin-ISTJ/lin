@@ -632,7 +632,13 @@
             contactId: contactId,
             cast: cast,
             createdAt: Number(raw.createdAt) || Date.now(),
-            closedAt: Number(raw.closedAt) || 0,
+            /*
+             * 所有场次一律「可续写」——封存概念已整体移除。
+             *
+             * 历史数据里可能残留 closedAt 字段，归一化时统一压成 0，
+             * 让旧数据也表现为可续写，不必让用户去做数据迁移。
+             */
+            closedAt: 0,
             title: String(raw.title || '').trim(),
             messages: msgs,
             summaryList: sums,
@@ -826,7 +832,6 @@
         });
         if (!sorted.length) return null;
         var createdAt = Number(sorted[0].createdAt) || Date.now();
-        var closedAt = Number(sorted[sorted.length - 1].createdAt) || createdAt;
         var normMsgs = sorted
             .map(function (m) {
                 var ts = Number(m.createdAt) || createdAt;
@@ -848,7 +853,6 @@
             chatId: chatId,
             contactId: contactId,
             createdAt: createdAt,
-            closedAt: closedAt,
             title: '恢复 · ' + new Date(createdAt).toLocaleDateString('zh-CN'),
             messages: normMsgs,
             summaryList: []
@@ -1025,7 +1029,7 @@
                         ex.messages.sort(function (a, b) {
                             return (a.createdAt || 0) - (b.createdAt || 0);
                         });
-                        ex.closedAt = Math.max(Number(ex.closedAt) || 0, Number(norm.closedAt) || 0) || ex.closedAt;
+                        /* 封存已移除：合并时不再抬高 closedAt，场次一律保持可续写 */
                         if (!String(ex.contactId || '').trim() && norm.contactId) ex.contactId = norm.contactId;
                         bucket.sessions[idx] = normalizeSession(ex);
                         newMessages += added;
@@ -1771,10 +1775,10 @@
             var b = chatBucket(chatId);
             if (!b || !b.activeSessionId) return null;
             var sess = store.getSession(chatId, b.activeSessionId);
-            if (!sess || sess.closedAt) return null;
+            if (!sess) return null;
             return sess;
         },
-        /** 出演名单指纹（与顺序无关），用于续上未封存场次 */
+        /** 出演名单指纹（与顺序无关），用于续上场次 */
         castContactKey: function (castOpt, fallbackContactId, fallbackChatId) {
             return normalizeCast(castOpt, fallbackContactId, fallbackChatId)
                 .map(function (row) {
@@ -1797,7 +1801,7 @@
                 var b = cache.byChat[chatKey];
                 if (!b || !Array.isArray(b.sessions)) return;
                 b.sessions.forEach(function (sess) {
-                    if (!sess || sess.closedAt) return;
+                    if (!sess) return;
                     var key = store.castContactKey(
                         sess.cast,
                         sess.contactId,
@@ -1859,7 +1863,7 @@
             if (!Array.isArray(messages)) return null;
             var sess = normalizeSession(Object.assign({}, source, {
                 id: uid('sess'), chatId: chatId || source.chatId,
-                createdAt: Date.now(), closedAt: 0, messages: messages
+                createdAt: Date.now(), messages: messages
             }));
             if (!sess || !sess.chatId) return null;
             var b = chatBucket(sess.chatId);
@@ -2213,7 +2217,8 @@
                 return {
                     id: sess.id,
                     createdAt: sess.createdAt,
-                    closedAt: sess.closedAt,
+                    /* 封存已移除：恒为 0，保留字段只为兼容既有读取方 */
+                    closedAt: 0,
                     contactId: sess.contactId || contactId,
                     messages: (sess.messages || []).filter(function (m) { return m && !m.deleted; }),
                     summaryList: sess.summaryList || []
@@ -2221,16 +2226,18 @@
             });
         },
         closeActiveSession: function (chatId) {
+            /*
+             * 封存概念已整体移除：这里不再给场次盖 closedAt，
+             * 只把「当前激活场次」清空。
+             *
+             * 之所以还要保留这个函数：它同时被用于「离开场景时收尾」，
+             * 调用方只想要「这一场不再作为当前场次」的效果，
+             * 而不是要把它变成只读。把 closedAt 相关分支删掉，
+             * 语义反而更贴合调用方的真实意图。
+             */
             var b = chatBucket(chatId);
             if (!b || !b.activeSessionId) return null;
             var sess = store.getSession(chatId, b.activeSessionId);
-            if (!sess || sess.closedAt || countLiveMessages(sess) <= 0) {
-                if (sess && sess.closedAt) b.activeSessionId = '';
-                flushSave();
-                return sess;
-            }
-            sess.closedAt = Date.now();
-            store._writeSession(sess);
             b.activeSessionId = '';
             flushSave();
             return sess;

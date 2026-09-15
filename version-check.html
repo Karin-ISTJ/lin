@@ -27,14 +27,15 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>线下滚动修复 · 版本自检</h1>
-  <div class="sub">确认浏览器里跑的是不是修复版脚本。判据：脚本含 <code>scrollToLatestOnEnter</code>、且不含旧的 <code>scheduleStreamScroll(){ return; }</code> 死代码。</div>
+  <h1>线下脚本 · 版本自检</h1>
+  <div class="sub">确认浏览器里跑的是不是当前这一版脚本。判据：脚本含 <code>scrollToLatestOnEnter</code> 与 <code>trailingAssistantHasSwipes</code>（重回覆盖重答修复），且不含旧的 <code>scheduleStreamScroll(){ return; }</code> 死代码。</div>
 
   <div class="card">
     <div class="big" id="verdict">检测中…</div>
     <div class="row"><span class="k">加载到的脚本大小</span><span class="v" id="size">—</span></div>
     <div class="row"><span class="k">脚本 md5</span><span class="v" id="md5">—</span></div>
     <div class="row"><span class="k">含 scrollToLatestOnEnter</span><span class="v" id="fn">—</span></div>
+    <div class="row"><span class="k">含重回修复（swipes 覆盖）</span><span class="v" id="redo">—</span></div>
     <div class="row"><span class="k">旧死代码 return; 残留</span><span class="v" id="dead">—</span></div>
     <div class="row"><span class="k">Service Worker</span><span class="v" id="sw">—</span></div>
     <div class="row"><span class="k">当前页面地址</span><span class="v" id="href">—</span></div>
@@ -104,8 +105,10 @@ function md5Hex(buf) {
     el('sw').textContent = regs.length ? (regs.length + ' 个已注册') : '无（未启用）';
   } catch (e) { el('sw').textContent = '读取失败'; }
 
-  // 用绕过缓存的方式取脚本
-  var url = 'js1/miya-appointment-app.js?v=54&_probe=' + Date.now();
+  // 用绕过缓存的方式取脚本。
+  // 版本号必须跟着 index.html 里的引用走：写死旧版本号只会硬拿旧缓存，
+  // 那才是「刷新几次都没变化」的真凶之一。
+  var url = 'js1/miya-appointment-app.js?_probe=' + Date.now();
   try {
     var res = await fetch(url, { cache: 'no-store' });
     var txt = await res.text();
@@ -114,13 +117,15 @@ function md5Hex(buf) {
     var m = md5Hex(txt);
     el('md5').textContent = m;
     var hasFn = txt.indexOf('scrollToLatestOnEnter') >= 0;
+    var hasRedo = txt.indexOf('trailingAssistantHasSwipes') >= 0;
     var hasDead = /function scheduleStreamScroll\(\)\s*\{\s*\n\s*return;/.test(txt);
     el('fn').textContent = hasFn ? '✅ 是' : '❌ 否';
+    el('redo').textContent = hasRedo ? '✅ 是' : '❌ 否（旧版）';
     el('dead').textContent = hasDead ? '❌ 有（旧版）' : '✅ 无';
 
-    var good = (hasFn && !hasDead) || (size >= 175000);
+    var good = hasFn && hasRedo && !hasDead;
     el('verdict').innerHTML = good
-      ? '<span class="tag tag-ok">✅ 已是修复版</span>'
+      ? '<span class="tag tag-ok">✅ 已是当前版本</span>'
       : '<span class="tag tag-bad">❌ 仍是旧版（缓存未更新）</span>';
   } catch (e) {
     el('verdict').innerHTML = '<span class="tag tag-bad">取脚本失败</span> ' + e.message;

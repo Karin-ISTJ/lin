@@ -1033,12 +1033,11 @@
   margin-top: 18px;
 }
 
-.miya-offline-app.xw-theme-korean .xw-vault__grid {
-  grid-template-columns: 1fr;
-  gap: 12px;
+.miya-offline-app.xw-theme-korean .xw-vault__list {
+  gap: 8px;
 }
 
-.miya-offline-app.xw-theme-korean .xw-vault-card {
+.miya-offline-app.xw-theme-korean .xw-vault-row {
   border-radius: 14px;
   background: var(--xw-paper);
   border: 1px solid var(--xw-hair);

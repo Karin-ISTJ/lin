@@ -8,6 +8,15 @@
        所以只在「持续无进展」时判定，每收到一块数据就重置。 */
     var STREAM_IDLE_TIMEOUT_MS = 60000;
 
+    /*
+     * 单层楼层最多保留几条 swipe 候选。
+     *
+     * 超出的候选会让整份 swipes 数组被写进 localStorage，
+     * 反复「重回」几十次既撑大存储、又让「当前显示」永远是最后一条，
+     * 用户看到的就成了「点了很多次刷新，内容还是同一个」。
+     */
+    var SWIPE_MAX = 8;
+
     function eng() {
         return global.miyaChatEngine;
     }
@@ -1870,7 +1879,22 @@
                     if (lastAsst) {
                         var prevSwipes = Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
                         if (!prevSwipes.length && lastAsst.content) prevSwipes.push(String(lastAsst.content));
+                        /*
+                         * 候选数量必须有上限。
+                         *
+                         * 原实现是无限 push：用户每点一次「重回」就多一条候选，
+                         * 而「当前显示」永远落在最后一条 —— 相机位不变、楼层数不变，
+                         * 于是连着点几次看到的就是「内容一模一样、刷新像没生效」。
+                         * 同时 swipes 会被整份塞进 localStorage，
+                         * 候选堆到几十条之后写盘也会明显变慢。
+                         *
+                         * 这里按 SWIPE_MAX 截断：只保留「最早一条 + 最近几条」，
+                         * 既留住了和原回复对照的锚点，也不让数据无限膨胀。
+                         */
                         prevSwipes.push(content);
+                        if (prevSwipes.length > SWIPE_MAX) {
+                            prevSwipes = [prevSwipes[0]].concat(prevSwipes.slice(-(SWIPE_MAX - 1)));
+                        }
                         var swipeId = prevSwipes.length - 1;
                         msg = aps.updateMessage(chatId, sessionId, lastAsst.id, {
                             content: content,

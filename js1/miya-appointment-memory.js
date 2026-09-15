@@ -343,8 +343,13 @@
         } catch (eActive) {}
         var sessions = (aps.exportForMemory(chatId, contactId) || []).filter(function (sess) {
             if (!sess) return false;
-            /* 未封口的会话即当前场，一律排除 */
-            if (!sess.closedAt) return false;
+            /*
+             * 封存概念已移除，原来的 `if (!sess.closedAt) return false` 必须去掉：
+             * closedAt 现在恒为 0，那行会把**所有**会话都滤掉，
+             * 结果是「记忆档案」块永远为空 —— 线上角色会彻底想不起线下发生的事。
+             *
+             * 排除本场仍然靠下面的 activeSessionId 判定，这条才是真正必要的。
+             */
             if (activeSessionId && String(sess.id) === activeSessionId) return false;
             return true;
         });

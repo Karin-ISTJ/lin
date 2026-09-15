@@ -1136,32 +1136,29 @@
     }
 
     function renderHistory() {
-        var st0 = chatStore();
-        var chat0 = st0 && st0.findChat(ui.chatId);
-        var contact0 = chat0 && st0.findContact(chat0.contactId);
-        var castContacts = resolveCastContacts(activeSessionCast());
-        if (!castContacts.length && contact0) castContacts = [contact0];
-        var who = castDisplayName(castContacts) || characterRealName(contact0);
         var sessions = apStore().getSessions(ui.chatId);
         var recoverBanner = renderHistoryRecoverBanner();
         if (!sessions.length) {
-            return (
-                '<p class="xw-empty">「' +
-                esc(who) +
-                '」还没有保存过的场景。</p>' +
-                recoverBanner
-            );
+            return '<p class="xw-empty">还没有保存过的场景。</p>' + recoverBanner;
         }
+        /*
+         * 标题只写「聊天记录」四个字。
+         *
+         * 以前这里拼的是 `角色名 · 聊天记录`，看着像在说「闻述的聊天记录」，
+         * 但卷宗列表是整段会话共用的 —— 一卷里可能同时有主角、配角、旁白，
+         * 挂某个角色的名字会让人以为是单聊，点进去发现是群戏，反而更迷惑。
+         * 角色是谁，顶部那条状态栏已经在显示了，这里重复一遍没有信息量。
+         */
         return (
             '<div class="xw-vault">' +
             recoverBanner +
             '<header class="xw-vault__head">' +
-            '<h2 class="xw-vault__title">' + esc(who) + ' · 聊天记录</h2>' +
+            '<h2 class="xw-vault__title">聊天记录</h2>' +
             '<div class="xw-vault__actions">' +
             '<button type="button" class="xw-ribbon__act" id="xw-new-offline-chat">新建聊天</button>' +
             '<button type="button" class="xw-ribbon__act" id="xw-import-offline-chat">导入聊天</button>' +
             '</div></header>' +
-            '<div class="xw-vault__grid">' +
+            '<div class="xw-vault__list">' +
             sessions
                 .map(function (s, i) {
                     var n = (s.messages || []).filter(function (m) {
@@ -1169,22 +1166,31 @@
                     }).length;
                     var sumN = (s.summaryList || []).length;
                     var castN = Array.isArray(s.cast) ? s.cast.length : 0;
+                    /*
+                     * 一行一卷：左半边是「什么时候 / 什么名字 / 多厚」，
+                     * 右半边是导出与删除。之前是双列卡片，标题被挤成两行、
+                     * 时间缩成 10px 小字，扫一眼根本分不清哪卷是哪卷。
+                     * 改成通栏一行之后，名字有整行宽度，日期也终于看得清。
+                     *
+                     * 镜 → 层：和正片正文、顶栏楼层输入框的说法统一。
+                     * 同一件东西在不同界面叫两个名字，最容易让人以为
+                     * 「镜」和「层」是两种东西。
+                     */
                     return (
-                        '<article class="xw-vault-card" style="--xw-i:' + String(i) + '">' +
-                        '<button type="button" class="xw-vault-card__open" data-ap-view-session="' + esc(s.id) + '">' +
-                        '<time class="xw-vault-card__when">' + esc(formatTs(s.createdAt)) + '</time>' +
-                        '<strong class="xw-vault-card__name">' + esc(s.title || '未命名场景') + '</strong>' +
-                        '<span class="xw-vault-card__stat">' +
-                        (castN > 1 ? castN + ' 人 · ' : '') +
-                        n + ' 镜' +
+                        '<article class="xw-vault-row" style="--xw-i:' + String(i) + '">' +
+                        '<button type="button" class="xw-vault-row__open" data-ap-view-session="' + esc(s.id) + '">' +
+                        '<strong class="xw-vault-row__name">' + esc(s.title || '未命名场景') + '</strong>' +
+                        '<span class="xw-vault-row__stat">' +
+                        '<time class="xw-vault-row__when">' + esc(formatTs(s.createdAt)) + '</time>' +
+                        (castN > 1 ? ' · ' + castN + ' 人' : '') +
+                        ' · ' + n + ' 层' +
                         (sumN ? ' · ' + sumN + ' 份纪要' : '') +
                         (s.parentSessionId ? ' · 分支' : '') +
-                        (!s.closedAt && n ? ' · 未封存' : '') +
                         '</span></button>' +
-                        '<div class="xw-vault-card__actions">' +
-                        '<button type="button" class="xw-vault-card__mini" data-ap-export-txt="' + esc(s.id) + '">TXT</button>' +
-                        '<button type="button" class="xw-vault-card__mini" data-ap-export-json="' + esc(s.id) + '">JSON</button>' +
-                        '<button type="button" class="xw-vault-card__drop" data-ap-del-session="' + esc(s.id) +
+                        '<div class="xw-vault-row__acts">' +
+                        '<button type="button" class="xw-vault-row__mini" data-ap-export-txt="' + esc(s.id) + '" title="导出 TXT">TXT</button>' +
+                        '<button type="button" class="xw-vault-row__mini" data-ap-export-json="' + esc(s.id) + '" title="导出 JSON">JSON</button>' +
+                        '<button type="button" class="xw-vault-row__mini xw-vault-row__mini--del" data-ap-del-session="' + esc(s.id) +
                         '" aria-label="删除此卷">删</button></div></article>'
                     );
                 })
@@ -2327,20 +2333,34 @@
         var primaryFace = castContacts[0] || contact;
         var ava = esc(contactAvatar(primaryFace));
         var sceneTitle = String((sess && sess.title) || '').trim() || '未命名场景';
-        var ribbon = ui.viewingArchive
-            ? '<div class="xw-ribbon">' +
-              '<div class="xw-ribbon__lead">' +
-              '<span class="xw-ribbon__txt">旧卷只读</span>' +
-              '<strong class="xw-ribbon__name">' + esc(sceneTitle) + '</strong></div>' +
-              '<div class="xw-ribbon__acts">' +
-              '<button type="button" class="xw-ribbon__act xw-ribbon__act--ghost" id="xw-ribbon-rename">命名</button>' +
-              '<button type="button" class="xw-ribbon__act" id="xw-export-current-txt">TXT</button>' +
-              '<button type="button" class="xw-ribbon__act" id="xw-export-current-json">JSON</button>' +
-              (msgs.length
-                  ? '<button type="button" class="xw-ribbon__act" id="xw-ribbon-sum">归档成纪要</button>'
-                  : '') +
-              '</div></div>'
-            : '';
+        /*
+         * 卷宗里点开的卷，之前一律是「旧卷只读」——没有输入框，也回不到能说话的状态。
+         *
+         * 但用户从卷宗列表点进一卷，本就是打算接着往下演的。
+         * 把输入框一并藏掉，等于人进了房间却发现没有门，只能退出去重选，
+         * 而重选又未必落回同一场次。
+         *
+         * 现在所有卷一律可续写（封存概念已整体移除，见 store 里的说明），
+         * 所以 ribbon 上恒定给出「续写这一幕」入口，不再有只读分支。
+         */
+        var archivRibbon = '';
+        if (ui.viewingArchive) {
+            archivRibbon =
+                '<div class="xw-ribbon">' +
+                '<div class="xw-ribbon__lead">' +
+                '<span class="xw-ribbon__txt">可续写</span>' +
+                '<strong class="xw-ribbon__name">' + esc(sceneTitle) + '</strong></div>' +
+                '<div class="xw-ribbon__acts">' +
+                '<button type="button" class="xw-ribbon__act xw-ribbon__act--primary" id="xw-ribbon-resume">续写这一幕</button>' +
+                '<button type="button" class="xw-ribbon__act xw-ribbon__act--ghost" id="xw-ribbon-rename">命名</button>' +
+                '<button type="button" class="xw-ribbon__act" id="xw-export-current-txt">TXT</button>' +
+                '<button type="button" class="xw-ribbon__act" id="xw-export-current-json">JSON</button>' +
+                (msgs.length
+                    ? '<button type="button" class="xw-ribbon__act" id="xw-ribbon-sum">归档成纪要</button>'
+                    : '') +
+                '</div></div>';
+        }
+        var ribbon = archivRibbon;
         var hasStory =
             ui.viewingArchive ||
             msgs.length > 0 ||
@@ -2740,39 +2760,17 @@ function renderWriter() {
         }
     }
 
-    function sealActiveSession() {
-        if (!ui.chatId) return false;
-        var chatId = ui.chatId;
-        var contactId = ui.contactId;
-        var msgs = apStore().getSessionMessages(chatId, ui.sessionId);
-        if (!msgs.length) {
-            toast('还没有可封存的内容');
-            return false;
-        }
-        var sess = apStore().getSession(chatId, ui.sessionId);
-        var targets =
-            typeof apStore().syncSessionCastToChats === 'function'
-                ? apStore().syncSessionCastToChats(chatId, ui.sessionId)
-                : null;
-        if (!targets || !targets.length) {
-            syncSessionOnLeave();
-            targets = [{ contactId: contactId, chatId: chatId }];
-        }
-        if (typeof apStore().closeActiveSession === 'function') {
-            apStore().closeActiveSession(chatId);
-        }
-        var eng = global.miyaChatEngine;
-        var prompt =
-            '【模式切换·线下→线上】你刚与用户完成一段线下长剧情会面，那些事你都亲身经历过、必须记得。现已回到线上聊天，请自然衔接，禁止表示不知情、没发生过或「我们只在线上聊过」。';
-        if (eng && typeof eng.setPendingOnlineReturnPrompt === 'function') {
-            targets.forEach(function (t) {
-                var tid = String((t && t.chatId) || '').trim();
-                if (tid) eng.setPendingOnlineReturnPrompt(tid, prompt);
-            });
-        }
-        toast('本场景已封存');
-        return true;
-    }
+    /*
+     * 「封存本场景」功能已整体移除。
+     *
+     * 原来的 sealActiveSession() 在这里：它会盖 closedAt、把场次变成只读，
+     * 并给线上角色塞一条「刚见过面」的衔接提示。但入口按钮早已被删掉，
+     * 这个函数从那时起就是死代码 —— 零调用点，只占篇幅、还让读代码的人
+     * 误以为「封存」是条活路径。
+     *
+     * 现在连底层概念一起去掉：场次一律可续写，不再有只读状态。
+     * 需要「把这卷的事告诉线上角色」时，走模式切换（线下→线上）那条正常通路。
+     */
 
     function leaveStoryToPick() {
         syncSessionOnLeave();
@@ -2896,6 +2894,46 @@ function renderWriter() {
         resetScrollUiState();
         render();
         scrollToLatestOnEnter();
+    }
+
+    /*
+     * 从「卷宗里点开的卷」切回可续写的正片。
+     *
+     * 与 restoreToLiveStory() 的区别很关键，别混用：
+     *   restoreToLiveStory() 是「离开卷宗」——它会把 sessionId 换成
+     *     getActiveSession() 拿到的那一场（或干脆新开一场），
+     *     用户想看的那一卷就此被丢下。
+     *   本函数是「就地续写」——sessionId 原地保留，只是把只读标记摘掉，
+     *     于是输入框回来、正文还是同一卷，接着往下演。
+     *
+     * 所有卷一律可续写（封存概念已整体移除），这里不再做任何只读判定。
+     */
+    function resumeArchiveSession() {
+        if (!ui.chatId || !ui.sessionId) return;
+        var sess = apStore().getSession(ui.chatId, ui.sessionId);
+        if (!sess) {
+            toast('这一卷找不到了');
+            return;
+        }
+        /*
+         * 必须把它重新标为 active。
+         * 否则下一次 render 走 renderOpeningPicker 分支时，
+         * storyHasContent() / getActiveSession() 仍认为「当前没有进行中的场次」，
+         * 用户会看到开场白选择器盖在自己刚续写的内容上。
+         */
+        var st = apStore();
+        if (typeof st.setActiveSession === 'function') {
+            try { st.setActiveSession(ui.chatId, ui.sessionId); } catch (e) {}
+        }
+        ui.viewingArchive = false;
+        ui.view = 'story';
+        ui.status = 'idle';
+        ui.streamingLines = [];
+        ui.streamingRaw = '';
+        resetScrollUiState();
+        render();
+        scrollToLatestOnEnter();
+        toast('已回到这一幕，可以接着写');
     }
 
     function renameActiveSessionTitle() {
@@ -3088,6 +3126,29 @@ function renderWriter() {
         return round;
     }
 
+    /*
+     * 末尾这一轮角色回复里，是不是已经攒了多个候选（swipes 多于一条）？
+     *
+     * 「重回」的语义是「让角色把这一轮重答一次」。若这层已经在 swipe 里
+     * 躺过若干候选，说明它本身就是被重答过的产物 —— 此时再走一次
+     * regenerateAppointment（replaceLastAssistant=true）只会把新内容
+     * 继续 push 进同一层的 swipes 数组、并让视角停在最新的那条上。
+     *
+     * 结果就是用户看到的现象：
+     *   点「重回」N 次 → 楼层数不变、DOM 结构不变、当前显示的第 N 个候选
+     *   跟前一个往往还是同一段话（模型对着同一份上下文重答），
+     *   于是「刷新三四次还是一模一样的内容」。
+     * 看上去像刷新失败，其实是「刷新成功了，但结果被叠进了同一层」。
+     */
+    function trailingAssistantHasSwipes(msgs) {
+        var round = getTrailingAssistantRound(msgs);
+        for (var i = 0; i < round.length; i++) {
+            var sw = round[i] && round[i].swipes;
+            if (sw && sw.length > 1) return true;
+        }
+        return false;
+    }
+
     function quickRedoLastAssistant() {
         var eng = apEngine();
         if (!eng || eng.isBusy(ui.chatId, ui.sessionId)) {
@@ -3100,6 +3161,15 @@ function renderWriter() {
             toast('没有可重回的角色回复');
             return;
         }
+        /*
+         * 已有多候选时，先把这层的 swipes 候选清空再重答。
+         *
+         * 不清的话，引擎侧 updateMessage 里的
+         *   prevSwipes.push(content)
+         * 会把历史候选无限累积，且视角永远落在「最新」——
+         * 用户既看不到自己刚重答出来的差异，也没法靠左右切换找回旧文本。
+         */
+        var hadSwipes = trailingAssistantHasSwipes(msgs);
         round.forEach(function (m) {
             apStore().deleteMessage(ui.chatId, ui.sessionId, m.id);
         });
@@ -3118,6 +3188,10 @@ function renderWriter() {
                     endWriterGeneration();
                 })
         );
+        if (hadSwipes) {
+            /* 明确告知：这次是覆盖重答，不是又叠了一个候选。 */
+            toast('已重新书写这一镜');
+        }
     }
 
     function openSettingsSheet() {
@@ -4296,6 +4370,14 @@ function renderWriter() {
         if (renameBtn) {
             renameBtn.addEventListener('click', function () {
                 renameActiveSessionTitle();
+            });
+        }
+
+        /* 卷宗里点开「还能接着演」的卷 → 摘掉只读标记，输入框回来，接着写 */
+        var resumeBtn = $('xw-ribbon-resume');
+        if (resumeBtn) {
+            resumeBtn.addEventListener('click', function () {
+                resumeArchiveSession();
             });
         }
 
