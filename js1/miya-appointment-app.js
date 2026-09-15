@@ -3907,34 +3907,38 @@ function renderWriter() {
      * 把快照按原顺序原样放回。
      *
      * 只放「活着的」那几条 —— 已删除的楼层保持删除，不该被这次撤销顺手复活。
-     * addMessage 不给 id 就自己生成新的，所以这里显式把原 id 带上，
-     * 让恢复后的楼层仍能被 data-ap-msg-id 精确命中（否则隐藏/分支按钮会指错楼）。
+     *
+     * ⚠️ 这里曾经用 addMessage 还原，是个严重 bug：
+     * addMessage 是 push 到末尾，而被删的那一行其实还在数组里（软删）。
+     * 于是回滚一次就多出一条「同 id 同内容」的行 ——
+     *   · 屏幕上凭空多一层和刚才一模一样的内容（用户报的「刷新楼层生成出一层一模一样」）
+     *   · 两条同 id，之后按 id 找的删除 / 隐藏按钮全部指向第一条死行，
+     *     活行永远删不掉（用户报的「删除楼层删不掉」）
+     * 现在改用 store.restoreMessage()：优先原位复活，
+     * 只有原行确实不在了才追加，并保证不会出现重复 id。
      */
     function restoreMessageSnapshot(snap) {
         if (!snap || !snap.length) return false;
         var store = apStore();
         if (!store || !ui.chatId || !ui.sessionId) return false;
-        if (typeof store.addMessage !== 'function') return false;
+        if (typeof store.restoreMessage !== 'function') {
+            /* 老版本 store：没有原位还原能力，宁可不还原也不能制造重复行 */
+            if (global.console && console.warn) {
+                console.warn('[restore] store.restoreMessage 不存在，跳过还原以免产生重复楼层');
+            }
+            return false;
+        }
         var ok = true;
         snap.forEach(function (m) {
             if (!m || m.deleted) return;
             if (!String(m.content || '').trim()) return;
-            var row = store.addMessage(ui.chatId, ui.sessionId, {
-                id: m.id,
-                role: m.role,
-                type: m.type,
-                content: m.content,
-                thinking: m.thinking,
-                swipes: Array.isArray(m.swipes) ? m.swipes.slice() : undefined,
-                swipeId: m.swipeId,
-                hidden: !!m.hidden,
-                renderAsHtml: !!m.renderAsHtml,
-                htmlRaw: m.htmlRaw,
-                createdAt: m.createdAt,
-                timestamp: m.timestamp
-            });
-            if (!row) ok = false;
+            var res = store.restoreMessage(ui.chatId, ui.sessionId, m);
+            if (!res || !res.ok) ok = false;
         });
+        /* 收尾压实：万一历史数据里已经有重复 id，这次一并清掉 */
+        if (typeof store._dedupeMessages === 'function') {
+            store._dedupeMessages(ui.chatId, ui.sessionId);
+        }
         return ok;
     }
 

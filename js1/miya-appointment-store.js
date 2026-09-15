@@ -383,6 +383,38 @@
         return !!(msg && msg.role === 'system' && msg.type === 'opening');
     }
 
+    /**
+     * 同一个 id 只保留一行（保留靠后的那条 —— 它更接近当前状态）。
+     *
+     * 为什么需要：旧版 restoreMessageSnapshot 用 addMessage 还原被软删的楼层，
+     * 而 addMessage 是 push，于是数组里出现「同 id 两行」：一条 deleted 的死行
+     * 加一条活行。后续所有按 id 的查找/删除都会歧义，且每存一次盘就多占一份体积。
+     * 读盘时统一压实，让内存里始终保持「一个 id 一行」。
+     */
+    function dedupeMessagesById(list) {
+        var arr = Array.isArray(list) ? list : [];
+        if (arr.length < 2) return arr;
+        var seen = Object.create(null);
+        var dup = false;
+        for (var i = 0; i < arr.length; i++) {
+            var id = arr[i] && arr[i].id;
+            if (id && seen[id]) { dup = true; break; }
+            if (id) seen[id] = true;
+        }
+        if (!dup) return arr;
+        var keep = Object.create(null);
+        var out = [];
+        for (var j = arr.length - 1; j >= 0; j--) {
+            var m = arr[j];
+            var mid = m && m.id;
+            if (!m || !mid || keep[mid]) continue;
+            keep[mid] = true;
+            out.push(m);
+        }
+        out.reverse();
+        return out;
+    }
+
     /** 目标线程上是否仍有可用线下镜像（含已删除判定；不可用 getMessages，因其会滤掉 offlineMeet） */
     function liveMirrorOnChat(st, chatId, mirrorId) {
         var mid = String(mirrorId || '').trim();
@@ -618,7 +650,18 @@
 
     function normalizeSession(raw) {
         if (!raw || typeof raw !== 'object') return null;
-        var msgs = Array.isArray(raw.messages) ? raw.messages.map(normalizeMessage).filter(Boolean) : [];
+        /*
+         * 读盘时顺手把重复 id 压实。
+         *
+         * 历史脏数据来自旧版 restoreMessageSnapshot：它用 addMessage 还原，
+         * 会在数组末尾再 push 一条同 id 的行。这类数据一旦落盘就会一直存在，
+         * 表现为「同一层出现两遍」+「点删除删不掉」（find 总是命中第一条死行）。
+         * 在唯一的读盘入口收口，老用户一打开就自愈，不用手动清数据。
+         * 保留靠后的那一条（更接近当前状态）。
+         */
+        var msgs = Array.isArray(raw.messages)
+            ? dedupeMessagesById(raw.messages.map(normalizeMessage).filter(Boolean))
+            : [];
         var sums = Array.isArray(raw.summaryList) ? raw.summaryList.map(normalizeSummary).filter(Boolean) : [];
         var chatId = String(raw.chatId || '').trim();
         var contactId = String(raw.contactId || '').trim();
@@ -1929,6 +1972,98 @@
             store._writeSession(sess);
             return msg;
         },
+        /*
+         * 原位还原一条被软删的消息 —— 「重发失败回滚」专用。
+         *
+         * 为什么不能继续用 addMessage：addMessage 是 push。
+         * 重发失败回滚时那一行其实还在数组里（deleteMessage 只置 deleted），
+         * 用 addMessage 还原就等于再塞一条同 id 的同内容行进来，于是
+         *   · 屏幕上多出「一模一样的一层」（用户报的就是这个）
+         *   · 两条同 id，后续按 id 的删除/隐藏全部指向第一条死行（删除失效）
+         * 所以还原必须回到原来那一格，而不是在末尾新建一格。
+         *
+         * 返回值语义：
+         *   { ok:true, mode:'restored' }  原位复活成功
+         *   { ok:true, mode:'appended' }  原行已不在数组（被压实掉了），只能追加
+         *   { ok:false, mode:'invalid' }  快照本身没内容，跳过
+         */
+        restoreMessage: function (chatId, sessionId, snapshot) {
+            var sess = store.getSession(chatId, sessionId);
+            if (!sess) return { ok: false, mode: 'no_session' };
+            var snap = snapshot || {};
+            var mid = String(snap.id || '').trim();
+            if (!mid || !String(snap.content || '').trim()) {
+                return { ok: false, mode: 'invalid' };
+            }
+            var idx = (sess.messages || []).findIndex(function (m) {
+                return m && m.id === mid;
+            });
+            if (idx >= 0) {
+                /*
+                 * 原位复活：显式把 deleted 置回 false（patch 里必须带 deleted:false，
+                 * 否则 normalizeMessage 会沿用旧的 true），content 用快照里的原文本。
+                 * createdAt 也一并还原，楼层顺序不会因为回滚而漂移。
+                 */
+                sess.messages[idx] = normalizeMessage(
+                    Object.assign({}, sess.messages[idx], {
+                        role: snap.role,
+                        type: snap.type,
+                        content: snap.content,
+                        thinking: snap.thinking,
+                        swipes: Array.isArray(snap.swipes) ? snap.swipes.slice() : undefined,
+                        swipeId: snap.swipeId,
+                        hidden: !!snap.hidden,
+                        renderAsHtml: !!snap.renderAsHtml,
+                        htmlRaw: snap.htmlRaw,
+                        createdAt: snap.createdAt,
+                        deleted: false
+                    })
+                );
+                mirrorMessageToCast(sess, sess.messages[idx], { deferSessionWrite: true });
+                store._writeSession(sess);
+                return { ok: true, mode: 'restored' };
+            }
+            /* 原行确实没了（比如已被压实清理），退回追加，但绝不静默 */
+            var row = store.addMessage(chatId, sessionId, {
+                id: mid,
+                role: snap.role,
+                type: snap.type,
+                content: snap.content,
+                thinking: snap.thinking,
+                swipes: Array.isArray(snap.swipes) ? snap.swipes.slice() : undefined,
+                swipeId: snap.swipeId,
+                hidden: !!snap.hidden,
+                renderAsHtml: !!snap.renderAsHtml,
+                htmlRaw: snap.htmlRaw,
+                createdAt: snap.createdAt
+            });
+            return row ? { ok: true, mode: 'appended' } : { ok: false, mode: 'append_failed' };
+        },
+        /*
+         * 把「同一个 id 出现多行」压实成一行（保留最后一条活着的，否则保留最后一条）。
+         * deleteMessage 收尾会调它，防止历史脏数据一直膨胀下去。
+         */
+        _dedupeMessages: function (chatId, sessionId) {
+            var sess = store.getSession(chatId, sessionId);
+            if (!sess || !Array.isArray(sess.messages)) return 0;
+            var seen = Object.create(null);
+            var out = [];
+            var removed = 0;
+            /* 倒着遍历：同 id 时保留更靠后的那一条（更接近当前状态） */
+            for (var i = sess.messages.length - 1; i >= 0; i--) {
+                var m = sess.messages[i];
+                if (!m || !m.id) { removed++; continue; }
+                if (seen[m.id]) { removed++; continue; }
+                seen[m.id] = true;
+                out.push(m);
+            }
+            out.reverse();
+            if (removed > 0) {
+                sess.messages = out;
+                store._writeSession(sess);
+            }
+            return removed;
+        },
         updateMessage: function (chatId, sessionId, messageId, patch) {
             var sess = store.getSession(chatId, sessionId);
             if (!sess) return null;
@@ -1951,9 +2086,65 @@
         deleteMessage: function (chatId, sessionId, messageId) {
             var sess = store.getSession(chatId, sessionId);
             if (!sess) return null;
-            var row = (sess.messages || []).find(function (m) { return m.id === messageId; });
-            if (row) purgeMessageOnlineMirrors(chatId, row);
-            return store.updateMessage(chatId, sessionId, messageId, { deleted: true, content: '' });
+            /*
+             * 这里必须把「所有 id 相同的行」全部软删，不能只删第一条。
+             *
+             * 出过的故障：restoreMessageSnapshot() 早先用 addMessage 还原，
+             * 而 addMessage 是 push —— 数组里于是同时存在两条 id 相同的行
+             * （一条软删的死行 + 一条活着的新行）。旧实现用 find() 只命中
+             * 第一条，也就是那条早就死了的，于是「点删除」反复改死行，
+             * 活行永远不动，表现就是「删除楼层删不掉」。
+             *
+             * 现在：枚举全部同 id 行逐条软删，并在收尾时把重复行清掉，
+             * 让数组回到「一个 id 只有一行」的不变式。
+             */
+            var targets = (sess.messages || []).filter(function (m) {
+                return m && m.id === messageId;
+            });
+            if (!targets.length) return null;
+            var last = null;
+            targets.forEach(function (row) {
+                if (!row.deleted) purgeMessageOnlineMirrors(chatId, row);
+                /*
+                 * ⚠️ 必须用 _patchAllById 而不是 updateMessage：
+                 * updateMessage 内部是 findIndex，只改第一条同 id 行。
+                 * 脏数据里若有两行同 id，第二条就漏掉了 —— 而收尾的
+                 * _dedupeMessages 保留的是靠后那条，于是「删完反而剩一条活的」。
+                 */
+                last = store._patchAllById(chatId, sessionId, messageId, {
+                    deleted: true,
+                    content: ''
+                });
+            });
+            /*
+             * 清掉重复的死行：软删本身不动数组长度，重复行会一直躺在
+             * localStorage 里，每存一次都在放大体积，而且会让后续任何
+             * 基于 id 的查找继续歧义。软删后立刻压实。
+             */
+            store._dedupeMessages(chatId, sessionId);
+            return last;
+        },
+        /*
+         * 把「所有 id 相同的行」都打上同一个 patch（updateMessage 只打第一条）。
+         * 返回最后被改的那一条，供调用方沿用旧的返回语义。
+         */
+        _patchAllById: function (chatId, sessionId, messageId, patch) {
+            var sess = store.getSession(chatId, sessionId);
+            if (!sess || !Array.isArray(sess.messages)) return null;
+            var last = null;
+            var touched = false;
+            for (var i = 0; i < sess.messages.length; i++) {
+                var m = sess.messages[i];
+                if (!m || m.id !== messageId) continue;
+                sess.messages[i] = normalizeMessage(
+                    Object.assign({}, m, patch || {}, { editedAt: Date.now() })
+                );
+                last = sess.messages[i];
+                touched = true;
+            }
+            if (!touched) return null;
+            store._writeSession(sess);
+            return last;
         },
         syncAllSessionsToChat: function (chatId, contactId) {
             var cid = String(contactId || '').trim();
