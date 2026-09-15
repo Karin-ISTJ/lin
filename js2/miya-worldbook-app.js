@@ -982,7 +982,25 @@
       if (f) importDocToBody(f);
     });
 
-    /* 激活诊断：运行按钮 + 展开时自动填一次联系人 */
+    /* 激活诊断：顶栏入口 + 运行按钮 + 展开时自动填一次联系人 */
+    var diagJump = $('miya-wb-diag-jump');
+    if (diagJump) {
+      diagJump.addEventListener('click', function () {
+        var wrap = $('miya-wb-diag');
+        if (!wrap) return;
+        wrap.open = true;
+        fillDiagRoles(collectRoleIds());
+        /* 必须先展开再滚动 —— 折叠状态下 offsetTop 不准 */
+        var sc = document.querySelector('.ins-wb-editor-scroll');
+        if (sc) {
+          var top = wrap.offsetTop - 16;
+          if (typeof sc.scrollTo === 'function') sc.scrollTo({ top: top, behavior: 'smooth' });
+          else sc.scrollTop = top;
+        }
+        wrap.classList.add('is-flash');
+        setTimeout(function () { wrap.classList.remove('is-flash'); }, 1200);
+      });
+    }
     var diagRun = $('miya-wb-diag-run');
     if (diagRun) diagRun.addEventListener('click', runDiag);
     var diagWrap = $('miya-wb-diag');

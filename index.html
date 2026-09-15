@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=29">
-  <link rel="stylesheet" href="css/miya-worldbook.css?v=11">
+  <link rel="stylesheet" href="css/miya-worldbook.css?v=12">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
   <link rel="stylesheet" href="css/miya-chat.css?v=62">
@@ -1124,7 +1124,7 @@
           <span>返回</span>
         </button>
         <h1 class="st-navtitle" id="miya-wb-editor-title">编辑条目</h1>
-        <span class="st-navspacer" aria-hidden="true"></span>
+        <button type="button" class="miya-wb-diagbtn" id="miya-wb-diag-jump" title="诊断：这条为什么没注入？" aria-label="诊断：这条为什么没注入？">诊断</button>
       </header>
       <div class="ins-wb-editor-scroll st-scroll">
         <div class="st-container miya-wb-st-editor">
@@ -1265,10 +1265,11 @@
           <textarea class="ins-textarea" id="miya-wb-field-body" rows="12" spellcheck="false" placeholder="写入会被注入模型的设定文本…"></textarea>
 
           <details class="miya-wb-advanced miya-wb-diag" id="miya-wb-diag">
-            <summary>为什么没注入？（激活诊断）</summary>
+            <summary>为什么没注入？— 激活诊断</summary>
             <p class="miya-wb-diag__hint">
-              按当前编辑器里的设置，模拟一次真实的激活判定，逐层告诉你卡在哪一步。
-              诊断只读，不会改动任何设置，也不会影响实际注入。
+              词条写得没问题，但对话里就是不出效果？把最近几条消息贴进来，
+              点「运行诊断」，它会按真实判定顺序逐层告诉你卡在哪一步。
+              <br>只读，不改设置、不影响实际注入。
             </p>
             <p class="ins-field-label" style="margin-bottom:6px">模拟上下文（会被扫描的正文）</p>
             <textarea class="ins-textarea" id="miya-wb-diag-ctx" rows="4"
@@ -3834,7 +3835,7 @@
   <script defer src="js2/miya-worldbook-store.js?v=15"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=7"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=16"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=26"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=27"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=6"></script>
   <script defer src="js1/miya-chat-store.js?v=57"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>

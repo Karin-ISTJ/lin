@@ -1301,6 +1301,35 @@
 .miya-worldbook-app .ins-wb-editor .st-navtitle {
   font-size: 15px !important;
 }
+
+/* 顶栏「诊断」入口。
+   之前诊断面板只放在编辑器最底部（滚动容器 89% 处），打开编辑器时在视口外，
+   用户填完内容以为到底了就直接保存 —— 根本发现不了有这个功能。
+   放个常驻入口在顶栏，点击后滚动定位到面板并自动展开。 */
+.miya-worldbook-app .ins-wb-editor .st-navtitle {
+  flex: 1 1 auto;
+}
+.miya-wb-diagbtn {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+  color: #444;
+  cursor: pointer;
+}
+.miya-wb-diagbtn:active {
+  transform: scale(0.97);
+  background: rgba(0, 0, 0, 0.05);
+}
+/* 面板被高亮时给个短暂提示，让用户明白"就是这里" */
+.miya-wb-diag.is-flash {
+  box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.45);
+  transition: box-shadow 0.25s ease;
+}
 .miya-worldbook-app .ins-wb-body-head {
   margin-top: 2px !important;
 }
