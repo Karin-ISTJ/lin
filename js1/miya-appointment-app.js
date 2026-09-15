@@ -154,6 +154,52 @@
         return global.MiyaAppointmentEngine;
     }
 
+    function timeEventsApi() {
+        return global.MiyaChatTimeEvents;
+    }
+
+    /**
+     * 现实时钟事件账本挂在聊天设置上（与线上同一份数据），
+     * 所以线下读写的 key 必须是 chatId，不能用 sessionId。
+     * 没有 chatId（还没绑定联系人）时不做任何事，免得写出一份孤儿账本。
+     */
+    function timeEventsHtml(chatId, at) {
+        var api = timeEventsApi();
+        if (!api || typeof api.renderCards !== 'function') return '';
+        var id = String(chatId || ui.chatId || '').trim();
+        if (!id) return '';
+        try {
+            return api.renderCards(chatStore(), id, at || Date.now()) || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    /**
+     * 把「现实时钟事件」提示块塞进本次请求的 system 层。
+     *
+     * 为什么必须在引擎里拼、不能只靠注入函数：
+     * 线下 prompt 的最终顺序是
+     *   ST 前置 → 线下上下文（本函数所在位置）→ 会话历史 → ST 后置 → 当前 user
+     * 只有落在这一层，模型才会把「账本现状」当成世界状态读；
+     * 排在历史之后会被历史覆盖，排在最前又会被后面的世界书冲淡。
+     *
+     * 注意这里【不】判断 appointmentMode：线下本身就是 appointment 流程，
+     * 线上引擎那边是靠这个开关避免把账本重复注入两次，
+     * 线下没有这条路径，直接注入即可。
+     */
+    function buildTimeEventsContext(chatId, at) {
+        var api = timeEventsApi();
+        if (!api || typeof api.buildPromptContext !== 'function') return '';
+        var id = String(chatId || '').trim();
+        if (!id) return '';
+        try {
+            return api.buildPromptContext(chatStore(), id, at || Date.now()) || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
     function dialog(opts) {
         if (global.miyaDialog) {
             if (opts.mode === 'prompt' && global.miyaDialog.prompt) return global.miyaDialog.prompt(opts);
@@ -1645,8 +1691,38 @@
              * 于是眼睛图标永远停在旧状态（用户以为没生效）。
              */
             ':fh' +
-            floorHiddenFingerprint(m)
+            floorHiddenFingerprint(m) +
+            /*
+             * 现实时钟事件指纹也要进 key。
+             * 事件卡不属于任何楼层，只靠消息判断「有没有变化」会漏掉它：
+             * 点「领取 / 确认」后账本状态变了（due → claimed）、
+             * 卡片该消失，但消息一条没动 → key 不变 → patchStoryBody 判定
+             * 「无变化」→ DOM 不重建 → 按钮原地不动，用户以为没点上。
+             * 跟 :fh 是同一类坑，所以按同样的办法补指纹。
+             */
+            ':te' +
+            timeEventsFingerprint()
         );
+    }
+
+    /**
+     * 事件卡指纹：只取「当前可见的那几条」的 id + 状态。
+     *
+     * 不能直接把整本账本 stringify：pending 里的项随时在补算状态，
+     * 会让指纹频繁变化、引起无意义的整段 DOM 重建（白闪 + 流式挂载重置）。
+     * 只有「看得见的部分真的变了」才值得重建。
+     */
+    function timeEventsFingerprint() {
+        var api = timeEventsApi();
+        var chatId = String(ui.chatId || '').trim();
+        if (!api || !chatId || typeof api.getVisible !== 'function') return '';
+        try {
+            return api.getVisible(chatStore(), chatId, Date.now())
+                .map(function (e) { return e.id + '#' + e.status; })
+                .join(',');
+        } catch (e) {
+            return '';
+        }
     }
 
     /** 楼层隐藏状态指纹：只关心「哪些位置是隐藏的」，与内容无关 */
@@ -2230,8 +2306,21 @@
 
         var streamingActive =
             !ui.viewingArchive && (ui.streamingLines.length > 0 || ui.status === 'coming');
+        /*
+         * 现实时钟事件卡片挂在正文【上方】。
+         *
+         * 为什么不进 renderStoryLines：那张卡不属于任何楼层，
+         * 它是「世界在这段时间里发生的变化」。房间在用户离线时照样在走，
+         * 用户隔了几天回来，第七天该到的利息要在正文之前先告诉他，
+         * 而不是等他读完第十四天的剧情再从楼层里找。
+         *
+         * 归档视图（旧卷只读）刻意不显示：那里是回看历史，
+         * 插一张当下的账本会跟卷宗里的时间线打架。
+         */
+        var teHtml = ui.viewingArchive ? '' : timeEventsHtml(ui.chatId, Date.now());
         var scriptInner =
             '<article class="xw-script" id="mol-story-body">' +
+            teHtml +
             renderStoryLines(msgs, [], [], !ui.viewingArchive) +
             (streamingActive
                 ? '<div class="xw-stream-mount" data-ap-stream-mount aria-live="polite"></div>'
@@ -2554,7 +2643,16 @@ function renderWriter() {
             ui.stableStoryKey = stableKey;
             var watermark = body.querySelector('.mol-story-watermark');
             var wmHtml = watermark ? watermark.outerHTML : '';
-            body.innerHTML = wmHtml + renderStoryLines(msgs, [], [], !ui.viewingArchive);
+            /*
+             * 这里必须跟 renderStory() 用同一套拼法（事件卡在正文上方），
+             * 否则发完一镜、patchStoryBody 就地重写 innerHTML 时，
+             * 卡片会被整块抹掉——表现就是「刚回来能看到利息卡，
+             * 一说话就没了」，用户会以为钱没到账。
+             */
+            body.innerHTML =
+                wmHtml +
+                (ui.viewingArchive ? '' : timeEventsHtml(ui.chatId, Date.now())) +
+                renderStoryLines(msgs, [], [], !ui.viewingArchive);
             hydrateAppointmentHtmlPanels(body);
             resetStreamUi();
             if (streaming) ensureStreamMount(body);
@@ -3769,6 +3867,35 @@ function renderWriter() {
         if (!root || root.__miyaFloorToolsBound) return;
         root.__miyaFloorToolsBound = true;
         root.addEventListener('click', function (e) {
+            /*
+             * 现实时钟事件卡的两枚按钮（领取 / 确认、知道了）。
+             * 跟楼层工具一样走委托：卡片每次 patch 都会被重建，
+             * 直接绑元素上的监听器会一起消失。
+             */
+            var teBtn = e.target && e.target.closest
+                ? e.target.closest('[data-te-claim],[data-te-dismiss]')
+                : null;
+            if (teBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                var teApi = timeEventsApi();
+                var teId = teBtn.getAttribute('data-te-claim') || teBtn.getAttribute('data-te-dismiss');
+                var teChatId = String(ui.chatId || '').trim();
+                if (teApi && teId && teChatId) {
+                    if (teBtn.hasAttribute('data-te-claim')) {
+                        if (typeof teApi.claim === 'function') teApi.claim(chatStore(), teChatId, teId, 'user');
+                    } else if (typeof teApi.dismiss === 'function') {
+                        teApi.dismiss(chatStore(), teChatId, teId, 'user');
+                    }
+                    /*
+                     * 领完/确认完立刻重画：卡片的状态是从账本实时补算的，
+                     * 不重画的话按钮会停在原地，用户会以为没点上。
+                     * 走 patchStoryBody 而不是 render()，免得输入框里的草稿被清空。
+                     */
+                    patchStoryBody();
+                }
+                return;
+            }
             var hideBtn = e.target && e.target.closest ? e.target.closest('[data-ap-floor-hide]') : null;
             if (hideBtn) {
                 e.stopPropagation();

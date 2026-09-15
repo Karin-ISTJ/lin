@@ -166,6 +166,23 @@
   }
 
   /** 合并全局/单独配置到 chat settings 对象（浅拷贝后 patch） */
+  /**
+   * backgroundMessage 里「按会话独立」的字段。
+   *
+   * 这些字段不属于全局配置的管理范围，但 defaultChatSettings() 会给它们
+   * 填一份空模板（playerPlots: [] / timeEvents: [] 等），
+   * defaultGlobalSlice() 又会把整份模板拷进全局配置。
+   * 于是 applyToChatSettings 做浅合并时，这份空模板会盖掉真实数据 ——
+   * 表现就是「存进去就没了」。
+   *
+   * 每加一个会话级的 backgroundMessage 字段，都要登记到这里，
+   * 否则就会踩同一个坑（farm 和 timeEvents 已经各踩过一次）。
+   */
+  var SESSION_SCOPED_BM_KEYS = [
+    'farm',
+    'timeEvents'
+  ];
+
   function applyToChatSettings(base, contactId) {
     var out = Object.assign({}, base || {});
     var st = readState();
@@ -180,10 +197,17 @@
          * defaultChatSettings() 里带了一个 farm 空模板（playerPlots: [] 等），
          * 它会被 defaultGlobalSlice() 拷进全局配置；若无条件浅合并，这个空模板
          * 就会盖掉真实农场 —— 表现为「作物种下去就消失」。
-         * 这里剔除全局 slice 里的 farm，只让 backgroundMessage 的其它字段生效。
+         *
+         * timeEvents（现实时钟事件账本）同理：它是每个聊天各自的时间线，
+         * 被空数组盖掉后表现为「利息写进去了，一读就没了」。
+         *
+         * 这里剔除全局 slice 里的这些会话级字段，只让 backgroundMessage
+         * 的其它字段生效。
          */
         var clean = Object.assign({}, slice[k]);
-        delete clean.farm;
+        SESSION_SCOPED_BM_KEYS.forEach(function (bk) {
+          delete clean[bk];
+        });
         out[k] = Object.assign({}, out[k] || {}, clean);
         return;
       }

@@ -522,6 +522,24 @@
             if (messageIndexCovered(i + 1, ranges)) return;
             var body = String(m.content || '').trim();
             if (!body) return;
+            /*
+             * 历史里的 <miyaevent> 标记要剥掉再进请求。
+             * 正常路径上这些标记在落库前就被 extractAndStore 摘走了，
+             * 但旧楼层（接入前产生的回复）或导入的会话里可能还留着。
+             * 不剥的话模型会把标签当成一种写法跟着学，
+             * 从此每轮都吐一串 JSON，正文全被吃掉。
+             */
+            var teHistMod = global.MiyaChatTimeEvents;
+            if (
+                teHistMod &&
+                typeof teHistMod.stripTags === 'function'
+            ) {
+                var teStripped = teHistMod.stripTags(body);
+                if (teStripped != null) {
+                    body = String(teStripped).trim();
+                    if (!body) return;
+                }
+            }
             if (m.role === 'user') {
                 /* 线下楼层保持纯正文，不加线上时间戳前缀 */
                 buf.push(body);
@@ -757,6 +775,24 @@
             worldbookLayers: wbBundle.layers,
             castContacts: castContacts
         });
+        /*
+         * 现实时钟事件账本（线下注入点）。
+         *
+         * 与线上 miya-chat-engine.js 的区别：那边用 !opts.appointmentMode 做守卫，
+         * 因为线下也走同一个引擎、同一个 chatId，不挡住会在一次请求里注入两遍。
+         * 线下这条路径本身就是 appointment 流程，没有重复问题，所以直接注入。
+         *
+         * 位置要紧贴系统层最后：账本描述的是「此刻的世界状态」，
+         * 放在世界书/人物档案之前会被后面的规则盖过去，
+         * 模型就只当背景知识读，不会真的按「已到期 / 已错过」来写。
+         */
+        var teMod = global.MiyaChatTimeEvents;
+        if (teMod && typeof teMod.buildPromptContext === 'function') {
+            try {
+                var teContext = teMod.buildPromptContext(st, canonId || chatId, Date.now());
+                if (teContext) apiMessages.push({ role: 'system', content: teContext });
+            } catch (eTe) {}
+        }
         apiMessages.push({ role: 'system', content: systemContent });
 
         if (mem && typeof mem.injectAppointmentCrossMemory === 'function') {
@@ -1777,6 +1813,25 @@
                     completion && completion.raw != null
                         ? String(completion.raw)
                         : String(completion || '');
+                /*
+                 * 现实时钟事件：先从回复里摘出 <miyaevent>…</miyaevent> 并落账，
+                 * 拿到剥干净的正文再往下走。
+                 *
+                 * 必须放在所有下游解析之前：记忆表格、状态条、分镜都要拿
+                 * 「没有事件标记」的正文，否则标签会顺着 content 写进楼层，
+                 * 下一轮又被当成历史送回去，模型开始照着模仿。
+                 */
+                var teModOff = global.MiyaChatTimeEvents;
+                if (
+                    teModOff &&
+                    typeof teModOff.extractAndStore === 'function' &&
+                    chatId
+                ) {
+                    try {
+                        var teExtract = teModOff.extractAndStore(st, chatId, fullRaw);
+                        if (teExtract && teExtract.text != null) fullRaw = teExtract.text;
+                    } catch (eTeEx) {}
+                }
                 try {
                     var mtEng = global.MiyaMemoryTableEngine;
                     if (mtEng && typeof mtEng.processAssistantReply === 'function') {

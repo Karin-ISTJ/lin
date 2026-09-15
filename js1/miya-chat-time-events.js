@@ -223,6 +223,21 @@
     return e;
   }
 
+  /**
+   * 摘掉标记后收拾残留空行。
+   *
+   * 标记通常单独占一行，直接删掉会留下 "正文\n\n\n\n正文" 这种空洞，
+   * 而正文是按空行分段的 —— 多出来的空行会被切分器当成额外段落，
+   * 正文里就凭空多出几个空白段。这里把「只剩空白的行」折叠成一个，
+   * 同时顺手清掉行尾空格。
+   */
+  function tidyBlankLines(text) {
+    return String(text == null ? '' : text)
+      .replace(/[ \t]+$/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   function extractAndStore(store, chatId, text) {
     var src = String(text || '');
     var found = [];
@@ -244,7 +259,19 @@
         if (created) found.push(created);
       }
     }
-    return { text: src.replace(TAG, '').trim(), events: found };
+    return { text: tidyBlankLines(src.replace(TAG, '')), events: found };
+  }
+
+  /**
+   * 只剥标记、不落账。
+   * 给「历史楼层 / 导入的旧会话」用：那些内容已经过去了，
+   * 不该在这次重新入账（会凭空多出一堆陈年事件），
+   * 但标记必须清掉，否则模型照着学、以后每轮都吐 JSON。
+   */
+  function stripTags(text) {
+    var src = String(text == null ? '' : text);
+    TAG.lastIndex = 0;
+    return tidyBlankLines(src.replace(TAG, ''));
   }
 
   function claim(store, chatId, eventId, by) {
@@ -407,6 +434,7 @@
   global.MiyaChatTimeEvents = {
     create: create,
     extractAndStore: extractAndStore,
+    stripTags: stripTags,
     claim: claim,
     dismiss: dismiss,
     markMissed: markMissed,
