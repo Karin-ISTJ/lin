@@ -62,6 +62,22 @@
     /* 进入场景后的贴底锚定句柄（见 anchorToLatestForAWhile） */
     var enterAnchorRaf = 0;
     var enterAnchorTimer = 0;
+    /* 锚定期间挂上的「用户接管」监听清理函数 */
+    var enterAnchorDisposers = [];
+
+    /*
+     * 能让「入场锚定」立刻收手的用户输入。
+     * 必须覆盖触摸/鼠标/滚轮/键盘/触控笔，少一个就会在那个交互方式下卡住。
+     */
+    var ENTER_ANCHOR_EVENTS = [
+        'wheel',
+        'touchstart',
+        'touchmove',
+        'pointerdown',
+        'pointermove',
+        'mousedown',
+        'keydown'
+    ];
 
 
     /* 统一简约 Ins 线框图标（stroke 1.5 / round） */
@@ -1946,14 +1962,7 @@
             streamUi.scrollRaf = 0;
         }
         /* 换场景时停掉上一场的入场锚定，避免它接着在新场景里写 scrollTop */
-        if (enterAnchorRaf) {
-            cancelAnimationFrame(enterAnchorRaf);
-            enterAnchorRaf = 0;
-        }
-        if (enterAnchorTimer) {
-            clearTimeout(enterAnchorTimer);
-            enterAnchorTimer = 0;
-        }
+        cancelEnterAnchor();
         streamUi.userPinnedBottom = false;
         streamUi.userTouchedScroll = false;
         streamUi.userIntendsFollowBottom = false;
@@ -1986,44 +1995,80 @@
          *   头像 / 内嵌 HTML 面板 / 图片 / 自定义字体都会在首帧之后才撑高内容，
          *   只滚一次的话会停在「差一点到底」的位置，用户看起来就是
          *   「并没有跳到最新楼层」。移动端图片解码慢时尤其明显。
-         *
-         * 所以这里在入场后的短暂窗口内反复把视图钉在底部，
-         * 一旦用户自己碰了滚动条（userTouchedScroll）就立刻收手，
-         * 绝不和用户抢滚动位置。
          */
         anchorToLatestForAWhile();
     }
 
     /*
-     * 入场后的贴底锚定。
-     * 用「若干次 rAF + 一个尾随定时器」而不是单帧，
-     * 覆盖图片/字体/面板撑高的完整时间窗。
+     * 入场后的贴底锚定 —— 必须「不跟用户抢」。
+     *
+     * 这里有一个极其危险的坑（之前踩过）：
+     *   锚定如果靠 rAF 高频写 scrollTop，就会把用户的滑动手势直接压掉
+     *   （手指在动，位置纹丝不动）。更糟的是，程序写入会触发我们自己的
+     *   markSelfScroll 标记，真实的 scroll 事件被吞掉，于是
+     *   userTouchedScroll 永远变不成 true —— 释放条件永远不成立，
+     *   锚定自己把自己锁死，表现就是「页面卡住 + 生成后一直跳到底部」。
+     *
+     * 所以现在的做法是：
+     *   · 用「输入事件」而不是「scroll 能否生效」来判断用户是否接管，
+     *     手指一碰、滚轮一转、按键一按，立刻永久放弃锚定；
+     *   · 只在内容确实长高了（scrollHeight 变化）时才补一次，
+     *     不再每帧无条件写 scrollTop；
+     *   · 窗口很短（约 1.2 秒），到点自动收工。
      */
     function anchorToLatestForAWhile() {
-        if (enterAnchorRaf) cancelAnimationFrame(enterAnchorRaf);
-        if (enterAnchorTimer) clearTimeout(enterAnchorTimer);
-        enterAnchorTimer = 0;
-        var frames = 0;
-        function pin() {
+        cancelEnterAnchor();
+        var deadline = Date.now() + 1200;
+        var lastH = 0;
+        var el = $('xw-main');
+        if (el) lastH = el.scrollHeight;
+
+        /*
+         * 用户接管的即时判据：任何一种输入都算。
+         * 在 window 上以 capture 阶段监听（不 preventDefault），
+         * 只用来「认输」——一旦触发就永久停掉本次锚定，把位置完全交还用户。
+         * 注意必须用 once:false + 手动摘除，才能保证失败路径也能清理干净。
+         */
+        function onUserInput() { cancelEnterAnchor(); }
+        ENTER_ANCHOR_EVENTS.forEach(function (evt) {
+            window.addEventListener(evt, onUserInput, { capture: true, passive: true });
+            enterAnchorDisposers.push(function () {
+                window.removeEventListener(evt, onUserInput, { capture: true });
+            });
+        });
+
+        function tick() {
             enterAnchorRaf = 0;
-            var el = $('xw-main');
-            /* 用户一旦自己滚了，或已离开该场景，立即放弃锚定 */
-            if (!el || !streamUi.landedAtLatest || streamUi.userTouchedScroll) return;
-            markSelfScroll();
-            el.scrollTop = el.scrollHeight;
-            frames++;
-            if (frames < 30) enterAnchorRaf = requestAnimationFrame(pin);
+            var node = $('xw-main');
+            if (!node || !streamUi.landedAtLatest) { cancelEnterAnchor(); return; }
+            /* 内容又长高了（图片/字体/面板加载完）→ 补一次贴底 */
+            if (node.scrollHeight !== lastH) {
+                lastH = node.scrollHeight;
+                markSelfScroll();
+                node.scrollTop = node.scrollHeight;
+            }
+            if (Date.now() < deadline) {
+                enterAnchorRaf = requestAnimationFrame(tick);
+            } else {
+                cancelEnterAnchor();
+            }
         }
-        enterAnchorRaf = requestAnimationFrame(pin);
-        /* 尾随兜底：图片解码可能晚于 30 帧，再补一次；用户已滚动则不动。 */
-        enterAnchorTimer = setTimeout(function () {
+        enterAnchorRaf = requestAnimationFrame(tick);
+    }
+
+    /* 停掉入场锚定，并摘掉它的输入监听（避免残留监听误伤下一场） */
+    function cancelEnterAnchor() {
+        if (enterAnchorRaf) {
+            cancelAnimationFrame(enterAnchorRaf);
+            enterAnchorRaf = 0;
+        }
+        if (enterAnchorTimer) {
+            clearTimeout(enterAnchorTimer);
             enterAnchorTimer = 0;
-            var el = $('xw-main');
-            if (!el || streamUi.userTouchedScroll) return;
-            if (!streamUi.landedAtLatest) return;
-            markSelfScroll();
-            el.scrollTop = el.scrollHeight;
-        }, 450);
+        }
+        enterAnchorDisposers.splice(0).forEach(function (off) {
+            try { off(); } catch (e) {}
+        });
     }
 
     function patchSummaryBusyUi() {
