@@ -936,8 +936,10 @@
         if (!(ui.view === 'story' && !ui.viewingArchive)) return '';
         return (
             '<div class="xw-floor-scope">' +
+            /* inputmode="numeric" 在手机上只弹数字键盘，想填 “0-1” 连那个连字符都敲不出来；
+               改成 text 并把范围写在 placeholder 里，用户才能按提示原样输入。 */
             '<input type="text" class="xw-floor-scope__input" id="xw-floor-scope-input"' +
-            ' inputmode="numeric" autocomplete="off" spellcheck="false"' +
+            ' inputmode="text" enterkeyhint="done" autocomplete="off" spellcheck="false"' +
             ' placeholder="0-1" title="填楼层范围，如 0-1 或 5（支持 0-1,11）"' +
             ' aria-label="楼层范围">' +
             '<button type="button" class="xw-floor-scope__go xw-floor-scope__go--hide" id="xw-floor-scope-hide"' +
@@ -3676,6 +3678,21 @@ function renderWriter() {
         return list[start].id;
     }
 
+    /*
+     * 楼层上的那个「重发」按钮。
+     *
+     * 这里原来是直接调 deleteFromMessage() 把「被点的那层 + 之后的所有层」删掉，
+     * 然后才去请求模型。问题是：删除是立刻落库的，而重发只是发了一个网络请求。
+     * 只要这一下没成功（断网、额度、接口报错、用户中途点停止），
+     * 那几层就已经永久没了 —— 点一下按钮等于删档，而且还没有撤销。
+     *
+     * 现在改成：
+     *   1. 先把「要重写的区间」整段快照下来（内容、思考、swipes、隐藏状态、时间戳，全都要）；
+     *   2. 精确删掉「被点那层的起点」之后的楼层，只动需要重写的那一段；
+     *   3. 重发失败就把快照按原顺序原样放回去，并明确告诉用户「已撤销」，而不是假装无事发生。
+     *
+     * 成功路径不变：区间被新生成的内容替换掉，这正是「重发」该有的样子。
+     */
     function redoFromMessage(msg, autoSend) {
         var sess = apStore().getSession(ui.chatId, ui.sessionId);
         if (!sess || !msg) return;
@@ -3686,6 +3703,7 @@ function renderWriter() {
 
         if (msg.role === 'user') {
             var text = msg.content;
+            var userSnap = snapshotMessagesFrom(sess, idx);
             deleteFromMessage(msg.id);
             if (autoSend) {
                 var eng = apEngine();
@@ -3703,6 +3721,12 @@ function renderWriter() {
                         .then(function () {
                             return eng.sendAppointment(ui.chatId, ui.sessionId, text, streamHandlers());
                         })
+                        .catch(function (err) {
+                            restoreMessageSnapshot(userSnap);
+                            renderStory();
+                            toast('没发出去，已把这层放回去');
+                            if (global.console && console.warn) console.warn('[redo] send failed', err);
+                        })
                         .finally(function () {
                             endWriterGeneration();
                         })
@@ -3719,11 +3743,31 @@ function renderWriter() {
         }
 
         if (msg.role === 'assistant') {
+            /*
+             * 起点要回到「这一轮」的开头：通常就是紧挨着的那条用户消息。
+             * 这样重发才是让角色重新答一次，而不是凭空重写、把提问也丢掉。
+             */
             var roundStartId = assistantRoundStartId(sess, msg);
-            deleteFromMessage(roundStartId);
+            var startIdx = sess.messages.findIndex(function (m) {
+                return m.id === roundStartId;
+            });
+            if (startIdx < 0) {
+                startIdx = (sess.messages || []).findIndex(function (m) {
+                    return m && m.id === msg.id;
+                });
+            }
+            if (startIdx < 0) return;
+            var snap = snapshotMessagesFrom(sess, startIdx);
+            if (!snap.length) return;
+            if (!removeMessagesFrom(startIdx)) {
+                toast('重发中断：没能清掉旧楼层');
+                return;
+            }
             var eng2 = apEngine();
             if (!eng2 || eng2.isBusy(ui.chatId, ui.sessionId)) {
-                toast('请稍候');
+                restoreMessageSnapshot(snap);
+                renderStory();
+                toast('上一镜还没结束，已撤销');
                 return;
             }
             var input2 = $('xw-writer-input');
@@ -3736,11 +3780,88 @@ function renderWriter() {
                     .then(function () {
                         return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
                     })
+                    .catch(function (err) {
+                        restoreMessageSnapshot(snap);
+                        renderStory();
+                        toast('重发失败，已还原这几层');
+                        if (global.console && console.warn) console.warn('[redo] regenerate failed', err);
+                    })
                     .finally(function () {
                         endWriterGeneration();
                     })
             );
         }
+    }
+
+    /** 从 startIdx 起把剩下的楼层整段抄一份，用于失败时原样放回 */
+    function snapshotMessagesFrom(sess, startIdx) {
+        if (!sess || !Array.isArray(sess.messages)) return [];
+        return sess.messages.slice(startIdx).map(function (m) {
+            var copy = {};
+            Object.keys(m || {}).forEach(function (k) {
+                copy[k] = m[k];
+            });
+            if (Array.isArray(m && m.swipes)) copy.swipes = m.swipes.slice();
+            return copy;
+        });
+    }
+
+    /**
+     * 精确回滚到 startIdx，一条不落、一条不多。
+     *
+     * 这里刻意不用上面那个 deleteFromMessage()：它内部是「从被点的那条往后全删」，
+     * 但它的入参语义容易被误用成「删到某人为止」，调用方一不小心就会漏删角色楼层，
+     * 表现为「重发之后旧回复还挂着，新回复又叠了一层」。
+     * 重发这条路径要的是确定的区间，所以在这里自己枚举、自己删，全部成功才返回 true。
+     */
+    function removeMessagesFrom(startIdx) {
+        var store = apStore();
+        if (!store || !ui.chatId || !ui.sessionId) return false;
+        var s = store.getSession(ui.chatId, ui.sessionId);
+        if (!s || !Array.isArray(s.messages) || startIdx >= s.messages.length) return true;
+        var targets = s.messages.slice(startIdx).filter(function (m) {
+            return m && !m.deleted;
+        });
+        if (!targets.length) return true;
+        for (var i = 0; i < targets.length; i++) {
+            store.deleteMessage(ui.chatId, ui.sessionId, targets[i].id);
+        }
+        return true;
+    }
+
+    /**
+     * 把快照按原顺序原样放回。
+     *
+     * 只放「活着的」那几条 —— 已删除的楼层保持删除，不该被这次撤销顺手复活。
+     * addMessage 不给 id 就自己生成新的，所以这里显式把原 id 带上，
+     * 让恢复后的楼层仍能被 data-ap-msg-id 精确命中（否则隐藏/分支按钮会指错楼）。
+     */
+    function restoreMessageSnapshot(snap) {
+        if (!snap || !snap.length) return false;
+        var store = apStore();
+        if (!store || !ui.chatId || !ui.sessionId) return false;
+        if (typeof store.addMessage !== 'function') return false;
+        var ok = true;
+        snap.forEach(function (m) {
+            if (!m || m.deleted) return;
+            if (!String(m.content || '').trim()) return;
+            var row = store.addMessage(ui.chatId, ui.sessionId, {
+                id: m.id,
+                role: m.role,
+                type: m.type,
+                content: m.content,
+                thinking: m.thinking,
+                swipes: Array.isArray(m.swipes) ? m.swipes.slice() : undefined,
+                swipeId: m.swipeId,
+                hidden: !!m.hidden,
+                renderAsHtml: !!m.renderAsHtml,
+                htmlRaw: m.htmlRaw,
+                createdAt: m.createdAt,
+                timestamp: m.timestamp
+            });
+            if (!row) ok = false;
+        });
+        return ok;
     }
 
     function safeFileName(name) { return String(name || '聊天记录').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) || '聊天记录'; }
@@ -3802,19 +3923,52 @@ function renderWriter() {
     }
 
     /** 解析 "3-8" / "5" / "3-8,11" → [[3,8],[11,11]]；非法返回 null */
+    /*
+     * 楼层范围输入框的解析。
+     *
+     * 归一化顺序有讲究，不能把「并列分隔符」和「区间连接符」一锅端：
+     *   1. 先把各种区间符号（～－—–~ 到 至）统一成半角连字符 —— 这一步只认区间符号；
+     *   2. 去掉「第 / 层 / 楼」这类修饰字；
+     *   3. 把连字符两边的空白吃掉（"1 - 3" / "1- 3" 否则会被拆成 ["1","-","3"]）；
+     *   4. 用「数字之后的并列分隔符」来切块（逗号、顿号、分号、斜杠、空格都算），
+     *      分隔符本身连同其两侧空白一起吃掉，不留残渣。
+     *
+     * 第 4 步之所以用 lookbehind 定点切，是因为早先的实现把逗号也统一成空格再按空格切，
+     * 于是 "1-3,11" 会被切成 ["1-3","11"] 之外的怪东西；而 "1,3" 这种正常的并列
+     * 又会被误当成区间。现在两件事彻底分开，互不干扰。
+     */
+    function splitFloorChunks(raw) {
+        return String(raw || '')
+            .trim()
+            .replace(/[～－—–~到至]/g, '-')
+            .replace(/[第层楼]/g, '')
+            .replace(/(\d)\s*-\s*(?=\d)/g, '$1-')
+            .split(/(?<=\d)(?:\s+|\s*[,，、；;\/|]+\s*)(?=\d)/)
+            .map(function (s) {
+                return String(s || '').replace(/^\s*[,，、；;\/|]+\s*|\s*[,，、；;\/|]+\s*$/g, '').trim();
+            })
+            .filter(Boolean);
+    }
+
+    /*
+     * 楼层是从 1 开始编号的，所以 0 在这里永远不是一个有效楼层。
+     * 之前 0-1 会在解析阶段直接返回 null，用户看到的是「格式不对」——
+     * 可 0-1 正是输入框自己给的示例，照着填却被骂，纯属自己打自己脸。
+     * 现在把两端分别夹到合法区间：0-1 → 1-1（第 1 层），1-0 → 1-1，
+     * 0-5 → 1-5，6-0 → 1-6，既不再报错，也不会把 0 当成真实楼层。
+     */
     function parseFloorRange(text) {
-        var raw = String(text || '').trim();
-        if (!raw) return null;
-        var chunks = raw.split(/[,，、\s]+/).filter(Boolean);
+        var chunks = splitFloorChunks(text);
         if (!chunks.length) return null;
         var ranges = [];
         for (var i = 0; i < chunks.length; i++) {
-            var c = chunks[i].replace(/[第层楼\s]/g, '');
-            var mt = c.match(/^(\d+)(?:\s*[-~－—到至]\s*(\d+))?$/);
+            var mt = chunks[i].match(/^(\d+)(?:-(\d+))?$/);
             if (!mt) return null;
             var a = parseInt(mt[1], 10);
             var b = mt[2] != null ? parseInt(mt[2], 10) : a;
-            if (!isFinite(a) || !isFinite(b) || a < 1 || b < 1) return null;
+            if (!isFinite(a) || !isFinite(b)) return null;
+            if (a < 1) a = 1;
+            if (b < 1) b = 1;
             if (a > b) { var t = a; a = b; b = t; }
             ranges.push([a, b]);
         }
@@ -3832,7 +3986,7 @@ function renderWriter() {
         var sess = apStore().getSession(ui.chatId, ui.sessionId);
         if (!sess) { toast('当前没有打开的场次'); return false; }
         var ranges = parseFloorRange(text);
-        if (!ranges) { toast('格式不对，示例：3-8 或 5'); return false; }
+        if (!ranges) { toast('格式不对，示例：0-1 或 5'); return false; }
         var byNo = floorNumbersOf(sess);
         var maxNo = 0;
         Object.keys(byNo).forEach(function (k) { maxNo = Math.max(maxNo, parseInt(k, 10)); });
