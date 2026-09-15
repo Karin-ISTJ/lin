@@ -96,8 +96,21 @@
       if (entry && entry.id) exists[String(entry.id)] = true;
     });
 
+  /**
+   * 条目两层开关：自身 + 所属分组。
+   * 分组开关不改写条目 enabled，所以这里每次都实时问 store。
+   */
+  function entryActive(entry) {
+    if (!entry || entry.enabled === false || !entry.id) return false;
+    var store = global.miyaWorldbookStore;
+    if (store && typeof store.isEntryGroupEnabled === 'function') {
+      return store.isEntryGroupEnabled(entry);
+    }
+    return true;
+  }
+
     function pushIfNeeded(entry) {
-      if (!entry || entry.enabled === false || !entry.id) return;
+      if (!entryActive(entry)) return;
       var id = String(entry.id);
       if (exists[id]) return;
       if (matcher && typeof matcher.matchEntry === 'function') {
@@ -127,7 +140,7 @@
       if (!binding || typeof binding !== 'object') return;
       if (String(binding.type || '').trim() !== 'entry') return;
       var entry = entryMap[String(binding.entryId || binding.id || '').trim()];
-      if (!entry || entry.enabled === false || !entry.id) return;
+      if (!entryActive(entry)) return;
       if (binding.force) {
         if (!allowForcedReach(entry)) return;
         var fid = String(entry.id);
@@ -141,7 +154,7 @@
 
     forcedIds.forEach(function (id) {
       var entry = entryMap[String(id || '').trim()];
-      if (!entry || entry.enabled === false || !entry.id || exists[String(entry.id)]) return;
+      if (!entryActive(entry) || exists[String(entry.id)]) return;
       if (matcher && typeof matcher.matchEntry === 'function') {
         if (!matcher.matchEntry(entry, {
           roleId: cfg.roleId,

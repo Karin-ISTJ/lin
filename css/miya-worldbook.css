@@ -1242,3 +1242,47 @@
   height: 14px;
   opacity: 0.85;
 }
+
+/* ─── 分组总开关（整组启停） ─────────────────────────────────────
+   独立于条目开关的一层：关组不会写回条目的 enabled，
+   所以重新打开分组时，组内原本的启停状态原样恢复。 */
+.miya-worldbook-app .ins-wb-group-op--power {
+  min-width: 32px;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1;
+  color: #3f8f5f;
+  border-color: rgba(63, 143, 95, 0.45);
+  background: rgba(63, 143, 95, 0.08);
+}
+.miya-worldbook-app .ins-wb-group-op--power.is-off {
+  color: #9a9a9a;
+  border-color: var(--st-border);
+  background: var(--st-card-bg);
+}
+.miya-worldbook-app .ins-wb-group-op--power:active {
+  transform: scale(0.94);
+}
+
+/* 整组关闭：标题降饱和 + 加「已关闭」徽标，一眼能看出这组不生效 */
+.miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-title {
+  color: #9a9a9a;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-arrow {
+  color: #bbb;
+}
+.miya-worldbook-app .ins-wb-book-badge {
+  flex-shrink: 0;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #8a8a8a;
+  background: rgba(127, 127, 127, 0.12);
+}
+.miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-count {
+  color: #bbb;
+}

@@ -248,17 +248,27 @@
       var items = byGroup[g.id] || [];
       if (!items.length) return;
       var collapsed = !!collapsedGroups[g.id];
+      /* 分组总开关（未分组是兜底容器，不提供开关） */
+      var groupOff = !g.fixed && g.enabled === false;
+      var toggleOp = g.fixed ? '' : (
+        '<button type="button" class="ins-wb-group-op ins-wb-group-op--power' + (groupOff ? ' is-off' : '') + ' mi-ico-btn" ' +
+        'data-wb-group-toggle="' + esc(g.id) + '" ' +
+        'title="' + (groupOff ? '整组已关闭，点击启用' : '整组启用中，点击关闭') + '" ' +
+        'aria-label="' + (groupOff ? '启用整组' : '关闭整组') + '" aria-pressed="' + (groupOff ? 'false' : 'true') + '">' +
+        (groupOff ? '○' : '●') + '</button>'
+      );
       var actions = g.fixed ? '' : (
-        '<span class="ins-wb-group-head-ops">' +
+        '<span class="ins-wb-group-head-ops">' + toggleOp +
         '<button type="button" class="ins-wb-group-op mi-ico-btn" data-wb-group-edit="' + esc(g.id) + '" title="重命名" aria-label="重命名"><img src="img/icons/edit-03.svg" alt="" width="16" height="16"></button>' +
         '<button type="button" class="ins-wb-group-op ins-wb-group-op--del mi-ico-btn mi-ico-btn--danger" data-wb-group-del="' + esc(g.id) + '" title="删除世界书" aria-label="删除世界书"><img src="img/icons/trash-01.svg" alt="" width="16" height="16"></button>' +
         '</span>'
       );
-      html += '<section class="ins-wb-book' + (collapsed ? ' is-collapsed' : ' is-open') + '" data-wb-book="' + esc(g.id) + '">' +
+      html += '<section class="ins-wb-book' + (collapsed ? ' is-collapsed' : ' is-open') + (groupOff ? ' is-group-off' : '') + '" data-wb-book="' + esc(g.id) + '">' +
         '<div class="ins-wb-book-head">' +
         '<button type="button" class="ins-wb-book-toggle" data-wb-collapse="' + esc(g.id) + '" aria-expanded="' + !collapsed + '">' +
         '<span class="ins-wb-book-arrow">' + (collapsed ? '▸' : '▾') + '</span>' +
         '<span class="ins-wb-book-title">' + esc(g.name) + '</span>' +
+        (groupOff ? '<span class="ins-wb-book-badge">已关闭</span>' : '') +
         '<span class="ins-wb-book-count">' + items.length + ' 条</span>' +
         '</button>' + actions + '</div>';
       if (!collapsed) {
@@ -744,6 +754,21 @@
       if (groupChip && groupChip.hasAttribute('data-wb-group')) {
         filterGroupId = groupChip.getAttribute('data-wb-group') || 'all';
         renderList();
+        return;
+      }
+      /*
+       * 分组总开关必须放在 collapse 之前判断：
+       * 按钮虽在分组头里，但不该触发折叠。
+       */
+      var groupToggleBtn = e.target.closest('[data-wb-group-toggle]');
+      if (groupToggleBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        var tgGid = groupToggleBtn.getAttribute('data-wb-group-toggle');
+        var tgOn = store.isGroupEnabled ? store.isGroupEnabled(tgGid) : true;
+        if (typeof store.toggleGroupEnabled === 'function') {
+          store.toggleGroupEnabled(tgGid, !tgOn).then(renderList);
+        }
         return;
       }
       var collapseBtn = e.target.closest('[data-wb-collapse]');

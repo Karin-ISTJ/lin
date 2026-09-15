@@ -114,8 +114,21 @@
     });
   }
 
-  function matchEntry(entry, cfg) {
+  /**
+   * 条目是否「两层都放行」：自身开关开着，且所属分组的总开关也开着。
+   * 分组开关是独立的一层，不改写条目 enabled —— 关组再开组能原样恢复。
+   */
+  function entryActive(entry) {
     if (!entry || entry.enabled === false) return false;
+    var store = global.miyaWorldbookStore;
+    if (store && typeof store.isEntryGroupEnabled === 'function') {
+      return store.isEntryGroupEnabled(entry);
+    }
+    return true;
+  }
+
+  function matchEntry(entry, cfg) {
+    if (!entryActive(entry)) return false;
     var contextText = String(cfg.contextText || '');
     var scope = String(entry.scope || 'global');
     var promptContext = String(cfg.promptContext || '').trim();
@@ -180,7 +193,7 @@
 
   function collectUniversalGlobalEntries(entries) {
     return (entries || []).filter(function (entry) {
-      return entry && entry.enabled !== false && String(entry.scope) !== 'local' &&
+      return entryActive(entry) && String(entry.scope) !== 'local' &&
         getEntryGlobalReach(entry) === 'all';
     });
   }
@@ -189,7 +202,7 @@
     var ctx = String(promptContext || '').trim();
     if (!ctx) return [];
     return (entries || []).filter(function (entry) {
-      if (!entry || entry.enabled === false || String(entry.scope) === 'local') return false;
+      if (!entryActive(entry) || String(entry.scope) === 'local') return false;
       return globalReachApplies(getEntryGlobalReach(entry), ctx);
     });
   }

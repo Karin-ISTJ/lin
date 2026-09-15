@@ -87,7 +87,14 @@
       id: id,
       name: String((raw && raw.name) || '').trim() || '未命名分组',
       sort: typeof raw.sort === 'number' ? raw.sort : (index + 1) * 10,
-      fixed: false
+      fixed: false,
+      /*
+       * 分组总开关（独立的「组级」一层）。
+       * 关掉后该组条目在匹配与注入时全部跳过，但**不写回条目的 enabled** ——
+       * 这样重新打开分组时，组内原本启用/关闭的条目会原样恢复，
+       * 用户不需要再一条条手动开回来。
+       */
+      enabled: !(raw && raw.enabled === false)
     };
   }
 
@@ -352,8 +359,16 @@
     var next = normalizeGroup(payload || {}, st.groups.length);
     if (next.id === DEFAULT_GROUP_ID) return Promise.resolve(st.groups[0]);
     var idx = st.groups.findIndex(function (x) { return x.id === next.id; });
-    if (idx >= 0) st.groups[idx] = next;
-    else st.groups.push(next);
+    if (idx >= 0) {
+      /*
+       * 重命名等场景传进来的 payload 不带 enabled，
+       * 不保留就会把分组总开关悄悄重置成「开」。这里显式继承旧值。
+       */
+      if (payload && payload.enabled === undefined) next.enabled = st.groups[idx].enabled !== false;
+      st.groups[idx] = next;
+    } else {
+      st.groups.push(next);
+    }
     return persist(st).then(function () { return next; });
   }
 
@@ -398,6 +413,37 @@
     target.enabled = !!enabled;
     target.updatedAt = Date.now();
     return persist(st).then(function () { return target; });
+  }
+
+  /**
+   * 分组总开关。
+   * 只改 group.enabled，**绝不触碰组内条目的 enabled** ——
+   * 关组再开组时，条目原先的启停状态必须原样回来。
+   */
+  function toggleGroupEnabled(groupId, enabled) {
+    var st = readState();
+    var gid = String(groupId || '');
+    var target = st.groups.filter(function (g) { return g.id === gid; })[0];
+    if (!target) return Promise.resolve(null);
+    target.enabled = !!enabled;
+    return persist(st).then(function () { return target; });
+  }
+
+  /** 该分组的开关状态（未分组恒为开：它是兜底容器，不该被整体关掉） */
+  function isGroupEnabled(groupId) {
+    var gid = String(groupId || '');
+    if (gid === DEFAULT_GROUP_ID) return true;
+    var g = readState().groups.filter(function (x) { return x.id === gid; })[0];
+    return !g || g.enabled !== false;
+  }
+
+  /**
+   * 某条目在「组开关」这一层是否放行。
+   * 匹配器与注入器统一调这个，就不用各自去查分组表。
+   */
+  function isEntryGroupEnabled(entry) {
+    if (!entry) return false;
+    return isGroupEnabled(entry.groupId);
   }
 
   function resolveAvailableRoles() {
@@ -457,6 +503,9 @@
     upsertEntry: upsertEntry,
     removeEntry: removeEntry,
     toggleEntryEnabled: toggleEntryEnabled,
+    toggleGroupEnabled: toggleGroupEnabled,
+    isGroupEnabled: isGroupEnabled,
+    isEntryGroupEnabled: isEntryGroupEnabled,
     resolveAvailableRoles: resolveAvailableRoles,
     invalidateCache: function () { _cache = null; _ready = null; _dirtySinceRead = false; },
     importStJson: function (data, opts) {
