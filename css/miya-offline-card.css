@@ -242,6 +242,17 @@
   color: var(--xwc-ink);
 }
 
+/* 已完成：空心点 + 文字淡化划掉，与未完成一眼区分 */
+.xwc__item--todo.is-done .xwc__dot {
+  background: transparent;
+  border: 1px solid var(--xwc-line);
+}
+.xwc__item--todo.is-done .xwc__todo-text {
+  color: var(--xwc-soft);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 /* ── 键值行 ── */
 .xwc__row {
   display: flex;

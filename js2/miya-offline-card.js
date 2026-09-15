@@ -10,17 +10,15 @@
  *   3. 不抢风头：所有样式都是「透明底 + 继承字体 + 变量描边」，
  *      原卡若提供了配色就跟随，没提供就退化成最朴素的中性样式。
  *
- * 与旧实现的关系
- *   旧的 miya-gourmet-journal.js 依赖一张 58KB 的专用 HTML 模板（写死了
- *   菜品玩法、NPC 头像表、17 个自造颜色变量），只能服务「我是厨神」这一张卡。
- *   本模块取而代之：解析逻辑通用化，视觉交给线下主题。
+ * 解析逻辑与视觉样式完全解耦：
+ *   本模块只负责「把结构化文本变成语义化的 DOM」，
+ *   长什么样交给线下主题的 CSS 变量决定，所以换卡不用改这里。
  */
 (function (global) {
     'use strict';
 
-    /* ── 触发标记 ───────────────────────────────────────────
-       优先识别 <card>；同时兼容旧卡的 <gourmet_journal>，避免老卡直接失效。 */
-    var BLOCK_TAGS = ['card', 'gourmet_journal'];
+    /* ── 触发标记 ─────────────────────────────────────────── */
+    var BLOCK_TAGS = ['card'];
 
     function buildBlockRegex(tag) {
         return new RegExp('<' + tag + '\\s*>([\\s\\S]*?)(?:<\\s*\\/\\s*' + tag + '\\s*>|$)', 'gi');
@@ -193,6 +191,13 @@
                 if (!out.sections.__items[key]) out.sections.__items[key] = [];
                 /* 未知题材的分区：记住标题，供后续未知类型条目归入 */
                 if (!alias) out.__declaredMore = parts[0];
+                /*
+                 * 记住「当前声明中的分区」。后续条目优先落进这里，
+                 * 而不是按类型重新归类 —— 否则卡片自己分的区会被类型名覆盖掉：
+                 * 比如 [其他线索] 下面放 [Card|…]，Card 属于情报组，
+                 * 就会把这批内容抢回「情报」分区，卡片的分区意图被抹掉。
+                 */
+                out.__cursor = key;
                 return;
             }
 
@@ -223,6 +228,12 @@
             if (header === 'pinned') { out.pinned = item; return; }
 
             var group = GROUP_OF[header] || 'more';
+            /*
+             * 卡片显式分过区（有 __cursor）时，条目就落进当前分区，
+             * 不再按类型重新归类 —— 尊重卡片自己的分区意图。
+             * 仅在条目直接出现在 <card> 顶层（无任何分区声明）时才走类型归类。
+             */
+            if (out.__cursor) group = out.__cursor;
             /* 若是首次进入 'more' 且卡片自己声明过中文分区名，就用那个名字，
                避免自定义题材（如「其他线索」）被统一吞成"更多"。 */
             if (!out.sections[group]) {
@@ -322,7 +333,15 @@
         }
 
         if (t === 'todo') {
-            return '<div class="xwc__item xwc__item--todo">' +
+            /*
+             * done 的判定放宽：模型可能给 0/1、true/false、√/×、是/否……
+             * 只认数字 1 太窄，会把「已完成」误显示成未完成。
+             */
+            var raw = String(item.done == null ? '' : item.done).trim().toLowerCase();
+            var isDone = raw === '1' || raw === 'true' || raw === 'yes' || raw === 'y'
+                || raw === 'done' || raw === '√' || raw === '✓' || raw === '✔'
+                || raw === '是' || raw === '已完成' || raw === '完成';
+            return '<div class="xwc__item xwc__item--todo' + (isDone ? ' is-done' : '') + '">' +
                 '<span class="xwc__dot"></span>' +
                 '<span class="xwc__todo-text">' + esc(item.text) + '</span></div>';
         }

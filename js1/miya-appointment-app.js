@@ -1277,8 +1277,8 @@
         if (m.renderAsHtml) return buildHtmlPanelHtml(m.htmlRaw || m.content);
 
         /*
-         * 通用卡片：回复里带 <card>…</card>（兼容旧卡的 <gourmet_journal>）时，
-         * 把那一段渲染成卡片，正文其余部分照常走排版。
+         * 通用卡片：回复里带 <card>…</card> 时，把那一段渲染成卡片，
+         * 正文其余部分照常走排版。
          * 卡片是内联 DOM 而非 iframe，所以能直接继承线下主题的 CSS 变量。
          */
         var cardHtml = offlineCardHtmlFor(m.content);
