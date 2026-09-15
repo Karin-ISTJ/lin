@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=29">
-  <link rel="stylesheet" href="css/miya-worldbook.css?v=10">
+  <link rel="stylesheet" href="css/miya-worldbook.css?v=11">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
   <link rel="stylesheet" href="css/miya-chat.css?v=62">
@@ -1240,8 +1240,18 @@
             <label class="miya-wb-check" style="margin-top:8px"><input type="checkbox" id="miya-wb-field-group-override"> groupOverride（同组可并列）</label>
             <label class="ins-field-label" for="miya-wb-field-scan-depth" style="margin-top:10px;display:block">scanDepth（扫描最近 N 行上下文；空=默认 50）</label>
             <input type="number" class="ins-text-input" id="miya-wb-field-scan-depth" min="0" max="500" placeholder="默认">
+            <p class="ins-field-label" style="margin-top:14px;margin-bottom:6px">匹配方式</p>
+            <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-case-sensitive"> 区分大小写（caseSensitive）</label>
+            <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-whole-words"> 全词匹配（matchWholeWords）</label>
+            <p class="ins-field-label" style="margin-top:14px;margin-bottom:6px">递归控制</p>
+            <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-exclude-recursion"> 不参与递归（excludeRecursion）</label>
+            <label class="miya-wb-check"><input type="checkbox" id="miya-wb-field-prevent-recursion"> 不被递归触发（preventRecursion）</label>
             <p class="ins-field-label" style="margin-top:10px;opacity:.7;line-height:1.5">
-              说明：从 ST 导入的 sticky / cooldown / delay、useGroupScoring 目前不生效（本项目未实现按会话的激活计时与评分）；excludeRecursion / preventRecursion / caseSensitive / matchWholeWords 可被导入并生效，但此处暂未提供编辑入口。
+              全词匹配：避免「Art」命中「Artificial」这类子串误触发，英文名/缩写多时建议开。<br>
+              两个递归开关：本项目当前不执行递归激活，导入 ST 世界书时按原值保留、导出时原样写回。
+            </p>
+            <p class="ins-field-label" style="margin-top:10px;opacity:.7;line-height:1.5">
+              说明：从 ST 导入的 sticky / cooldown / delay、useGroupScoring 目前不生效（本项目未实现按会话的激活计时与评分）。
             </p>
           </details>
 
@@ -1253,6 +1263,32 @@
             <button type="button" class="ins-chip ins-chip--dim" id="miya-wb-doc-import">从文件填入</button>
           </div>
           <textarea class="ins-textarea" id="miya-wb-field-body" rows="12" spellcheck="false" placeholder="写入会被注入模型的设定文本…"></textarea>
+
+          <details class="miya-wb-advanced miya-wb-diag" id="miya-wb-diag">
+            <summary>为什么没注入？（激活诊断）</summary>
+            <p class="miya-wb-diag__hint">
+              按当前编辑器里的设置，模拟一次真实的激活判定，逐层告诉你卡在哪一步。
+              诊断只读，不会改动任何设置，也不会影响实际注入。
+            </p>
+            <p class="ins-field-label" style="margin-bottom:6px">模拟上下文（会被扫描的正文）</p>
+            <textarea class="ins-textarea" id="miya-wb-diag-ctx" rows="4"
+              placeholder="粘贴最近几条消息，或留空只看静态条件…" style="min-height:80px"></textarea>
+            <div class="miya-wb-row2">
+              <div class="miya-wb-field">
+                <label class="ins-field-label" for="miya-wb-diag-scene">模拟场景</label>
+                <select class="ins-select" id="miya-wb-diag-scene">
+                  <option value="online">线上聊天</option>
+                  <option value="offline">线下</option>
+                </select>
+              </div>
+              <div class="miya-wb-field">
+                <label class="ins-field-label" for="miya-wb-diag-role">模拟联系人</label>
+                <select class="ins-select" id="miya-wb-diag-role"></select>
+              </div>
+            </div>
+            <button type="button" class="ins-chip ins-chip--gold" id="miya-wb-diag-run">运行诊断</button>
+            <div id="miya-wb-diag-out" class="miya-wb-diag__out" hidden></div>
+          </details>
         </div>
       </div>
       <footer class="ins-wb-editor-foot">
@@ -3794,11 +3830,11 @@
   <script defer src="js1/miya-beautify-doc-import.js?v=3"></script>
   <script defer src="js2/miya-tavern-card-import.js?v=5"></script>
   <script defer src="js1/miya-contacts-app.js?v=10"></script>
-  <script defer src="js2/miya-worldbook-st.js?v=8"></script>
+  <script defer src="js2/miya-worldbook-st.js?v=9"></script>
   <script defer src="js2/miya-worldbook-store.js?v=15"></script>
-  <script defer src="js2/miya-worldbook-matcher.js?v=6"></script>
+  <script defer src="js2/miya-worldbook-matcher.js?v=7"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=16"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=23"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=26"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=6"></script>
   <script defer src="js1/miya-chat-store.js?v=57"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>

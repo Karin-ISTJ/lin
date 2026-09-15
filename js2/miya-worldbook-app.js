@@ -292,11 +292,34 @@
        它只负责异常兜底，用户没有理由主动往里面存词条。 */
     var groups = store.listVisibleGroups();
     if (!groups.length) groups = store.listGroups();
+
+    /* 【必须补进来】词条当前所属的分组若已关闭（或未分组被隐藏），
+       它不会出现在 listVisibleGroups 里。此时下拉会回落到别的分组，
+       readEditorPayload 读到的 groupId 就与词条真实归属不一致 ——
+       用户什么都没改、点一下保存，词条就被**静默搬到另一个世界书**。
+       所以这里把「当前归属」强行补进选项并选中，保证「打开→保存」
+       这条路径不改变任何数据。 */
+    var wantId = selectedId != null && selectedId !== '' ? String(selectedId) : '';
+    var hasWant = wantId && groups.some(function (g) { return String(g.id) === wantId; });
+    if (wantId && !hasWant) {
+      var cur = store.getGroup ? store.getGroup(wantId) : null;
+      if (cur) {
+        groups = groups.concat([{
+          id: cur.id,
+          name: String(cur.name || '未命名世界书') +
+            (cur.enabled === false ? '（已关闭）' : ''),
+          enabled: cur.enabled
+        }]);
+      }
+    }
+
     /* 默认选中「第一个真实分组」，未分组不作为默认。
        未分组只会在「正在编辑一条兜底条目」时被显式传入而选中。 */
-    var fallbackId = store.peekDefaultGroupId();
-    if (!fallbackId) fallbackId = groups[0] && groups[0].id;
-    var wantId = selectedId != null && selectedId !== '' ? String(selectedId) : String(fallbackId || '');
+    if (!wantId) {
+      var fallbackId = store.peekDefaultGroupId();
+      if (!fallbackId) fallbackId = groups[0] && groups[0].id;
+      wantId = String(fallbackId || '');
+    }
     sel.innerHTML = groups.map(function (g) {
       var picked = String(g.id) === wantId ? ' selected' : '';
       return '<option value="' + esc(g.id) + '"' + picked + '>' + esc(g.name) + '</option>';
@@ -372,6 +395,18 @@
     if (gEl) gEl.value = data.group || '';
     setNum('miya-wb-field-group-weight', data.groupWeight, 100);
     setChk('miya-wb-field-group-override', data.groupOverride);
+    /*
+     * 匹配方式与递归控制。
+     *
+     * 这四个字段引擎早就支持、导入导出也一直带，但之前没有编辑入口 ——
+     * 用户只能靠改 JSON 去动它们，等于「有能力但够不着」。
+     * 注意一律用 !! 归一化：这些字段可能是 undefined（老数据没存过），
+     * 直接赋给 checked 会得到 undefined → 控件状态不确定。
+     */
+    setChk('miya-wb-field-case-sensitive', data.caseSensitive);
+    setChk('miya-wb-field-whole-words', data.matchWholeWords);
+    setChk('miya-wb-field-exclude-recursion', data.excludeRecursion);
+    setChk('miya-wb-field-prevent-recursion', data.preventRecursion);
     $('miya-wb-field-body').value = data.content || '';
     var rolesHost = $('miya-wb-roles-host');
     if (rolesHost) rolesHost.innerHTML = '<p class="ins-wb-role-empty">正在读取联系人档案…</p>';
@@ -394,6 +429,14 @@
     ensureContactsReady().then(function () {
       if (rolesHost) rolesHost.innerHTML = renderRolePicker(data.boundRoleIds || []);
     });
+
+    /* 诊断面板：每次打开编辑器都重置。
+       关键——必须在这条新建词条/另一条词条之间清掉上一次的结论，
+       否则会拿上一条的结果误导用户。 */
+    var diagWrap = $('miya-wb-diag');
+    if (diagWrap) diagWrap.open = false;
+    resetDiag();
+    fillDiagRoles(data.boundRoleIds || []);
   }
 
   function syncDepthFieldVisibility() {
@@ -467,7 +510,11 @@
       ignoreBudget: chk('miya-wb-field-ignore-budget'),
       group: ($('miya-wb-field-st-group') && $('miya-wb-field-st-group').value) || '',
       groupWeight: numVal('miya-wb-field-group-weight', 100),
-      groupOverride: chk('miya-wb-field-group-override')
+      groupOverride: chk('miya-wb-field-group-override'),
+      caseSensitive: chk('miya-wb-field-case-sensitive'),
+      matchWholeWords: chk('miya-wb-field-whole-words'),
+      excludeRecursion: chk('miya-wb-field-exclude-recursion'),
+      preventRecursion: chk('miya-wb-field-prevent-recursion')
     };
   }
 
@@ -477,6 +524,203 @@
     if (app) app.classList.remove('has-editor');
     var editor = $('miya-wb-editor');
     if (editor) editor.setAttribute('aria-hidden', 'true');
+    resetDiag();
+  }
+
+  /* ------------------------------------------------------------------
+   * 激活诊断
+   *
+   * 输入源刻意复用 readEditorPayload() —— 保证「诊断用的词条」与
+   * 「保存后会写入的词条」是同一份数据。若另建一套读取逻辑，两者迟早漂移，
+   * 诊断就会开始骗人。
+   *
+   * 判定交给 matcher.diagnoseEntries（纯只读，不掷概率）。
+   * ------------------------------------------------------------------ */
+
+  /** 把词条判定结果翻译成用户能看懂的分层结论 */
+  function buildDiagSteps(entry, cfg, verdict) {
+    var steps = [];
+    var reach = verdict.reach;
+    function push(state, key, text) {
+      steps.push({ state: state, key: key, text: text });
+    }
+
+    /* 1) 条目开关 */
+    if (entry.enabled === false) {
+      push('fail', '条目开关', '已关闭 —— 后续判定不再执行');
+      return steps;
+    }
+    push('pass', '条目开关', '已开启');
+
+    /* 2) 分组开关 */
+    if (verdict.reason === 'group_disabled') {
+      push('fail', '世界书分组', '所属世界书被整组关闭 —— 条目自身仍是开启的');
+      return steps;
+    }
+    push('pass', '世界书分组', '所属世界书已启用');
+
+    /* 3) 范围 / 场景 / 角色 */
+    var scopeTxt = entry.scope === 'local' ? '局部（需绑定联系人）' : '全局（对所有联系人）';
+    if (entry.scope === 'local' && verdict.reason === 'scope_local_role_mismatch') {
+      push('fail', '生效范围', scopeTxt + ' —— 绑定的联系人与模拟对象不一致');
+      return steps;
+    }
+    /* 局部但一个联系人都没绑：引擎按「不限制角色」处理，会对所有人注入。
+       这与「局部」这个名字给用户的预期正相反，必须显式警告 ——
+       正常路径下编辑器会拦住它（保存时校验），但**导入的词条可能绕过**。 */
+    var unboundLocal = entry.scope === 'local' && !(entry.boundRoleIds || []).length;
+    if (unboundLocal) {
+      push('warn', '生效范围', '局部词条但未绑定任何联系人 —— 引擎会当作「不限制角色」，' +
+        '对**所有**联系人注入，与「局部」的预期相反。建议绑定联系人后保存');
+    } else if (entry.scope === 'local') {
+      push('pass', '生效范围', scopeTxt + '，绑定 ' + (entry.boundRoleIds || []).length + ' 位联系人');
+    } else {
+      push('pass', '生效范围', scopeTxt);
+    }
+
+    if (verdict.reason === 'reach_mismatch') {
+      push('fail', '生效场景', '词条限定「' + reachName(reach) + '」，模拟场景是「' +
+        reachName(cfg.promptContext) + '」');
+      return steps;
+    }
+    /* 「线上和线下」这类包含关系要说清为什么相符，
+       否则用户会以为「仅线上」是个约束。 */
+    var reachTxt = '词条限定「' + reachName(reach) + '」';
+    if (cfg.promptContext) {
+      reachTxt += '，当前模拟「' + reachName(cfg.promptContext) + '」';
+      reachTxt += (String(reach) === 'online_offline')
+        ? ' —— 线上线下都覆盖，相符'
+        : ' —— 相符';
+    }
+    push('pass', '生效场景', reachTxt);
+
+    /* 4) 常驻 / 关键词 */
+    if (entry.constant) {
+      push('pass', '触发方式', '常驻 —— 无需关键词，直接注入');
+      return steps;
+    }
+    if (verdict.reason === 'no_keywords') {
+      push('fail', '关键词', '非常驻，且没有配置任何关键词 —— 永远不会被触发');
+      return steps;
+    }
+    if (verdict.reason === 'keyword_miss') {
+      push('fail', '关键词', verdict.detail);
+      return steps;
+    }
+    if (verdict.reason === 'probability') {
+      push('pass', '关键词', '已命中');
+      push('warn', '触发概率', '设置了 ' + entry.probability +
+        '% 概率 —— 每次生成独立掷骰，可能命中也可能不命中');
+      return steps;
+    }
+    push('pass', '关键词', verdict.detail || '已命中');
+
+    /* 5) 概率（命中后再看） */
+    if (entry.useProbability && entry.probability < 100) {
+      push('warn', '触发概率', '设置了 ' + entry.probability + '% 概率，命中后仍会掷骰');
+    } else {
+      push('pass', '触发概率', '100% —— 命中即注入');
+    }
+    return steps;
+  }
+
+  function reachName(v) {
+    var s = String(v || '').trim();
+    if (s === 'all') return '全软件';
+    if (s === 'online') return '仅线上';
+    if (s === 'offline') return '仅线下';
+    if (s === 'online_offline') return '线上和线下';
+    return s || '未限定';
+  }
+
+  /** 填充「模拟联系人」下拉（每个 local 词条都可能绑不同的人） */
+  function fillDiagRoles(selectedIds) {
+    var sel = $('miya-wb-diag-role');
+    if (!sel) return;
+    var store = global.miyaWorldbookStore;
+    var rows = store && typeof store.resolveAvailableRoles === 'function'
+      ? store.resolveAvailableRoles()
+      : [];
+    var picked = Array.isArray(selectedIds) ? selectedIds.map(String) : [];
+    /* 优先选中词条已绑定的联系人，其次第一个 */
+    var want = picked.length ? picked[0] : (rows[0] && rows[0].roleId) || '';
+    if (!rows.length) {
+      sel.innerHTML = '<option value="">（暂无联系人）</option>';
+      return;
+    }
+    sel.innerHTML = rows.map(function (r) {
+      var id = String(r.roleId || '');
+      return '<option value="' + esc(id) + '"' + (id === want ? ' selected' : '') + '>' +
+        esc(r.roleName || id) + '</option>';
+    }).join('');
+  }
+
+  function resetDiag() {
+    var out = $('miya-wb-diag-out');
+    if (out) {
+      out.hidden = true;
+      out.innerHTML = '';
+    }
+  }
+
+  function runDiag() {
+    var matcher = global.miyaWorldbookMatcher;
+    var out = $('miya-wb-diag-out');
+    if (!out) return;
+    if (!matcher || typeof matcher.diagnoseEntries !== 'function') {
+      out.hidden = false;
+      out.innerHTML = '<p class="miya-wb-diag__detail">诊断模块未就绪（matcher 未加载）。</p>';
+      return;
+    }
+
+    /* 用编辑器当前内容当作被诊断的词条 —— 与保存后的数据同源 */
+    var entry = readEditorPayload();
+    var cfg = {
+      contextText: ($('miya-wb-diag-ctx') && $('miya-wb-diag-ctx').value) || '',
+      promptContext: ($('miya-wb-diag-scene') && $('miya-wb-diag-scene').value) || 'online',
+      roleIds: (function () {
+        var r = ($('miya-wb-diag-role') && $('miya-wb-diag-role').value) || '';
+        return r ? [r] : [];
+      })()
+    };
+
+    var res = matcher.diagnoseEntries([entry], cfg);
+    var verdict = res.rows[0] || {};
+    var steps = buildDiagSteps(entry, cfg, verdict);
+
+    var cls = verdict.injected
+      ? (verdict.reason === 'probability' ? 'is-warn' : 'is-ok')
+      : 'is-block';
+    var headline = verdict.injected
+      ? (verdict.reason === 'probability' ? '有条件注入' : '会注入')
+      : '不会注入';
+
+    var html = '<div class="miya-wb-diag__verdict ' + cls + '">' +
+      '<strong>' + esc(headline) + '</strong>' +
+      '<span>· ' + esc(verdict.reasonLabel || '') + '</span>' +
+      '</div>';
+
+    html += '<ul class="miya-wb-diag__steps">' + steps.map(function (s) {
+      var mark = s.state === 'pass' ? '✓' : s.state === 'warn' ? '!' : s.state === 'fail' ? '✕' : '·';
+      var cls2 = s.state === 'pass' ? 'is-pass' : s.state === 'fail' ? 'is-fail' : s.state === 'skip' ? 'is-skip' : '';
+      return '<li class="miya-wb-diag__step ' + cls2 + '">' +
+        '<span class="miya-wb-diag__mark">' + mark + '</span>' +
+        '<span><span class="miya-wb-diag__k">' + esc(s.key) + '</span>' + esc(s.text) + '</span>' +
+        '</li>';
+    }).join('') + '</ul>';
+
+    if (!entry.name) {
+      html += '<p class="miya-wb-diag__meta">提示：尚未填写标题，保存前请补上。</p>';
+    }
+    if (!cfg.contextText) {
+      html += '<p class="miya-wb-diag__meta">未填模拟上下文 —— 关键词类词条在空白文本上必然不命中，' +
+        '请粘贴几条最近的消息再试。</p>';
+    }
+    html += '<p class="miya-wb-diag__meta">诊断只读：不掷概率、不改设置、不影响实际注入。' +
+      '显示的是关键词层面的判定结果。</p>';
+
+    out.innerHTML = html;
+    out.hidden = false;
   }
 
   function saveEditor() {
@@ -737,6 +981,18 @@
       $('miya-wb-doc-file').value = '';
       if (f) importDocToBody(f);
     });
+
+    /* 激活诊断：运行按钮 + 展开时自动填一次联系人 */
+    var diagRun = $('miya-wb-diag-run');
+    if (diagRun) diagRun.addEventListener('click', runDiag);
+    var diagWrap = $('miya-wb-diag');
+    if (diagWrap) {
+      diagWrap.addEventListener('toggle', function () {
+        if (!diagWrap.open) return;
+        var roles = collectRoleIds();
+        fillDiagRoles(roles);
+      });
+    }
 
     app.addEventListener('click', function (e) {
       var roleCard = e.target.closest('.ins-wb-role-card');

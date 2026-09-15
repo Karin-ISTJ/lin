@@ -123,14 +123,23 @@
     var probability = clampInt(raw.probability, 0, 100, 100);
     var useProbability = raw.useProbability === true || raw.use_probability === true;
     var ignoreBudget = raw.ignoreBudget === true || raw.ignore_budget === true;
-    var excludeRecursion =
+    /*
+     * ⚠️ 这里必须显式 !! 归一化成布尔。
+     * 旧写法是 `a === true || b === true || (raw.extensions && raw.extensions.x === true)`，
+     * 当 raw.extensions 不存在时，最后一项求出的是 **undefined**（不是 false），
+     * 于是整个字段变成 undefined。后果是 JSON 里该键被丢掉、
+     * UI 的 checked 属性拿到 undefined、导出 ST 世界书时字段凭空消失。
+     */
+    var excludeRecursion = !!(
       raw.excludeRecursion === true ||
       raw.exclude_recursion === true ||
-      (raw.extensions && raw.extensions.exclude_recursion === true);
-    var preventRecursion =
+      (raw.extensions && raw.extensions.exclude_recursion === true)
+    );
+    var preventRecursion = !!(
       raw.preventRecursion === true ||
       raw.prevent_recursion === true ||
-      (raw.extensions && raw.extensions.prevent_recursion === true);
+      (raw.extensions && raw.extensions.prevent_recursion === true)
+    );
     var caseSensitive = raw.caseSensitive === true || raw.match_case === true;
     var matchWholeWords = raw.matchWholeWords === true || raw.match_whole_words === true;
     var disabled = raw.disable === true || raw.enabled === false || raw.disabled === true;
@@ -223,10 +232,24 @@
       }
     }
     if (opts.matchWholeWords) {
-      var re = new RegExp(
-        '(?:^|[^\\w\\u3400-\\u9fff])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^\\w\\u3400-\\u9fff])',
-        opts.caseSensitive ? '' : 'i'
-      );
+      /*
+       * 全词匹配 =「关键词两侧不能紧邻同为"词字符"的字符」。
+       *
+       * ⚠️ 中文必须单独走一条路。
+       * `\b` 和 `\w` 都只认 ASCII，中文在它们眼里**全是非词字符** ——
+       * 也就是说对中文做全词匹配等于要求「龙」两侧必须是非中文，
+       * 而「一条龙服务」两侧都是中文 → 永远不命中。
+       * 实测：旧实现下 一条龙服务/我是龙/龙的传人/龙飞凤舞 全部返回 false，
+       * 用户一旦勾上「全词匹配」，所有中文关键词就**静默失效**。
+       *
+       * 中文没有词边界的概念（分词需要词典），所以对 CJK 关键词的合理语义是：
+       * 退化为「包含匹配」，与未开启时一致 —— 宁可放宽，也不要让功能哑掉。
+       */
+      if (/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(k)) {
+        return h.indexOf(k) >= 0;
+      }
+      var esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var re = new RegExp('(?:^|[^\\w])' + esc + '(?:$|[^\\w])', opts.caseSensitive ? '' : 'i');
       return re.test(String(haystack || ''));
     }
     return h.indexOf(k) >= 0;
