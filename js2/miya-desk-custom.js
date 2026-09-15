@@ -41,13 +41,15 @@
   var pageEdgeDwellStart = 0;
   var pageEdgeSide = null;
 
+  /* 只保留桌面上真实存在的 App 标签。原表残留 pen（模拟器，功能已移除）、
+     apps（查无引用）、store（线下）与 weather（天气）——后两者桌面无图标，
+     APP_HANDLERS 虽有分支但无图标可点，属悬空入口，故一并清理。 */
   var APP_LABELS = {
     set: '设置', book: '世界书',
-    memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设', store: '线下',
+    memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设',
     couple: '情侣空间', itinerary: '行程轨迹',
     notes: '日记', fun: '娱乐', imagegen: '生图',
-    weather: '天气', apps: '应用',
-    contacts: '联系人', pen: '模拟器'
+    contacts: '联系人'
   };
 
   var WIDGET_CATALOG = buildWidgetCatalog();

@@ -2128,35 +2128,8 @@
         if (target === 'miya-st-panel-imagegen' && global.MiyaImageGen) {
           global.MiyaImageGen.onSettingsPanelOpen();
         }
-        if (target === 'miya-st-panel-cache-probe') {
-          if (global.miyaCacheProbe && typeof global.miyaCacheProbe.renderPanel === 'function') {
-            requestAnimationFrame(function () {
-              try { global.miyaCacheProbe.renderPanel(); } catch (e) {}
-            });
-          }
-        }
       });
     });
-
-    var cacheProbeRefresh = $('miya-st-cache-probe-refresh');
-    if (cacheProbeRefresh) {
-      cacheProbeRefresh.addEventListener('click', function () {
-        if (global.miyaCacheProbe && typeof global.miyaCacheProbe.renderPanel === 'function') {
-          global.miyaCacheProbe.renderPanel();
-          toast('已刷新');
-        }
-      });
-    }
-    var cacheProbeClear = $('miya-st-cache-probe-clear');
-    if (cacheProbeClear) {
-      cacheProbeClear.addEventListener('click', function () {
-        if (global.miyaCacheProbe && typeof global.miyaCacheProbe.clear === 'function') {
-          global.miyaCacheProbe.clear();
-          if (typeof global.miyaCacheProbe.renderPanel === 'function') global.miyaCacheProbe.renderPanel();
-          toast('记录已清空');
-        }
-      });
-    }
 
     bindSwitch($('miya-st-sw-notify'), function (on) {
       if (!getNotificationApi()) {

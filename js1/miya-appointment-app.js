@@ -30,13 +30,38 @@
          * 用户是否「贴着底部」。只决定「要不要跟着新内容滚」，
          * 不代表「可以主动抢滚动位置」。
          */
-        userPinnedBottom: true,
+        userPinnedBottom: false,
         /* 用户在这个场景里是否亲手滚动过。没滚过 = 还没表达过立场，
            此时绝不主动改 scrollTop，免得正文一生成完就把人拽到最底下。 */
-        userTouchedScroll: false
+        userTouchedScroll: false,
+        /*
+         * 用户的「跟随意图」：他最后一次亲手滚动时，是不是停在底部。
+         *
+         * 与 userPinnedBottom 的区别很关键：
+         *   userPinnedBottom 表达「此刻在哪」，内容增长后就会过时；
+         *   userIntendsFollowBottom 表达「他想不想跟最新」，是意图，不过时。
+         *
+         * 生成结束时内容会从流式片段变成完整正文、高度骤增。
+         * 若那时才去量「此刻是否贴底」，本来贴着底的用户也会被判成不贴底，
+         * 于是真正的跟随被误伤；反之若直接用可能过期的 pinned=true，
+         * 又会把静看的用户拽下去。用意图就同时避开这两个坑。
+         * 只在真实手势滚动时更新，程序滚动不参与。
+         */
+        userIntendsFollowBottom: false,
+        /* 进入场景时已由程序定位到最新楼层。它只是一个「视图落点」的记号，
+           不等于用户表达了跟随意图——两者必须分开，否则静看也会被拽走。 */
+        landedAtLatest: false
     };
 
     var SCROLL_PIN_THRESHOLD = 72;
+
+    /* 程序滚动后，连续多少帧内把 scroll 事件视作「自己造的」。
+       1 帧会被移动端惯性/渲染延迟漏掉，取 6 帧留出安全余量。 */
+    var SELF_SCROLL_FRAMES = 6;
+
+    /* 进入场景后的贴底锚定句柄（见 anchorToLatestForAWhile） */
+    var enterAnchorRaf = 0;
+    var enterAnchorTimer = 0;
 
 
     /* 统一简约 Ins 线框图标（stroke 1.5 / round） */
@@ -1778,6 +1803,8 @@
         streamUi.userPinnedBottom = true;
         /* 主动贴底（用户按下发送/重回）＝用户已经表态，允许跟随滚动。 */
         streamUi.userTouchedScroll = true;
+        /* 这是明确的「我要看最新」意图，后续生成可以继续跟随。 */
+        streamUi.userIntendsFollowBottom = true;
     }
 
     function bindScrollPin() {
@@ -1786,13 +1813,21 @@
         if (sc._xwScrollPin) return;
         sc._xwScrollPin = true;
         /* 注意：程序改 scrollTop 也会触发 scroll 事件。
-           所以这里不直接置 userTouchedScroll，而是用 rAF 标记下一帧，
-           把「我们自己的滚动」排除掉，只认用户的真实手势。 */
+           所以这里不直接置 userTouchedScroll，而是用 rAF 标记接下来若干帧，
+           把「我们自己的滚动」排除掉，只认用户的真实手势。
+           只挡 1 帧是不够的：移动端惯性滚动 / 渲染延迟会让 scroll 事件晚到，
+           漏标之后程序滚动会被误认成用户手势，进而污染跟随意图。 */
         var markSelf = function () {
             sc._xwScrollSelf = true;
-            requestAnimationFrame(function () {
-                sc._xwScrollSelf = false;
-            });
+            var frames = 0;
+            (function holdSelf() {
+                frames++;
+                if (frames >= SELF_SCROLL_FRAMES) {
+                    sc._xwScrollSelf = false;
+                    return;
+                }
+                requestAnimationFrame(holdSelf);
+            })();
         };
         sc._xwMarkSelfScroll = markSelf;
         ['touchstart', 'pointerdown', 'wheel', 'keydown'].forEach(function (evt) {
@@ -1813,9 +1848,41 @@
                 }
                 if (sc._xwScrollSelf) return; /* 自己滚的，不覆盖用户立场 */
                 streamUi.userPinnedBottom = isScrollNearBottom(sc);
+                /*
+                 * 意图要等手势停下来再结算，不能在滚动过程中就地采信。
+                 *
+                 * 原因：一次下滑手势会产生很多个 scroll 事件。页面短的时候，
+                 * 中途某一帧可能恰好「贴底」，若当场就把意图记成 true，
+                 * 用户明明只是滑了一小段、最终停在半空，也会被当成「要跟最新」，
+                 * 生成结束就被拽到底。
+                 *
+                 * 所以这里只吊销意图（离开底部就立刻停止跟随），
+                 * 而把「确立意图」交给手势结束后的 settle 判定。
+                 */
+                streamUi.userIntendsFollowBottom = false;
+                scheduleFollowIntentSettle(sc);
             },
             { passive: true }
         );
+    }
+
+    var followIntentTimer = 0;
+
+    /*
+     * 滚动停稳后，按「最终停留位置」确立跟随意图。
+     * 只有真正停在底部（阈值内）才算「用户要跟最新」。
+     */
+    function scheduleFollowIntentSettle(sc) {
+        if (followIntentTimer) clearTimeout(followIntentTimer);
+        followIntentTimer = setTimeout(function () {
+            followIntentTimer = 0;
+            if (!sc || !sc.isConnected) return;
+            /* 程序滚动不参与意图判定 */
+            if (sc._xwScrollSelf) return;
+            if (!streamUi.userTouchedScroll) return;
+            streamUi.userIntendsFollowBottom = isScrollNearBottom(sc);
+            streamUi.userPinnedBottom = streamUi.userIntendsFollowBottom;
+        }, 160);
     }
 
     /* 供程序滚动前调用：标记「接下来这几帧的 scroll 事件是我自己造的」 */
@@ -1824,14 +1891,25 @@
         if (sc && typeof sc._xwMarkSelfScroll === 'function') sc._xwMarkSelfScroll();
     }
 
+    /*
+     * 流式跟随滚动。
+     *
+     * 旧实现第一行就是 `return;`（死代码），整个函数体永不执行——
+     * 等于「跟最新」能力被直接关掉，而不是修好判定。这里恢复实现，
+     * 但判据仍严格用「用户意图」而非「当前位置」，避免误伤静看的用户。
+     */
     function scheduleStreamScroll() {
-        return;
-        if (!streamUi.userPinnedBottom) return;
+        if (!streamUi.userTouchedScroll) return;
+        if (!streamUi.userIntendsFollowBottom) return;
         if (streamUi.scrollRaf) return;
         streamUi.scrollRaf = requestAnimationFrame(function () {
             streamUi.scrollRaf = 0;
-            if (!streamUi.userPinnedBottom) return;
-            scrollStoryToEnd(true);
+            if (!streamUi.userTouchedScroll) return;
+            if (!streamUi.userIntendsFollowBottom) return;
+            var sc = $('xw-main');
+            if (!sc) return;
+            markSelfScroll();
+            sc.scrollTop = sc.scrollHeight;
         });
     }
 
@@ -1843,6 +1921,109 @@
         stopStreamRevealLoop();
         streamUi.paraCount = 0;
         ui.streamingRevealLen = 0;
+    }
+
+    /*
+     * 清空「滚动立场」。
+     *
+     * 为什么必须有这个函数：
+     *   旧代码只在用户手势里更新这几个值，从不在「换场景 / 生成结束」时清空。
+     *   于是只要用户某次按过发送（pinScrollToBottom 把三个值全置 true），
+     *   这个「我要跟最新」的立场就会一直残留——跨会话、跨退出进入都还在。
+     *   之后任何一次全量重绘（render 的 innerHTML 重建会把 scrollTop 归零），
+     *   紧接着 scrollStoryToEnd() 判定成立 -> 强行推到最底。
+     *   用户看到的就是「生成完就跳到底部」，而且怎么改都复现。
+     *
+     * 所以立场必须跟着场景走：进新场景、重开一轮生成，都从「没表达过」开始。
+     */
+    function resetScrollUiState() {
+        if (followIntentTimer) {
+            clearTimeout(followIntentTimer);
+            followIntentTimer = 0;
+        }
+        if (streamUi.scrollRaf) {
+            cancelAnimationFrame(streamUi.scrollRaf);
+            streamUi.scrollRaf = 0;
+        }
+        /* 换场景时停掉上一场的入场锚定，避免它接着在新场景里写 scrollTop */
+        if (enterAnchorRaf) {
+            cancelAnimationFrame(enterAnchorRaf);
+            enterAnchorRaf = 0;
+        }
+        if (enterAnchorTimer) {
+            clearTimeout(enterAnchorTimer);
+            enterAnchorTimer = 0;
+        }
+        streamUi.userPinnedBottom = false;
+        streamUi.userTouchedScroll = false;
+        streamUi.userIntendsFollowBottom = false;
+        streamUi.landedAtLatest = false;
+    }
+
+    /*
+     * 进入场景后把视图落到最新楼层（最底部）。
+     *
+     * 关键设计：程序定位 ≠ 用户立场。
+     *   这里刻意**不**置 userTouchedScroll / userIntendsFollowBottom。
+     *   自动贴底只是「默认视图起点」，用户并没有表达「我要跟最新」。
+     *   若这里顺手把立场置 true，就退化成旧代码的老毛病：
+     *   用户进来啥也没动，生成一结束就被拽到新底部。
+     *   只有他真正滚到底、或主动按发送，才进入跟随模式。
+     */
+    function scrollToLatestOnEnter() {
+        var sc = $('xw-main');
+        if (!sc) return;
+        /* 无动画直落底部：进入场景时若用平滑动画，用户会看到一段莫名滚动。 */
+        markSelfScroll();
+        sc.scrollTop = sc.scrollHeight;
+        streamUi.landedAtLatest = true;
+        streamUi.userPinnedBottom = true;
+        streamUi.userTouchedScroll = false;
+        streamUi.userIntendsFollowBottom = false;
+
+        /*
+         * 补锚：真实设备上「贴底」不是一个瞬间完成的状态。
+         *   头像 / 内嵌 HTML 面板 / 图片 / 自定义字体都会在首帧之后才撑高内容，
+         *   只滚一次的话会停在「差一点到底」的位置，用户看起来就是
+         *   「并没有跳到最新楼层」。移动端图片解码慢时尤其明显。
+         *
+         * 所以这里在入场后的短暂窗口内反复把视图钉在底部，
+         * 一旦用户自己碰了滚动条（userTouchedScroll）就立刻收手，
+         * 绝不和用户抢滚动位置。
+         */
+        anchorToLatestForAWhile();
+    }
+
+    /*
+     * 入场后的贴底锚定。
+     * 用「若干次 rAF + 一个尾随定时器」而不是单帧，
+     * 覆盖图片/字体/面板撑高的完整时间窗。
+     */
+    function anchorToLatestForAWhile() {
+        if (enterAnchorRaf) cancelAnimationFrame(enterAnchorRaf);
+        if (enterAnchorTimer) clearTimeout(enterAnchorTimer);
+        enterAnchorTimer = 0;
+        var frames = 0;
+        function pin() {
+            enterAnchorRaf = 0;
+            var el = $('xw-main');
+            /* 用户一旦自己滚了，或已离开该场景，立即放弃锚定 */
+            if (!el || !streamUi.landedAtLatest || streamUi.userTouchedScroll) return;
+            markSelfScroll();
+            el.scrollTop = el.scrollHeight;
+            frames++;
+            if (frames < 30) enterAnchorRaf = requestAnimationFrame(pin);
+        }
+        enterAnchorRaf = requestAnimationFrame(pin);
+        /* 尾随兜底：图片解码可能晚于 30 帧，再补一次；用户已滚动则不动。 */
+        enterAnchorTimer = setTimeout(function () {
+            enterAnchorTimer = 0;
+            var el = $('xw-main');
+            if (!el || streamUi.userTouchedScroll) return;
+            if (!streamUi.landedAtLatest) return;
+            markSelfScroll();
+            el.scrollTop = el.scrollHeight;
+        }, 450);
     }
 
     function patchSummaryBusyUi() {
@@ -1978,6 +2159,21 @@
     function render() {
         var root = $('xw-root');
         if (!root) return;
+
+        /*
+         * 重建 DOM 前先记住滚动位置。
+         *
+         * 原因：下面用 root.innerHTML 整体重建，#xw-main 是新节点，
+         * 浏览器对新建的可滚动元素一律把 scrollTop 归零。
+         * 生成结束时 patchStoryBody() 会走到这里，于是：
+         *   用户正看历史楼层 -> scrollTop 被清 0 -> 又被 scrollStoryToEnd 推到底
+         * 表现为「生成完就跳到底部」。所以位置必须自己保。
+         */
+        var scBefore = $('xw-main');
+        var keepTop = scBefore ? scBefore.scrollTop : 0;
+        var keepFollow = streamUi.userTouchedScroll && streamUi.userIntendsFollowBottom;
+        var keepLand = streamUi.landedAtLatest && !streamUi.userTouchedScroll;
+
         var body = '';
         if (ui.view === 'history') body = renderHistory();
         else if (ui.view === 'story') {
@@ -2022,7 +2218,44 @@
             }
             patchSummaryBusyUi();
         }
+
+        /* 重建后把滚动位置还回去（见本函数开头 keepTop / keepFollow / keepLand）。 */
+        restoreScrollAfterRender(keepTop, keepFollow, keepLand);
+
         syncStatusFab();
+    }
+
+    /*
+     * render() 重建 DOM 后的滚动位置恢复。
+     *
+     * 三种立场，优先级从高到低：
+     *   1. keepFollow —— 用户明确要跟最新：贴到底。
+     *   2. keepLand   —— 进入场景时的程序定位：重新贴到底，别停在半路。
+     *   3. 其余         —— 用户在看历史：回到原来的 scrollTop，原地不动。
+     *
+     * 第 3 条正是「生成完跳到底部」的解药：静看的用户位置被原样保留。
+     */
+    function restoreScrollAfterRender(keepTop, keepFollow, keepLand) {
+        var sc = $('xw-main');
+        if (!sc) return;
+        if (keepFollow) {
+            markSelfScroll();
+            sc.scrollTop = sc.scrollHeight;
+            streamUi.userPinnedBottom = true;
+            return;
+        }
+        if (keepLand) {
+            markSelfScroll();
+            sc.scrollTop = sc.scrollHeight;
+            streamUi.userPinnedBottom = true;
+            return;
+        }
+        if (keepTop > 0) {
+            markSelfScroll();
+            var max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+            sc.scrollTop = Math.min(keepTop, max);
+            streamUi.userPinnedBottom = isScrollNearBottom(sc);
+        }
     }
 
     function syncStatusFab() {
@@ -2179,18 +2412,26 @@ function renderWriter() {
         var sc = $('xw-main');
         if (!sc) return;
         /*
-         * 谁都不能在用户没碰过滚动条的情况下动他的位置。
-         * 之前的问题：userPinnedBottom 初值为 true → 正文一生成完
-         * patchStoryBody 立刻带着 force=true 跳到最底，人还在上面看，
-         * 画面自己就滑走了。现在只有用户亲手滚过、且当前确实贴底，
-         * 才跟随；force 也不再绕过这道闸。
+         * 「跟随最新」的判据：用户碰过滚动条 + 他**打算**待在底部。
+         *
+         * 为什么不能只看 userPinnedBottom：它只在真实滚动事件里更新，
+         * 而程序自己的滚动会被 markSelfScroll 标记后跳过更新。
+         * 于是「用户滚到底 → 内容继续增长 → 用户没再动」这种情况下，
+         * pinned 会停留在一个过期的 true，把人硬拽到新底部。
+         *
+         * 为什么也不能「滚之前重新量一次」：本函数在内容已重绘之后才被调用，
+         * 那时页面已经被新内容撑高，用户原本贴底的位置自然不再贴底 ——
+         * 真·跟随的用户会被误判成「不跟随」。
+         *
+         * 正确做法：用「重绘前」记下的意图（streamUi.userIntendsFollowBottom）。
+         * 该值在每次真实滚动时按当时的内容高度结算，代表用户的真实意图，
+         * 不受后续内容增长影响。
          */
         if (!streamUi.userTouchedScroll) return;
-        if (!force && !streamUi.userPinnedBottom) return;
-        if (force && !streamUi.userPinnedBottom) return;
+        if (!streamUi.userIntendsFollowBottom) return;
         requestAnimationFrame(function () {
             if (!streamUi.userTouchedScroll) return;
-            if (!streamUi.userPinnedBottom) return;
+            if (!streamUi.userIntendsFollowBottom) return;
             markSelfScroll();
             sc.scrollTop = sc.scrollHeight;
             streamUi.userPinnedBottom = isScrollNearBottom(sc);
@@ -2233,7 +2474,12 @@ function renderWriter() {
             resetStreamUi();
         }
 
-        if (!opts.streamOnly && streamUi.userTouchedScroll && streamUi.userPinnedBottom) {
+        /*
+         * 只有用户「想跟最新」时才在重绘后贴底。
+         * 判据用意图（userIntendsFollowBottom）而不是此刻位置
+         * （userPinnedBottom）——重绘已经把内容撑高，此刻位置必然失真。
+         */
+        if (!opts.streamOnly && streamUi.userTouchedScroll && streamUi.userIntendsFollowBottom) {
             scrollStoryToEnd(true);
         }
     }
@@ -2369,7 +2615,12 @@ function renderWriter() {
         ui.streamingRaw = '';
         ui.status = 'idle';
         ui.view = 'story';
+        /* 换场景必须先清滚动立场，否则上一场的「跟最新」会残留下来，
+           配合重建 DOM 就会在生成结束时把人拽到底部。 */
+        resetScrollUiState();
         render();
+        /* 楼层高时直接落到最新楼层，不用手动滑到底。 */
+        scrollToLatestOnEnter();
     }
 
     function startPickedCast() {
@@ -2397,7 +2648,9 @@ function renderWriter() {
         ui.view = 'story';
         ui.streamingLines = [];
         ui.streamingRaw = '';
+        resetScrollUiState();
         render();
+        scrollToLatestOnEnter();
     }
 
     function renameActiveSessionTitle() {
@@ -2443,6 +2696,7 @@ function renderWriter() {
         }
         ui.view = 'story';
         render();
+        scrollToLatestOnEnter();
     }
 
     function runStream(handlers) {
@@ -2453,6 +2707,12 @@ function renderWriter() {
         resetStreamUi();
         startStreamRevealLoop();
         patchStoryBody({ streamOnly: true });
+        /*
+         * 注意：这里**不**重置滚动立场。
+         * 用户按发送时 pinScrollToBottom() 已明确表态「我要跟最新」，
+         * 那份立场必须在这一轮生成里保留，否则跟随会失效。
+         * 立场只在「换场景」时清（openWithChat 等入口的 resetScrollUiState）。
+         */
         return handlers
             .then(function () {
                 flushStreamReveal();
@@ -3269,7 +3529,11 @@ function renderWriter() {
             if (!ok) return;
             var branch = apStore().createBranch(ui.chatId, ui.sessionId, idx + 1);
             if (!branch) { toast('分支创建失败'); return; }
-            ui.sessionId = branch.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle'; render(); toast('已建立剧情分支');
+            ui.sessionId = branch.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle';
+            resetScrollUiState();
+            render();
+            scrollToLatestOnEnter();
+            toast('已建立剧情分支');
         });
     }
     function toggleFloor(messageId) {
@@ -3377,7 +3641,10 @@ function renderWriter() {
     function newOfflineChat() {
         var st = chatStore(); var chat = st && st.findChat(ui.chatId); if (!chat) { toast('请先选择角色'); return; }
         var sess = apStore().startNewSession(ui.chatId, chat.contactId, activeSessionCast()); if (!sess) return;
-        ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle'; render();
+        ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle';
+        resetScrollUiState();
+        render();
+        scrollToLatestOnEnter();
     }
     function importOfflineChat() {
         var input = document.createElement('input'); input.type = 'file'; input.accept = '.json,.txt';
@@ -3387,7 +3654,11 @@ function renderWriter() {
                 if (/\.json$/i.test(file.name)) payload = JSON.parse(text);
                 else { var lines = text.split(/\r?\n/), msgs = [], role = 'assistant', buf = []; lines.forEach(function (line) { var hit = line.match(/^【第\s*\d+\s*层】\s*(.*)$/); if (hit) { if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); buf = []; role = /我/.test(hit[1]) ? 'user' : /系统/.test(hit[1]) ? 'system' : 'assistant'; return; } if (/^#\s*/.test(line)) return; buf.push(line); }); if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); payload = { session: { title: file.name.replace(/\.[^.]+$/, '') }, messages: msgs }; }
                 var sess = apStore().importSession(ui.chatId, payload); if (!sess) throw new Error('invalid');
-                ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle'; render(); toast('聊天已导入');
+                ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle';
+                resetScrollUiState();
+                render();
+                scrollToLatestOnEnter();
+                toast('聊天已导入');
             } catch (e) { console.error(e); toast('导入失败：文件格式不正确'); }
         }; reader.readAsText(file); }); input.click();
     }
@@ -3793,6 +4064,9 @@ function renderWriter() {
          */
         ui.groupChatId = '';
         ui.sceneTitle = '';
+        /* 每次打开线下都从干净的滚动立场开始，
+           避免上一次会话残留的「跟最新」把这次生成结束后的位置拽到底部。 */
+        resetScrollUiState();
         ui.catalogNo = '现场·' + String(Date.now()).slice(-6);
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
@@ -3837,6 +4111,8 @@ function renderWriter() {
 
     function closeApp() {
         syncSessionOnLeave();
+        /* 关掉线下时停掉入场锚定与滚动立场，避免残留到下次打开。 */
+        resetScrollUiState();
         if (global.MiyaOfflineStatus && global.MiyaOfflineStatus.hideAll) {
             global.MiyaOfflineStatus.hideAll();
         }

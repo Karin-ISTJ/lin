@@ -1,15 +1,16 @@
 (function (global) {
   'use strict';
 
+  /* 本表仅作「图标可换图槽位」的中文名回退（实际遍历的是 miyaCUSTOM_DESK_ICON_KEYS）。
+     原含 store（线下）/ pen（模拟器）：两者桌面均无图标，槽位不会出现，属死数据；
+     pen 对应的模拟器功能已整体移除，故一并剔除。 */
   var ICON_LABELS = {
     set: '设置',
     book: '世界书',
     memory: '记忆',
     chat: '聊天',
     beauty: '美化',
-    store: '线下',
     contacts: '联系人',
-    pen: '模拟器',
     polaroid_1: '拍立得 · 前景',
     polaroid_2: '拍立得 · 中层',
     polaroid_3: '拍立得 · 底层',
@@ -68,7 +69,7 @@
     if (global.miyaAppSvg && global.miyaAppSvg[key]) return global.miyaAppSvg[key];
     var map = {
       memo: 'M', set: '⚙', book: '书', memory: '忆', chat: '聊',
-      beauty: '美', store: '店', contacts: '人', pen: '模',
+      beauty: '美', contacts: '人',
       tile_notes: '日', tile_fun: '娱',
       tile_log: '录',
       tile_couple: '侣', tile_themeshop: '程',

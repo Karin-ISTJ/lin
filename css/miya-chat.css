@@ -339,17 +339,9 @@
   object-fit: cover;
   filter: grayscale(25%) contrast(1.05);
 }
-.qq-room__head-avatar::after {
-  content: '';
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 8px;
-  height: 8px;
-  background: #3a3a3a;
-  border-radius: 50%;
-  border: 2px solid #f5f5f3;
-}
+/* 原 .qq-room__head-avatar::after 是头像右下角的深灰小圆点（8px，#3a3a3a + 白描边），
+   形似「离线 / 隐身」状态指示，易被误读，按需求移除。
+   如需恢复在线状态指示，建议改为按数据条件加 class 再显示，而非常驻。 */
 
 .qq-room__head-info {
   flex: 1;
