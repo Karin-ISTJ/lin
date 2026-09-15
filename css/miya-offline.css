@@ -1153,18 +1153,87 @@
   transform: translateY(-1px);
 }
 
+/* 卡片头部：名称 + 明确的「发送」按钮。
+   正文不再整块可点 —— 否则想展开全文时很容易误触发送，
+   而发送会立刻落库并触发一次生成，代价太高。 */
+.xw-opening-pick__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 0 0 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
 .xw-opening-pick__name {
   display: block;
-  margin-bottom: 4px;
   font-size: 14px;
   color: var(--xw-ink);
 }
 
+.xw-opening-pick__go {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--xw-ink);
+  transition: background 0.16s, border-color 0.16s;
+}
+
+.xw-opening-pick__head:hover .xw-opening-pick__go {
+  background: var(--xw-ink);
+  border-color: var(--xw-ink);
+  color: #fff;
+}
+
+/* 正文：完整展示，保留换行与段落。
+   默认最多 OPENING_PREVIEW_CLAMP 行（JS 写成行内变量），
+   点「展开全文」后解除行数限制 —— 全程不发送任何内容。 */
 .xw-opening-pick__preview {
-  display: block;
-  font-size: 12px;
-  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: var(--xw-preview-clamp, 5);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.7;
   color: var(--xw-soft);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.xw-opening-pick__preview.is-expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.xw-opening-pick__more {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 11px;
+  color: var(--xw-ink);
+  cursor: pointer;
+  transition: background 0.16s;
+}
+
+/* 短开场白不该出现这枚按钮：由 JS 实测高度后决定 hidden 去留。
+   必须显式写 [hidden] 分支，否则上面的 display 会盖掉 hidden 的默认样式。 */
+.xw-opening-pick__more[hidden] { display: none; }
+
+.xw-opening-pick__more:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .xw-opening-sheet__list {
@@ -1206,6 +1275,15 @@
   line-height: 1.5;
   color: var(--xw-soft);
   word-break: break-word;
+}
+
+/* 抽屉里的正文：完整展示，最多滚动，不截断 */
+.xw-opening-sheet__body {
+  max-height: 132px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .xw-opening-sheet__del {

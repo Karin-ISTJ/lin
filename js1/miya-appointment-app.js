@@ -672,6 +672,57 @@
         return merged;
     }
 
+    /*
+     * 开场白选择：正文默认【完整展示】，不再截成一行省略号。
+     *
+     * 改版前的问题：列表项把正文压成单行 56 字（.xw-opening-pick__preview 无换行、
+     * 无高度），长开场白只剩一个开头，用户必须点下去（＝真的发送、并触发一次生成）
+     * 才知道后面写了什么 —— 选错就得整场重来。
+     *
+     * 现在：
+     * - 正文保留原始换行与段落，默认最多 OPENING_PREVIEW_CLAMP 行；
+     * - 确实被压住的长开场白，行内给一枚「展开全文 / 收起」，
+     *   只切换显示，不发送、不触发任何生成。
+     *
+     * 注意：展开按钮【不能】靠字数猜，必须量真实高度。
+     * 同样的 105 字，全角中文、换行位置、主题字号都会改变实际占几行
+     * （实测按字数估会漏判：明明被裁到 5 行，却拿不到展开按钮）。
+     * 所以这里先用 CSS 行数兜底，再由 syncOpeningPreviewMore() 在渲染后实测校正。
+     */
+    var OPENING_PREVIEW_CLAMP = 5;
+
+    /* 先按保守估计渲染，渲染完由实测结果决定按钮去留 */
+    function openingPreviewBlock(p) {
+        var full = String(p.content || '').trim();
+        var body = esc(full).replace(/\n/g, '<br>');
+        return (
+            '<div class="xw-opening-pick__preview" data-ap-opening-preview style="--xw-preview-clamp:' +
+            OPENING_PREVIEW_CLAMP +
+            '">' +
+            body +
+            '</div>' +
+            '<button type="button" class="xw-opening-pick__more" data-ap-opening-more aria-expanded="false" hidden>展开全文</button>'
+        );
+    }
+
+    /**
+     * 渲染后实测：正文真的被行数限制压住了才显示「展开全文」。
+     *
+     * 量的是未展开状态下的 scrollHeight 与 clientHeight 之差。
+     * 判定完立刻把按钮切好，避免用户看到闪一下的多余按钮。
+     */
+    function syncOpeningPreviewMore(scope) {
+        var root = scope || document;
+        root.querySelectorAll('.xw-opening-pick__item').forEach(function (item) {
+            var body = item.querySelector('[data-ap-opening-preview]');
+            var more = item.querySelector('[data-ap-opening-more]');
+            if (!body || !more) return;
+            var clipped = body.scrollHeight > body.clientHeight + 1;
+            if (clipped) more.removeAttribute('hidden');
+            else more.setAttribute('hidden', '');
+        });
+    }
+
     function renderOpeningPicker() {
         var contact = activeContact();
         var name = characterRealName(contact);
@@ -680,18 +731,18 @@
             ? '<div class="xw-opening-pick__list">' +
               presets
                   .map(function (p) {
-                      var preview = String(p.content || '').replace(/\s+/g, ' ').trim();
-                      if (preview.length > 56) preview = preview.slice(0, 56) + '…';
                       return (
-                          '<button type="button" class="xw-opening-pick__item" data-ap-apply-opening="' +
+                          '<div class="xw-opening-pick__item">' +
+                          '<button type="button" class="xw-opening-pick__head" data-ap-apply-opening="' +
                           esc(p.id) +
                           '">' +
                           '<strong class="xw-opening-pick__name">' +
                           esc(p.name) +
                           '</strong>' +
-                          '<span class="xw-opening-pick__preview">' +
-                          esc(preview) +
-                          '</span></button>'
+                          '<span class="xw-opening-pick__go">发送</span>' +
+                          '</button>' +
+                          openingPreviewBlock(p) +
+                          '</div>'
                       );
                   })
                   .join('') +
@@ -703,7 +754,7 @@
             esc(name) +
             ' · 新场景</p>' +
             '<h2 class="xw-opening-pick__title">选择开场白</h2>' +
-            '<p class="xw-opening-pick__hint">系统注入的首条上下文，非任一方气泡；可在调参里添加预设，也可直接发送。</p>' +
+            '<p class="xw-opening-pick__hint">选一条作为第一楼，系统只会把它摆好，不会自动替你往下生成。</p>' +
             listHtml +
             '</div>'
         );
@@ -733,34 +784,26 @@
             toast('开场白未能写入');
             return;
         }
-        var eng = apEngine();
-        if (!eng || eng.isBusy(ui.chatId, ui.sessionId)) {
-            toast('等上一镜结束再说');
-            render();
-            return;
-        }
         if (typeof persistAppointmentPresetFromSheet === 'function') {
             try {
                 persistAppointmentPresetFromSheet();
             } catch (e) {}
         }
+        /*
+         * 只落地开场白，【不自动生成二楼】。
+         *
+         * 以前这里会紧接着 regenerateAppointment()，于是用户刚点完「发送」，
+         * 一楼还没看清，角色就已经接了一整段话 —— 想自己接着往下写的人
+         * 全被抢先了，而且那一楼还落进了存档、不好收回。
+         *
+         * 现在选中开场白 = 把这一楼摆好，然后停在原地等你自己动：
+         * 想继续就手动点生成，想改就换个预设或直接打字。
+         * 落库后 storyHasContent() 自然为真，会切到正文视图显示这一楼。
+         */
         render();
-        var input = $('xw-writer-input');
-        if (input) input.disabled = true;
-        var sendBtn = $('xw-writer-go');
-        if (sendBtn) sendBtn.disabled = true;
         pinScrollToBottom();
         scrollStoryToEnd(true);
-        beginWriterGeneration();
-        runStream(
-            Promise.resolve()
-                .then(function () {
-                    return eng.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers());
-                })
-                .finally(function () {
-                    endWriterGeneration();
-                })
-        );
+        toast('开场白已就位，可继续生成或直接输入');
     }
 
     function removeSessionOpening(openingId) {
@@ -782,8 +825,13 @@
         }
         return presets
             .map(function (p) {
-                var preview = String(p.content || '').replace(/\s+/g, ' ').trim();
-                if (preview.length > 64) preview = preview.slice(0, 64) + '…';
+                /*
+                 * 调参抽屉里也【完整展示】正文。
+                 * 以前压成单行 64 字，用户在这里根本认不出两条相似的开场白，
+                 * 更没法判断该删哪条 —— 这个列表正是用来管理预设的，必须看得全。
+                 */
+                var full = String(p.content || '').trim();
+                var body = esc(full).replace(/\n/g, '<br>');
                 /*
                  * 来自联系人档案的行是只读的 —— 它归「联系人」App 管，
                  * 在调参里删不掉，也不该删（下次进来又会从档案里读出来）。
@@ -802,8 +850,8 @@
                     '<strong>' +
                     esc(p.name) +
                     '</strong>' +
-                    '<span>' +
-                    esc(preview) +
+                    '<span class="xw-opening-sheet__body">' +
+                    body +
                     '</span></div>' +
                     delBtn +
                     '</div>'
@@ -2388,6 +2436,8 @@
             '</div>';
 
         bindEvents();
+        /* DOM 已就位，此时量高度才准：只给真的被压住的开场白露出「展开全文」 */
+        syncOpeningPreviewMore(root);
         syncDockCollapsedUi();
         hydrateOfflineAvatars(root);
         if (ui.view === 'story' && ui.chatId && ui.sessionId) {
@@ -4046,6 +4096,24 @@ function renderWriter() {
         document.querySelectorAll('[data-ap-apply-opening]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 applyOpeningPreset(btn.getAttribute('data-ap-apply-opening'));
+            });
+        });
+
+        /*
+         * 「展开全文 / 收起」：只改 display，不发送、不重绘。
+         * 单独绑在按钮上并拦掉冒泡 —— 它内嵌在整行卡片里，
+         * 不拦的话会顺带触发外层那颗 data-ap-apply-opening 的发送逻辑。
+         */
+        document.querySelectorAll('[data-ap-opening-more]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var item = btn.closest('.xw-opening-pick__item');
+                var body = item ? item.querySelector('[data-ap-opening-preview]') : null;
+                if (!body) return;
+                var expanded = body.classList.toggle('is-expanded');
+                btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                btn.textContent = expanded ? '收起' : '展开全文';
             });
         });
 
