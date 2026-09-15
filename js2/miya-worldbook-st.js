@@ -4,6 +4,18 @@
  * - 扫描触发（constant / key / keysecondary / selectiveLogic）
  * - 注入排序 + token 预算
  * - 导入/导出 ST JSON（entries 为对象或数组）
+ *
+ * ── 来源声明 ────────────────────────────────────────────────
+ * 本文件为**独立实现**：为了能读写 SillyTavern 的 World Info /
+ * Lorebook 数据格式而自行编写，**未复制、未改编 SillyTavern 源代码**，
+ * 也未依赖其任何模块。
+ *
+ * 其中与 ST 取值一致的常量（如 selectiveLogic 的 0/1/2/3、
+ * position 的 0–4）属于**数据格式约定** —— 要正确解析 ST 导出的
+ * JSON 就必须认这些数值，等同于「读一个文件要知道它的文件头格式」，
+ * 不构成对 ST 代码的衍生。判断逻辑、匹配算法、注入排序、
+ * 位置分桶（front/middle/back）等均为本项目自研。
+ * ────────────────────────────────────────────────────────────
  */
 (function (global) {
   'use strict';

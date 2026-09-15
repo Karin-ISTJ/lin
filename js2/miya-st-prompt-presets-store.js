@@ -1,6 +1,16 @@
 /**
  * ST prompt preset packs (multi-preset, independent from built-in API presets).
  * Active pack's enabled entries inject into chat API messages.
+ *
+ * ── 来源声明 ────────────────────────────────────────────────
+ * 本文件为**独立实现**：为了能读写 SillyTavern 的 prompt preset 数据格式
+ * 而自行编写，**未复制、未改编 SillyTavern 源代码**，也未依赖其任何模块。
+ *
+ * 其中与 ST 一致的约定（如 prompt_order 里 character_id === 100000 表示
+ * 角色默认预设、100001 表示 persona 覆盖）属于**数据格式约定** ——
+ * 要正确解析 ST 导出的 JSON 就必须认这些值，不构成对 ST 代码的衍生。
+ * 预设挑选优先级、条目去重、字段归一化、legacy 迁移等均为本项目自研。
+ * ────────────────────────────────────────────────────────────
  */
 (function (global) {
   'use strict';
