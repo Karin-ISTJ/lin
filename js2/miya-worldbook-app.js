@@ -792,17 +792,33 @@
     var g = store.getGroup(groupId);
     if (!g || g.fixed) return;
     var cnt = store.listEntries().filter(function (e) { return e.groupId === g.id; }).length;
+    /*
+     * 弹窗文案必须把「条目会一起没」讲明白。
+     *
+     * 这个操作不可撤销 —— 条目直接从数组摘掉，没有回收站。
+     * 而「删分卷」三个字本身有歧义：有人以为是解散分组（内容留下），
+     * 有人以为是连内容一起删。所以这里不但要说明，还要把**条数**摆出来，
+     * 让用户有个具体的量感，才有机会在按删除前反悔。
+     */
+    var message = cnt > 0
+      ? '分卷「' + g.name + '」及其中的 ' + cnt + ' 条片段将一并删除。\n\n此操作不可撤销，删除后无法恢复。'
+      : '分卷「' + g.name + '」将被删除（该分卷下没有片段）。';
     dialog({
       mode: 'confirm',
-      title: '删除分卷',
-      message: '分卷「' + g.name + '」下的 ' + cnt + ' 条片段将移入「未分组」。继续？',
+      title: cnt > 0 ? '删除分卷及其内容' : '删除分卷',
+      message: message,
       confirmText: '删除'
     }).then(function (ok) {
       if (!ok) return;
-      store.removeGroup(g.id).then(function () {
+      store.removeGroup(g.id).then(function (res) {
         if (filterGroupId === g.id) filterGroupId = 'all';
         renderList();
-        toast('分卷已删除');
+        /*
+         * 提示里带上实际删掉的条数 —— 让「删了 13 条」这件事有回执，
+         * 而不是只看到「分卷已删除」，心里没底到底删干净没有。
+         */
+        var n = res && typeof res.removedEntries === 'number' ? res.removedEntries : 0;
+        toast(n > 0 ? '分卷及 ' + n + ' 条片段已删除' : '分卷已删除');
       });
     });
   }

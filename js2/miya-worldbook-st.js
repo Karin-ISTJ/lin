@@ -658,7 +658,20 @@
         groupId: '',
         boundRoleIds: [],
         source: 'st-import',
-        createdAt: Date.now(),
+        /*
+         * createdAt 按**原始顺序**分配，而不是全部写 Date.now()。
+         *
+         * 列表现在是按 createdAt 降序排的（见 store 的 normalizeState）。
+         * 以前这里全写 Date.now()，一次导入 100 条就得到 100 个几乎相同的
+         * 时间戳（甚至同毫秒完全相同）——排序退化成靠 id 兜底，
+         * 导入进来的条目会以不可预期的顺序摊在分组里。
+         *
+         * 现在：以「当前时间」为基准，**按索引往前递减 1 毫秒**。
+         * 效果是原文件的第 0 条时间戳最大 → 排在列表最顶，往后依次递减。
+         * 这样两次导入之间仍有先后（后来的整体更靠前），
+         * 同一批内部也严格保持原文件顺序。
+         */
+        createdAt: Date.now() - index,
         updatedAt: Date.now()
       });
     });

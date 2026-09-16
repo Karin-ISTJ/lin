@@ -210,7 +210,30 @@
 
     var rawEntries = Array.isArray(state && state.entries) ? state.entries : [];
     var entries = rawEntries.map(function (e) { return normalizeEntry(e, groupsById); });
-    entries.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    /*
+     * 排序：按**创建时间**降序（新的在前），不用 updatedAt。
+     *
+     * 【为什么改】原先按 updatedAt 排，意味着「任何一次修改都会把条目顶到分组最上方」。
+     * 最常见的两个触发场景，恰恰都是用户不想要的：
+     *   1. 关掉某条的开关 —— 只是拨了一下显示开关，条目却从眼皮底下跑走，
+     *      还得重新找它在哪（这正是用户报的问题）。
+     *   2. 进去看一眼又出来（或只改了个无关紧要的字段）—— 同样会跳。
+     *
+     * 用户要的是「条目本来在哪就还在哪」。条目一旦排好，位置就该稳定下来，
+     * 不因为被操作过而漂移。所以改按 createdAt：谁先建的谁在下，
+     * 新条目出现在顶部（与原 unshift 的行为一致），此后不再挪窝。
+     *
+     * updatedAt 依然保留在数据里（用于「这条内容什么时候变的」这类信息展示），
+     * 只是不再参与排序。
+     *
+     * ⚠️ 同毫秒创建的两条，createdAt 相同，靠 id 兜底保证顺序稳定
+     *    （否则 Array.sort 在不同引擎下可能给出不同结果，导致列表偶发闪动）。
+     */
+    entries.sort(function (a, b) {
+      var d = (b.createdAt || 0) - (a.createdAt || 0);
+      if (d !== 0) return d;
+      return String(a.id) < String(b.id) ? 1 : (String(a.id) > String(b.id) ? -1 : 0);
+    });
     return { version: 2, groups: groups, entries: entries };
   }
 
@@ -372,16 +395,35 @@
     return persist(st).then(function () { return next; });
   }
 
+  /**
+   * 删除一个分卷，**连同其下所有条目**。
+   *
+   * 【为什么改】原先这里把组内条目 `groupId` 改写成未分组，组没了、条目还在。
+   * 但用户的意图是「删掉这个分卷」，不是「把这个分卷清空、内容倒进杂物间」。
+   * 原先那种做法会造成两个后果：
+   *   1. 未分组被迫显形（它本来是只兜底异常数据的隐藏容器），
+   *      一堆本该一起消失的条目堆在眼前，用户还得再手动删一遍。
+   *   2. 「删了等于没删」——删完看一眼，条目数没变，会以为功能坏了。
+   * 所以现在改成连条目一起 remove。
+   *
+   * ⚠️ 不可恢复：条目直接从数组里摘掉，没有回收站。
+   *    调用方（UI 层）必须在确认弹窗里把「条目会一并删除」讲清楚，
+   *    并显示将要删掉的条数，让用户有机会取消。
+   *
+   * 未分组本身不可删（fixed 容器），返回 false。
+   */
   function removeGroup(groupId) {
     var targetId = String(groupId || '');
     if (!targetId || targetId === DEFAULT_GROUP_ID) return Promise.resolve(false);
     var st = readState();
-    st.groups = st.groups.filter(function (g) { return g.id !== targetId; });
-    st.entries = st.entries.map(function (e) {
-      if (e.groupId === targetId) e.groupId = DEFAULT_GROUP_ID;
-      return e;
+    /* 先数一下要带走多少条 —— 调用方拿去做提示/日志 */
+    var removedCount = 0;
+    st.entries.forEach(function (e) {
+      if (e.groupId === targetId) removedCount++;
     });
-    return persist(st).then(function () { return true; });
+    st.groups = st.groups.filter(function (g) { return g.id !== targetId; });
+    st.entries = st.entries.filter(function (e) { return e.groupId !== targetId; });
+    return persist(st).then(function () { return { ok: true, removedEntries: removedCount }; });
   }
 
   function upsertEntry(payload) {
@@ -392,9 +434,14 @@
     next.updatedAt = Date.now();
     var idx = st.entries.findIndex(function (x) { return x.id === next.id; });
     if (idx >= 0) {
+      /* 编辑已有条目：createdAt 必须沿用旧值 —— 它是排序依据，
+         不保留会让「改一次内容」把条目挪到列表别处去。 */
       next.createdAt = st.entries[idx].createdAt || next.createdAt;
       st.entries[idx] = next;
     } else {
+      /* 新建：createdAt 就是此刻，排序后自然落在最前（新的在前）。
+         这里的 unshift 只是让「未经过 normalizeState 的直读路径」
+         也能看到新条目在头部 —— 真正的顺序由 normalizeState 的排序决定。 */
       st.entries.unshift(next);
     }
     return persist(st).then(function () { return next; });
@@ -406,12 +453,21 @@
     return persist(st);
   }
 
+  /**
+   * 切换单条条目的启用/停用。
+   *
+   * 不更新 updatedAt：开关状态和「内容改没改」是两回事。
+   * updatedAt 表达的是「这条的词条/正文/参数什么时候变的」，
+   * 而启停只是一次显示层的开关动作。
+   *
+   * （列表现在按 createdAt 排，即使这里刷了 updatedAt 也不会跳位；
+   *   但不刷仍然是对的 —— 别让「关了个开关」被记成「内容改动过」。）
+   */
   function toggleEntryEnabled(entryId, enabled) {
     var st = readState();
     var target = st.entries.filter(function (e) { return e.id === String(entryId || ''); })[0];
     if (!target) return Promise.resolve(null);
     target.enabled = !!enabled;
-    target.updatedAt = Date.now();
     return persist(st).then(function () { return target; });
   }
 
