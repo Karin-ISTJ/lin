@@ -6,7 +6,6 @@
         chatId: '',
         contactId: '',
         sessionId: '',
-        viewingArchive: false,
         streamingLines: [],
         streamingRaw: '',
         streamingRevealLen: 0,
@@ -578,7 +577,6 @@
     /** 已发送或正在生成叙事（不含进入时的空白态） */
     function storyHasContent() {
         if (ui.view !== 'story' || !ui.chatId || !ui.sessionId) return false;
-        if (ui.viewingArchive) return true;
         var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
         if (msgs.length > 0 || ui.streamingLines.length > 0 || ui.status === 'coming') return true;
         /*
@@ -995,7 +993,7 @@
     }
 
     function isVaultLikeView() {
-        return ui.view === 'history' || (ui.view === 'story' && ui.viewingArchive);
+        return ui.view === 'history';
     }
 
     function renderExitBtn() {
@@ -1014,7 +1012,7 @@
      * 不会再出现「隐藏了 1 层、显示了 2 层」这种要心算的结果。
      */
     function renderFloorScopeHtml() {
-        if (!(ui.view === 'story' && !ui.viewingArchive)) return '';
+        if (ui.view !== 'story') return '';
         return (
             '<div class="xw-floor-scope">' +
             /* inputmode="numeric" 在手机上只弹数字键盘，想填 “0-1” 连那个连字符都敲不出来；
@@ -1090,10 +1088,7 @@
         }
         var showWho = castContacts.length && (ui.view === 'story' || ui.view === 'history');
         var statusLine = '在线';
-        if (ui.view === 'story' && ui.viewingArchive) {
-            var archSess = apStore().getSession(ui.chatId, ui.sessionId);
-            statusLine = String((archSess && archSess.title) || '').trim() || '未命名场景';
-        } else if (ui.view === 'history') {
+        if (ui.view === 'history') {
             statusLine = '往日卷宗';
         } else if (castContacts.length > 1) {
             statusLine = String(castContacts.length) + ' 人同场';
@@ -1124,7 +1119,7 @@
                     '<button type="button" class="xw-journal-bar__ico" id="xw-dock-vault" title="卷宗" aria-label="卷宗">' +
                     ICON_ARCHIVE + '</button>';
             }
-            if (ui.view === 'story' && !ui.viewingArchive) {
+            if (ui.view === 'story') {
                 toolHtml +=
                     '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
                     ICON_SET + '</button>';
@@ -1269,6 +1264,7 @@
                         (s.parentSessionId ? ' · 分支' : '') +
                         '</span></button>' +
                         '<div class="xw-vault-row__acts">' +
+                        '<button type="button" class="xw-vault-row__mini" data-ap-rename-session="' + esc(s.id) + '" title="命名此卷">命名</button>' +
                         '<button type="button" class="xw-vault-row__mini" data-ap-export-txt="' + esc(s.id) + '" title="导出 TXT">TXT</button>' +
                         '<button type="button" class="xw-vault-row__mini" data-ap-export-json="' + esc(s.id) + '" title="导出 JSON">JSON</button>' +
                         '<button type="button" class="xw-vault-row__mini xw-vault-row__mini--del" data-ap-del-session="' + esc(s.id) +
@@ -2274,7 +2270,7 @@
 
     function patchStreamMount() {
         var body = getStoryBodyEl();
-        if (!body || ui.viewingArchive) return;
+        if (!body) return;
         var mount = ensureStreamMount(body);
         patchStreamThinking(mount);
         var lines = resolveStreamingParagraphs();
@@ -2611,11 +2607,8 @@
             runBtn.disabled = !!ui.summaryBusy;
             runBtn.textContent = ui.summaryBusy ? '纪要生成中…' : '生成纪要';
         }
-        var archBtn = $('xw-ribbon-sum');
-        if (archBtn) {
-            archBtn.disabled = !!ui.summaryBusy;
-            archBtn.textContent = ui.summaryBusy ? '纪要生成中…' : '总结本期';
-        }
+        /* xw-ribbon-sum（卷宗条上的「归档成纪要」）随卷宗条一并移除，
+           纪要入口现在只在设置抽屉里的「生成纪要」一处。 */
     }
 
     function setSummaryBusy(busy) {
@@ -2670,39 +2663,29 @@
         var ava = esc(contactAvatar(primaryFace));
         var sceneTitle = String((sess && sess.title) || '').trim() || '未命名场景';
         /*
-         * 卷宗里点开的卷，之前一律是「旧卷只读」——没有输入框，也回不到能说话的状态。
+         * 卷宗条（.xw-ribbon）已整体移除。
          *
-         * 但用户从卷宗列表点进一卷，本就是打算接着往下演的。
-         * 把输入框一并藏掉，等于人进了房间却发现没有门，只能退出去重选，
-         * 而重选又未必落回同一场次。
+         * 它原本出现在「从卷宗点开一卷」时，挂在正文最上方，提供
+         * 「续写这一幕 / 命名 / TXT / JSON / 归档成纪要」。
+         * 实测下来它有两个硬伤，且是设计自相矛盾留下的残留：
          *
-         * 现在所有卷一律可续写（封存概念已整体移除，见 store 里的说明），
-         * 所以 ribbon 上恒定给出「续写这一幕」入口，不再有只读分支。
+         *   1. 位置错。它排在正文【最上方】，而进入一场戏时视图会自动落到
+         *      最新楼层，于是这张卡永远在屏幕外——用户根本不知道它存在，
+         *      更别说那张卡正是「输入框为什么不见了」的唯一解法。
+         *
+         *   2. 职能重叠。TXT / JSON 导出在【上一个页面】的卷宗列表里每行都有；
+         *      而「续写这一幕」的存在本身，源于「卷宗一律只读」这条早已废弃的规则
+         *      （封存概念已整体移除，见 store 说明）。既然所有卷都能续写，
+         *      就没必要先进只读态、再点一下按钮解除——点进来直接能写才对。
+         *
+         * 现在：点开卷宗即视为续写，输入框常驻。「命名」挪到卷宗列表每行。
          */
-        var archivRibbon = '';
-        if (ui.viewingArchive) {
-            archivRibbon =
-                '<div class="xw-ribbon">' +
-                '<div class="xw-ribbon__lead">' +
-                '<span class="xw-ribbon__txt">可续写</span>' +
-                '<strong class="xw-ribbon__name">' + esc(sceneTitle) + '</strong></div>' +
-                '<div class="xw-ribbon__acts">' +
-                '<button type="button" class="xw-ribbon__act xw-ribbon__act--primary" id="xw-ribbon-resume">续写这一幕</button>' +
-                '<button type="button" class="xw-ribbon__act xw-ribbon__act--ghost" id="xw-ribbon-rename">命名</button>' +
-                '<button type="button" class="xw-ribbon__act" id="xw-export-current-txt">TXT</button>' +
-                '<button type="button" class="xw-ribbon__act" id="xw-export-current-json">JSON</button>' +
-                (msgs.length
-                    ? '<button type="button" class="xw-ribbon__act" id="xw-ribbon-sum">归档成纪要</button>'
-                    : '') +
-                '</div></div>';
-        }
-        var ribbon = archivRibbon;
+        /* 卷宗条位置原本放 ribbon 变量，随该条一并删除（见上方说明）。 */
         /*
          * 与 storyHasContent() 同一口径：刷新期间被刷的那一层处于软删态，
          * msgs 会是空数组，但场景并没有消失 —— 不能因此把正片换成空白页。
          */
         var hasStory =
-            ui.viewingArchive ||
             msgs.length > 0 ||
             ui.streamingLines.length > 0 ||
             ui.status === 'coming' ||
@@ -2715,8 +2698,7 @@
             return '<div id="mol-story-body" class="xw-script-host" hidden aria-hidden="true"></div>';
         }
 
-        var streamingActive =
-            !ui.viewingArchive && (ui.streamingLines.length > 0 || ui.status === 'coming');
+        var streamingActive = ui.streamingLines.length > 0 || ui.status === 'coming';
         /*
          * 现实时钟事件卡片挂在正文【上方】。
          *
@@ -2728,11 +2710,11 @@
          * 归档视图（旧卷只读）刻意不显示：那里是回看历史，
          * 插一张当下的账本会跟卷宗里的时间线打架。
          */
-        var teHtml = ui.viewingArchive ? '' : timeEventsHtml(ui.chatId, Date.now());
+        var teHtml = timeEventsHtml(ui.chatId, Date.now());
         var scriptInner =
             '<article class="xw-script" id="mol-story-body">' +
             teHtml +
-            renderStoryLines(msgs, [], [], !ui.viewingArchive) +
+            renderStoryLines(msgs, [], [], true) +
             (streamingActive
                 ? '<div class="xw-stream-mount" data-ap-stream-mount aria-live="polite"></div>'
                 : '') +
@@ -2746,7 +2728,6 @@
         return (
             '<div class="xw-scene' + (isJournalTheme() ? ' xw-scene--journal' : '') + '"' +
             (isJournalTheme() ? ' style="--xw-stream-face:url(' + ava + ')"' : '') + '>' +
-            ribbon +
             '<div class="xw-script-col">' + scriptInner + '</div></div>'
         );
     }
@@ -2772,12 +2753,17 @@
         var body = '';
         if (ui.view === 'history') body = renderHistory();
         else if (ui.view === 'story') {
-            if (!ui.viewingArchive && !storyHasContent()) body = renderOpeningPicker();
+            /*
+             * 卷宗视图不再走只读分支：点进来就是想接着写，直接渲染正文。
+             * （原条件里的 !ui.viewingArchive 连同开场白选择器的互斥一起放开——
+             *   有内容的卷本来就不会落到开场白分支。）
+             */
+            if (!storyHasContent()) body = renderOpeningPicker();
             else body = renderStory();
         }
 
         var mainCls = 'xw-main';
-        if (ui.view === 'story' && !ui.viewingArchive && !storyHasContent()) {
+        if (ui.view === 'story' && !storyHasContent()) {
             mainCls += ' xw-main--blank';
         }
         if (isJournalTheme()) mainCls += ' xw-main--journal';
@@ -2789,7 +2775,11 @@
             (isJournalTheme() ? '' : renderDock()) +
             renderFloatFloorScope() +
             '<main class="' + mainCls + '" id="xw-main">' + body + '</main>' +
-            (ui.view === 'story' && !ui.viewingArchive
+            /*
+             * 输入框恒常驻：进 story 视图就有，不再区分「卷宗只读」。
+             * 这是本次改动的核心 —— 用户点进一卷，下面就该能直接说话。
+             */
+            (ui.view === 'story'
                 ? isJournalTheme()
                     ? renderJournalWriter()
                     : renderWriter()
@@ -2806,10 +2796,7 @@
         if (ui.view === 'story' && ui.chatId && ui.sessionId) {
             var msgsR = apStore().getSessionMessages(ui.chatId, ui.sessionId);
             ui.stableStoryKey = computeStableStoryKey(msgsR);
-            if (
-                !ui.viewingArchive &&
-                (ui.status === 'coming' || String(ui.streamingRaw || '').length > 0)
-            ) {
+            if (ui.status === 'coming' || String(ui.streamingRaw || '').length > 0) {
                 startStreamRevealLoop();
                 patchStreamMount();
             }
@@ -3086,7 +3073,7 @@ function renderWriter() {
         var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
         if (!body) return;
         var stableKey = computeStableStoryKey(msgs);
-        var streaming = !ui.viewingArchive && (ui.streamingLines.length > 0 || ui.status === 'coming');
+        var streaming = ui.streamingLines.length > 0 || ui.status === 'coming';
 
         if (!opts.streamOnly && stableKey !== ui.stableStoryKey) {
             ui.stableStoryKey = stableKey;
@@ -3100,8 +3087,8 @@ function renderWriter() {
              */
             body.innerHTML =
                 wmHtml +
-                (ui.viewingArchive ? '' : timeEventsHtml(ui.chatId, Date.now())) +
-                renderStoryLines(msgs, [], [], !ui.viewingArchive);
+                timeEventsHtml(ui.chatId, Date.now()) +
+                renderStoryLines(msgs, [], [], true);
             hydrateAppointmentHtmlPanels(body);
             resetStreamUi();
             if (streaming) ensureStreamMount(body);
@@ -3259,7 +3246,6 @@ function renderWriter() {
         ui.chatId = String(sess.chatId || hostChatId);
         ui.contactId = String(sess.contactId || contactId || '').trim();
         ui.sessionId = sess.id;
-        ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.status = 'idle';
@@ -3291,10 +3277,31 @@ function renderWriter() {
         openWithChat(cast[0].chatId, cast[0].contactId, cast);
     }
 
+    /**
+     * 从卷宗列表点开一卷 —— 现在等同于「就地续写」。
+     *
+     * 原先分两步：点进来先置 viewingArchive = true（只读、输入框藏起），
+     * 再由卷宗条上的「续写这一幕」摘掉标记。但封存概念早已整体移除，
+     * 「所有卷都能续写」，那个中间态纯属历史残留，还顺带制造了
+     * 「为什么进来不能打字」的困惑。
+     *
+     * 现在：点开即续写。同时把它标为 active，避免下一次 render 落到
+     * 开场白选择器上（会盖住用户正在看的这一卷）。
+     */
     function openArchiveSession(sessionId) {
+        if (!ui.chatId || !sessionId) return;
+        var st = apStore();
+        var sess = st.getSession(ui.chatId, sessionId);
+        if (!sess) {
+            toast('这一卷找不到了');
+            return;
+        }
+        if (typeof st.setActiveSession === 'function') {
+            try { st.setActiveSession(ui.chatId, sessionId); } catch (e) {}
+        }
         ui.sessionId = sessionId;
-        ui.viewingArchive = true;
         ui.view = 'story';
+        ui.status = 'idle';
         ui.streamingLines = [];
         ui.streamingRaw = '';
         resetScrollUiState();
@@ -3303,49 +3310,36 @@ function renderWriter() {
     }
 
     /*
-     * 从「卷宗里点开的卷」切回可续写的正片。
+     * 关于「续写这一幕」按钮与卷宗条：
      *
-     * 与 restoreToLiveStory() 的区别很关键，别混用：
-     *   restoreToLiveStory() 是「离开卷宗」——它会把 sessionId 换成
-     *     getActiveSession() 拿到的那一场（或干脆新开一场），
-     *     用户想看的那一卷就此被丢下。
-     *   本函数是「就地续写」——sessionId 原地保留，只是把只读标记摘掉，
-     *     于是输入框回来、正文还是同一卷，接着往下演。
+     * 该按钮曾与整条卷宗条（.xw-ribbon）一起存在，作用是「从只读的卷宗里
+     * 点开的卷，切回可续写的正片」。
      *
-     * 所有卷一律可续写（封存概念已整体移除），这里不再做任何只读判定。
+     * 封存概念整体移除后，「所有卷一律可续写」成了唯一规则 —— 只读态本身
+     * 就不该存在，那个按钮也就失去了存在前提。整条卷宗条已在 renderStory()
+     * 里移除（见该函数注释），输入框改为常驻（见 render()）。
+     *
+     * 因此原来的 resumeArchiveSession() 已删除：它唯一的效果就是把
+     * ui.viewingArchive 从 true 改成 false，而全项目再无任何地方把它置为 true。
+     * 同理，只服务于「卷宗条上的改名」的 renameActiveSessionTitle() 也已删除 ——
+     * 命名入口统一到了卷宗列表每行，走下面的 renameSessionById()。
      */
-    function resumeArchiveSession() {
-        if (!ui.chatId || !ui.sessionId) return;
-        var sess = apStore().getSession(ui.chatId, ui.sessionId);
+
+    /**
+     * 按 sessionId 重命名（卷宗列表每行的「命名」按钮用）。
+     *
+     * 与 renameActiveSessionTitle 的差别：后者只认「当前打开的场次」，
+     * 而卷宗列表里点命名的那一卷未必是当前活动卷 —— 改名不该顺带切场次。
+     * 所以这里走显式 id，保存后只刷新列表，不动 ui.sessionId。
+     */
+    function renameSessionById(sessionId) {
+        var sid = String(sessionId || '').trim();
+        if (!ui.chatId || !sid) return;
+        var sess = apStore().getSession(ui.chatId, sid);
         if (!sess) {
             toast('这一卷找不到了');
             return;
         }
-        /*
-         * 必须把它重新标为 active。
-         * 否则下一次 render 走 renderOpeningPicker 分支时，
-         * storyHasContent() / getActiveSession() 仍认为「当前没有进行中的场次」，
-         * 用户会看到开场白选择器盖在自己刚续写的内容上。
-         */
-        var st = apStore();
-        if (typeof st.setActiveSession === 'function') {
-            try { st.setActiveSession(ui.chatId, ui.sessionId); } catch (e) {}
-        }
-        ui.viewingArchive = false;
-        ui.view = 'story';
-        ui.status = 'idle';
-        ui.streamingLines = [];
-        ui.streamingRaw = '';
-        resetScrollUiState();
-        render();
-        scrollToLatestOnEnter();
-        toast('已回到这一幕，可以接着写');
-    }
-
-    function renameActiveSessionTitle() {
-        if (!ui.chatId || !ui.sessionId) return;
-        var sess = apStore().getSession(ui.chatId, ui.sessionId);
-        if (!sess) return;
         dialog({
             mode: 'prompt',
             title: '场景命名',
@@ -3357,7 +3351,7 @@ function renderWriter() {
             if (name == null) return;
             var trimmed = String(name || '').trim();
             if (typeof apStore().setSessionTitle === 'function') {
-                apStore().setSessionTitle(ui.chatId, ui.sessionId, trimmed);
+                apStore().setSessionTitle(ui.chatId, sid, trimmed);
             } else {
                 sess.title = trimmed;
                 apStore()._writeSession(sess);
@@ -3368,7 +3362,6 @@ function renderWriter() {
     }
 
     function restoreToLiveStory() {
-        ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.status = 'idle';
@@ -4727,7 +4720,7 @@ function renderWriter() {
             if (!ok) return;
             var branch = apStore().createBranch(ui.chatId, ui.sessionId, idx + 1);
             if (!branch) { toast('分支创建失败'); return; }
-            ui.sessionId = branch.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle';
+            ui.sessionId = branch.id; ui.view = 'story'; ui.status = 'idle';
             resetScrollUiState();
             render();
             scrollToLatestOnEnter();
@@ -4872,7 +4865,7 @@ function renderWriter() {
     function newOfflineChat() {
         var st = chatStore(); var chat = st && st.findChat(ui.chatId); if (!chat) { toast('请先选择角色'); return; }
         var sess = apStore().startNewSession(ui.chatId, chat.contactId, activeSessionCast()); if (!sess) return;
-        ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle';
+        ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
         resetScrollUiState();
         render();
         scrollToLatestOnEnter();
@@ -4885,7 +4878,7 @@ function renderWriter() {
                 if (/\.json$/i.test(file.name)) payload = JSON.parse(text);
                 else { var lines = text.split(/\r?\n/), msgs = [], role = 'assistant', buf = []; lines.forEach(function (line) { var hit = line.match(/^【第\s*\d+\s*层】\s*(.*)$/); if (hit) { if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); buf = []; role = /我/.test(hit[1]) ? 'user' : /系统/.test(hit[1]) ? 'system' : 'assistant'; return; } if (/^#\s*/.test(line)) return; buf.push(line); }); if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); payload = { session: { title: file.name.replace(/\.[^.]+$/, '') }, messages: msgs }; }
                 var sess = apStore().importSession(ui.chatId, payload); if (!sess) throw new Error('invalid');
-                ui.sessionId = sess.id; ui.view = 'story'; ui.viewingArchive = false; ui.status = 'idle';
+                ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
                 resetScrollUiState();
                 render();
                 scrollToLatestOnEnter();
@@ -5025,10 +5018,15 @@ function renderWriter() {
          */
         document.querySelectorAll('[data-ap-export-txt]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineText(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-txt'))); }); });
         document.querySelectorAll('[data-ap-export-json]').forEach(function (btn) { btn.addEventListener('click', function (e) { e.stopPropagation(); downloadOfflineJson(apStore().getSession(ui.chatId, btn.getAttribute('data-ap-export-json'))); }); });
+        /* 命名按钮挪到卷宗列表每行（原先只在卷宗条上，而那条已移除） */
+        document.querySelectorAll('[data-ap-rename-session]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                renameSessionById(btn.getAttribute('data-ap-rename-session'));
+            });
+        });
         var nc = $('xw-new-offline-chat'); if (nc) nc.addEventListener('click', newOfflineChat);
         var ic = $('xw-import-offline-chat'); if (ic) ic.addEventListener('click', importOfflineChat);
-        var ct = $('xw-export-current-txt'); if (ct) ct.addEventListener('click', function () { downloadOfflineText(apStore().getSession(ui.chatId, ui.sessionId)); });
-        var cj = $('xw-export-current-json'); if (cj) cj.addEventListener('click', function () { downloadOfflineJson(apStore().getSession(ui.chatId, ui.sessionId)); });
         var toolsToggle = $('xw-writer-tools-toggle');
         var toolsMenu = $('xw-writer-tools-menu');
         if (toolsToggle && toolsMenu) {
@@ -5052,7 +5050,6 @@ function renderWriter() {
             if (toolVault) toolVault.addEventListener('click', function () {
                 toolsMenu.hidden = true;
                 ui.view = 'history';
-                ui.viewingArchive = false;
                 render();
             });
         }
@@ -5061,12 +5058,6 @@ function renderWriter() {
         var back = $('xw-exit');
         if (back) {
             back.onclick = function () {
-                if (ui.view === 'story' && ui.viewingArchive) {
-                    ui.view = 'history';
-                    ui.viewingArchive = false;
-                    render();
-                    return;
-                }
                 if (ui.view === 'history') {
                     restoreToLiveStory();
                     return;
@@ -5096,14 +5087,10 @@ function renderWriter() {
         var histBtn = $('xw-dock-vault');
         if (histBtn) {
             histBtn.addEventListener('click', function () {
+                /* 卷宗与正片之间来回切：从卷宗点回来就落到当前活动场次。
+                   viewingArchive 已不再参与（卷宗点开即续写，没有只读态）。 */
                 if (ui.view === 'history') {
                     restoreToLiveStory();
-                    return;
-                }
-                if (ui.viewingArchive) {
-                    ui.view = 'history';
-                    ui.viewingArchive = false;
-                    render();
                     return;
                 }
                 ui.view = 'history';
@@ -5149,31 +5136,18 @@ function renderWriter() {
             });
         }
 
-        var archSumBtn = $('xw-ribbon-sum');
-        if (archSumBtn) {
-            archSumBtn.addEventListener('click', function () {
-                runManualSummary({}).catch(function () {});
-            });
-        }
-
-        var renameBtn = $('xw-ribbon-rename');
-        if (renameBtn) {
-            renameBtn.addEventListener('click', function () {
-                renameActiveSessionTitle();
-            });
-        }
-
-        /* 卷宗里点开「还能接着演」的卷 → 摘掉只读标记，输入框回来，接着写 */
-        var resumeBtn = $('xw-ribbon-resume');
-        if (resumeBtn) {
-            resumeBtn.addEventListener('click', function () {
-                resumeArchiveSession();
-            });
-        }
+        /* 卷宗条（xw-ribbon-*）已整体移除，其上的
+           「归档成纪要 / 命名 / 续写这一幕」三个绑定一并删除：
+             · 归档成纪要 → 设置抽屉里的「生成纪要」
+             · 命名       → 卷宗列表每行的 [data-ap-rename-session]
+             · 续写这一幕 → 点开卷宗即续写，不再需要                          */
 
         document.querySelectorAll('[data-ap-view-session]').forEach(function (row) {
             row.addEventListener('click', function (e) {
                 if (e.target.closest('[data-ap-del-session]')) return;
+                if (e.target.closest('[data-ap-rename-session]')) return;
+                if (e.target.closest('[data-ap-export-txt]')) return;
+                if (e.target.closest('[data-ap-export-json]')) return;
                 openArchiveSession(row.getAttribute('data-ap-view-session'));
             });
         });
@@ -5204,7 +5178,6 @@ function renderWriter() {
         var story = $('mol-story-body');
         if (story) {
             story.addEventListener('click', function (e) {
-                if (ui.viewingArchive) return;
                 var editBtn = e.target.closest('[data-ap-msg-edit]');
                 if (editBtn) {
                     e.stopPropagation();
@@ -5412,7 +5385,6 @@ function renderWriter() {
         ui.chatId = '';
         ui.sessionId = '';
         ui.contactId = '';
-        ui.viewingArchive = false;
         ui.streamingLines = [];
         ui.streamingRaw = '';
         ui.pickSelected = [];

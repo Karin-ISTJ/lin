@@ -498,6 +498,21 @@
   max-width: 100%;
 }
 
+/*
+ * .xw-ribbon 系列：卷宗条【已从界面上整体移除】。
+ *
+ * 它原本挂在正片正文最上方，提供「续写这一幕 / 命名 / TXT / JSON / 归档成纪要」。
+ * 移除原因见 js1/miya-appointment-app.js 的 renderStory()：位置在屏幕外 +
+ * 职能与卷宗列表重复 + 存在前提（卷宗只读）已废弃。
+ *
+ * 下面的 .xw-ribbon 本体与 __lead / __txt / __name / __acts 已无任何渲染点，
+ * 保留仅为兼容旧缓存页面（老 HTML 可能仍在 SW 缓存里引用这些类名）；
+ * 新代码不要再使用。
+ *
+ * ⚠️ 但 .xw-ribbon__act 【仍在使用】——卷宗页「新建聊天 / 导入聊天」两个按钮
+ *    复用这个类（见 miya-appointment-app.js renderHistory 的 .xw-vault__actions）。
+ *    连同 __act--ghost / __act--primary 都不要删。
+ */
 .xw-ribbon {
   display: flex;
   align-items: center;
@@ -557,8 +572,8 @@
   border: 1px solid rgba(0, 0, 0, 0.14);
 }
 
-/* 「续写这一幕」是卷宗页里唯一的主动作：其余按钮都是次要操作（命名/导出/归档）。
-   给它一点视觉重量，免得用户在一排小胶囊里找不到「怎么继续说话」的入口。 */
+/* __act--primary 曾给「续写这一幕」加权（原为卷宗页唯一主动作）。
+   该按钮已随卷宗条移除，本类现无渲染点，保留待复用。 */
 .xw-ribbon__act--primary {
   background: var(--xw-gold, var(--xw-ink));
   color: #fff;
