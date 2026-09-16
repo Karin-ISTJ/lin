@@ -7,11 +7,27 @@
   var MAX_CUSTOM_BYTES = 1024 * 1024;
   var MAX_CUSTOM_PRESETS = 10;
 
+  /*
+   * ── 内置提示音 ────────────────────────────────────────────────
+   *
+   * 两种来源，靠有没有 url 区分：
+   *
+   *   合成型（没有 url）
+   *     用 Web Audio 现场生成，零文件体积。
+   *     id 是 'preset-N'，播放走 playBuiltin()。
+   *
+   *   文件型（有 url）
+   *     指向 audio/ 下的 mp3，播放走 playUrl()。
+   *     采样率统一 44.1kHz、响度对齐到 -22dB RMS，
+   *     这样切来切去不会忽大忽小。
+   *
+   * 排序：清脆 → 星落 → 和音 → 风铃。
+   * 前面几个都是短促单音，和音最长（1 秒），放最后不打断前两个的节奏。
+   */
   var BUILTIN = [
     { id: 'preset-1', name: '清脆叮', builtin: true },
-    { id: 'preset-2', name: '柔和铃', builtin: true },
-    { id: 'preset-3', name: '气泡音', builtin: true },
-    { id: 'preset-4', name: '木鱼声', builtin: true },
+    { id: 'preset-6', name: '星落', builtin: true, url: 'audio/msg-xingluo.mp3' },
+    { id: 'preset-7', name: '和音', builtin: true, url: 'audio/msg-heyin.mp3' },
     { id: 'preset-5', name: '风铃声', builtin: true }
   ];
 
@@ -141,25 +157,6 @@
     var t = ctx.currentTime;
     if (id === 'preset-1') {
       playTone(ctx, 880, t, 0.18, 'sine', 0.4);
-    } else if (id === 'preset-2') {
-      playTone(ctx, 659, t, 0.08, 'sine', 0.28);
-      playTone(ctx, 523, t + 0.06, 0.35, 'sine', 0.32);
-    } else if (id === 'preset-3') {
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(620, t);
-      osc.frequency.exponentialRampToValueAtTime(180, t + 0.12);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.38, t + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.16);
-    } else if (id === 'preset-4') {
-      playTone(ctx, 220, t, 0.06, 'triangle', 0.55);
-      playTone(ctx, 180, t + 0.04, 0.08, 'square', 0.18);
     } else if (id === 'preset-5') {
       [784, 988, 1175, 988].forEach(function (f, i) {
         playTone(ctx, f, t + i * 0.09, 0.22, 'sine', 0.26);
@@ -231,19 +228,46 @@
     }
   }
 
+  /*
+   * 播放文件型音效（内置的 audio/*.mp3，以及用户上传的自定义音频）。
+   *
+   * 和 playCustom 的区别只在音源：这里是现成的 url（项目内相对路径），
+   * 不用去 IndexedDB 取 blob。播放控制逻辑完全一致，所以合成一个函数，
+   * 免得两份 <audio> 管理代码各自演化出不一致的行为。
+   */
+  function playUrl(url) {
+    if (!url) return Promise.resolve();
+    stopPlaying();
+    var audio = new Audio(url);
+    playingAudio = audio;
+    audio.volume = 0.85;
+    var p = audio.play();
+    if (p && typeof p.catch === 'function') p.catch(function () {});
+    audio.onended = function () {
+      if (playingAudio === audio) playingAudio = null;
+    };
+    return Promise.resolve();
+  }
+
   function playCustom(id) {
     return getBlobUrl(id).then(function (url) {
-      if (!url) return;
-      stopPlaying();
-      var audio = new Audio(url);
-      playingAudio = audio;
-      audio.volume = 0.85;
-      var p = audio.play();
-      if (p && typeof p.catch === 'function') p.catch(function () {});
-      audio.onended = function () {
-        if (playingAudio === audio) playingAudio = null;
-      };
+      return playUrl(url);
     });
+  }
+
+  /*
+   * 统一的「按预设播放」入口。
+   *
+   * 三种来源在这里收口，调用方不用关心 preset 是哪种：
+   *   有 url  → 文件（内置的 audio/*.mp3）
+   *   builtin → 现场合成
+   *   其余    → IndexedDB 里的用户音频
+   */
+  function playPreset(preset) {
+    if (!preset) return Promise.resolve();
+    if (preset.url) return playUrl(preset.url);
+    if (preset.builtin) return playBuiltin(preset.id);
+    return playCustom(preset.id);
   }
 
   function playSelected() {
@@ -251,8 +275,7 @@
     var preset = getPresetById(settings.selectedId);
     if (!preset) return Promise.resolve();
     stopPlaying();
-    if (preset.builtin) return playBuiltin(preset.id);
-    return playCustom(preset.id);
+    return playPreset(preset);
   }
 
   /*
@@ -294,8 +317,7 @@
     var preset = getPresetById(id);
     if (!preset) return Promise.resolve();
     stopPlaying();
-    if (preset.builtin) return playBuiltin(preset.id);
-    return playCustom(preset.id);
+    return playPreset(preset);
   }
 
   function selectPreset(id) {

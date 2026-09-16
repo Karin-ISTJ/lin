@@ -100,17 +100,53 @@
   function saveGenerationFromUi() {
     var st = store();
     if (!st || typeof st.setActiveGeneration !== 'function') return;
+
+    /*
+     * 保存前先确保有 active pack。
+     *
+     * 存储层的 updateActivePack 在「没有 active pack」时会返回 null 静默失败，
+     * 而旧代码不看返回值、无条件提示「已保存」——
+     * 用户于是以为存上了，重开面板却发现开关弹回默认值。
+     * 这里补上创建，让保存真的落到一个 pack 上。
+     */
+    if (!st.getActivePack() && typeof st.createPack === 'function') {
+      st.createPack('默认预设');
+    }
+
     function n(id, fallback) { var v = Number($(id) && $(id).value); return Number.isFinite(v) ? v : fallback; }
-    st.setActiveGeneration({
+
+    var patch = {
       contextLength: Math.max(0, n('stp-gen-context', 2000000)),
       maxTokens: Math.max(1, n('stp-gen-max', 50000)),
       n: Math.max(1, Math.min(8, Math.floor(n('stp-gen-n', 1)))),
-      stream: !!($('stp-gen-stream') && $('stp-gen-stream').checked),
       temperature: Math.max(0, Math.min(2, n('stp-gen-temperature', 1))),
       frequencyPenalty: Math.max(-2, Math.min(2, n('stp-gen-frequency', 0))),
       presencePenalty: Math.max(-2, Math.min(2, n('stp-gen-presence', 0))),
       topP: Math.max(0, Math.min(1, n('stp-gen-topp', 0.95)))
-    });
+    };
+
+    /*
+     * 流式开关只在复选框真的存在时才写进 patch。
+     *
+     * 旧代码写的是 `!!($(...) && $(...).checked)` —— 元素取不到时
+     * 静默存成 false，把用户原来的设置抹掉。取不到就该保持原值不动。
+     */
+    var streamEl = $('stp-gen-stream');
+    if (streamEl) patch.stream = !!streamEl.checked;
+
+    var saved = st.setActiveGeneration(patch);
+
+    /*
+     * 看返回值判断成败，不再无条件报「已保存」。
+     * setActiveGeneration 失败时返回 null（见 store 的 updateActivePack）。
+     */
+    if (!saved) {
+      toast('保存失败，可能是存储空间不足');
+      return;
+    }
+
+    /* 保存后按存储的真实值回填一次，保证「所见即所存」 */
+    renderGeneration();
     toast('生成参数已保存');
   }
 
@@ -123,8 +159,15 @@
     };
     Object.keys(map).forEach(function (id) { if ($(id)) $(id).value = String(map[id]); });
     if ($('stp-gen-stream')) $('stp-gen-stream').checked = g.stream !== false;
+
+    /*
+     * 摘要必须反映**请求层真正用了什么**，而不是用户存了什么。
+     *
+     * 请求层目前硬编码 stream:false（见 miya-chat-engine.js 的 reqPayload.stream），
+     * 所以无论这里存的是 true 还是 false，实际都是非流式。
+     * 摘要写死「非流式」——它描述的是事实，不是开关状态。
+     */
     var summary = $('stp-gen-summary');
-    /* 流式开关在请求层被硬编码为 false，这里不再宣称「流式」，避免误导。 */
     if (summary) summary.textContent = '温度 ' + g.temperature + ' · Top P ' + g.topP + ' · 非流式';
   }
 
@@ -555,5 +598,18 @@
     }, 300);
   }
 
-  global.miyaStPromptPresetsApp = { open: open, close: close, refresh: renderList };
+  global.miyaStPromptPresetsApp = {
+    open: open,
+    close: close,
+    refresh: renderList,
+    /*
+     * 测试后门：生图参数面板的两个纯 UI 函数。
+     *
+     * 它们平时只被事件监听调用，headless 里点不到按钮，
+     * 而「保存后弹回」这类问题恰恰只能在这一层验出来
+     * （存储层是好的，是 UI 把值读错/写错了）。
+     */
+    __testSaveGeneration: saveGenerationFromUi,
+    __testRenderGeneration: renderGeneration
+  };
 })(typeof window !== 'undefined' ? window : this);

@@ -109,6 +109,14 @@
   var pendingCloseOnPanelBack = null;
   var apiConfigCache = null;
   var apiConfigHydrated = false;
+  /*
+   * 水合竞态防护：用户在本轮会话里改过配置后置真。
+   * 背景：配置正本在 IndexedDB，localStorage 只留占位符时，冷启动要异步水合才读得回来。
+   * 若用户在「读回来」之前就点了保存，随后的水合会把磁盘旧值灌回缓存，
+   * 把刚保存的选择覆盖掉 —— 表现为「明明选了非流式，保存后重开又变回流式」。
+   * 有了这个标记，水合只补齐本地没有的键，已在本会话写过的键一律以内存为准。
+   */
+  var apiConfigDirty = false;
   var apiPresetsCache = null;
   var apiPresetsReady = null;
   var storageSummaryTimer = null;
@@ -169,6 +177,15 @@
     return Object.assign({}, apiConfigCache);
   }
 
+  /*
+   * 异步水合：把 IndexedDB 里的配置正本读回内存缓存。
+   *
+   * 关键约束（v66 修复）：水合期间若用户已经改过配置（apiConfigDirty），
+   * 不能整体覆盖缓存 —— 那会把用户刚保存的选择退回到磁盘旧值。
+   * 此时改为「补齐式合并」：磁盘上有而内存里没有的键才补进来
+   * （典型是冷启动时 baseUrl / apiKey / model 这些没被本会话动过的字段），
+   * 内存里已有的键一律保留。
+   */
   function hydrateApiConfigFromIdb() {
     if (typeof global.miyaReadLsJsonKey !== 'function') return Promise.resolve();
     var needsAsync = global.miyaKvKeyNeedsAsyncHydrate && global.miyaKvKeyNeedsAsyncHydrate(API_CONFIG_KEY);
@@ -176,20 +193,86 @@
       return Promise.resolve();
     }
     return global.miyaReadLsJsonKey(API_CONFIG_KEY, null).then(function (v) {
-      if (v && typeof v === 'object' && !isIdbPlaceholderConfig(v)) apiConfigCache = v;
+      if (v && typeof v === 'object' && !isIdbPlaceholderConfig(v)) {
+        if (apiConfigDirty) {
+          var live = apiConfigCache && !isIdbPlaceholderConfig(apiConfigCache) ? apiConfigCache : null;
+          if (live) {
+            /* 以内存为准，磁盘只补空缺键 */
+            var merged = Object.assign({}, v, live);
+            apiConfigCache = merged;
+            if (typeof global.miyaWriteLsJsonKey === 'function') {
+              global.miyaWriteLsJsonKey(API_CONFIG_KEY, merged).catch(function () {
+                saveJson(API_CONFIG_KEY, merged);
+              });
+            } else {
+              saveJson(API_CONFIG_KEY, merged);
+            }
+          } else {
+            apiConfigCache = v;
+          }
+        } else {
+          apiConfigCache = v;
+        }
+      }
       apiConfigHydrated = true;
     });
   }
 
-  function setApiConfig(next) {
-    apiConfigCache = Object.assign({}, getApiConfig(), next || {});
-    if (typeof global.miyaWriteLsJsonKey === 'function') {
-      global.miyaWriteLsJsonKey(API_CONFIG_KEY, apiConfigCache).catch(function () {
-        saveJson(API_CONFIG_KEY, apiConfigCache);
+  /*
+   * 把磁盘上的配置补进内存（磁盘为底，内存为面）。
+   *
+   * 为什么需要它：冷启动时 localStorage 可能只剩占位符，真数据要异步读 IDB 才拿得到。
+   * 若用户在这之前就点了保存，setApiConfig 会以「空对象」为底合并，
+   * 把 baseUrl / apiKey / model 连同用户的新值一起写回磁盘 —— 配置被清空。
+   * 所以保存动作本身必须先确认「磁盘数据已经读进来」。
+   *
+   * 同步路径（miyaSyncReadJsonKey）能拿到就直接用；拿不到再走异步读 IDB，
+   * 读完才落盘。整个过程对调用方仍是同步返回，只是写盘被安排在合并之后。
+   */
+  function baseApiConfigForWrite() {
+    var cur = apiConfigCache && !isIdbPlaceholderConfig(apiConfigCache) ? apiConfigCache : null;
+    if (cur) return Promise.resolve(Object.assign({}, cur));
+    if (!apiConfigHydrated && typeof global.miyaReadLsJsonKey === 'function') {
+      return global.miyaReadLsJsonKey(API_CONFIG_KEY, null).then(function (v) {
+        var disk = v && typeof v === 'object' && !isIdbPlaceholderConfig(v) ? v : {};
+        apiConfigHydrated = true;
+        return Object.assign({}, disk, cur || {});
+      }).catch(function () {
+        apiConfigHydrated = true;
+        return Object.assign({}, cur || {});
       });
-    } else {
-      saveJson(API_CONFIG_KEY, apiConfigCache);
     }
+    return Promise.resolve(Object.assign({}, cur || {}));
+  }
+
+  function setApiConfig(next) {
+    /* 先把已有的内存值并上本次改动，保证「读回立即生效」是同步的 */
+    var optimistic = Object.assign({}, getApiConfig(), next || {});
+    apiConfigCache = optimistic;
+    /* 记下「本会话已改动」，供 hydrateApiConfigFromIdb 判断能否整体覆盖 */
+    apiConfigDirty = true;
+
+    function persist(cfg) {
+      if (typeof global.miyaWriteLsJsonKey === 'function') {
+        global.miyaWriteLsJsonKey(API_CONFIG_KEY, cfg).catch(function () {
+          saveJson(API_CONFIG_KEY, cfg);
+        });
+      } else {
+        saveJson(API_CONFIG_KEY, cfg);
+      }
+    }
+
+    /*
+     * 落盘前先补齐磁盘上的历史字段，避免用空底覆盖。
+     * 若同步路径已经读到完整配置（common case），这里直接落盘，行为与旧版一致。
+     */
+    baseApiConfigForWrite().then(function (base) {
+      var merged = Object.assign({}, base, optimistic);
+      apiConfigCache = merged;
+      persist(merged);
+    }).catch(function () {
+      persist(optimistic);
+    });
   }
 
   global.miyaGetApiConfigCached = getApiConfig;
@@ -198,6 +281,9 @@
   global.miyaInvalidateApiConfigCache = function () {
     apiConfigCache = null;
     apiConfigHydrated = false;
+    /* 外部数据被整体替换（清空存储 / 导入备份 / 云同步拉取），
+       本会话的「已改动」标记随之作废，否则水合会拿旧内存压掉新数据。 */
+    apiConfigDirty = false;
     hydrateApiConfigFromIdb();
   };
 
@@ -1003,6 +1089,7 @@
     if (global.MiyaChatAlbum && global.MiyaChatAlbum.invalidateCache) global.MiyaChatAlbum.invalidateCache();
     apiConfigCache = null;
     apiConfigHydrated = false;
+    apiConfigDirty = false;
     invalidateApiPresetsCache();
     loadSystemPrefs();
     syncFormsFromConfig();

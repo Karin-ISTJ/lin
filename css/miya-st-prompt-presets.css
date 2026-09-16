@@ -347,6 +347,8 @@ body.stp-is-dragging { user-select: none; }
 .stp-gen-grid input[type="number"] { box-sizing:border-box; width:100%; border:1px solid rgba(0,0,0,.12); border-radius:8px; background:#fff; padding:7px 8px; font:inherit; font-size:12px; }
 .stp-gen-check { display:flex !important; flex-direction:column; justify-content:flex-start; }
 .stp-gen-check input { width:20px; height:20px; margin:2px 0 0; }
+/* 只读状态项：请求层固定非流式，这里只说明事实，不提供切换 */
+.stp-gen-readonly .stp-gen-badge { display:inline-block; margin:2px 0 0; padding:2px 8px; border-radius:999px; background:rgba(0,0,0,.06); color:rgba(0,0,0,.6); font-size:11px; line-height:1.6; }
 .stp-gen-grid small { display:block; margin-top:4px; font-size:9px; color:rgba(0,0,0,.4); line-height:1.3; }
 @media (max-width: 700px) {
   .stp-entry-top { grid-template-columns: 1fr 1fr; }

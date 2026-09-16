@@ -4112,9 +4112,24 @@
                 if (stGen.topP != null) reqPayload.top_p = Number(stGen.topP);
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
-                /* 请求层固定走非流式（fetchChatCompletion 按非流式解析 body），
-                   所以这里恒为 false。ST 预设里的「流式」开关只影响文案展示，
-                   不再对外宣称可切换——详见 miya-st-prompt-presets-app.js 的摘要文案。 */
+                /*
+                 * ⚠️ 这里固定非流式，是**当前实现的限制**，不是有意设计。
+                 *
+                 * 原因：本引擎走的是自己这套 fetchChatCompletion，按整体 JSON
+                 * 解析响应，没有接 miya-api-bridge 里那套 SSE 读取能力。
+                 * 所以 ST 预设里的「流式」开关无法在此生效。
+                 *
+                 * 相应地，UI 上那个开关已改成只读状态展示，不再让用户
+                 * 误以为可以切换 —— 见 miya-st-prompt-presets-app.js 与 index.html。
+                 *
+                 * 要真正支持流式，需要改造：
+                 *   1. SSE 分帧读取（getReader + 解析 data: 帧）
+                 *   2. 增量拼接 replyRaw
+                 *   3. 思考块（<thinking>）的实时剥离
+                 *   4. 断流重试与 AbortSignal 处理
+                 *   5. 气泡渲染的增量更新
+                 * 在完成这些之前，保持 false 是唯一正确的值。
+                 */
                 reqPayload.stream = false;
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1, genSignal).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');

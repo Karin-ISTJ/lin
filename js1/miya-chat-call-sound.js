@@ -45,6 +45,9 @@
   var loopTimer = null;
   var activeNodes = [];
   var activeKind = '';
+  /* 文件型铃声的 <audio> 元素，stop() 时要能立刻掐断 */
+  var activeAudio = null;
+  var audioTimer = null;
 
   /* 频率常量，按音名命名便于调音时对照 */
   var C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99, A5 = 880.0;
@@ -131,6 +134,25 @@
         [440.0, 0.0, 0.2, 0.1]
       ]
     }
+  };
+
+  /*
+   * ── 文件型铃声（来电）─────────────────────────────────────────
+   *
+   * voiceCall / videoCall 现在都用同一个真实音频文件，而不是现场合成。
+   *
+   * 为什么语音和视频来电用同一个音 ——
+   * 原来两者不同（videoCall 三音上行更明亮），本意是「听声辨类型」。
+   * 但那点区分价值有限：接电话时人是看屏幕的，不是靠耳朵猜。
+   * 既然用户点名要这个音，让它成为统一来电铃更符合预期。
+   *
+   * gap：响完一轮后静默多久（秒）。
+   * 真实电话铃是「响一阵、停一下」而不是连续蜂鸣 ——
+   * 和音本身 1 秒，配 2 秒静默，节奏是 3 秒一轮，听着不催命。
+   */
+  var FILE_LOOPS = {
+    voiceCall: { url: 'audio/msg-heyin.mp3', gap: 2.0 },
+    videoCall: { url: 'audio/msg-heyin.mp3', gap: 2.0 }
   };
 
   /*
@@ -239,19 +261,32 @@
    * 重复调用同一个 kind 是幂等的，不会叠加出两轨。
    * 换成不同 kind 会先停掉旧的。
    *
+   * 两种循环实现按音源分流：
+   *   文件型（来电）—— <audio> 播完一轮，等 gap 秒再播一轮
+   *   合成型（去电）—— Web Audio 每 span 秒重放一次音符表
+   *
+   * 没有用 <audio loop> 属性，因为要的是「响一段、停一段」，
+   * 而 loop 是无缝接续。间隙得自己用定时器控制。
+   *
    * @param {string} kind voiceCall | videoCall | outgoing
    */
   function startLoop(kind) {
     if (isMuted()) return Promise.resolve();
-    if (!PATTERNS[kind]) return Promise.resolve();
-    /* 同类已在循环 → 不重启，避免铃声被打断重来 */
-    if (activeKind === kind && loopTimer) return Promise.resolve();
+    var fileLoop = FILE_LOOPS[kind];
+    if (!fileLoop && !PATTERNS[kind]) return Promise.resolve();
+    /* 同类已在循环 → 不重启，避免铃声被打断重来。
+       判据同 isLooping()，看 activeKind 而不是定时器 ——
+       文件型铃声在「第一轮播放中」和「刚播完的空档」都没定时器，
+       按定时器判会导致这两个时刻被当成没在响，铃声被重复启动、叠成两轨。 */
+    if (activeKind === kind) return Promise.resolve();
 
     stop();
 
     return unlock().then(function () {
       if (isMuted()) return;
       activeKind = kind;
+      if (fileLoop) return startFileLoop(kind, fileLoop);
+
       playPattern(kind);
       var span = PATTERNS[kind].span;
       loopTimer = setInterval(function () {
@@ -265,19 +300,94 @@
           if (!isMuted() && activeKind === kind) playPattern(kind);
         });
       }, span * 1000);
+    }).catch(function () {
+      /* 启动失败要把标志清掉，否则上面那条幂等判断会把后续
+         重试请求全挡回去，铃声永久静默 */
+      if (activeKind === kind) activeKind = '';
     });
+  }
+
+  /*
+   * 文件型铃声的一轮：播音频 → 播完等 gap 秒 → 再播。
+   *
+   * 用 'ended' 事件驱动而不是固定间隔 —— mp3 实际时长会因解码有
+   * 几十毫秒出入，固定间隔久了会累积漂移，听着节奏越来越乱。
+   */
+  function startFileLoop(kind, cfg) {
+    function playRound() {
+      if (isMuted() || activeKind !== kind) return;
+      var audio;
+      try {
+        audio = new Audio(cfg.url);
+      } catch (e) {
+        /* 构造不出来（环境不支持 Audio）→ 直接退回合成铃，
+           别让用户面对一个完全静默的来电 */
+        playPatternFallback(kind);
+        audioTimer = setTimeout(playRound, (cfg.gap + 1) * 1000);
+        return;
+      }
+      activeAudio = audio;
+      audio.volume = 0.85;
+      audio.onended = function () {
+        if (activeAudio === audio) activeAudio = null;
+        if (isMuted() || activeKind !== kind) return;
+        audioTimer = setTimeout(playRound, cfg.gap * 1000);
+      };
+      var p = audio.play();
+      /* 自动播放被拦时不要卡死循环：退化成合成铃保底 */
+      if (p && typeof p.catch === 'function') {
+        p.catch(function () {
+          if (activeAudio === audio) activeAudio = null;
+          if (activeKind !== kind) return;
+          playPatternFallback(kind);
+          audioTimer = setTimeout(playRound, (cfg.gap + 1) * 1000);
+        });
+      }
+    }
+    playRound();
+  }
+
+  /*
+   * 音频播不出来时的兜底：退回该 kind 原本的合成音。
+   *
+   * 场景：文件被缓存策略挡掉、格式不支持、或自动播放被浏览器拦。
+   * 宁可响个次一等的铃，也不要让用户面对一个完全静默的来电 ——
+   * 那是「漏接电话」级别的体验事故。
+   */
+  function playPatternFallback(kind) {
+    var fallback = kind === 'videoCall' ? PATTERNS.videoCall : PATTERNS.voiceCall;
+    if (!fallback) return;
+    var c = getCtx();
+    if (!c) return;
+    for (var i = 0; i < fallback.notes.length; i++) {
+      var n = fallback.notes[i];
+      tone(c, n[0], n[1], n[2], n[3], fallback.wave);
+    }
   }
 
   /**
    * 立即停止所有循环音效，并掐掉正在响的音符。
    *
    * 用 stop(0) 而不是等自然结束 —— 挂断那一刻铃声必须断干净，
-   * 拖半秒的尾音听感很怪。
+   * 拖半秒的尾音听感很怪。文件型铃声同理，pause 之后要把 src 清掉，
+   * 否则有些浏览器会继续缓冲、占着音频通道。
    */
   function stop() {
     if (loopTimer) {
       clearInterval(loopTimer);
       loopTimer = null;
+    }
+    if (audioTimer) {
+      clearTimeout(audioTimer);
+      audioTimer = null;
+    }
+    if (activeAudio) {
+      try {
+        activeAudio.pause();
+        activeAudio.removeAttribute('src');
+        activeAudio.load();
+      } catch (e) {}
+      activeAudio = null;
     }
     activeKind = '';
     for (var i = 0; i < activeNodes.length; i++) {
@@ -306,9 +416,15 @@
 
   /**
    * 是否存在正在循环的铃声。
+   *
+   * 判据用 activeKind，而不是「有没有定时器」——
+   * 文件型铃声有两种「正在响但还没有定时器」的时刻：
+   *   · 第一轮刚开始播（音频还在播，还不该挂定时器）
+   *   · 音频播完那一刻（旧定时器已清，新定时器还没挂）
+   * 只查定时器会把这两段误判成「没在响」。
    */
   function isLooping() {
-    return !!loopTimer;
+    return !!activeKind;
   }
 
   /**
@@ -342,6 +458,8 @@
     isMuted: isMuted,
     release: release,
     /* 暴露供设置面板列出可选音效 */
-    PATTERNS: PATTERNS
+    PATTERNS: PATTERNS,
+    /* 文件型循环定义（来电铃），供自动化测试断言音源与间隙 */
+    FILE_LOOPS: FILE_LOOPS
   };
 })(window);
