@@ -895,49 +895,18 @@
         render();
     }
 
-    function renderSheetOpeningPresetList(contactId) {
-        var st = chatStore();
-        var contact = st && st.findContact ? st.findContact(contactId) : null;
-        var presets = openingPresetRowsForContact(contact);
-        if (!presets.length) {
-            return '<p class="xw-opening-sheet__empty">暂无预设</p>';
-        }
-        return presets
-            .map(function (p) {
-                /*
-                 * 调参抽屉里也【完整展示】正文。
-                 * 以前压成单行 64 字，用户在这里根本认不出两条相似的开场白，
-                 * 更没法判断该删哪条 —— 这个列表正是用来管理预设的，必须看得全。
-                 */
-                var full = String(p.content || '').trim();
-                var body = esc(full).replace(/\n/g, '<br>');
-                /*
-                 * 来自联系人档案的行是只读的 —— 它归「联系人」App 管，
-                 * 在调参里删不掉，也不该删（下次进来又会从档案里读出来）。
-                 * 用户要改就去联系人 App 的档案编辑页改，改完这里立刻同步。
-                 */
-                var delBtn = p.fromProfile
-                    ? '<span class="xw-opening-sheet__src">档案</span>'
-                    : '<button type="button" class="xw-opening-sheet__del" data-ap-opening-preset-del="' +
-                      esc(p.id) +
-                      '" aria-label="删除">×</button>';
-                return (
-                    '<div class="xw-opening-sheet__row" data-ap-opening-preset="' +
-                    esc(p.id) +
-                    '">' +
-                    '<div class="xw-opening-sheet__copy">' +
-                    '<strong>' +
-                    esc(p.name) +
-                    '</strong>' +
-                    '<span class="xw-opening-sheet__body">' +
-                    body +
-                    '</span></div>' +
-                    delBtn +
-                    '</div>'
-                );
-            })
-            .join('');
-    }
+    /*
+     * renderSheetOpeningPresetList() 已删除。
+     *
+     * 它只服务于调参抽屉里那块「开场白预设」面板（列表 + 删除按钮），
+     * 而那块面板因为与联系人 App 的档案开场白重复、且挤占抽屉纵向空间，
+     * 已从界面上移除 —— 于是这个函数没有任何调用方了。
+     *
+     * 注意别把它和下面这些混淆，它们【都还在用】：
+     *   - renderOpeningPicker()        新场景首屏的「选择开场白」
+     *   - openingPresetRowsForContact() 选择器读的数据源
+     *   - contactProfileGreetingRows()  联系人档案 greetings 的桥接
+     */
 
     function ensureChatForContact(contactId) {
         var st = chatStore();
@@ -4003,14 +3972,21 @@ function renderWriter() {
             })() +
             '</select>' +
             '<p class="xw-field__hint">关则每轮不要求输出状态（单人/多人共用）</p></div>' +
-            '<div class="xw-field xw-field--panel"><label>开场白预设</label>' +
-            '<p class="xw-field__hint">按当前角色保存；新场景选用后作为系统上下文首条，非任一方气泡。</p>' +
-            '<div class="xw-opening-sheet__list" id="xw-opening-preset-list">' +
-            renderSheetOpeningPresetList(chat.contactId) +
-            '</div>' +
-            '<input type="text" id="xw-opening-preset-name" class="xw-wb-add" placeholder="预设名称" maxlength="32">' +
-            '<textarea id="xw-opening-preset-content" class="xw-opening-sheet__input" rows="4" placeholder="场景、氛围或前情…"></textarea>' +
-            '<button type="button" class="xw-btn" id="xw-opening-preset-add">存为开场白预设</button></div></section>' +
+            /*
+             * 「开场白预设」面板已从这里移除。
+             *
+             * 原因：它和联系人 App 档案里的「开场白」功能重复，而且位置在调参抽屉
+             * 底部 —— 预设一多，整个抽屉要下滑很久才能摸到下面的「额外挂世界书」
+             * 和「本卷纪要」。维护入口收敛到联系人 App 一处即可：在那里加/改，
+             * 线下「选择开场白」首屏会自动读到（见 contactProfileGreetingRows 的桥接）。
+             *
+             * ⚠️ 注意：删掉的只是【手工预设的管理界面】。
+             * 下面这些【都还在】、都还要用，别一起删了：
+             *   - renderOpeningPicker()          新场景首屏的「选择开场白」
+             *   - openingPresetRowsForContact()  选择器读的数据（档案 + 手工预设合并）
+             *   - contactProfileGreetingRows()   把联系人档案 greetings 桥接过来
+             */
+            '</section>' +
             '<section class="xw-manga-panel">' +
             '<div class="xw-field xw-field--panel"><label>额外挂世界书</label>' +
             '<div class="xw-wb-list" id="xw-wb-list">' +
@@ -4224,55 +4200,15 @@ function renderWriter() {
         }
         bindSumActions();
 
-        function refreshOpeningPresetList() {
-            var el = $('xw-opening-preset-list');
-            if (el && chat && chat.contactId) {
-                el.innerHTML = renderSheetOpeningPresetList(chat.contactId);
-            }
-            bindOpeningPresetActions();
-        }
-
-        function bindOpeningPresetActions() {
-            sheet.querySelectorAll('[data-ap-opening-preset-del]').forEach(function (btn) {
-                btn.onclick = function () {
-                    var pid = btn.getAttribute('data-ap-opening-preset-del');
-                    dialog({
-                        mode: 'confirm',
-                        title: '删除开场白预设',
-                        message: '确定删除这条开场白预设？',
-                        confirmText: '删除',
-                        cancelText: '取消'
-                    }).then(function (ok) {
-                        if (!ok || !chat || !chat.contactId) return;
-                        apStore().deleteContactOpeningPreset(chat.contactId, pid);
-                        refreshOpeningPresetList();
-                        toast('已删除');
-                    });
-                };
-            });
-        }
-        bindOpeningPresetActions();
-
-        var openingAddBtn = $('xw-opening-preset-add');
-        if (openingAddBtn) {
-            openingAddBtn.addEventListener('click', function () {
-                if (!chat || !chat.contactId) return;
-                var name = String(($('xw-opening-preset-name') || {}).value || '').trim();
-                var content = String(($('xw-opening-preset-content') || {}).value || '').trim();
-                if (!content) {
-                    toast('请输入开场白内容');
-                    return;
-                }
-                apStore().upsertContactOpeningPreset(chat.contactId, {
-                    name: name || '开场白',
-                    content: content
-                });
-                if ($('xw-opening-preset-name')) $('xw-opening-preset-name').value = '';
-                if ($('xw-opening-preset-content')) $('xw-opening-preset-content').value = '';
-                refreshOpeningPresetList();
-                toast('开场白预设已保存');
-            });
-        }
+        /*
+         * 「开场白预设」的增删绑定已随之移除：
+         *   refreshOpeningPresetList() / bindOpeningPresetActions() / 存为预设按钮
+         * 那三块代码服务的 DOM（#xw-opening-preset-list / -name / -content / -add）
+         * 已经不在抽屉里，留着只会是永不命中的空绑定。
+         *
+         * 数据接口（apStore().getContactOpeningPresets / upsert / delete）保留在 store 层：
+         * 历史数据还在，且「选择开场白」的合并逻辑仍会把已有预设读出来展示。
+         */
 
         $('mol-params-save').addEventListener('click', function () {
             if (persistPresetFromForm()) toast('已保存当前角色参数');

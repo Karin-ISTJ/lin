@@ -1374,96 +1374,16 @@
   background: rgba(0, 0, 0, 0.05);
 }
 
-.xw-opening-sheet__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.xw-opening-sheet__empty {
-  margin: 0 0 8px;
-  font-size: 11px;
-  color: var(--xw-soft);
-}
-
-.xw-opening-sheet__row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.xw-opening-sheet__copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.xw-opening-sheet__copy strong {
-  display: block;
-  font-size: 11px;
-  margin-bottom: 2px;
-}
-
-.xw-opening-sheet__copy span {
-  display: block;
-  font-size: 10px;
-  line-height: 1.5;
-  color: var(--xw-soft);
-  word-break: break-word;
-}
-
-/* 抽屉里的正文：完整展示，最多滚动，不截断 */
-.xw-opening-sheet__body {
-  max-height: 132px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.xw-opening-sheet__del {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--xw-soft);
-}
-
-/* 来自「联系人」档案的开场白：只读标记，替代删除按钮 */
-.xw-opening-sheet__src {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
-  font-size: 10px;
-  line-height: 1.6;
-  letter-spacing: 0.06em;
-  color: var(--xw-soft);
-  white-space: nowrap;
-}
-
-.xw-opening-sheet__input {
-  display: block;
-  width: 100%;
-  margin: 8px 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  border-radius: 0;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.6;
-  resize: vertical;
-  box-sizing: border-box;
-}
+/*
+ * .xw-opening-sheet__* 系列（—— 原「调参抽屉 · 开场白预设」面板的样式）已全部删除。
+ *
+ * 那一整块面板（列表 / 只读「档案」标记 / 删除按钮 / 名称输入 / 正文输入）
+ * 因为与联系人 App 的档案开场白功能重复、且把调参抽屉撑得很长，已从界面移除。
+ * 样式随之清掉，避免留下永远命不中的规则。
+ *
+ * ⚠️ 别和 .xw-opening-pick__* 搞混 —— 那是【新场景首屏「选择开场白」】的样式，
+ *    上面不远处，仍然在用，不要删。
+ */
 
 /* ── 正文符号美化（基础；主题再覆写） ── */
 .xw-deco {
