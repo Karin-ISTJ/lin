@@ -2134,8 +2134,47 @@
                         }
                     }
                     if (lastAsst) {
-                        var prevSwipes = Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
-                        if (!prevSwipes.length && lastAsst.content) prevSwipes.push(String(lastAsst.content));
+                        /*
+                         * ── 这一版旧内容，要不要留成候选？──
+                         *
+                         * 由调用方决定（handlers.keepRegenCandidate）。
+                         * 两种刷新入口对用户的承诺不同，这是本次新增的分野：
+                         *
+                         *   · keepRegenCandidate = true（默认）——
+                         *     「楼层右下角的 ›」。语义是「多来一版」，
+                         *     旧的那一版必须留得住，用户还能用 ‹ 翻回去。
+                         *
+                         *   · keepRegenCandidate = false ——
+                         *     「删除键旁边的刷新键」。语义是「这一版不要了，
+                         *     重写」。此时旧内容既不进候选、也不再占 swipes 的位，
+                         *     刷完就是干干净净的一版。
+                         *
+                         * 为什么这个开关必须落在引擎而不是调用方：
+                         *   写 swipes 的动作就发生在这里（下面那几行），
+                         *   调用方在调用前根本还没有新内容可以填。
+                         *   调用方唯一能做的就是「别把旧内容塞进来」，
+                         *   所以开关只能由调用方传、在这里生效。
+                         */
+                        var keepCand = handlers.keepRegenCandidate !== false;
+                        var prevSwipes = keepCand && Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
+                        /*
+                         * 当前正文是否要补成第一个候选。
+                         *
+                         * 两个条件缺一不可：
+                         *   · keepCand —— 不保留就别补；
+                         *   · !lastAsst.deleted —— 行没被软删，正文就是「当前正显示的那一版」。
+                         *
+                         * 第二个条件看着别扭，其实是「推翻旧实验」：
+                         * 早先的做法是「不管行是死是活，只要有正文就补成候选」，
+                         * 于是从 > 键刷新（那时旧行已软删）也会把旧版留下 ——
+                         * 用户点的明明是「不留」，翻 ‹ 却还能看到它。
+                         * 反过来说，直接调用引擎（不经过 regenerateAssistantFloor）
+                         * 的老路径因为没软删，正文仍在、deleted 仍是 false，
+                         * 补候选的行为和以前完全一致，不会退化。
+                         */
+                        if (keepCand && !lastAsst.deleted && !prevSwipes.length && lastAsst.content) {
+                            prevSwipes.push(String(lastAsst.content));
+                        }
                         /*
                          * 追加候选并裁剪。
                          *
@@ -2261,6 +2300,17 @@
          */
         if (handlers.regenerateAttempt == null) {
             handlers.regenerateAttempt = Math.max(1, Math.floor(Number(regenOpts.attempt) || 1));
+        }
+        /*
+         * 旧版要不要留成候选。
+         *
+         * 必须显式写进 handlers —— runAppointmentCompletion 只认 handlers，
+         * 它看不到这里的 regenOpts。漏掉这一句的表现很隐蔽：
+         * 「不保留」的刷新键行为上会退化成「保留」，
+         * 因为下游读不到标记、走了默认的 true 分支。
+         */
+        if (regenOpts.keepRegenCandidate != null && handlers.keepRegenCandidate == null) {
+            handlers.keepRegenCandidate = regenOpts.keepRegenCandidate !== false;
         }
         if (handlers.onStatus) handlers.onStatus('generating');
         return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {

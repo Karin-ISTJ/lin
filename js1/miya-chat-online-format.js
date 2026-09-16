@@ -1583,7 +1583,52 @@
         /^(?:引用|语音|图片|位置|转账|转账回执|外卖|送礼|情诗|旁(?:白)?|发起语音通话|发起视频通话|【发朋友圈)[-－—]/;
     var RE_RT_HEART_VOICE =
         /^(?:好感度|欲望值|行为动作|角色心声)\s*[-－—：:]/;
-    var RE_RT_META_TAG = /^<\/?(?:thinking|miyavoice|miyanextpush|think|redacted_thinking|reasoning)>|\[?\/?(?:thinking|think|miyavoice|miyanextpush|heartvoice|正文|主体|回复)\]?$|【?\/?(?:thinking|正文|主体)】?$/i;
+    /*
+     * 结构标记行的识别。
+     *
+     * ⚠️ 这里必须把每一支都单独锚定，不能把 ^ / $ 只挂在整条正则的两头。
+     *
+     * 旧写法是：
+     *   /^<\/?(?:thinking|...)>|\[?\/?(?:...|正文|主体|回复)\]?$|【?\/?(?:...|正文|主体)】?$/i
+     * 三支用 | 并列，而 ^ 只作用于第一支、$ 只作用于第二三支的**行尾**。
+     * JS 没有「整条表达式两端锚定」这种语法糖 —— 于是中间那一支实际等价于
+     * 「行内任意位置出现 正文 / 主体 / 回复 等词」，只要该词后面接的行尾
+     * 能被 $ 匹配上即可。
+     *
+     * 后果不是漏判而是**误杀**：角色正常说一句
+     *   「他把伞收好，转身走进正文里。」
+     * 因为含有「正文」二字被判成结构标记，整行被丢掉，
+     * 线下楼层里就直接变成空白楼层（renderStoryLines 拿不到 body 就整层不渲染）。
+     * 这类句子在正常剧情里毫不罕见，属于必然踩中的坑。
+     *
+     * 现在每支各带自己的 ^…$，语义回到「**整行**就是一个标记」，
+     * 该拦的 [正文]、[/thinking]、【主体】 一个不少，正常句子不再被吃掉。
+     */
+    var RE_RT_META_TAG = new RegExp(
+        '^(?:' +
+            /* 思维链 / 心声等尖括号标签整行 */
+            '<\\/?\\s*(?:thinking|think|miyavoice|miyanextpush|heartvoice|redacted_thinking|reasoning)\\s*>' +
+            '|' +
+            /* 方括号形式：可选闭合斜杠，[正文] [/thinking] 之类 */
+            '\\[\\s*\\/?\\s*(?:thinking|think|miyavoice|miyanextpush|heartvoice|正文|主体|回复)\\s*\\]' +
+            '|' +
+            /* 全角方括号形式 */
+            '［\\s*\\/?\\s*(?:thinking|think|miyavoice|miyanextpush|heartvoice|正文|主体|回复)\\s*］' +
+            '|' +
+            /* 直角引号 / 书名号形式 */
+            '【\\s*\\/?\\s*(?:thinking|think|miyavoice|miyanextpush|heartvoice|正文|主体|回复)\\s*】' +
+            '|' +
+            /*
+             * 无包裹的孤立标记词：整行**只有**「正文」「主体」这种词。
+             *
+             * 模型偶尔把段落标题单独写成一行，不带任何括号。
+             * 这里必须用 ^…$ 卡死整行，否则又会退回到「只要含这两个字就丢」
+             * 的误杀老路上去 —— 正是上面那段说明里要修的问题。
+             */
+            '(?:正文|主体)' +
+            ')$',
+        'i'
+    );
 
     /** 模型泄漏的结构标记行（[正文]、[/thinking] 等），不应进入聊天气泡 */
     function isStructuralLeakLine(line) {

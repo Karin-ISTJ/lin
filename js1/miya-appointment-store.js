@@ -370,11 +370,38 @@
         if (row.openingPresetId) out.openingPresetId = String(row.openingPresetId || '').trim();
         var castMirrors = normalizeCastMirrors(row.castMirrors);
         if (castMirrors) out.castMirrors = castMirrors;
-        /* 线下楼层 Swipe 候选 */
-        if (Array.isArray(row.swipes) && row.swipes.length) {
-            out.swipes = row.swipes.map(function (x) { return String(x == null ? '' : x); });
-            var sid = Number(row.swipeId);
-            out.swipeId = Number.isFinite(sid) ? Math.max(0, Math.min(out.swipes.length - 1, Math.floor(sid))) : out.swipes.length - 1;
+        /*
+         * 线下楼层 Swipe 候选。
+         *
+         * ⚠️ 这里必须区分「没传 swipes」和「传了个空数组」——
+         * 两者语义完全相反，早先只用 `row.swipes.length` 一个条件判，
+         * 把它们混成了一种：
+         *
+         *   · 没传（undefined/null）→ 「这次别动候选表」，沿用旧值。
+         *     这是绝大多数 patch 的形态（改 content、改 hidden…），
+         *     绝不能顺手把候选清掉。
+         *
+         *   · 传了空数组           → 「候选全部作废」，显式清空。
+         *     这是「删除键旁边的刷新键」那条路径要的行为：用户说了
+         *     不保留这一版，翻 ‹ 就不该还能翻出来。
+         *
+         * 旧写法下空数组因为 length 为 0 被跳过，Object.assign 于是保留
+         * 了**旧候选表** —— 表现就是「点了不保留的刷新，旧版本还挂在
+         * 候选里」，和用户的要求正好相反。所以这里按「传没传」而不是
+         * 「长不长」来分流。
+         */
+        if (Array.isArray(row.swipes)) {
+            if (row.swipes.length) {
+                out.swipes = row.swipes.map(function (x) { return String(x == null ? '' : x); });
+                var sid = Number(row.swipeId);
+                out.swipeId = Number.isFinite(sid)
+                    ? Math.max(0, Math.min(out.swipes.length - 1, Math.floor(sid)))
+                    : out.swipes.length - 1;
+            } else {
+                /* 显式清空：候选表归零，当前版就是唯一一版（swipeId 0） */
+                out.swipes = [];
+                out.swipeId = 0;
+            }
         }
         return out;
     }
@@ -2069,8 +2096,26 @@
             if (!sess) return null;
             var idx = sess.messages.findIndex(function (m) { return m.id === messageId; });
             if (idx < 0) return null;
+            /*
+             * ⚠️ 补上 role。
+             *
+             * normalizeMessage 对缺失的 role 是**兜底成 'user'**，不是报错。
+             * 而这里走的是 Object.assign(旧行, patch) —— 调用方几乎都只传
+             * 要改的那几个字段（改 content、改 hidden、改 swipes…），
+             * 于是合并出来的对象**没有 role**，落进 normalizeMessage 就被
+             * 判成了 'user'：
+             *
+             *   · 角色楼层被 updateMessage 一改就变成「我发的消息」，
+             *     渲染时换了气泡方向，候选切换键也一并消失
+             *     （offlineSwipeBarHtml 只给 assistant 出键）；
+             *   · 而且是静默的 —— 改一次内容，楼层就换了身份。
+             *
+             * 补一句把旧行的 role 显式带上，patch 想改 role 时仍然能改
+             * （patch 在后，优先级更高）。这是修一个已有的数据损坏点，
+             * 不是为本次的新功能打的补丁。
+             */
             sess.messages[idx] = normalizeMessage(
-                Object.assign({}, sess.messages[idx], patch || {}, { editedAt: Date.now() })
+                Object.assign({}, sess.messages[idx], { role: sess.messages[idx].role }, patch || {}, { editedAt: Date.now() })
             );
             store._writeSession(sess);
             /*

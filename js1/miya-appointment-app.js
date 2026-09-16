@@ -610,25 +610,37 @@
     }
 
     /*
-     * 「我发的消息」楼层上的刷新键。
+     * 楼层工具行里的「刷新」键。
      *
-     * 为什么只给 user 楼层、assistant 楼层不给：
+     * 设计约定（本次改动定下的分工，两个主题、两种角色一律遵守）：
      *
-     *   角色楼层的重刷入口是右下角的 ‹ › —— 那里既是「再生成一版」
-     *   也是「翻看已有候选」，语义完整、位置也贴着这一层。再塞一个刷新键
-     *   就是同一层两个做同一件事的按钮，正是这次要清理掉的那种重复。
+     *   · 点**右下角的 ›**  → 保留当前这一版（存成候选），重刷本层；
+     *     用户可以再用 ‹ 翻回旧版。
      *
-     *   而我发的消息楼层**没有**候选表这个概念（没有人会要「我这句的
-     *   另一个版本」），但它在一种情况下必须能重刷：上一轮生成失败时，
-     *   最新楼层就停在这条 user 上，屏上再没有别的入口可以「重试」。
-     *   此时这个键的预期行为是「保留我这句话，让角色重新答一次」——
-     *   对应 regenerateAfterUserFloor()。
+     *   · 点**这里的刷新键** → 不保留。这一版就是不要了，重写一版干净的。
+     *
+     * 两者都复用一个按钮外观，靠 data-ap-msg-refresh 携带的 keep 标记分流，
+     * 不需要两个视觉上无法区分的图标。
+     *
+     * 为什么 user 楼层也要有：上一轮生成失败时，最新楼层就停在
+     * 「我发的那条」上，屏上再没有别的入口可以「重试」。此时这个键的
+     * 预期行为是「保留我这句话，让角色重新答一次」—— 对应
+     * regenerateAfterUserFloor()，和角色楼层走的是另一条路径。
      */
-    function refreshToolHtml(msgId) {
+    function refreshToolHtml(msgId, keep) {
+        /* keep === undefined 的老调用方式按「保留」处理，保持向后兼容 */
+        var keepVersion = keep !== false;
+        var title = keepVersion
+            ? '刷新这一层（保留这一版，重新生成）'
+            : '刷新这一层（不保留这一版，重新生成）';
         return (
             '<button type="button" class="xw-block__tool" data-ap-msg-refresh="' +
             esc(msgId) +
-            '" title="刷新这一层（保留这条消息，重新生成）" aria-label="刷新">' +
+            '" data-ap-refresh-keep="' +
+            (keepVersion ? '1' : '0') +
+            '" title="' +
+            title +
+            '" aria-label="刷新">' +
             ICON_REFRESH +
             '</button>'
         );
@@ -1526,8 +1538,13 @@
                 ICON_EDIT +
                 '</button>' +
                 resendToolHtml(m.id) +
-                /* 我发的消息额外给一个刷新键：生成失败后最新楼层会停在它上面 */
-                (isUser ? refreshToolHtml(m.id) : '') +
+                /*
+                 * 刷新键，两种楼层各按自己的语义给：
+                 *   · 我发的消息 → 保留这条，在后面生成新楼层；
+                 *   · 角色楼层   → 不保留这一版，就地重写（keep=false）。
+                 * 角色楼层的「保留版」入口在右下角的 ›，两者分工见 refreshToolHtml。
+                 */
+                (isUser ? refreshToolHtml(m.id, true) : refreshToolHtml(m.id, false)) +
                 '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
                 esc(m.id) +
                 '" title="删除" aria-label="删除">' +
@@ -1588,10 +1605,11 @@
     /**
      * 楼层右下角的候选切换键。
      *
-     * 三种形态：
+     * 三种形态（括号里是 › 此刻真正会做的事，写进 title 提示）：
      *
-     *   只有 1 条内容（还没刷过）  →  只显示 [›]，点它**生成**一个新候选
-     *   有 2 条以上                →  [‹ 2 / 3 ›]，‹ › 用来**翻看**已有候选
+     *   只有 1 条内容（还没刷过）  →  只显示 [›]（点上 = 生成新的一版）
+     *   有 2 条以上、不在最后一版  →  [‹ 2 / 3 ›]（› = 翻到下一版）
+     *   有 2 条以上、已在最后一版  →  [‹ 2 / 3 ›]（› = 生成新的一版）
      *   生成中                     →  按钮置灰、禁止重复点击
      *
      * 为什么要区分「生成」和「翻看」：
@@ -1601,12 +1619,13 @@
      * 藏得也深。
      *
      * 现在把入口摆在这一层自己的右下角：先给一个 [›]，点一下生成；
-     * 攒够两条之后它自然变成 [‹ N/M ›]，继续点 › 还能往上加候选。
-     * 「生成」和「翻看」共用同一个键，是靠**候选数量**自动切换的 ——
-     * 一条时 › 是「再生成一版」，两条以上时 › 是「看下一版」。
+     * 攒够两条之后它自然变成 [‹ N/M ›]，继续翻。
+     * 「生成」和「翻看」共用同一个键，但**不再靠候选数量猜**，
+     * 而是看当前位置：只有站在最后一版（或只有一版）时，往右才是生成。
      *
-     * 这个区分对用户是直观的：只有一版的时候，往右意味着「多来几版」；
-     * 有多版的时候，往右意味着「翻到下一版」。
+     * 这个区分对用户是直观的：还有下一版就翻过去，翻到头了再往右
+     * 就是「多来一版」。title 会跟着当前语义变，鼠标一悬停就知道
+     * 这一下点下去是翻页还是重刷。
      */
     function offlineSwipeBarHtml(m) {
         if (!m || m.role !== 'assistant') return '';
@@ -1615,19 +1634,17 @@
          * 或者刚被软删待重写。此时给它一个 › 是没有意义的。
          */
         if (!String(m.content || '').trim()) return '';
-        var swipes = Array.isArray(m.swipes) ? m.swipes : [];
-        /*
-         * 候选表可能还是空的（这一层从没刷过）。
-         * 注意此时**当前正文本身就是第 1 个候选**，只是还没归档进 swipes。
-         * 展示上按「1 条」算，才能正确决定显示单键还是双键。
-         */
-        var total = swipes.length || 1;
-        var sid = Number(m.swipeId);
-        if (!Number.isFinite(sid)) sid = swipes.length ? swipes.length - 1 : 0;
-        sid = Math.max(0, Math.min(total - 1, Math.floor(sid)));
+        var pos = swipePosition(m);
+        var swipes = pos.swipes;
+        var total = pos.total;
+        var sid = pos.sid;
         var mid = esc(m.id);
+        var atLast = total < 2 || sid >= total - 1;
 
-        /* 只有一条：单键，语义是「再生成一版」。 */
+        /*
+         * 单键形态：还没翻过，也没有候选可翻。
+         * 这一枚 › 的唯一含义就是生成。
+         */
         if (total < 2) {
             return (
                 '<div class="xw-swipe xw-swipe--single" data-ap-swipe="' + mid + '">' +
@@ -1637,14 +1654,40 @@
             );
         }
 
-        /* 两条以上：完整切换器。 */
+        /*
+         * 双键形态。› 的 title 随位置切换 ——
+         * 这两句提示是用户唯一能分辨「翻页 / 重刷」的地方，
+         * 不能两边都写成模糊的「下一个」。
+         */
+        var nextTitle = atLast ? '再生成一版（保留这一版）' : '下一个候选';
+        var prevTitle = sid <= 0 ? '已经是最早的一版' : '上一个候选';
         return (
             '<div class="xw-swipe" data-ap-swipe="' + mid + '">' +
-            '<button type="button" class="xw-swipe__btn" data-ap-swipe-prev="' + mid + '" aria-label="上一个候选">‹</button>' +
+            '<button type="button" class="xw-swipe__btn" data-ap-swipe-prev="' + mid + '" aria-label="上一个候选" title="' + prevTitle + '">‹</button>' +
             '<span class="xw-swipe__idx">' + (sid + 1) + ' / ' + total + '</span>' +
-            '<button type="button" class="xw-swipe__btn" data-ap-swipe-next="' + mid + '" aria-label="下一个候选">›</button>' +
+            '<button type="button" class="xw-swipe__btn" data-ap-swipe-next="' + mid + '" aria-label="' + nextTitle + '" title="' + nextTitle + '">›</button>' +
             '</div>'
         );
+    }
+
+    /**
+     * 读一层楼的候选位置：候选表、总版数、当前第几版。
+     *
+     * total 用 `swipes.length || 1` 而不是 `swipes.length`：
+     * 候选表可能还是空的（这一层从没刷过），但**当前正文本身就是第 1 版**，
+     * 只是还没归档进 swipes。按「1 条」算，渲染和翻页判断才不会各自跑偏。
+     *
+     * 抽成公共助手是因为这个换算要在两处保持一致：
+     * offlineSwipeBarHtml 决定画什么键，applyOfflineSwipe 决定点下去做什么。
+     * 早先两边各写一遍，任何一边改动都容易让「显示的」和「实际做的」错位。
+     */
+    function swipePosition(m) {
+        var swipes = m && Array.isArray(m.swipes) ? m.swipes : [];
+        var total = swipes.length || 1;
+        var sid = Number(m && m.swipeId);
+        if (!Number.isFinite(sid)) sid = swipes.length ? swipes.length - 1 : 0;
+        sid = Math.max(0, Math.min(total - 1, Math.floor(sid)));
+        return { swipes: swipes, total: total, sid: sid };
     }
 
     /**
@@ -1670,21 +1713,31 @@
         if (!sess) return;
         var m = (sess.messages || []).find(function (x) { return x && x.id === msgId; });
         if (!m) return;
-        var swipes = Array.isArray(m.swipes) ? m.swipes : [];
-        var total = swipes.length || 1;
-        var sid = Number(m.swipeId);
-        if (!Number.isFinite(sid)) sid = swipes.length ? swipes.length - 1 : 0;
-        sid = Math.max(0, Math.min(total - 1, Math.floor(sid)));
+        var pos = swipePosition(m);
+        var swipes = pos.swipes;
+        var total = pos.total;
+        var sid = pos.sid;
 
         /*
          * ── 分岔：› 到底该生成还是该翻页 ──
          *
-         * 只有一版时点 ›：用户想看到「另一版」，去生成。
-         * 有多版且已经看到最后一版时点 ›：同样是「没有更多可翻的了」，
-         *   与其让点击静默失败（旧实现在两端直接 return，体感就是
-         *   按钮坏了），不如理解成「再要一版」。
+         * 判据是**当前站在候选表的哪一端**，而不是简单的「有没有下一版」。
+         *
+         *   只有一版时点 ›：没有别的候选可翻，用户想看「另一版」→ 生成。
+         *   已在最后一版时点 ›：同样没有更靠后的了 → 生成新的一版。
+         *   已在第一版时点 ›：还有旧候选可翻 → 老老实实翻页。
+         *
+         * 「已在第一版」这一支原先是**生成**（条件写的是 sid>=total-1，
+         * 而 total<2 时两端重合，才掩盖了这个分支的问题）。这次明确成
+         * 「滚动而非生成」，好处是 ‹ › 真的变成一条首尾相接的环：
+         * 从头往右翻能一路看到最新，翻到底往右才追加新版。
+         *
+         * 注意这里生成时**保留旧版**（regenerateFloor 的 keepVersion
+         * 不传即 true）：› 对用户的承诺始终是「多留一版给我翻」，
+         * 和删除键旁边那个「这一版不要了」的刷新键是两件事。
          */
-        var wantGenerate = delta > 0 && (total < 2 || sid >= total - 1);
+        var atLast = total < 2 || sid >= total - 1;
+        var wantGenerate = delta > 0 && atLast;
         if (wantGenerate) {
             generateSwipeForMessage(m);
             return;
@@ -1809,8 +1862,13 @@
             ICON_EDIT +
             '</button>' +
             resendToolHtml(m.id) +
-            /* 我发的消息额外给一个刷新键：生成失败后最新楼层会停在它上面 */
-            (m.role === 'user' ? refreshToolHtml(m.id) : '') +
+            /*
+             * 刷新键，两种楼层各按自己的语义给：
+             *   · 我发的消息 → 保留这条，在后面生成新楼层；
+             *   · 角色楼层   → 不保留这一版，就地重写（keep=false）。
+             * 角色楼层的「保留版」入口在右下角的 ›，两者分工见 refreshToolHtml。
+             */
+            (m.role === 'user' ? refreshToolHtml(m.id, true) : refreshToolHtml(m.id, false)) +
             '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
             esc(m.id) +
             '" title="删除" aria-label="删除">' +
@@ -3440,16 +3498,20 @@ function renderWriter() {
     /**
      * 让指定楼层「再生成一版」。
      *
-     * 现在有两个调用方，语义各自明确：
+     * 三个调用方，语义两两不同 —— keepVersion 就是用来区分它们的：
      *
      *   · 楼层右下角的候选键 ›  —— 点在**角色楼层**上，重刷这一层自己。
-     *   · 楼层的刷新键          —— 点在**我发的消息**上（生成失败后它就
-     *     成了最新楼层），此时要「保留我发的这条、在它后面生成新楼层」，
-     *     而不是重写我自己写的话。
+     *     语义是「多来一版」，所以 **保留**旧版（keepVersion 默认 true）。
      *
-     * 后者是本次新增的能力，详见下面按 role 分流的注释。
+     *   · 删除键旁边的刷新键    —— 也在**角色楼层**上，同样是重刷这一层。
+     *     语义是「这一版不要了，重写」，所以 **不保留**旧版（false）。
+     *
+     *   · 刷新键                —— 点在**我发的消息**上（生成失败后它就
+     *     成了最新楼层），此时要「保留我发的这条、在它后面生成新楼层」，
+     *     而不是重写我自己写的话。这一条不看 keepVersion（user 楼层压根
+     *     没有候选表的概念），详见 regenerateAfterUserFloor 的注释。
      */
-    function regenerateFloor(m) {
+    function regenerateFloor(m, keepVersion) {
         if (!m || !m.id) return;
         var eng = apEngine();
         if (!eng) return;
@@ -3458,7 +3520,7 @@ function renderWriter() {
             return;
         }
         if (m.role === 'assistant') {
-            regenerateAssistantFloor(m);
+            regenerateAssistantFloor(m, keepVersion);
             return;
         }
         regenerateAfterUserFloor(m);
@@ -3472,11 +3534,12 @@ function renderWriter() {
      * 它后面的楼层不受影响（后面的内容只把这一层的**当前版**当历史，
      * 而我们要做的正是把当前这版换掉）。
      */
-    function regenerateAssistantFloor(m) {
+    function regenerateAssistantFloor(m, keepVersion) {
         if (!String(m.content || '').trim()) {
             toast('这一层还没有内容，先让它生成完');
             return;
         }
+        var keep = keepVersion !== false;
         var eng = apEngine();
         var aps = apStore();
         var attempt = Math.max(1, floorSwipeCount(m));
@@ -3495,11 +3558,23 @@ function renderWriter() {
          */
         beginWriterGeneration();
 
-        /* 归档原版 → 软删这一层。候选锚点就在这里留下。 */
-        if (aps && typeof aps.softDeleteForRegenerate === 'function') {
+        /*
+         * 归档原版 → 软删这一层。
+         *
+         * keep = true（右下角 ›）：走 softDeleteForRegenerate。
+         *   它会把当前正文归档进 swipes[0] 作为锚点，所以引擎随后
+         *   「不重复补第一条候选」的判断也认这个标记 —— 见引擎侧那段
+         *   keepRegenCandidate 的说明。
+         *
+         * keep = false（删除键旁的刷新键）：走 deleteMessage，传入
+         *   swipes: [] 顺手把候选表清空，「不保留」才是一句真话 ——
+         *   否则旧候选还挂在行上，用户翻 ‹ 依然能看到它们。
+         *   这里也**不**通过 extra 传 content，deleteMessage 自己会置 ''。
+         */
+        if (aps && keep && typeof aps.softDeleteForRegenerate === 'function') {
             aps.softDeleteForRegenerate(ui.chatId, ui.sessionId, m.id);
         } else if (aps && typeof aps.deleteMessage === 'function') {
-            aps.deleteMessage(ui.chatId, ui.sessionId, m.id);
+            aps.deleteMessage(ui.chatId, ui.sessionId, m.id, keep ? undefined : { swipes: [] });
         }
 
         /*
@@ -3519,7 +3594,12 @@ function renderWriter() {
                         ui.chatId,
                         ui.sessionId,
                         streamHandlers(),
-                        { replaceTargetId: m.id, attempt: attempt }
+                        {
+                            replaceTargetId: m.id,
+                            attempt: attempt,
+                            /* 见引擎侧 keepRegenCandidate：› 留旧版，刷新键不留 */
+                            keepRegenCandidate: keep
+                        }
                     );
                 })
                 .catch(function (err) {
@@ -3535,7 +3615,7 @@ function renderWriter() {
                 })
         );
 
-        if (hadSwipes) {
+        if (keep && hadSwipes) {
             toast('已刷新，用右下角 ‹ › 翻看各个版本');
         }
     }
@@ -5005,7 +5085,7 @@ function renderWriter() {
                     return;
                 }
                 /*
-                 * 「我发的消息」楼层的刷新键。
+                 * 楼层工具行里的「刷新」键。
                  *
                  * 和上面的「重发」只差在预期：重发会先把这条 user 之后的
                  * 楼层全清掉再重答（包括可能已经写成一半的角色回复），
@@ -5015,11 +5095,18 @@ function renderWriter() {
                  *
                  * 两者最终都把 user 本身留在原位，所以这里共用同一段
                  * 「先按 id 取活行、再判忙」的前置逻辑，不重复写。
+                 *
+                 * 角色楼层上的这个键走另一条路径：
+                 * data-ap-refresh-keep="0" 明确表示「这一版不要了」，
+                 * 由 regenerateFloor(msg, false) 传给引擎。
+                 * 想保留旧版的入口是右下角的 ›，见 refreshToolHtml 的说明。
                  */
                 var refreshBtn = e.target.closest('[data-ap-msg-refresh]');
                 if (refreshBtn) {
                     e.stopPropagation();
                     var refreshId = refreshBtn.getAttribute('data-ap-msg-refresh');
+                    /* 缺字段时按「保留」兜底，和 refreshToolHtml 的默认值对齐 */
+                    var refreshKeep = refreshBtn.getAttribute('data-ap-refresh-keep') !== '0';
                     var sessRefresh = apStore().getSession(ui.chatId, ui.sessionId);
                     var msgRefresh = sessRefresh
                         ? (sessRefresh.messages || []).find(function (m) {
@@ -5027,7 +5114,7 @@ function renderWriter() {
                           })
                         : null;
                     if (!msgRefresh || msgRefresh.role === 'system') return;
-                    regenerateFloor(msgRefresh);
+                    regenerateFloor(msgRefresh, refreshKeep);
                     return;
                 }
                 var openingDelBtn = e.target.closest('[data-ap-opening-del]');
