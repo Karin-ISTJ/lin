@@ -226,6 +226,21 @@
   color: var(--xw-soft);
 }
 
+/*
+ * 空卷宗列表的第二行提示。
+ *
+ * 卷宗列表为空时，工具栏（新建聊天 / 导入聊天）现在是照常渲染的，
+ * 所以这里要说清楚「往哪儿走」—— 以前那块 DOM 被提前 return 掉了，
+ * 用户只看到「还没有保存过的场景。」，找不到入口。
+ * 比正文再小一号、更淡，避免和主提示抢注意力。
+ */
+.xw-empty__hint {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  opacity: 0.75;
+}
+
 /* —— 选角：横向胶片 —— */
 .xw-hub {
   padding: 8px 6px 32px;

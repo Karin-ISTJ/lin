@@ -1214,28 +1214,21 @@
     function renderHistory() {
         var sessions = apStore().getSessions(ui.chatId);
         var recoverBanner = renderHistoryRecoverBanner();
-        if (!sessions.length) {
-            return '<p class="xw-empty">还没有保存过的场景。</p>' + recoverBanner;
-        }
         /*
-         * 标题只写「聊天记录」四个字。
+         * 空的卷宗列表也【必须】渲染顶部工具栏。
          *
-         * 以前这里拼的是 `角色名 · 聊天记录`，看着像在说「闻述的聊天记录」，
-         * 但卷宗列表是整段会话共用的 —— 一卷里可能同时有主角、配角、旁白，
-         * 挂某个角色的名字会让人以为是单聊，点进去发现是群戏，反而更迷惑。
-         * 角色是谁，顶部那条状态栏已经在显示了，这里重复一遍没有信息量。
+         * 以前这里是一句 `if (!sessions.length) return '<p class="xw-empty">…'`，
+         * 直接把整块 DOM 提前返回掉了 —— 连带把「新建聊天 / 导入聊天」两个按钮
+         * 一起吞了。后果是：一卷都没有的时候，页面上只剩「还没有保存过的场景。」，
+         * 而唯一能把内容弄进来的「导入聊天」入口看不见、点不着，
+         * 于是永远停在空态里出不来。
+         *
+         * 现在把工具栏提出来，空态只替换【列表那一段】——
+         * 有卷就列卷，没卷就显示提示，工具栏两种情况都在。
          */
-        return (
-            '<div class="xw-vault">' +
-            recoverBanner +
-            '<header class="xw-vault__head">' +
-            '<h2 class="xw-vault__title">聊天记录</h2>' +
-            '<div class="xw-vault__actions">' +
-            '<button type="button" class="xw-ribbon__act" id="xw-new-offline-chat">新建聊天</button>' +
-            '<button type="button" class="xw-ribbon__act" id="xw-import-offline-chat">导入聊天</button>' +
-            '</div></header>' +
-            '<div class="xw-vault__list">' +
-            sessions
+        var listHtml = sessions.length
+            ? '<div class="xw-vault__list">' +
+              sessions
                 .map(function (s, i) {
                     var n = (s.messages || []).filter(function (m) {
                         return m && !m.deleted;
@@ -1272,7 +1265,28 @@
                     );
                 })
                 .join('') +
-            '</div></div>'
+              '</div>'
+            : '<p class="xw-empty">还没有保存过的场景。' +
+              '<br><span class="xw-empty__hint">用上面的「新建聊天」开一段，或「导入聊天」把已有记录搬进来。</span></p>';
+        /*
+         * 标题只写「聊天记录」四个字。
+         *
+         * 以前这里拼的是 `角色名 · 聊天记录`，看着像在说「闻述的聊天记录」，
+         * 但卷宗列表是整段会话共用的 —— 一卷里可能同时有主角、配角、旁白，
+         * 挂某个角色的名字会让人以为是单聊，点进去发现是群戏，反而更迷惑。
+         * 角色是谁，顶部那条状态栏已经在显示了，这里重复一遍没有信息量。
+         */
+        return (
+            '<div class="xw-vault">' +
+            recoverBanner +
+            '<header class="xw-vault__head">' +
+            '<h2 class="xw-vault__title">聊天记录</h2>' +
+            '<div class="xw-vault__actions">' +
+            '<button type="button" class="xw-ribbon__act" id="xw-new-offline-chat">新建聊天</button>' +
+            '<button type="button" class="xw-ribbon__act" id="xw-import-offline-chat">导入聊天</button>' +
+            '</div></header>' +
+            listHtml +
+            '</div>'
         );
     }
 
