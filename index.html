@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="css/miya-apps.css?v=31">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=26">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=30">
+  <link rel="stylesheet" href="css/miya-settings.css?v=31">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=12">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="css/miya-chat-ins.css?v=52">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=1">
   <link rel="stylesheet" href="css/miya-chat-settings.css?v=42">
-  <link rel="stylesheet" href="css/miya-chat-album.css?v=6">
+  <link rel="stylesheet" href="css/miya-chat-album.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=10">
   <link rel="stylesheet" href="css/miya-offline-card.css?v=5">
   <link rel="stylesheet" href="css/miya-offline.css?v=67">
@@ -910,6 +910,35 @@
             <h4 class="st-form-section__title">自由生图</h4>
             <div class="st-form-card ins-form-block">
               <p class="st-form-hint">直接描述你想要的画面，无需绑定联系人即可出图</p>
+
+              <!-- ── 垫图（图生图）────────────────────────────────
+                   放在画面描述之前：先定「有没有底图」，再定「要画什么」，
+                   顺序上更符合实际操作的心智。
+                   没有垫图时不占视觉重量（只有一行标题和两个按钮）。 -->
+              <div class="miya-ig-ref" id="miya-st-ig-free-ref">
+                <div class="miya-ig-ref__head">
+                  <span class="miya-ig-ref__label">垫图（图生图）</span>
+                  <span class="miya-ig-ref__tip">可选择要参考的图片，也可直接纯文字生图</span>
+                </div>
+                <div class="miya-ig-ref__preview" id="miya-st-ig-free-ref-preview">
+                  <div class="miya-ig-ref__empty"><p>未选择垫图（当前为纯文字生图）</p></div>
+                </div>
+                <div class="miya-ig-ref__actions">
+                  <button type="button" class="st-action-btn st-action-btn--xs" id="miya-st-ig-free-ref-upload">本地上传</button>
+                  <button type="button" class="st-action-btn st-action-btn--xs" id="miya-st-ig-free-ref-album">我的相册</button>
+                  <button type="button" class="st-action-btn st-action-btn--xs" id="miya-st-ig-free-ref-clear" disabled>清空垫图</button>
+                </div>
+                <div class="miya-ig-ref__modes" id="miya-st-ig-free-ref-mode-wrap">
+                  <span class="miya-ig-ref__modes-label">垫图程度</span>
+                  <div class="miya-ig-seg" role="group" aria-label="垫图程度">
+                    <button type="button" class="miya-ig-seg__item is-on" data-ig-free-ref-mode="style" aria-pressed="true">参考风格</button>
+                    <button type="button" class="miya-ig-seg__item" data-ig-free-ref-mode="redraw" aria-pressed="false">照着重画</button>
+                  </div>
+                  <p class="miya-ig-ref__modes-hint">「参考风格」只借画风配色；「照着重画」更贴近原图构图。选中小图后这两档才生效。</p>
+                </div>
+                <p class="st-form-hint miya-ig-ref__legal">参考图仅针对支持图片输入的模型生效。严禁上传无版权、无授权的图片信息；严禁未经他人允许上传他人肖像信息。</p>
+              </div>
+
               <label class="ins-field-label" for="miya-st-ig-free-prompt">画面描述</label>
               <textarea class="ins-text-input ins-text-input--area" id="miya-st-ig-free-prompt" rows="3" placeholder="例如：黄昏的海边，一位少女提着裙摆奔跑，逆光，电影感"></textarea>
               <label class="ins-field-label" for="miya-st-ig-free-size">图片尺寸</label>
@@ -3822,7 +3851,7 @@
   <script defer src="js2/miya-lockscreen.js?v=10"></script>
   <script defer src="js1/miya-beautify-app.js?v=41"></script>
   <script defer src="js2/miya-msg-sound.js?v=1"></script>
-  <script defer src="js2/miya-image-gen.js?v=8"></script>
+  <script defer src="js2/miya-image-gen.js?v=9"></script>
   <script defer src="js2/miya-settings-app.js?v=65"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
@@ -3847,7 +3876,7 @@
   <script defer src="js1/miya-chat-memory-extract.js?v=3"></script>
   <script defer src="js1/miya-chat-translate.js?v=10"></script>
   <script defer src="js1/miya-chat-image.js?v=4"></script>
-  <script defer src="js1/miya-chat-album.js?v=11"></script>
+  <script defer src="js1/miya-chat-album.js?v=12"></script>
   <script defer src="js1/miya-chat-moments.js?v=17"></script>
   <script defer src="js1/miya-chat-wallet.js?v=3"></script>
   <script defer src="js1/miya-chat-calls.js?v=1"></script>
@@ -3862,6 +3891,7 @@
   <script defer src="js1/miya-chat-group.js?v=12"></script>
   <script defer src="js1/miya-chat-group-redpacket.js?v=9"></script>
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
+  <script defer src="js1/miya-chat-album-picker.js?v=1"></script>
   <script defer src="js1/miya-chat-group-ledger.js?v=2"></script>
   <script defer src="js1/miya-chat-group-settings.js?v=20"></script>
   <script defer src="js1/miya-appointment-store.js?v=47"></script>

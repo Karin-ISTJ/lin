@@ -1258,3 +1258,132 @@
   max-height: none;
   margin: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   相册选图器（浮层）· 供「自由生图 → 垫图 → 我的相册」使用
+   ═══════════════════════════════════════════════════════════════
+   设计取舍：
+   · 走的是**底部浮层**而不是内联展开。设置面板本身已经很长，
+     内联再插一个网格会把「生成图片」按钮推到很远；
+     浮层即用即走，不改变原面板的滚动长度。
+   · z-index 给到 **600**。
+     一开始写的是 90，理由是「要盖住设置面板（面板里有 z-index 60 的
+     相册头像面板先例）」—— 这个推理漏了最要紧的一层：
+     浮层挂在 document.body 上，而 .miya-chat-app 本身是
+     position:fixed; inset:0; **z-index:500**。
+     于是 90 被整个 App 容器盖住，肉眼完全看不见 ——
+     而 DOM 层面它是正常的（hidden=false、is-open、rect 占满屏），
+     纯逻辑断言全部通过，**只有截图能发现**。
+     600 > 500 才能浮在 App 之上；同时远低于全局对话框（12000）
+     与 toast（120000），不会被自己的提示语压住。 */
+
+.miya-album-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.miya-album-picker[hidden] {
+  display: none;
+}
+
+.miya-album-picker__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.2s ease;
+}
+
+.miya-album-picker.is-open .miya-album-picker__mask {
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.miya-album-picker__sheet {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--alb-paper, #fff);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.18);
+  transform: translateY(100%);
+  transition: transform 0.24s ease;
+  /* 底部留白：手势条/圆角屏在浮层贴底时会吃掉一行按钮 */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.miya-album-picker.is-open .miya-album-picker__sheet {
+  transform: translateY(0);
+}
+
+.miya-album-picker__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--alb-line, rgba(0, 0, 0, 0.08));
+  flex-shrink: 0;
+}
+
+.miya-album-picker__title {
+  flex: 1;
+  font-size: 15px;
+  font-family: var(--alb-serif, serif);
+}
+
+.miya-album-picker__close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--alb-ink, #333);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.miya-album-picker__body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px 16px;
+  min-height: 120px;
+}
+
+.miya-album-picker__empty {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--alb-muted, #8a8a8a);
+}
+
+.miya-album-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.miya-album-picker__cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.05);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.miya-album-picker__cell:active {
+  opacity: 0.72;
+}

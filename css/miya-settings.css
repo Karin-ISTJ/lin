@@ -1640,3 +1640,165 @@
   color: var(--st-text-quaternary, #b3b3b3);
 }
 
+
+/* ─── 自由生图的垫图（图生图）─────────────────────────────────
+   布局上刻意做成「没有垫图时几乎不占视觉重量」：
+   只有一行标题、一行说明、一个薄的预览位、三个小按钮。
+   一旦选了图，预览位才长出缩略图，用户一眼能看出「这次带了底图」。 */
+
+.miya-ig-ref {
+  margin: 2px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.018);
+}
+
+.miya-ig-ref__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.miya-ig-ref__label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.miya-ig-ref__tip {
+  font-size: 11px;
+  color: var(--st-text-tertiary, #999);
+}
+
+.miya-ig-ref__preview {
+  margin-bottom: 8px;
+}
+
+.miya-ig-ref__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+}
+
+.miya-ig-ref__empty p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--st-text-quaternary, #b3b3b3);
+}
+
+.miya-ig-ref__thumb {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.miya-ig-ref__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 「垫图」角标：换过好几张之后，光看缩略图容易忘了这是底图而不是结果图 */
+.miya-ig-ref__badge {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 1px 5px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 0 8px 0 8px;
+}
+
+.miya-ig-ref__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.miya-ig-ref__actions .st-action-btn {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.miya-ig-ref__actions .st-action-btn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.miya-ig-ref__modes-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--st-text-secondary, #666);
+}
+
+/* 分段控件：两档互斥，用 is-on 表示当前档 */
+.miya-ig-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.055);
+}
+
+.miya-ig-seg__item {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  font-size: 12px;
+  color: var(--st-text-secondary, #666);
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.miya-ig-seg__item.is-on {
+  background: #fff;
+  color: var(--st-text, #222);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* 没选垫图时整块变灰：这两档此刻没有任何作用，得让人看出来 */
+.miya-ig-ref__modes.is-disabled {
+  opacity: 0.5;
+}
+
+.miya-ig-ref__modes-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--st-text-quaternary, #b3b3b3);
+}
+
+.miya-ig-ref__legal {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 结果区的两条状态提示：走没走垫图，必须一眼看得出来 */
+.miya-ig-free-refok {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--st-text-tertiary, #999);
+}
+
+.miya-ig-free-refwarn {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #b4761b;
+}

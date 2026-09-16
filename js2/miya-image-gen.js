@@ -44,6 +44,61 @@
   var REF_LEGAL_NOTE =
     '参考图仅针对支持图片输入的模型生效。严禁上传无版权、无授权的图片信息；严禁未经他人允许上传他人肖像信息。';
 
+  /*
+   * ── 垫图（图生图）的两种「程度」───────────────────────────────
+   *
+   * 用户要的是「两种都给，界面上可切」。这里先把两档的**语义**定死，
+   * 因为两档在两条协议上的实现路径完全不同：
+   *
+   *   style（参考风格）
+   *     只借垫图的画风/配色/氛围，画面内容仍由文字描述决定。
+   *     提示词上要靠引导语（STYLE_PROMPT_HINT）来约束；
+   *     强度不宜高，否则内容会被垫图带跑。
+   *
+   *   redraw（照着重画）
+   *     让输出贴近垫图的构图与主体，文字描述只做局部修饰。
+   *     需要较高强度，提示词上也要改成「保持构图」的说法。
+   *
+   * ⚠️ 两档只在**支持强度的协议（NovelAI）**上有数值差异。
+   * OpenAI 兼容那条走 /images/edits，协议里根本没有强度字段 ——
+   * 那就只能靠提示词引导来区分两档，这是协议的硬限制，不是实现偷懒。
+   */
+  var REF_MODE_STYLE = 'style';
+  var REF_MODE_REDRAW = 'redraw';
+
+  /* 两档各自的强度与提示词引导语。缺省档 = style。 */
+  var REF_MODE_PRESETS = {
+    style: {
+      strength: 0.45,
+      hint: 'reference image is for art style, color palette and mood reference only, do not copy its composition'
+    },
+    redraw: {
+      strength: 0.75,
+      hint: 'closely follow the composition, pose and subject layout of the reference image'
+    }
+  };
+
+  function normalizeRefMode(v) {
+    return trim(v) === REF_MODE_REDRAW ? REF_MODE_REDRAW : REF_MODE_STYLE;
+  }
+
+  function refModePreset(mode) {
+    return REF_MODE_PRESETS[normalizeRefMode(mode)] || REF_MODE_PRESETS[REF_MODE_STYLE];
+  }
+
+  /*
+   * 把垫图引导语拼到提示词尾部。
+   *
+   * 只在**确实带垫图**时调用 —— 没有垫图却加一句「参考这张图」，
+   * 纯文生图的模型会去编一张不存在的参考图，画面反而更差。
+   */
+  function appendRefHint(prompt, mode) {
+    var hint = refModePreset(mode).hint;
+    var base = trim(prompt);
+    if (!hint) return base;
+    return base ? base + ', ' + hint : hint;
+  }
+
   var presetsCache = null;
   var presetsReady = null;
   var inFlight = Object.create(null);
@@ -408,6 +463,20 @@
         response_format: 'b64_json',
         image: refB64
       };
+      /*
+       * ── 走了 /images/edits 却没拿到图时，**回退要能被看见** ──────────
+       *
+       * 原先这里是静默 `return callGenerations()`：垫图失败就悄悄按纯文生图
+       * 再发一次，用户完全不知道自己的垫图被丢掉了 —— 看到一张图，
+       * 只是跟垫图毫无关系，只会以为「垫图功能坏了」。
+       *
+       * 现在给回退结果打个 fellBack 标记，一路透到 UI 上去提示
+       * 「当前模型未走垫图，已按纯文生图生成」。
+       *
+       * 做法是在 Blob 上挂属性而不是改返回类型 —— 返回类型是 Blob，
+       * 调用方有聊天、朋友圈、测试生图、自由生图四处，改类型会牵连一大片。
+       * Blob 是对象，挂个额外属性不影响它照常当 Blob 用。
+       */
       return fetch(root + '/images/edits', {
         method: 'POST',
         headers: {
@@ -418,8 +487,9 @@
       }).then(function (r) {
         return r.text().then(function (t) {
           if (r.ok) {
-            var j = JSON.parse(t);
-            var item = j.data && j.data[0];
+            var j;
+            try { j = JSON.parse(t); } catch (e) { j = null; }
+            var item = j && j.data && j.data[0];
             if (item && item.b64_json) {
               var bin = atob(item.b64_json);
               var u8 = new Uint8Array(bin.length);
@@ -427,13 +497,21 @@
               return new Blob([u8], { type: 'image/png' });
             }
           }
-          return callGenerations();
+          return markFellBack(callGenerations());
         });
       }).catch(function () {
-        return callGenerations();
+        return markFellBack(callGenerations());
       });
     }
     return callGenerations();
+  }
+
+  /* 给回退出来的 Blob 盖个章，供 UI 判断要不要提示用户。失败不影响主流程。 */
+  function markFellBack(promise) {
+    return Promise.resolve(promise).then(function (blob) {
+      try { if (blob && typeof blob === 'object') blob.miyaRefFellBack = true; } catch (e) {}
+      return blob;
+    });
   }
 
   function generateNovelAi(opts) {
@@ -462,7 +540,19 @@
     };
     if (opts.referenceDataUrl) {
       body.parameters.reference_image_multiple = [dataUrlToBase64(opts.referenceDataUrl)];
-      body.parameters.reference_strength_multiple = [0.6];
+      /*
+       * 强度改成可传参，但**缺省必须与改动前逐字节一致（0.6）**。
+       *
+       * 这条路上跑着两个功能：
+       *   · 角色的「外观参考图」（老功能，从来不传 referenceStrength）
+       *   · 自由生图的垫图（新功能，按 style/redraw 两档传值）
+       * 老功能不传参时落到 0.6，行为与从前一模一样；
+       * 新功能才用得上自定义强度。
+       */
+      var refStrength = parseFloat(opts.referenceStrength);
+      body.parameters.reference_strength_multiple = [
+        Number.isFinite(refStrength) ? Math.min(1, Math.max(0, refStrength)) : 0.6
+      ];
       body.parameters.add_original_image = true;
     }
     return fetch(novelAiEndpoint(na.baseUrl), {
@@ -532,12 +622,20 @@
         ? Promise.resolve(overrides.referenceDataUrl)
         : resolveReferenceDataUrl(contactId);
       return refPromise.then(function (refUrl) {
+        /*
+         * 垫图引导语在这里拼，而不是在调用方拼 ——
+         * 调用方（自由生图）传的是用户输入的原话，不该让它去操心
+         * 「提示词体系里该怎么表达垫图」；这里是唯一知道提示词全貌的地方。
+         */
+        var positive = refUrl ? appendRefHint(bundle.positive, overrides.referenceMode) : bundle.positive;
         var req = {
-          prompt: bundle.positive,
+          prompt: positive,
           negative: bundle.negative,
           size: overrides.size || cfg.size,
           referenceDataUrl: refUrl || ''
         };
+        /* 强度只在调用方明确要时透传；不传时下游各自落到与从前一致的缺省值 */
+        if (overrides.referenceStrength != null) req.referenceStrength = overrides.referenceStrength;
         if (cfg.provider === 'novelai') return generateNovelAi(req);
         return generateOpenAi(req);
       });
@@ -921,8 +1019,20 @@
 
   /* 自由生图：不绑定联系人，直接按用户输入的画面描述出图。
      复用 generateImageForScene('', prompt, { skipContactCheck: true })，
-     提示词仍会带上全局正向/反向提示词与画质标签。 */
-  var freeGenState = { blob: null, prompt: '', busy: false };
+     提示词仍会带上全局正向/反向提示词与画质标签。
+
+     垫图（图生图）也挂在这里 —— 见下方 freeGenState.ref* 三个字段。 */
+  var freeGenState = {
+    blob: null,
+    prompt: '',
+    busy: false,
+    /* 垫图：原图 blob（用于预览与重新编码）、它的 dataURL（发请求用）、档位 */
+    refBlob: null,
+    refDataUrl: '',
+    refMode: REF_MODE_STYLE,
+    /* 上一次生成是否走了回退（未真正用上垫图），供 UI 提示 */
+    lastFellBack: false
+  };
 
   function renderFreePreview(html) {
     var el = document.getElementById('miya-st-ig-free-preview');
@@ -955,6 +1065,159 @@
     if (save) save.disabled = !!busy;
   }
 
+  /*
+   * ── 垫图（图生图）────────────────────────────────────────────
+   *
+   * 生命周期按用户定的规则：**保留到手动清空**。
+   * 也就是生成完一张之后垫图不自动丢 —— 想同一个底图连着出好几张变体
+   * 是常见用法，每次都要重新选一遍会很烦。要换就走「清空垫图」。
+   *
+   * 垫图存在内存里（freeGenState），不落盘：它是「这次要用的素材」，
+   * 刷新后失效是合理的（跟结果图一样处理），免得在下一次打开设置时，
+   * 莫名其妙挂着一张上次会话的底图并且真的参与出图。
+   */
+  var FREE_REF_MAX_EDGE = 1024;
+  var FREE_REF_QUALITY = 0.85;
+
+  function renderFreeRefPreview() {
+    var el = document.getElementById('miya-st-ig-free-ref-preview');
+    if (!el) return;
+    if (!freeGenState.refBlob) {
+      el.innerHTML = '<div class="miya-ig-ref__empty"><p>未选择垫图（当前为纯文字生图）</p></div>';
+      return;
+    }
+    var url = '';
+    try { url = URL.createObjectURL(freeGenState.refBlob); } catch (e) {}
+    /* 旧 objectURL 要顺手回收，否则连续换图会一直攒着不放 */
+    if (el._miyaRefUrl) {
+      try { URL.revokeObjectURL(el._miyaRefUrl); } catch (e0) {}
+    }
+    el._miyaRefUrl = url;
+    el.innerHTML = '<div class="miya-ig-ref__thumb"><img src="' + esc(url) + '" alt="垫图预览">' +
+      '<span class="miya-ig-ref__badge">垫图</span></div>';
+  }
+
+  function renderFreeRefModeUI() {
+    var mode = normalizeRefMode(freeGenState.refMode);
+    var nodes = document.querySelectorAll('[data-ig-free-ref-mode]');
+    for (var i = 0; i < nodes.length; i++) {
+      var on = normalizeRefMode(nodes[i].getAttribute('data-ig-free-ref-mode')) === mode;
+      nodes[i].classList.toggle('is-on', on);
+      nodes[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    var clearBtn = document.getElementById('miya-st-ig-free-ref-clear');
+    if (clearBtn) clearBtn.disabled = !freeGenState.refBlob;
+    var wrap = document.getElementById('miya-st-ig-free-ref-mode-wrap');
+    if (wrap) wrap.classList.toggle('is-disabled', !freeGenState.refBlob);
+  }
+
+  /**
+   * 把一张图设为垫图。
+   *
+   * 先压缩再存：垫图要整个 base64 进请求体，原图动辄几 MB，
+   * 直接发出去既慢又容易撞上网关的体积限制 —— 而垫图这个用途
+   * 1024 长边已经完全够用（模型侧拿到后还要自己缩到它的训练分辨率）。
+   */
+  function setFreeRefFromBlob(blob) {
+    if (!blob) return Promise.resolve(false);
+    var img = global.MiyaChatImage;
+    var compress = img && typeof img.compressImageFileToBlob === 'function'
+      ? img.compressImageFileToBlob(blob, { maxEdge: FREE_REF_MAX_EDGE, quality: FREE_REF_QUALITY })
+      : Promise.resolve(blob);
+    return compress.catch(function () {
+      /* 压缩失败不阻断：拿原图也能用，总比「选了半天没反应」强 */
+      return blob;
+    }).then(function (out) {
+      var use = out || blob;
+      return blobToDataUrl(use).then(function (dataUrl) {
+        freeGenState.refBlob = use;
+        freeGenState.refDataUrl = dataUrl || '';
+        renderFreeRefPreview();
+        renderFreeRefModeUI();
+        toast('已设为垫图，将按「' + (normalizeRefMode(freeGenState.refMode) === REF_MODE_REDRAW ? '照着重画' : '参考风格') + '」生成');
+        return true;
+      });
+    }).catch(function () {
+      toast('垫图读取失败，请换一张试试');
+      return false;
+    });
+  }
+
+  function clearFreeRef(silent) {
+    freeGenState.refBlob = null;
+    freeGenState.refDataUrl = '';
+    renderFreeRefPreview();
+    renderFreeRefModeUI();
+    if (!silent) toast('已清空垫图');
+  }
+
+  function setFreeRefMode(mode) {
+    freeGenState.refMode = normalizeRefMode(mode);
+    renderFreeRefModeUI();
+  }
+
+  function getFreeRefMode() {
+    return normalizeRefMode(freeGenState.refMode);
+  }
+
+  function hasFreeRef() {
+    return !!(freeGenState.refDataUrl && freeGenState.refBlob);
+  }
+
+  /* 懒建隐藏 file input —— 与角色「外观参考图」同款做法，不往 HTML 里塞一次性控件 */
+  function ensureFreeRefFileInput() {
+    var el = document.getElementById('miya-st-ig-free-ref-file');
+    if (el) return el;
+    el = document.createElement('input');
+    el.type = 'file';
+    el.accept = 'image/*';
+    el.id = 'miya-st-ig-free-ref-file';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    el.addEventListener('change', function () {
+      var f = el.files && el.files[0];
+      el.value = '';
+      if (!f) return;
+      setFreeRefFromBlob(f);
+    });
+    return el;
+  }
+
+  function pickFreeRefFile() {
+    ensureFreeRefFileInput().click();
+  }
+
+  /*
+   * 从 App 内相册挑一张当垫图。
+   *
+   * 注意取的是 photo.blobId（主图）而不是 thumbBlobId ——
+   * 缩略图只有 320 长边，拿去当垫图会明显糊；
+   * 选图器内部渲染用缩略图只是为了列表轻快。
+   */
+  function openFreeRefAlbumPicker() {
+    var picker = global.MiyaChatAlbumPicker;
+    if (!picker || typeof picker.open !== 'function') {
+      toast('相册选图暂不可用，请改用「本地上传」');
+      return;
+    }
+    picker.open(function (photo) {
+      var st = getStore();
+      if (!st || typeof st.getAvatarUrl !== 'function' || !photo || !photo.blobId) {
+        toast('读取照片失败，请换一张试试');
+        return;
+      }
+      st.getAvatarUrl(photo.blobId).then(function (url) {
+        if (!url) throw new Error('no_url');
+        /* 从 objectURL 取回真正的 Blob，再走统一的压缩/入库路径 */
+        return fetch(url).then(function (r) { return r.blob(); });
+      }).then(function (blob) {
+        return setFreeRefFromBlob(blob);
+      }).catch(function () {
+        toast('读取照片失败，请换一张试试');
+      });
+    });
+  }
+
   function runFreeGeneration() {
     if (freeGenState.busy) return Promise.resolve(false);
     var el = document.getElementById('miya-st-ig-free-preview');
@@ -966,19 +1229,43 @@
     }
     setFreeBusy(true);
     freeGenState.blob = null;
-    renderFreePreview('<div class="miya-ig-test miya-ig-test--busy"><span class="miya-ig-test__spin"></span><p>生成中…</p></div>');
+    freeGenState.lastFellBack = false;
+    var useRef = hasFreeRef();
+    var refMode = getFreeRefMode();
+    renderFreePreview('<div class="miya-ig-test miya-ig-test--busy"><span class="miya-ig-test__spin"></span><p>' +
+      (useRef ? '正在按垫图生成…' : '生成中…') + '</p></div>');
     return generateImageForScene('', prompt, {
       skipContactCheck: true,
-      referenceDataUrl: '',
+      referenceDataUrl: useRef ? freeGenState.refDataUrl : '',
+      /*
+       * 有垫图才传强度，没有就**完全不传** ——
+       * 传了会走到 NovelAI 的参考图分支，无中生有一张不存在的参考图。
+       */
+      referenceStrength: useRef ? refModePreset(refMode).strength : undefined,
+      referenceMode: refMode,
       size: getFreeSize()
     })
       .then(function (blob) {
+        /* 引导语只影响发出去的提示词，不改用户看到/下载的那段原文 */
         return blobToDataUrl(blob).then(function (url) {
           freeGenState.blob = blob;
           freeGenState.prompt = prompt;
+          freeGenState.lastFellBack = !!blob.miyaRefFellBack;
+          var refNote = '';
+          if (useRef && freeGenState.lastFellBack) {
+            /*
+             * 用户定的规则：模型不支持垫图时**自动回退 + 明确告知**。
+             * 但不能说成「失败」—— 图是出来了的，只是没用上垫图。
+             */
+            refNote = '<p class="miya-ig-free-refwarn">当前模型未走垫图，已按纯文生图生成</p>';
+          } else if (useRef) {
+            refNote = '<p class="miya-ig-free-refok">已按垫图（' +
+              (refMode === REF_MODE_REDRAW ? '照着重画' : '参考风格') + '）生成</p>';
+          }
           renderFreePreview('<div class="miya-ig-test miya-ig-test--done">' +
             '<img src="' + esc(url) + '" alt="自由生图">' +
             '<p class="miya-ig-free-caption">' + esc(prompt) + '</p>' +
+            refNote +
             /*
              * 给移动端留一句「长按可存」的提示。
              * 桌面端下载按钮直接可用，这句显示出来也无害；
@@ -988,6 +1275,8 @@
              */
             '<p class="miya-ig-free-hint">点击「保存到本地」下载，手机端也可长按图片保存</p>' +
           '</div>');
+          /* 垫图按用户要求保留，这里只同步一下按钮可用态 */
+          renderFreeRefModeUI();
           return true;
         });
       })
@@ -1116,6 +1405,14 @@
   function resetFreeGenPreview() {
     freeGenState.blob = null;
     freeGenState.prompt = '';
+    freeGenState.lastFellBack = false;
+    /*
+     * 垫图也一起清 —— 它的生命周期规则是「保留到手动清空」，
+     * 指的是**同一次会话里**连续生成不丢；而进设置面板是一个新会话，
+     * 上一轮的底图不该悄悄继续生效（用户看不见它，只会觉得出图不对）。
+     */
+    clearFreeRef(true);
+    renderFreeRefModeUI();
     renderFreeIdle();
   }
 
@@ -1810,6 +2107,24 @@
         downloadFreeGeneration();
         return;
       }
+      /* ── 垫图相关 ── */
+      if (t.closest('#miya-st-ig-free-ref-upload')) {
+        pickFreeRefFile();
+        return;
+      }
+      if (t.closest('#miya-st-ig-free-ref-album')) {
+        openFreeRefAlbumPicker();
+        return;
+      }
+      if (t.closest('#miya-st-ig-free-ref-clear')) {
+        if (!hasFreeRef()) { toast('当前没有垫图'); return; }
+        clearFreeRef();
+        return;
+      }
+      if (t.closest('[data-ig-free-ref-mode]')) {
+        setFreeRefMode(t.closest('[data-ig-free-ref-mode]').getAttribute('data-ig-free-ref-mode'));
+        return;
+      }
       if (t.closest('#miya-st-ig-oa-preset-save')) {
         saveOaPreset();
         return;
@@ -1877,6 +2192,19 @@
     downloadFreeGeneration: downloadFreeGeneration,
     saveFreeGenerationToAlbum: saveFreeGenerationToAlbum,
     resetFreeGenPreview: resetFreeGenPreview,
+    /* 垫图（图生图）对外接口 */
+    REF_MODES: { style: REF_MODE_STYLE, redraw: REF_MODE_REDRAW },
+    REF_MODE_PRESETS: REF_MODE_PRESETS,
+    normalizeRefMode: normalizeRefMode,
+    refModePreset: refModePreset,
+    appendRefHint: appendRefHint,
+    setFreeRefFromBlob: setFreeRefFromBlob,
+    clearFreeRef: clearFreeRef,
+    setFreeRefMode: setFreeRefMode,
+    getFreeRefMode: getFreeRefMode,
+    hasFreeRef: hasFreeRef,
+    pickFreeRefFile: pickFreeRefFile,
+    openFreeRefAlbumPicker: openFreeRefAlbumPicker,
     saveOaPreset: saveOaPreset,
     loadOaPreset: loadOaPreset,
     deleteOaPreset: deleteOaPreset,
@@ -1902,6 +2230,18 @@
       freeGenState.blob = blob || null;
       freeGenState.prompt = String(prompt || '');
       return !!freeGenState.blob;
-    }
+    },
+    /* 垫图相关的只读/写入后门，供自动化测试断言状态 */
+    __testFreeGenState: function () {
+      return {
+        hasRef: hasFreeRef(),
+        refMode: getFreeRefMode(),
+        refDataUrlLen: String(freeGenState.refDataUrl || '').length,
+        refBlobSize: freeGenState.refBlob ? freeGenState.refBlob.size : 0,
+        lastFellBack: !!freeGenState.lastFellBack,
+        busy: !!freeGenState.busy
+      };
+    },
+    __testFreeRefDataUrl: function () { return String(freeGenState.refDataUrl || ''); }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
