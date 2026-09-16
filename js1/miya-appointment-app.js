@@ -623,22 +623,24 @@
     }
 
     /*
-     * 楼层工具行里的「刷新」键 —— 只出现在「我发的消息」楼层上。
+     * 楼层工具行的「刷新」键 —— **当前没有任何楼层渲染它**。
      *
-     * ⚠️ 角色楼层**没有**这枚键，别再加回去。
+     * ⚠️ 保留这个函数，但别把它挂回工具行。
      *
-     * 起因：两个键曾被同时挂在角色楼层上，实测两者完全等价 ——
-     * 都让角色重答一遍、旧版都不留、也都不产生候选项。用户直接问
-     * 「我第二个键不就是刷新键？为什么要那个第三个键？」—— 问得对。
-     * 所以角色楼层只留「重发」，重答/换版本交给「重发」和右下角的 ›。
+     * 它经历过两轮删除：
+     *   第 1 轮：角色楼层上的 ↻ 与「重发」实测完全等价 → 撤掉。
+     *   第 2 轮：「我发的消息」楼层上的 ↻ 与「重发」同样逐字节等价
+     *     （都产出 [user:原文][assistant:新楼层]）→ 也撤掉。
      *
-     * 现在这枚 ↻ 的唯一职责：
-     *   · 我发的消息 → 保留我这句话，在它后面长出一个新楼层。
-     *     它没有候选表这个概念，但上一轮生成失败时最新楼层就停在它上面，
-     *     屏上再没有别的入口能重试，所以必须给它留一个。
+     * 两种楼层的工具行现在统一为三枚键：改 / 重发 / 删除。
+     * 重试、重答、换版本分别由「重发」和右下角的 › 覆盖。
      *
-     * data-ap-refresh-keep 仍固定在 "1"，点击处的分流逻辑保持原样不变；
-     * 它现在恒为 keep=true，但保留这个属性是为了不破坏已有的取值路径。
+     * 之所以不把函数和 regenerateAfterUserFloor 一起删掉：
+     * 它们是「生成失败后从我的消息层重试」这条语义的唯一完整实现，
+     * 留着当备案；真要用时再挂一个入口即可，不用重新推导一遍。
+     *
+     * keep 参数依旧区分两种语义（见 regenerateFloor 的说明），
+     * 但既然没有调用方，它只作为这族能力的参数化入口存在。
      */
     function refreshToolHtml(msgId, keep) {
         var keepVersion = keep !== false;
@@ -1551,23 +1553,32 @@
                 '</button>' +
                 resendToolHtml(m.id) +
                 /*
-                 * 刷新键只给「我发的消息」楼层，角色楼层不给。
+                 * ⚠️ 这里**不再**挂第 3 枚刷新键 —— 两种楼层都不挂了。
                  *
-                 * 曾经的错误做法是两种楼层都给一枚 ↻，于是角色楼层上
-                 * 同时存在「重发」和「刷新」两个干同一件事的按钮 ——
-                 * 实测两者在角色楼层上完全等价：都是让角色重答一遍、
-                 * 旧版都不保留、也都不产生候选项。用户一眼就看出
-                 * 第 3 枚是多余的。
+                 * 演进过程（两轮都被用户当场抓住，记在这里免得再走回头路）：
                  *
-                 * 现在分工是：
-                 *   · 角色楼层想重答、想换版本 → 右下角的 ›（保留旧版进候选，可 ‹ 翻回）
-                 *   · 角色楼层想彻底回炉     → 第 2 枚「重发」（回到这一轮开头，连提问一起）
-                 *   · 我发的消息想重试       → 这里的 ↻（保留我这句话，在后面长出新楼层）
+                 *   第 1 轮：两枚 ↻ 同时挂在角色楼层上。实测两者完全等价，
+                 *     用户问「我第二个键不就是刷新键？为什么要那个第三个键？」
+                 *     → 撤掉角色楼层那枚。
                  *
-                 * 最后一条不能省：生成失败时最新楼层会停在我的消息上，
-                 * 那就是唯一的重试入口，撤掉它用户就没路可走了。
+                 *   第 2 轮：只给「我发的消息」楼层留了一枚 ↻。用户又发现
+                 *     「我发消息的这一层也还有两个一样的刷新键」—— 实测
+                 *     这一层的「重发」与「刷新」产出也是逐字节相同：
+                 *         点重发: [user:原文] [assistant:第 1 版新内容。]
+                 *         点刷新: [user:原文] [assistant:第 1 版新内容。]
+                 *     都是「保留我这句 → 删掉后面的角色层 → 重新生成一个新楼层」。
+                 *     → 用户层这枚也撤掉。
+                 *
+                 * 所以现在两种楼层都只有三枚键：改 / 重发 / 删除。
+                 *
+                 * 重试能力没有丢：生成失败时最新楼层停在我的消息上，
+                 * 点这一层的「重发」走 redoFromMessage 的 user 分支 ——
+                 * 保留原话、只删它之后的楼层、再让引擎接着写，
+                 * 正是原来那枚 ↻ 的语义。refreshToolHtml 与
+                 * regenerateAfterUserFloor 的实现都保留着（没有其它调用方，
+                 * 但删掉会让「重试」这条路径失去唯一的备案），
+                 * 只是不再从工具行暴露入口。
                  */
-                (isUser ? refreshToolHtml(m.id, true) : '') +
                 '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
                 esc(m.id) +
                 '" title="删除" aria-label="删除">' +
@@ -1894,17 +1905,15 @@
             '</button>' +
             resendToolHtml(m.id) +
             /*
-             * 刷新键只给「我发的消息」楼层，角色楼层不给。
+             * 跟手帐主题同款：两种楼层都**不再**挂第 3 枚刷新键。
              *
-             * 跟手帐主题同款处理，理由见 journalMessageBlockHtml 里那段注释：
-             * 角色楼层上「重发」已经覆盖了重答的需求，再挂一枚 ↻
-             * 就是两个按钮干同一件事，用户会当它是多余的乱码键。
+             * 理由与完整演进过程见 journalMessageBlockHtml 里那段注释 ——
+             * 「重发」在两种楼层上都已经覆盖了刷新键的语义，实测产出
+             * 逐字节相同，所以第 3 枚是纯重复。
              *
-             * 角色楼层想换版本 → 右下角的 ›（保留旧版进候选）；
-             * 角色楼层想彻底回炉 → 「重发」；
-             * 我发的消息想重试     → 这里的 ↻（保我的原话、在后面长新楼层）。
+             * 现在统一为三枚键：改 / 重发 / 删除。
+             * 角色楼层换版本用右下角的 ›（保留旧版进候选）。
              */
-            (m.role === 'user' ? refreshToolHtml(m.id, true) : '') +
             '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
             esc(m.id) +
             '" title="删除" aria-label="删除">' +
@@ -3729,10 +3738,23 @@ function renderWriter() {
         runStream(
             Promise.resolve()
                 .then(function () {
+                    /*
+                     * ⚠️ keepRegenCandidate 显式传 false。
+                     *
+                     * 这条路径会生成**全新的角色楼层**（不是就地重写），
+                     * 所以它本身就不该归档任何候选 —— 归档的前提是
+                     * 「同一层里有多版可以互相翻」，而这里连被覆盖的层都没有。
+                     *
+                     * 不传的后果和 redoFromMessage 那次一样：引擎落到
+                     * `!== false` 的默认 true 分支。虽然本路径下引擎那条
+                     * 「并入候选」的代码因为目标层是新建的、走不到归档，
+                     * 但语义不该靠「碰巧走不到」来保证 —— 显式写死 false，
+                     * 免得以后引擎侧调整了回退逻辑，这里又悄悄长出候选。
+                     */
                     return eng.runAppointmentCompletion(
                         ui.chatId,
                         ui.sessionId,
-                        streamHandlers()
+                        Object.assign(streamHandlers(), { keepRegenCandidate: false })
                     );
                 })
                 .catch(function (err) {
@@ -4403,7 +4425,7 @@ function renderWriter() {
                             return eng.runAppointmentCompletion(
                                 ui.chatId,
                                 ui.sessionId,
-                                streamHandlers()
+                                Object.assign(streamHandlers(), { keepRegenCandidate: false })
                             );
                         })
                         .catch(function (err) {
@@ -4486,7 +4508,29 @@ function renderWriter() {
                              * 所以也需要让模型知道「这不是第一次」。
                              * 候选表长度就是权威计数，见 floorSwipeCount 的说明。
                              */
-                            attempt: Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0)
+                            attempt: Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0),
+                            /*
+                             * ⚠️ 必须显式传 false —— 「重发」是纯重写，不产候选。
+                             *
+                             * 这里曾经**漏传**这个参数，于是引擎落到
+                             * `handlers.keepRegenCandidate !== false` 的默认 true 分支，
+                             * 把旧正文归档成了 swipes[0]。实测点角色层「重发」后：
+                             *     {"content":"第 1 版新内容。","swipes":1,"swipeId":0}
+                             * 而点 › 键是 {"swipes":2,"swipeId":1}。
+                             *
+                             * 两者在当时看起来都「没有候选条」（候选指示器要
+                             * swipes.length >= 2 才渲染），所以视觉上骗过了测试 ——
+                             * 但这个长度为 1 的候选表是真的写着库里的：
+                             * 它会污染 attempt 计数（floorSwipeCount 拿它当权威），
+                             * 让下一次重答一上来就被模型告知「这是第 2 次」，
+                             * 而且和「重发不产候选」这条约定直接冲突。
+                             *
+                             * 用户报「角色楼层还是会生成候选内容」时，指的就是
+                             * 这个 —— 它挂在「重发」上，不是刷新键（刷新键早已撤掉）。
+                             * 候选归档从此只属于 ›（generateSwipeForMessage 是
+                             * 全应用唯一显式传 true 的地方）。
+                             */
+                            keepRegenCandidate: false
                         });
                     })
                     .catch(function (err) {
@@ -5137,26 +5181,20 @@ function renderWriter() {
                     return;
                 }
                 /*
-                 * 楼层工具行里的「刷新」键。
+                 * 楼层工具行里的「刷新」键 —— 现在没有任何楼层会渲染它，
+                 * 这段处理保留为**备案入口**。
                  *
-                 * 和上面的「重发」只差在预期：重发会先把这条 user 之后的
-                 * 楼层全清掉再重答（包括可能已经写成一半的角色回复），
-                 * 而刷新只做「让我这条话被重新回答一次」——
-                 * 走 regenerateAfterUserFloor，语义是
-                 * 「保留我这条，在后面生成新楼层」。
+                 * 两种楼层的这枚键都已撤掉（角色层第 1 轮、我发的消息层
+                 * 第 2 轮），因为实测它们各自和同层的「重发」产出逐字节
+                 * 相同。详见 refreshToolHtml 与 journalMessageBlockHtml
+                 * 里的说明。
                  *
-                 * 两者最终都把 user 本身留在原位，所以这里共用同一段
-                 * 「先按 id 取活行、再判忙」的前置逻辑，不重复写。
+                 * 留着这段是因为：属性一旦从别处（插件、旧缓存 DOM、
+                 * 未来的新入口）出现，它能保证点击仍然走到正确的实现，
+                 * 而不是变成一个「点了没反应」的死键。
                  *
-                 * 这枚键现在只出现在「我发的消息」楼层上 ——
-                 * 角色楼层的那一枚已按用户要求撤掉（它和「重发」完全等价，
-                 * 见 refreshToolHtml 的说明）。
-                 *
-                 * regenerateFloor 里仍保留 assistant 分支，且**一律传
-                 * keepVersion=false**：就地重写本层、不归档候选。
-                 * 候选归档是 › 键的专属行为，刷新键绝不碰 ——
-                 * 万一以后从别处再挂出这个属性，走的也是这条正确的路，
-                 * 不会变成「第二个 › 键」，也不会是「点了没反应的死键」。
+                 * regenerateFloor 的 assistant 分支一律传 keepVersion=false：
+                 * 就地重写本层、不归档候选 —— 候选归档是 › 键的专属行为。
                  */
                 var refreshBtn = e.target.closest('[data-ap-msg-refresh]');
                 if (refreshBtn) {

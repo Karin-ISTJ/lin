@@ -2138,16 +2138,33 @@
                          * ── 这一版旧内容，要不要留成候选？──
                          *
                          * 由调用方决定（handlers.keepRegenCandidate）。
-                         * 两种刷新入口对用户的承诺不同，这是本次新增的分野：
+                         * 全应用只有一条路径会传 true：
                          *
-                         *   · keepRegenCandidate = true（默认）——
+                         *   · keepRegenCandidate = true ——
                          *     「楼层右下角的 ›」。语义是「多来一版」，
                          *     旧的那一版必须留得住，用户还能用 ‹ 翻回去。
+                         *     这是**唯一**允许归档候选的入口。
                          *
-                         *   · keepRegenCandidate = false ——
-                         *     「删除键旁边的刷新键」。语义是「这一版不要了，
-                         *     重写」。此时旧内容既不进候选、也不再占 swipes 的位，
-                         *     刷完就是干干净净的一版。
+                         *   · keepRegenCandidate 缺省 / false ——
+                         *     其余所有重生成路径：「重发」「刷新」「重回」之类。
+                         *     语义是「这一版不要了，重写」。此时旧内容既不进候选、
+                         *     也不再占 swipes 的位，写完就是干干净净的一版。
+                         *
+                         * ⚠️ 默认值的方向是**刻意**选的：缺省即 false，不是 true。
+                         *
+                         * 早先写的是 `handlers.keepRegenCandidate !== false` ——
+                         * 也就是缺省 true。于是任何一个忘记传参的调用方都会
+                         * 悄悄变成「第二个 › 键」。这不是假设，是真实发生过的：
+                         * redoFromMessage 的 assistant 分支漏传该参数，
+                         * 实测点「重发」后得到 {"content":"第 1 版新内容。",
+                         * "swipes":1,"swipeId":0} —— 库里被写进了一份长度为 1
+                         * 的候选表（› 键是 swipes:2）。它当时没被测试抓住，
+                         * 因为候选指示器要求 swipes.length >= 2 才渲染，
+                         * 视觉上看不出差别，但它确实污染了 attempt 计数。
+                         *
+                         * 改成 `=== true` 之后，漏传参数的代价是「少一个候选项」，
+                         * 而不是「凭空多出一个和 › 重复的行为」—— 前者无害，
+                         * 后者正是用户反复抓到的那类 bug。
                          *
                          * 为什么这个开关必须落在引擎而不是调用方：
                          *   写 swipes 的动作就发生在这里（下面那几行），
@@ -2155,7 +2172,7 @@
                          *   调用方唯一能做的就是「别把旧内容塞进来」，
                          *   所以开关只能由调用方传、在这里生效。
                          */
-                        var keepCand = handlers.keepRegenCandidate !== false;
+                        var keepCand = handlers.keepRegenCandidate === true;
                         var prevSwipes = keepCand && Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
                         /*
                          * 当前正文是否要补成第一个候选。
@@ -2319,12 +2336,19 @@
          * 旧版要不要留成候选。
          *
          * 必须显式写进 handlers —— runAppointmentCompletion 只认 handlers，
-         * 它看不到这里的 regenOpts。漏掉这一句的表现很隐蔽：
-         * 「不保留」的刷新键行为上会退化成「保留」，
-         * 因为下游读不到标记、走了默认的 true 分支。
+         * 它看不到这里的 regenOpts。
+         *
+         * ⚠️ 同向收紧：只有 regenOpts.keepRegenCandidate **显式为 true**
+         * 才写 true，其余（缺省、false）一律写 false。
+         *
+         * 原来这里是 `regenOpts.keepRegenCandidate !== false` —— 只要调用方
+         * 传了这个字段（哪怕传的就是缺省语义）都会被归一成 true，
+         * 于是「没打算要候选」的调用方反而被这里**主动打开**了候选归档。
+         * 上下两处默认值必须同向，否则一处改了、另一处又把缺省拽回 true，
+         * 漏洞会从这条转发路径重新漏回来。
          */
         if (regenOpts.keepRegenCandidate != null && handlers.keepRegenCandidate == null) {
-            handlers.keepRegenCandidate = regenOpts.keepRegenCandidate !== false;
+            handlers.keepRegenCandidate = regenOpts.keepRegenCandidate === true;
         }
         if (handlers.onStatus) handlers.onStatus('generating');
         return runAppointmentCompletion(chatId, sessionId, handlers).then(function (v) {
