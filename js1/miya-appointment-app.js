@@ -117,15 +117,28 @@
     var ICON_EMOJI =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" ' + _I + '/><path d="M9 10.2h.01M15 10.2h.01M8.8 14.4c1.1 1.3 2.3 1.9 3.2 1.9s2.1-.6 3.2-1.9" ' + _I + '/></svg>';
     /*
-     * 刷新（循环箭头）。
+     * 刷新（顺时针循环箭头）。
      *
      * 原来这里叫 ICON_UNDO，配的是输入框左边的「重回 ↶」键 —— 那个键已移除。
-     * 图形本身（顺时针回环）正是「重来一遍」的意思，与现在
-     * 「刷新这一层」的语义完全对得上，所以直接沿用图形、改名归位，
-     * 挂在楼层工具行的 ↻ 上（见 refreshToolHtml）。
+     * 图形本身（回环）正是「重来一遍」的意思，与现在「刷新这一层」的语义对得上，
+     * 所以沿用图形、改名归位，挂在楼层工具行的 ↻ 上（见 refreshToolHtml）。
+     *
+     * ⚠️ 几何修正：旧图形是
+     *     M9 8H4.5v4.5            （左边一小段折线）
+     *     M5 12.5a7 7 0 1 0 2.1-5 （半径 7 的大弧）
+     * 这条弧的弦长只有 5.42，却声明半径 7 —— 弦长不足，浏览器在 24×24 里
+     * 只能画出一小块残缺曲线，末端又绕回起点形成闭合，最终糊成一个
+     * 「空心破圈」。放大 6 倍看就是一团圆疙瘩，完全读不出「刷新」，
+     * 用户因此把它当成一个多余的乱码键。
+     *
+     * 现在改成标准写法：以 (12,12) 为圆心、r=7 的圆上，
+     * 从正上方 (12,5) 逆时针扫 270° 到正左方 (5,12)，
+     * 留出右上角 90° 的缺口，再补一个箭头；缺口处就是箭头的着力点，
+     * 一眼能认出是「重来一遍」。
+     *   A 7 7 0 1 1 5 12  → large-arc=1（大弧 270°）、sweep=1
      */
     var ICON_REFRESH =
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H4.5v4.5" ' + _I + '/><path d="M5 12.5a7 7 0 1 0 2.1-5" ' + _I + '/></svg>';
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5A7 7 0 1 1 5 12" ' + _I + '/><path d="M12 2.2v5.6M9.2 5L12 7.8 14.8 5" ' + _I + '/></svg>';
     var ICON_SEND =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5L10.2 14.2" ' + _I + '/><path d="M21.5 3.5L14.8 21l-3.3-7.5L4 10.2 21.5 3.5z" ' + _I + '/></svg>';
     var ICON_RESEND =
@@ -610,22 +623,22 @@
     }
 
     /*
-     * 楼层工具行里的「刷新」键 —— 就是截图里那枚 ↻（在「改」和「重发」之间）。
+     * 楼层工具行里的「刷新」键 —— 只出现在「我发的消息」楼层上。
      *
-     * ⚠️ 全局只有这一枚刷新键，两个主题、两种角色都复用它。
-     * 曾经误解成「角色楼层还该再有一个」，在右下角之外另加了一个，
-     * 结果同一层出现两个干同一件事的按钮 —— 那正是这次要清理的重复。
-     * 现在把分工写在最前面，避免再走回头路：
+     * ⚠️ 角色楼层**没有**这枚键，别再加回去。
      *
-     *   · 右下的 ›（角色楼层专属）→ 保留这一版，重刷本层，旧版进候选可翻回。
-     *   · 这里的 ↻（两种楼层都有）→ 不保留，重写一版干净的。
+     * 起因：两个键曾被同时挂在角色楼层上，实测两者完全等价 ——
+     * 都让角色重答一遍、旧版都不留、也都不产生候选项。用户直接问
+     * 「我第二个键不就是刷新键？为什么要那个第三个键？」—— 问得对。
+     * 所以角色楼层只留「重发」，重答/换版本交给「重发」和右下角的 ›。
      *
-     * 两种楼层点它时的行为不同，靠 data-ap-refresh-keep 分流：
-     *
-     *   · 角色楼层 → keep=false，就地重写这一层（这一版不要了）。
-     *   · 我发的消息 → keep=true，保留我这句话、在后面生成新楼层。
+     * 现在这枚 ↻ 的唯一职责：
+     *   · 我发的消息 → 保留我这句话，在它后面长出一个新楼层。
      *     它没有候选表这个概念，但上一轮生成失败时最新楼层就停在它上面，
      *     屏上再没有别的入口能重试，所以必须给它留一个。
+     *
+     * data-ap-refresh-keep 仍固定在 "1"，点击处的分流逻辑保持原样不变；
+     * 它现在恒为 keep=true，但保留这个属性是为了不破坏已有的取值路径。
      */
     function refreshToolHtml(msgId, keep) {
         var keepVersion = keep !== false;
@@ -1538,12 +1551,23 @@
                 '</button>' +
                 resendToolHtml(m.id) +
                 /*
-                 * 这一枚 ↻ 是全局唯一的刷新键，两种楼层都给，行为分两种：
-                 *   · 我发的消息 → 保留这条，在后面生成新楼层；
-                 *   · 角色楼层   → 不保留这一版，就地重写。
-                 * 想保留版本的入口是右下角的 ›，别在这里再加第二个刷新键。
+                 * 刷新键只给「我发的消息」楼层，角色楼层不给。
+                 *
+                 * 曾经的错误做法是两种楼层都给一枚 ↻，于是角色楼层上
+                 * 同时存在「重发」和「刷新」两个干同一件事的按钮 ——
+                 * 实测两者在角色楼层上完全等价：都是让角色重答一遍、
+                 * 旧版都不保留、也都不产生候选项。用户一眼就看出
+                 * 第 3 枚是多余的。
+                 *
+                 * 现在分工是：
+                 *   · 角色楼层想重答、想换版本 → 右下角的 ›（保留旧版进候选，可 ‹ 翻回）
+                 *   · 角色楼层想彻底回炉     → 第 2 枚「重发」（回到这一轮开头，连提问一起）
+                 *   · 我发的消息想重试       → 这里的 ↻（保留我这句话，在后面长出新楼层）
+                 *
+                 * 最后一条不能省：生成失败时最新楼层会停在我的消息上，
+                 * 那就是唯一的重试入口，撤掉它用户就没路可走了。
                  */
-                (isUser ? refreshToolHtml(m.id, true) : refreshToolHtml(m.id, false)) +
+                (isUser ? refreshToolHtml(m.id, true) : '') +
                 '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
                 esc(m.id) +
                 '" title="删除" aria-label="删除">' +
@@ -1862,12 +1886,17 @@
             '</button>' +
             resendToolHtml(m.id) +
             /*
-             * 这一枚 ↻ 是全局唯一的刷新键，两种楼层都给，行为分两种：
-             *   · 我发的消息 → 保留这条，在后面生成新楼层；
-             *   · 角色楼层   → 不保留这一版，就地重写。
-             * 想保留版本的入口是右下角的 ›，别在这里再加第二个刷新键。
+             * 刷新键只给「我发的消息」楼层，角色楼层不给。
+             *
+             * 跟手帐主题同款处理，理由见 journalMessageBlockHtml 里那段注释：
+             * 角色楼层上「重发」已经覆盖了重答的需求，再挂一枚 ↻
+             * 就是两个按钮干同一件事，用户会当它是多余的乱码键。
+             *
+             * 角色楼层想换版本 → 右下角的 ›（保留旧版进候选）；
+             * 角色楼层想彻底回炉 → 「重发」；
+             * 我发的消息想重试     → 这里的 ↻（保我的原话、在后面长新楼层）。
              */
-            (m.role === 'user' ? refreshToolHtml(m.id, true) : refreshToolHtml(m.id, false)) +
+            (m.role === 'user' ? refreshToolHtml(m.id, true) : '') +
             '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
             esc(m.id) +
             '" title="删除" aria-label="删除">' +
@@ -5095,10 +5124,14 @@ function renderWriter() {
                  * 两者最终都把 user 本身留在原位，所以这里共用同一段
                  * 「先按 id 取活行、再判忙」的前置逻辑，不重复写。
                  *
-                 * 角色楼层上的这个键走另一条路径：
-                 * data-ap-refresh-keep="0" 明确表示「这一版不要了」，
-                 * 由 regenerateFloor(msg, false) 传给引擎。
-                 * 想保留旧版的入口是右下角的 ›，见 refreshToolHtml 的说明。
+                 * 这枚键现在只出现在「我发的消息」楼层上 ——
+                 * 角色楼层的那一枚已按用户要求撤掉（它和「重发」完全等价，
+                 * 见 refreshToolHtml 的说明）。
+                 *
+                 * regenerateFloor 里仍保留 assistant 分支：
+                 * 万一以后从别处再挂出这个属性，它会走
+                 * regenerateFloor(msg, false) —— 不保留这一版、就地重写，
+                 * 行为仍然正确，不会出现「点了没反应」的死键。
                  */
                 var refreshBtn = e.target.closest('[data-ap-msg-refresh]');
                 if (refreshBtn) {
@@ -5345,6 +5378,20 @@ function renderWriter() {
         getStatusContext: getStatusContext,
         contactAvatar: contactAvatar,
         resolveOfflineContactAvatarAsync: resolveOfflineContactAvatarAsync,
-        findContactsAppAvatar: findContactsAppAvatar
+        findContactsAppAvatar: findContactsAppAvatar,
+        /*
+         * 测试专用后门：直连楼层重生成。
+         *
+         * 角色楼层的刷新键撤掉之后，自动化测试就没有 UI 入口去验证
+         * 「keep=false 就地重写」这条底层路径了 —— 而它仍然活着
+         * （regenerateFloor 的 assistant 分支、引擎的 keepRegenCandidate）。
+         * 留这个钩子让测试能直接调用，确认能力没被删残，也让后来者
+         * 一眼看到：撤掉的是那枚按钮，不是这套逻辑。
+         *
+         * 只做透传，不含任何业务判断。
+         */
+        __testRegenFloor: function (msg, keepVersion) {
+            regenerateFloor(msg, keepVersion);
+        }
     };
 })(window);
