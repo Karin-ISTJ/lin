@@ -1632,3 +1632,11 @@
   word-break: break-word;
 }
 
+/* 「长按可存」的移动端兜底提示：比 caption 更弱一级，不抢画面描述的注意力 */
+.miya-ig-free-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--st-text-quaternary, #b3b3b3);
+}
+

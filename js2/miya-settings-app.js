@@ -1027,17 +1027,154 @@
     }
   }
 
-  async function fetchOpenAiModels(base, key) {
+  /*
+   * ── 模型列表缓存 ──────────────────────────────────────────────
+   *
+   * 解决的问题（用户报的）：「怎么每次回去换模型，都要把模型刷出来一遍」。
+   *
+   * 原先的流程是：点「获取模型」→ fetch /models → 把 ids 填进 <select>。
+   * 这份 ids **只活在 DOM 里**：没有持久化、没有缓存，页面一刷新就没了。
+   * 下次回来 syncChatApiPanelForms 只会执行
+   *     fillModelSelect(sel, cfg.model ? [cfg.model] : [], cfg.model)
+   * 也就是下拉里孤零零只剩**当前选中的那一个**，想换模型必须再点一次 ⟳。
+   *
+   * 修法分两层，都不动存储层的数据结构：
+   *
+   *   1. HTTP 缓存（stale-while-revalidate）——
+   *      给 /models 请求加 cache: 'force-cache'，浏览器自己的 HTTP 缓存会把
+   *      响应留着。再次打开面板时直接从磁盘拿，**同时**后台静默重拉一次
+   *      （见 warmModelsCache），列表变了会自动刷新。没有 TTL 上限、
+   *      不占 localStorage 配额，也不多一套要维护的失效逻辑。
+   *
+   *   2. localStorage 兜底 ——
+   *      HTTP 缓存可能被浏览器清理、或在某些壳浏览器里不生效。
+   *      落一份到 localStorage，按 `baseUrl|apiKey尾4位` 分桶，
+   *      force-cache 失败时用它先把下拉填上（秒开），再去联网补齐。
+   *
+   * 注意分桶键含 API key 尾部：换密钥时列表会重新拉，
+   * 不会把上一个账号的模型列表串到新账号上。
+   */
+  var MODEL_CACHE_KEY = 'miya-api-model-cache-v1';
+  /* 兜底缓存的保鲜期：超过这个时长就不先用旧值，避免填出一份过期列表 */
+  var MODEL_CACHE_TTL = 14 * 24 * 60 * 60 * 1000;
+
+  function modelCacheBucket(base, key) {
+    var tail = String(key || '').trim();
+    tail = tail ? tail.slice(-4) : '';
+    return openAiCompatibleApiRoot(base) + '|' + tail;
+  }
+
+  function readModelCacheAll() {
+    try {
+      var raw = localStorage.getItem(MODEL_CACHE_KEY);
+      if (!raw) return {};
+      var obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function readModelCache(base, key) {
+    var bucket = modelCacheBucket(base, key);
+    var hit = readModelCacheAll()[bucket];
+    if (!hit || !Array.isArray(hit.ids) || !hit.ids.length) return null;
+    if (hit.at && Date.now() - hit.at > MODEL_CACHE_TTL) return null;
+    return hit.ids;
+  }
+
+  function writeModelCache(base, key, ids) {
+    if (!ids || !ids.length) return;
+    try {
+      var all = readModelCacheAll();
+      all[modelCacheBucket(base, key)] = { ids: ids, at: Date.now() };
+      /*
+       * 只留最近 8 个桶。这个缓存是「锦上添花」，不该无限膨胀 ——
+       * 用户可能试过很多个中转站地址，每个都留着会撑爆 localStorage。
+       */
+      var keys = Object.keys(all);
+      if (keys.length > 8) {
+        keys.sort(function (a, b) { return (all[b].at || 0) - (all[a].at || 0); });
+        keys.slice(8).forEach(function (k) { delete all[k]; });
+      }
+      localStorage.setItem(MODEL_CACHE_KEY, JSON.stringify(all));
+    } catch (e) {
+      /* 配额满 / 隐私模式：缓存失败不影响主流程 */
+    }
+  }
+
+  /**
+   * 从 /models 拉模型列表。
+   *
+   * opts.cache 为 true 时走 HTTP 缓存优先（force-cache），
+   * 拿不到再回落到网络 —— 这条路径专门给「打开面板自动填充」用，
+   * 要的是**快**，不是绝对新。
+   * 手动点 ⟳ 时不传 opts（走纯网络），用户要的是「一定是新的」。
+   */
+  async function fetchOpenAiModels(base, key, opts) {
     var root = openAiCompatibleApiRoot(base);
     if (!root) throw new Error('empty');
+    var mode = opts && opts.cache ? 'force-cache' : 'default';
     var r = await fetch(root + '/models', {
       method: 'GET',
-      headers: { Authorization: 'Bearer ' + String(key || '').trim() }
+      headers: { Authorization: 'Bearer ' + String(key || '').trim() },
+      cache: mode
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var j = await r.json();
     if (!Array.isArray(j.data)) return [];
-    return j.data.map(function (x) { return x && x.id ? String(x.id) : ''; }).filter(Boolean).sort();
+    var ids = j.data.map(function (x) { return x && x.id ? String(x.id) : ''; }).filter(Boolean).sort();
+    /* 只有真拿到东西才落缓存，空列表不该覆盖掉上一次的好数据 */
+    if (ids.length) writeModelCache(base, key, ids);
+    return ids;
+  }
+
+  /**
+   * 打开面板时的「预热」：先把缓存里的列表填上，再静默联网刷新。
+   *
+   * 这里**全程不 toast、不抛错**。它的定位是「顺手补齐」：
+   * 联网失败（离线、地址没填、密钥过期）时应当安安静静地
+   * 保留已经填好的缓存值，而不是弹一个用户没主动触发的错误。
+   */
+  function warmModelsCache(sel, base, key, current) {
+    if (!sel) return;
+    var b = String(base || '').trim();
+    var k = String(key || '').trim();
+    if (!b || !k) return;
+
+    var cached = readModelCache(b, k);
+    if (cached && cached.length) {
+      /* 先上缓存：下拉立刻可用，换模型不用等网络 */
+      fillModelSelect(sel, cached, current);
+    }
+
+    fetchOpenAiModels(b, k, { cache: !cached }).then(function (ids) {
+      if (ids && ids.length) {
+        fillModelSelect(sel, ids, sel.value || current);
+        /* 刷新后如果用户在别处也打开了同一面板，同步过去（防御性重绘） */
+        if (sel.dataset) sel.dataset.modelWarmed = '1';
+      }
+    }).catch(function () {
+      /* 静默：缓存已经填上了，联网失败不该打扰用户 */
+    });
+  }
+
+  /**
+   * 把 /models 拉取的失败原因翻成一句能看懂的提示。
+   *
+   * 原先所有失败都提示「连接失败」—— 可实际最常见的两种失败
+   * 根本不是网络问题：密钥不对（HTTP 401）和地址填错（HTTP 404）。
+   * 提示语说不清，用户就只能靠反复试。
+   */
+  function modelFetchErrorToast(err) {
+    var msg = String((err && err.message) || '').trim();
+    if (msg === 'empty') return '请先填写 API 地址';
+    if (/^HTTP 40[13]$/.test(msg)) return '密钥不对（' + msg + '）';
+    if (msg === 'HTTP 404') return '地址不对，找不到 /models';
+    if (/^HTTP 5\d\d$/.test(msg)) return '服务端出错（' + msg + '），稍后再试';
+    if (/^HTTP /.test(msg)) return '连接失败（' + msg + '）';
+    /* 走到这里基本就是 fetch 本身抛的：离线、DNS 不通、被 CORS 挡下 */
+    return '连接失败，检查网络或跨域设置';
   }
 
   function fillModelSelect(sel, ids, keepValue) {
@@ -1153,6 +1290,12 @@
     'speech-02-hd', 'speech-02-turbo'
   ];
 
+  /*
+   * ⚠️ 当前没有调用方 —— 保留为「联系人级 API」面板的预留件。
+   * warmModelsCache 的 fallbackBase/fallbackKey 在这里取全局配置兜底：
+   * 联系人级配置允许留空表示「跟随全局」，留空时若不给兜底值，
+   * 下拉框会因为「没地址没密钥」而永远填不上模型列表。
+   */
   function syncScopedApiForm(prefix, scoped, chatTemp) {
     scoped = scoped && typeof scoped === 'object' ? scoped : {};
     var baseEl = $('miya-st-' + prefix + '-base');
@@ -1166,6 +1309,13 @@
     if (tempEl) tempEl.value = temp;
     if (tempLbl) tempLbl.textContent = String(temp);
     fillModelSelect(modelEl, scoped.model ? [scoped.model] : [], scoped.model);
+    /*
+     * 联系人级 API 同样享受模型列表缓存。
+     * base/key 留空表示「跟随全局」，所以这里显式回落到全局配置 ——
+     * 否则下拉框会因为「没地址没密钥」而永远填不上。
+     */
+    var gc = getApiConfig();
+    warmModelsCache(modelEl, scoped.baseUrl || gc.baseUrl, scoped.apiKey || gc.apiKey, scoped.model);
   }
 
   function syncChatApiPanelForms() {
@@ -1175,12 +1325,23 @@
     if ($('miya-st-chat-key')) $('miya-st-chat-key').value = cfg.apiKey || '';
     if ($('miya-st-chat-temp')) $('miya-st-chat-temp').value = cfg.temperature != null ? cfg.temperature : 1;
     if ($('miya-st-chat-temp-lbl')) $('miya-st-chat-temp-lbl').textContent = String(cfg.temperature != null ? cfg.temperature : 1);
+    /*
+     * ⚠️ 这两行原来只传 `cfg.model ? [cfg.model] : []` ——
+     * 也就是下拉里永远只有「当前选中的那一个」，完整列表全靠用户点 ⟳ 现拉。
+     * 这正是「每次回来换模型都要重新刷一遍」的直接原因。
+     *
+     * 现在：先按「当前值」建好基础下拉（保证 sync 是同步、不依赖网络的），
+     * 再交给 warmModelsCache 用缓存里的完整列表覆盖，并静默联网补齐。
+     * 手动点 ⟳ 的那条路保持不变，依旧是「一定是新的」。
+     */
     fillModelSelect($('miya-st-chat-model'), cfg.model ? [cfg.model] : [], cfg.model);
+    warmModelsCache($('miya-st-chat-model'), cfg.baseUrl, cfg.apiKey, cfg.model);
     if ($('miya-st-chat2-base')) $('miya-st-chat2-base').value = sec.baseUrl || '';
     if ($('miya-st-chat2-key')) $('miya-st-chat2-key').value = sec.apiKey || '';
     if ($('miya-st-chat2-temp')) $('miya-st-chat2-temp').value = sec.temperature != null ? sec.temperature : 1;
     if ($('miya-st-chat2-temp-lbl')) $('miya-st-chat2-temp-lbl').textContent = String(sec.temperature != null ? sec.temperature : 1);
     fillModelSelect($('miya-st-chat2-model'), sec.model ? [sec.model] : [], sec.model);
+    warmModelsCache($('miya-st-chat2-model'), sec.baseUrl || cfg.baseUrl, sec.apiKey || cfg.apiKey, sec.model);
     var fb = $('miya-st-chat-fallback');
     if (fb) {
       fb.classList.toggle('is-on', !!cfg.fallbackToSecondary);
@@ -2235,7 +2396,7 @@
         fetchOpenAiModels(b, k).then(function (ids) {
           fillModelSelect($('miya-st-' + prefix + '-model'), ids, ($('miya-st-' + prefix + '-model') || {}).value);
           toast('已载入 ' + ids.length + ' 个模型');
-        }).catch(function () { toast('连接失败'); });
+        }).catch(function (err) { toast(modelFetchErrorToast(err)); });
       });
     }
 
@@ -2270,7 +2431,7 @@
       fetchOpenAiModels(b, k).then(function (ids) {
         fillModelSelect($('miya-st-chat-model'), ids, $('miya-st-chat-model').value);
         toast('已载入 ' + ids.length + ' 个模型');
-      }).catch(function () { toast('连接失败'); });
+      }).catch(function (err) { toast(modelFetchErrorToast(err)); });
     });
 
     onClick('miya-st-chat2-fetch', function () {
@@ -2280,7 +2441,7 @@
       fetchOpenAiModels(b, k).then(function (ids) {
         fillModelSelect($('miya-st-chat2-model'), ids, $('miya-st-chat2-model').value);
         toast('已载入 ' + ids.length + ' 个模型');
-      }).catch(function () { toast('连接失败'); });
+      }).catch(function (err) { toast(modelFetchErrorToast(err)); });
     });
 
     onClick('miya-st-chat-save', saveChatApiPanel);

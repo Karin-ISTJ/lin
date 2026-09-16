@@ -979,6 +979,14 @@
           renderFreePreview('<div class="miya-ig-test miya-ig-test--done">' +
             '<img src="' + esc(url) + '" alt="自由生图">' +
             '<p class="miya-ig-free-caption">' + esc(prompt) + '</p>' +
+            /*
+             * 给移动端留一句「长按可存」的提示。
+             * 桌面端下载按钮直接可用，这句显示出来也无害；
+             * 但在 iOS 上它往往是唯一真正能存进照片的办法
+             * （Safari 对 <a download> 支持残缺，分享面板是主路径，
+             *  而分享面板被取消时用户还能靠长按兜底）。
+             */
+            '<p class="miya-ig-free-hint">点击「保存到本地」下载，手机端也可长按图片保存</p>' +
           '</div>');
           return true;
         });
@@ -993,42 +1001,110 @@
       });
   }
 
-  /* 把当前自由生图结果存进「我」的相册（默认分组），便于后续在聊天里当素材使用 */
-  function saveFreeGenerationToAlbum() {
+  /*
+   * ── 自由生图结果的去向：下载到本地 ──────────────────────────────
+   *
+   * 用户报的：「生图功能生成出来的图片不能保存到本地啊？
+   *            只能在聊天功能的我的相册找到」。
+   *
+   * 原先这里只有 saveFreeGenerationToAlbum() —— 它把 blob 交给
+   * MiyaChatAlbum.addPhotos() 塞进 App 内的相册，仅此一条路。
+   * 相册是「App 内素材库」，供后续在聊天里当素材引用；
+   * 可用户要的往往是「把这张图拿到手机/电脑上去」—— 这两件事不一样，
+   * 而当时**根本没有**第二条路，所以图怎么都出不了 App。
+   *
+   * 现在改成直接下载到设备，复用已有的 miyaDownloadBlobAsync ——
+   * 它内部已经处理好了几个平台坑，不该在这里重造一遍：
+   *   · iOS 上优先走 navigator.share（Safari 对 <a download> 支持残缺，
+   *     直接 click 常常毫无反应，只有分享面板能真正存进照片）
+   *   · 大文件（≥24MB）避开 new File 的内存拷贝
+   *   · 兜底还有 Service Worker 拉流那条路
+   */
+  function downloadFreeGeneration() {
     if (!freeGenState.blob) {
       toast('请先生成一张图片');
       return Promise.resolve(false);
     }
-    var album = global.MiyaChatAlbum;
-    if (!album || typeof album.addPhotos !== 'function') {
-      toast('相册模块未加载，无法保存');
-      return Promise.resolve(false);
-    }
-    var st = getStore();
-    var profile = st && typeof st.getActiveProfile === 'function' ? st.getActiveProfile() : null;
-    if (!profile || !profile.id) {
-      toast('未找到当前身份，无法保存');
-      return Promise.resolve(false);
-    }
     var blob = freeGenState.blob;
-    var name = 'free-gen-' + Date.now() + '.png';
-    var file;
-    try {
-      file = new File([blob], name, { type: blob.type || 'image/png' });
-    } catch (e) {
-      file = blob;
-    }
-    return album.addPhotos(profile.id, [file], 'default').then(function (added) {
-      if (!added || !added.length) {
-        toast('保存失败');
-        return false;
+    /*
+     * 文件名带上画面描述的前几个字，比一律 free-gen-<时间戳>.png 好认 ——
+     * 连着生成好几张时，下载目录里能一眼看出哪张是什么。
+     */
+    var name = buildFreeGenFileName(freeGenState.prompt, blob);
+    var dl = global.miyaDownloadBlobAsync;
+    if (typeof dl !== 'function') {
+      /* 兜底：miya-storage.js 没加载时自己拼一个 <a download>，聊胜于无 */
+      try {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () {
+          try { document.body.removeChild(a); } catch (e0) {}
+          URL.revokeObjectURL(url);
+        }, 2000);
+        toast('已保存到下载目录');
+        return Promise.resolve(true);
+      } catch (e) {
+        toast('保存失败，可长按图片另存');
+        return Promise.resolve(false);
       }
-      toast('已保存到相册');
-      return true;
+    }
+    return dl(blob, name).then(function (ok) {
+      /*
+       * ok=false 有两种含义，提示语要分开，不能混成一句：
+       *   · 用户在系统分享面板上点了取消 —— 说明「我不要了」，
+       *     不该说成失败；
+       *   · 分享不可用或出错 —— 这时要告诉他还能怎么补救。
+       */
+      if (ok) toast('已保存，可在系统面板里选「保存到相册」');
+      else toast('没保存成功，可在系统面板里选「保存到相册」再试');
+      return !!ok;
     }).catch(function () {
-      toast('保存失败');
-      return false;
+      toast('保存失败，可长按图片另存');
+      return Promise.resolve(false);
     });
+  }
+
+  /**
+   * 由画面描述推一个可读的文件名。
+   *
+   * 只取描述开头的若干字符，并且把文件系统不友好的字符换掉 ——
+   * 描述里常有「，」「。」「/」这类标点和换行，
+   * 原样丢进 <a download> 有些浏览器会直接拒收整个文件名。
+   */
+  function buildFreeGenFileName(prompt, blob) {
+    var ext = '.png';
+    var type = String((blob && blob.type) || '');
+    if (/jpe?g/i.test(type)) ext = '.jpg';
+    else if (/webp/i.test(type)) ext = '.webp';
+    var slug = String(prompt || '')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      /*
+       * 截断到 12 个字符。
+       *
+       * 曾经取 24 —— 但中文描述一个字就是一个字符，24 个字加上时间戳
+       * 会让文件名接近 50 字符，在下载列表里被截断、也难扫读。
+       * 12 个字足够认出「这张画的是什么」，又不至于喧宾夺主。
+       */
+      .slice(0, 12)
+      .trim();
+    /* 截断可能在标点处留下尾缀，去掉结尾的逗号/顿号一类字符 */
+    slug = slug.replace(/[，,。.、；;：:！!？?\-—\s]+$/, '').trim();
+    if (!slug) slug = 'miya-free-gen';
+    return slug + '-' + Date.now() + ext;
+  }
+
+  /* 老名字保留为别名：外部（含测试与其它模块）可能仍在引用它 */
+  function saveFreeGenerationToAlbum() {
+    return downloadFreeGeneration();
   }
 
   function syncFreeSizeOptions(provider, keepValue) {
@@ -1731,7 +1807,7 @@
         return;
       }
       if (t.closest('#miya-st-ig-free-save')) {
-        saveFreeGenerationToAlbum();
+        downloadFreeGeneration();
         return;
       }
       if (t.closest('#miya-st-ig-oa-preset-save')) {
@@ -1798,6 +1874,7 @@
     resolveReferenceDataUrl: resolveReferenceDataUrl,
     runTestGeneration: runTestGeneration,
     runFreeGeneration: runFreeGeneration,
+    downloadFreeGeneration: downloadFreeGeneration,
     saveFreeGenerationToAlbum: saveFreeGenerationToAlbum,
     resetFreeGenPreview: resetFreeGenPreview,
     saveOaPreset: saveOaPreset,
@@ -1812,6 +1889,19 @@
     invalidatePresetsCache: function () {
       presetsCache = null;
       presetsReady = null;
+    },
+    /*
+     * 测试专用后门：把一张现成的图直接摆成「刚刚生成完」的状态。
+     *
+     * 为什么需要它：真实生图请求的返回格式因服务商而异
+     * （b64_json / url / 各种中转站的变体），要写一套稳定的 mock 成本很高，
+     * 而这里真正要验证的是**保存链路**，不是生图链路 ——
+     * 把生图那一段换成一根桩，测试才盯得住该盯的东西。
+     */
+    __testSetFreeBlob: function (blob, prompt) {
+      freeGenState.blob = blob || null;
+      freeGenState.prompt = String(prompt || '');
+      return !!freeGenState.blob;
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

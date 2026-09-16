@@ -1118,11 +1118,36 @@
     }).catch(function () { return false; });
   }
 
+  /*
+   * ── 下载：优先「系统分享面板」，其次「下载目录」 ──────────────
+   *
+   * 背景（用户报的）：「那应该怎么保存到相册，我是用浏览器跑这个项目的」。
+   *
+   * 网页**没有**任何 API 能直接写进设备相册 —— 那是浏览器安全沙箱的硬限制，
+   * 不是实现问题。在浏览器里所谓「保存到相册」，实际的可行路径只有两条：
+   *
+   *   1. navigator.share()  → 弹系统分享面板，用户自己选「保存到相册/图库」。
+   *      这是安卓与 iOS 上**唯一**能真正把图存进系统图库的办法。
+   *
+   *   2. <a download>       → 进浏览器的下载目录。
+   *      桌面上没问题；但在**安卓上很容易让用户以为失败了** ——
+   *      文件落在 Download/，而系统图库 App 通常只扫 Pictures/ 等媒体目录，
+   *      用户打开图库找不到图，就会觉得「根本没保存成功」。
+   *
+   * ⚠️ 曾经的实现只对 isIOS 走分享面板，安卓一律走 <a download>。
+   * 结果就是安卓用户下载完在图库里找不到 —— 这正是用户报的现象。
+   * 现在改成**凡是支持 canShare({files}) 的平台都优先分享**，
+   * 不再拿 UA 判断当门槛：能力检测比猜平台可靠，
+   * 而且桌面 Chromium 的新版本也支持 share，没必要把它挡在外面。
+   *
+   * 关于 HTTPS：navigator.share 要求安全上下文（https 或 localhost）。
+   * 用户的部署地址是 GitHub Pages（https），满足条件。
+   * 若在 http 局域网 IP 下访问，canShare 不存在，会自动落到下载那条路，
+   * 不会报错 —— 这条降级路径必须留着。
+   */
   global.miyaDownloadBlobAsync = function (blob, filename) {
     if (!blob) return Promise.resolve(false);
     filename = String(filename || 'download.bin');
-    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     var size = blob.size || 0;
     var LARGE = 24 * 1024 * 1024;
 
@@ -1136,23 +1161,49 @@
       }
     }
 
-    if (isIOS && typeof File !== 'undefined' && typeof navigator.share === 'function' && size < LARGE) {
+    /*
+     * 分享面板优先 —— 但要先确认平台真的能分享文件。
+     * navigator.canShare 在老浏览器上不存在，所以两个条件缺一不可；
+     * 少了 typeof 检查会在旧安卓上直接抛错。
+     */
+    var canShareFiles =
+      typeof File !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      typeof navigator.canShare === 'function';
+
+    if (canShareFiles && size < LARGE) {
       var file;
       try {
+        /*
+         * 已经是 File 且名字对就直接用，省一次内存拷贝 ——
+         * 生图的 blob 常常有好几 MB，new File 会整份复制一遍。
+         */
         if (blob instanceof File && blob.name === filename) file = blob;
-        else file = new File([blob], filename, { type: blob.type || 'application/zip' });
+        else file = new File([blob], filename, { type: blob.type || 'image/png' });
       } catch (eMake) {
-        return Promise.resolve(false);
-      }
-      if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+        /* 构造 File 失败（内存不足等）就回退到下载，别让整个保存流程挂掉 */
         return Promise.resolve(downloadBlobViaAnchor(blob, filename));
       }
-      return navigator.share({ files: [file], title: filename }).then(function () {
-        return true;
-      }).catch(function (err) {
-        if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return false;
-        try { return downloadBlobViaAnchor(blob, filename); } catch (e1) { return false; }
-      });
+      /*
+       * canShare 会实打实地检查「这个文件类型能不能分享」。
+       * 有些平台支持 share 但不支持分享文件，这里必须问一次 ——
+       * 否则 share() 会抛 NotAllowedError。
+       */
+      if (navigator.canShare({ files: [file] })) {
+        return navigator.share({ files: [file], title: filename }).then(function () {
+          return true;
+        }).catch(function (err) {
+          /*
+           * AbortError = 用户在分享面板上点了取消；
+           * NotAllowedError = 权限/安全上下文不满足。
+           * 这两种都**不该**再偷偷下载一份 —— 用户明确表示不要了，
+           * 或者环境本来就不支持，硬下载反而像是「点了取消却还是下了文件」。
+           */
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return false;
+          /* 其它异常（分享面板崩了之类）才回退到下载 */
+          try { return downloadBlobViaAnchor(blob, filename); } catch (e1) { return false; }
+        });
+      }
     }
 
     return Promise.resolve(downloadBlobViaAnchor(blob, filename));

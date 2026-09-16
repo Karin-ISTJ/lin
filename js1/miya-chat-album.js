@@ -76,6 +76,12 @@
     return { albums: {} };
   }
 
+  /*
+   * ⚠️ 这是个**白名单**函数：它逐字段挑选，没列出来的字段会被静默丢掉。
+   * 新增照片字段时**必须同步加到这里**，否则写入时会无声无息地消失 ——
+   * thumbBlobId 第一次加进来时就踩过这个坑：addPhotos 里明明赋值了，
+   * 一过 normalizePhoto 就没了，表现是「缩略图永远不生成」。
+   */
   function normalizePhoto(raw) {
     if (!raw || typeof raw !== 'object') return null;
     var blobId = trim(raw.blobId);
@@ -83,6 +89,8 @@
     return {
       id: trim(raw.id) || uid('alb'),
       blobId: blobId,
+      /* 缩略图 blob（320 长边）。老数据没有这个字段，回落到 '' 表示「用主图」 */
+      thumbBlobId: trim(raw.thumbBlobId),
       groupId: trim(raw.groupId) || 'default',
       addedAt: Number(raw.addedAt) || Date.now(),
       visionText: trim(raw.visionText),
@@ -259,6 +267,45 @@
     return list[idx] || null;
   }
 
+  /*
+   * ── 相册图片的画质 ────────────────────────────────────────────
+   *
+   * 用户问的：「相册那里长按图片点下载图片，下载的是缩略图还是
+   *            画质没有受损的图片？」
+   *
+   * 实测链路是这样的：
+   *   addPhotos → compressImageFileToBlob()   ← 画质在这一步就没有了
+   *             → storeMediaBlob()            ← 进 IndexedDB
+   *   download  → getAvatarUrl() → createObjectURL(blob) → <a download>
+   *
+   * 下载这一步本身**没有二次损失**（createObjectURL 直接指向库里的 blob，
+   * 不经过任何缩放），但库里存的那一份**入库时就已经压过了**：
+   * 走的是 compressImageFileToBlob 的缺省参数 —— 长边 1920、JPEG 质量 0.82。
+   * 所以用户下载到的是「当年压缩后的版本」，原图早就不在了。
+   *
+   * 现在把相册这条路的入库参数单独提高：长边 2560、质量 0.92。
+   * 为什么不去改 compressImageFileToBlob 的全局缺省值 ——
+   * 那个函数聊天发图也在用，聊天图的场景是「快速发出、不占带宽」，
+   * 提高它会让每条消息都变重。相册是「收藏」，值当存好一点。
+   *
+   * 代价说明：单张图和存储占用都会变大（大致是原来的 1.5~2 倍）。
+   * 这是刻意的取舍 —— 用户要的是「下载下来画质没受损」。
+   */
+  var ALBUM_IMAGE_MAX_EDGE = 2560;
+  var ALBUM_IMAGE_QUALITY = 0.92;
+
+  /*
+   * 列表用缩略图的长边。
+   *
+   * 为什么要单独做一份：相册列表原先直接拿**完整 blob** 塞进 <img>
+   * （见下面的 _thumbUrls，走的是同一个 getAvatarUrl），
+   * 只是靠 CSS 把显示尺寸压小。这意味着一屏 20 张图就要按
+   * 20 张原图的尺寸解码进内存 —— 在手机上滑相册最容易卡的就是这里。
+   * 真正的缩略图应当是**另一份小得多的图**。
+   */
+  var ALBUM_THUMB_EDGE = 320;
+  var ALBUM_THUMB_QUALITY = 0.72;
+
   function addPhotos(profileId, files, groupId) {
     var st = getStore();
     var img = global.MiyaChatImage;
@@ -270,18 +317,44 @@
     arr.forEach(function (file) {
       chain = chain.then(function () {
         if (img && img.isLikelyImageFile && !img.isLikelyImageFile(file)) return;
+        /* 主图：高画质入库，下载取的就是它 */
         var compress = img && img.compressImageFileToBlob
-          ? img.compressImageFileToBlob(file)
+          ? img.compressImageFileToBlob(file, {
+              maxEdge: ALBUM_IMAGE_MAX_EDGE,
+              quality: ALBUM_IMAGE_QUALITY
+            })
           : Promise.resolve(file);
         return compress.then(function (blob) {
           return st.storeMediaBlob(blob, 'album').then(function (blobId) {
             if (!blobId) return;
-            added.push(normalizePhoto({
-              id: uid('alb'),
-              blobId: blobId,
-              groupId: gid,
-              addedAt: Date.now()
-            }));
+            /*
+             * 缩略图：另存一条独立的 blob，记录里用 thumbBlobId 指过去。
+             *
+             * 为什么不塞进同一条记录里：storeMediaBlob 的入参就是单个 blob，
+             * 要为「一条记录两个 blob」去改存储结构，影响面会扩散到
+             * 备份、导出、迁移那一整片。多存一条独立记录代价小得多，
+             * 而且天然享受已有的 blob 生命周期管理。
+             *
+             * 缩略图失败不该拖垮主流程 —— 它只是「列表更顺滑」的优化，
+             * 没有它照样能显示（回落到主图），所以这里 catch 后返回空。
+             */
+            var thumbP = img && img.compressImageFileToBlob
+              ? img.compressImageFileToBlob(file, {
+                  maxEdge: ALBUM_THUMB_EDGE,
+                  quality: ALBUM_THUMB_QUALITY
+                }).then(function (tb) {
+                  return st.storeMediaBlob(tb, 'album-thumb');
+                }).catch(function () { return ''; })
+              : Promise.resolve('');
+            return thumbP.then(function (thumbBlobId) {
+              added.push(normalizePhoto({
+                id: uid('alb'),
+                blobId: blobId,
+                thumbBlobId: thumbBlobId || '',
+                groupId: gid,
+                addedAt: Date.now()
+              }));
+            });
           });
         }).catch(function () {});
       });
@@ -637,9 +710,12 @@
     return (filtered[idx] || resolveAlbumGroup(groups, 'default')).id;
   }
 
-  function groupCoverBlob(album, groupId) {
+  /* 相册封面取第一张照片。
+     返回照片对象（而不是裸 blobId）是有意的 —— 封面是列表小图，
+     应当跟其它小图一样优先用缩略图，只有拿到对象才知道它有没有缩略图。 */
+  function groupCoverPhoto(album, groupId) {
     var list = photosInGroup(album, groupId);
-    return list.length ? list[0].blobId : '';
+    return list.length ? list[0] : null;
   }
 
   function groupLatestTs(album, groupId) {
@@ -743,7 +819,8 @@
 
   function renderCarouselCard(group, album, isBack) {
     var photos = photosInGroup(album, group.id);
-    var blob = groupCoverBlob(album, group.id);
+    var cover = groupCoverPhoto(album, group.id);
+    var blob = cover ? albumThumbId(cover) : '';
     var name = displayGroupName(group);
     var date = formatAlbumDate(groupLatestTs(album, group.id));
     var count = photos.length;
@@ -842,7 +919,7 @@
             ? '<label class="mi-album-masonry__pick"><input type="checkbox" data-mq-alb-check="' + esc(ph.id) + '"' + (sel ? ' checked' : '') + '></label>'
             : '') +
           '<button type="button" data-mq-alb-photo-open="' + esc(ph.id) + '" style="display:flex;align-items:center;gap:12px;flex:1;border:none;background:none;padding:0;cursor:pointer;text-align:left;">' +
-            '<img class="mi-album-list__thumb" data-mq-alb-thumb="' + esc(ph.blobId) + '" alt="">' +
+            '<img class="mi-album-list__thumb" data-mq-alb-thumb="' + esc(albumThumbId(ph)) + '" alt="">' +
             '<div class="mi-album-list__info">' +
               '<p class="mi-album-list__date">' + esc(formatAlbumDate(ph.addedAt)) + '</p>' +
               '<p class="mi-album-list__tag">' + (rec ? 'Recognized' : 'Pending') + '</p>' +
@@ -861,7 +938,7 @@
           ? '<label class="mi-album-masonry__pick"><input type="checkbox" data-mq-alb-check="' + esc(ph.id) + '"' + (sel ? ' checked' : '') + '></label>'
           : '') +
         '<button type="button" class="mi-album-masonry__btn" data-mq-alb-photo-open="' + esc(ph.id) + '">' +
-          '<img data-mq-alb-thumb="' + esc(ph.blobId) + '" alt="" loading="lazy">' +
+          '<img data-mq-alb-thumb="' + esc(albumThumbId(ph)) + '" alt="" loading="lazy">' +
         '</button>' +
         '<button type="button" class="mi-album-masonry__heart' + (ph.favorite ? ' is-on' : '') + '" data-mq-alb-fav="' + esc(ph.id) + '" aria-label="Favorite"' + heartStyle + '>' + svgIcon('heart') + '</button>' +
       '</article>';
@@ -870,7 +947,7 @@
     var polaroid = list.length >= 4
       ? '<div class="mi-album-polaroid">' +
           '<div class="mi-album-polaroid__inner">' +
-            '<img data-mq-alb-thumb="' + esc(list[list.length - 1].blobId) + '" alt="">' +
+            '<img data-mq-alb-thumb="' + esc(albumThumbId(list[list.length - 1])) + '" alt="">' +
             '<div class="mi-album-polaroid__play">' + svgIcon('play') + '</div>' +
           '</div>' +
         '</div>'
@@ -932,8 +1009,25 @@
           '<button type="button" class="mi-album-sheet__close" data-mq-alb-photo-close aria-label="关闭">×</button>' +
         '</div>' +
         '<div class="mi-album-sheet__body">' +
+          /*
+           * ⚠️ 大图预览必须用 photo.blobId（主图），**不能**用 albumThumbId() ——
+           * 列表小图才该用缩略图。这里用错的话，用户点开看到的就是
+           * 一张 320px 的糊图，而且长按保存、点下载拿到的也全是它。
+           */
           '<img class="mi-album-sheet__preview" data-mq-alb-thumb="' + esc(photo.blobId) + '" alt="">' +
           '<div class="mi-album-sheet__actions">' +
+            /*
+             * 「保存到相册」放在第一个：这是用户在相册里最常想做的一件事。
+             *
+             * 文案为什么叫这个、而不是「保存到本地」：
+             * 安卓上文件落进 Download/ 时，系统图库 App 通常扫不到，
+             * 用户打开图库找不到图，会认为「根本没保存成功」。
+             * 实际点击后会走 miyaDownloadBlobAsync —— 它优先弹系统分享面板，
+             * 用户在面板里选「保存到相册/图库」才能真正进系统图库；
+             * 分享不可用（如 http 局域网访问）时自动回退到下载。
+             * 文案直接对齐用户的心智：「我要把它存进相册」。
+             */
+            '<button type="button" class="mi-album-sheet__act" data-mq-alb-download="' + esc(photo.id) + '">保存到相册</button>' +
             '<button type="button" class="mi-album-sheet__act" data-mq-alb-avatar="' + esc(photo.id) + '">设为头像</button>' +
             '<button type="button" class="mi-album-sheet__act" data-mq-alb-moment="' + esc(photo.id) + '">发朋友圈</button>' +
             (rec
@@ -1026,6 +1120,67 @@
     return renderAlbumHome(data, album, profile, groups, contacts);
   }
 
+  /*
+   * 列表小图该用哪个 blob：优先缩略图，没有就回落主图。
+   *
+   * 回落是必要的 —— 老照片（这个字段出现之前存的）没有 thumbBlobId，
+   * 它们照旧走主图。宁可慢一点，也不能让老数据空白。
+   * 缩略图会在它们被看到时惰性补上（见 ensureAlbumThumb）。
+   */
+  function albumThumbId(ph) {
+    if (!ph) return '';
+    return String(ph.thumbBlobId || ph.blobId || '');
+  }
+
+  /*
+   * 惰性补缩略图：老照片（thumbBlobId 字段出现之前存的）第一次被看到时，
+   * 拿它的主图现压一份缩略图补上。
+   *
+   * 为什么不在启动时批量扫一遍补：
+   *   · 相册可能有几百上千张，批量压缩会把启动那几秒 CPU 吃满
+   *   · 大部分照片用户根本不会再翻到，白压
+   * 按需补的代价是「第一次看这张时会闪一下完整图」，可以接受。
+   *
+   * 失败静默：缩略图是优化不是功能，补不上就继续用主图。
+   */
+  var _thumbBackfillInFlight = {};
+
+  function ensureAlbumThumb(ph) {
+    if (!ph || !ph.id || ph.thumbBlobId || !ph.blobId) return;
+    if (_thumbBackfillInFlight[ph.id]) return;
+    var img = global.MiyaChatImage;
+    var st = getStore();
+    if (!img || typeof img.compressImageFileToBlob !== 'function' || !st) return;
+    var profile = st.getActiveProfile ? st.getActiveProfile() : null;
+    if (!profile || !profile.id) return;
+
+    _thumbBackfillInFlight[ph.id] = true;
+    st.getAvatarUrl(ph.blobId)
+      .then(function (url) {
+        if (!url) throw new Error('no_url');
+        return fetch(url).then(function (r) { return r.blob(); });
+      })
+      .then(function (blob) {
+        return img.compressImageFileToBlob(blob, {
+          maxEdge: ALBUM_THUMB_EDGE,
+          quality: ALBUM_THUMB_QUALITY
+        });
+      })
+      .then(function (tb) {
+        return st.storeMediaBlob(tb, 'album-thumb');
+      })
+      .then(function (thumbId) {
+        if (!thumbId) return;
+        return mutateAlbum(profile.id, function (album) {
+          var target = (album.photos || []).find(function (x) { return x && x.id === ph.id; });
+          if (target) target.thumbBlobId = thumbId;
+        });
+      })
+      .catch(function () {
+        /* 静默：补不上就继续用主图，功能不受影响 */
+      });
+  }
+
   function hydrateThumbs(root) {
     if (!root) return;
     var st = getStore();
@@ -1043,6 +1198,17 @@
         img.src = url;
       });
     });
+    /*
+     * 顺手给当前屏上「还没有缩略图」的照片排队补一份。
+     * 放在 hydrateThumbs 里是因为只有这里才知道「哪些真的被渲染出来了」——
+     * 这正好等价于「用户可能马上要看到」，是惰性补的最佳触发点。
+     */
+    var album = getAlbum(st.getActiveProfile && st.getActiveProfile() ? st.getActiveProfile().id : '');
+    if (album && Array.isArray(album.photos)) {
+      album.photos.forEach(function (ph) {
+        if (ph && ph.blobId && !ph.thumbBlobId) ensureAlbumThumb(ph);
+      });
+    }
     var avEl = root.querySelector('[data-mq-alb-profile-avatar]');
     if (avEl && st.getActiveProfile) {
       var prof = st.getActiveProfile();
@@ -1179,10 +1345,11 @@
         '</div>';
 
     var albumsGridHtml = filtered.map(function (g) {
-      var blob = groupCoverBlob(album, g.id);
+      var cover = groupCoverPhoto(album, g.id);
+      var coverId = cover ? albumThumbId(cover) : '';
       var cnt = photosInGroup(album, g.id).length;
       return '<button type="button" class="mi-album-albums__card" data-mq-alb-open="' + esc(g.id) + '">' +
-        (blob ? '<img class="mi-album-albums__img" data-mq-alb-thumb="' + esc(blob) + '" alt="">' : '<div class="mi-album-albums__img"></div>') +
+        (coverId ? '<img class="mi-album-albums__img" data-mq-alb-thumb="' + esc(coverId) + '" alt="">' : '<div class="mi-album-albums__img"></div>') +
         '<div class="mi-album-albums__info">' +
           '<p class="mi-album-albums__name">' + esc(displayGroupName(g)) + '</p>' +
           '<p class="mi-album-albums__count">' + cnt + ' photos</p>' +
@@ -1689,6 +1856,69 @@
           patchOverlays();
           refreshAlbumContent();
           patchBatchUI();
+        });
+        return;
+      }
+
+      /*
+       * 相册详情面板的「保存到本地」。
+       *
+       * ⚠️ 取的是 photo.blobId（主图），**不是** thumbBlobId ——
+       * 这一行是整个画质链路的关键收口：入库时按 2560/0.92 存的那份
+       * 才是用户要的「画质没受损」，缩略图只有 320/0.72，
+       * 误用会让下载下来的图糊掉，而且肉眼在手机小屏上不容易立刻发现。
+       *
+       * 与详情面板里 <img class="mi-album-sheet__preview"> 同源：
+       * 那条也用 blobId。两者必须一致 —— 否则会出现
+       * 「看到的是清晰的，下载下来是糊的」这种最难排查的错。
+       */
+      var dlBtn = e.target.closest('[data-mq-alb-download]');
+      if (dlBtn) {
+        e.preventDefault();
+        var dpid = dlBtn.getAttribute('data-mq-alb-download');
+        var dph = (getAlbum(profile.id).photos || []).find(function (p) { return p.id === dpid; });
+        if (!dph || !dph.blobId) { toast('找不到这张图片'); return; }
+        var dst = getStore();
+        if (!dst) { toast('存储未就绪'); return; }
+        var dl = global.miyaDownloadBlobAsync;
+        dst.getAvatarUrl(dph.blobId).then(function (url) {
+          if (!url) throw new Error('no_url');
+          return fetch(url).then(function (r) { return r.blob(); });
+        }).then(function (blob) {
+          var ext = '.png';
+          if (/jpe?g/i.test(String(blob.type || ''))) ext = '.jpg';
+          else if (/webp/i.test(String(blob.type || ''))) ext = '.webp';
+          var fname = 'miya-album-' + dpid + ext;
+          if (typeof dl !== 'function') {
+            /* 兜底：storage.js 未加载时自己拼一个 <a download> 触发下载 */
+            var u2 = URL.createObjectURL(blob);
+            var a2 = document.createElement('a');
+            a2.href = u2;
+            a2.download = fname;
+            a2.rel = 'noopener';
+            a2.style.display = 'none';
+            document.body.appendChild(a2);
+            a2.click();
+            setTimeout(function () {
+              try { document.body.removeChild(a2); } catch (e0) {}
+              URL.revokeObjectURL(u2);
+            }, 2000);
+            toast('已保存到下载目录');
+            return true;
+          }
+          return dl(blob, fname).then(function (ok) {
+            /*
+             * ok=false 的两种含义，提示语必须分开：
+             *   · 用户在分享面板上点了取消 —— 不该说「失败」；
+             *   · 分享不可用或出错 —— 这时要告诉他还能怎么办。
+             * 用一个笼统文案盖过去，用户会以为功能坏了。
+             */
+            if (ok) toast('已保存，可在系统面板里选「保存到相册」');
+            else toast('没保存成功，可在系统面板里选「保存到相册」再试');
+            return !!ok;
+          });
+        }).catch(function () {
+          toast('保存失败，可长按图片另存');
         });
         return;
       }
