@@ -962,11 +962,11 @@
           'mi-set-danger-card'
         ))
       ) +
-
-      '<footer class="st-footer">' +
-        '<div class="st-footer-brand">Group Preferences</div>' +
-        '<div class="st-footer-version">Karin · 2026</div>' +
-      '</footer>' +
+      /*
+       * 页脚（Group Preferences / Karin · 2026）已删除。
+       * 与联系人聊天设置、世界书列表页的页脚是同一套装饰语言，
+       * 无按钮无交互，只占末尾一行高度。
+       */
     '</div>';
   }
 

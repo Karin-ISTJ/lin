@@ -1101,6 +1101,14 @@ html.miya-app-open .miya-couple-app .cp-shell {
 }
 
 /* ═══ FOOTER ═══ */
+/*
+ * ⚠️ 「made for two」落款 + 装饰横线已从情侣空间首页删除
+ * （index.html 里 <footer class="cp-footer"> 整块移除）。
+ * 下面三条规则因此【已无节点可命中】。
+ *
+ * 值得注意的是它原本占的 40px 上边距 + 48px 下边距：
+ * 删掉后照片墙直接收尾，页面确实短了一屏左右 —— 这正是想要的效果。
+ */
 .cp-footer {
   padding: 40px 22px 48px;
   text-align: center;

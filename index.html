@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=27">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=32">
-  <link rel="stylesheet" href="css/miya-worldbook.css?v=12">
+  <link rel="stylesheet" href="css/miya-worldbook.css?v=13">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=1">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
   <link rel="stylesheet" href="css/miya-chat.css?v=62">
@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=5">
   <link rel="stylesheet" href="css/miya-chat-ins.css?v=52">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=1">
-  <link rel="stylesheet" href="css/miya-chat-settings.css?v=42">
+  <link rel="stylesheet" href="css/miya-chat-settings.css?v=43">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=10">
   <link rel="stylesheet" href="css/miya-offline-card.css?v=5">
@@ -750,10 +750,11 @@
           </div>
         </div>
 
-        <footer class="st-footer">
-          <div class="st-footer-brand">Settings &amp; Preferences</div>
-          <div class="st-footer-version">Karin · 2026</div>
-        </footer>
+        <!--
+          设置页页脚（Settings & Preferences / Karin · 2026）已删除。
+          与世界书列表页的页脚是同一套装饰：Playfair Display 意大利体英文小字，
+          没有按钮、没有交互，只在内容末尾多占一行高度。
+        -->
       </div>
     </div>
 
@@ -1109,17 +1110,30 @@
     <div class="st-ambient-bg" aria-hidden="true"></div>
 
     <div class="ins-wb-stage">
+      <!--
+        世界书列表页顶栏 —— 放在 .st-scroll 【外面】，所以它不跟着列表滚。
+
+        原来这里是一整块「刊头」：World & / Lorebook 两行大字（clamp 32–38px）
+        + 副标题「管理注入模型的设定片段与关键词」+ 一条 24px 短横线装饰。
+        实测占地极大，把下面真正的列表往下推了大半屏。
+
+        现在换成和「联系人聊天设置」一致的标准导航栏（.st-navbar + .mi-set-navbar）：
+          左 → 返回（.st-navback）  中 → 标题  右 → 新建片段
+        三者高度对齐，底部有分隔线，滚动时内容不会从底下透上来。
+      -->
+      <header class="st-navbar mi-set-navbar ins-wb-navbar">
+        <button type="button" class="st-navback" id="miya-wb-header-back" aria-label="返回">
+          <svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>返回</span>
+        </button>
+        <h1 class="st-navtitle">世界书</h1>
+        <button type="button" class="mi-set-navsave ins-wb-navsave" id="miya-wb-add" title="新建片段" aria-label="新建片段">＋</button>
+      </header>
+
       <div class="st-scroll">
         <div class="st-container">
           <div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>
           <div class="st-deco-ornament" style="bottom: 200px; left: -40px; font-size: 100px;">¶</div>
-
-          <header class="st-header st-header--topnav st-header--wb">
-            <button type="button" class="st-header-badge" id="miya-wb-header-back" aria-label="返回">World Lore</button>
-            <button type="button" class="st-wb-add-btn mi-ico-btn mi-ico-btn--solid" id="miya-wb-add" title="新建片段" aria-label="新建片段"><img src="img/icons/plus.svg" alt="" width="18" height="18"></button>
-            <h2>World <em>&amp;</em><br><span class="st-header-script">Lorebook</span></h2>
-            <p class="st-header-sub">管理注入模型的设定片段与关键词</p>
-          </header>
 
           <div class="st-wb-io-bar mi-ico-bar">
             <button type="button" class="mi-ico-btn" id="miya-wb-group-add-btn" data-wb-group-add title="新建世界书" aria-label="新建世界书">
@@ -1158,10 +1172,11 @@
             点右上「+」新建条目，或用「+ 新建世界书」建分卷后导入。点书名即可展开 / 收起。
           </div>
 
-          <footer class="st-footer">
-            <div class="st-footer-brand">World Lore &amp; Fragments</div>
-            <div class="st-footer-version">Karin · 2026</div>
-          </footer>
+          <!--
+            页脚（World Lore & Fragments / Karin · 2026）已删除。
+            它与本次删掉的刊头是同一套装饰语言：没有功能，只在列表末尾
+            多占一屏底部空间。列表本身到 ins-wb-list 就结束了。
+          -->
         </div>
       </div>
     </div>
@@ -1961,10 +1976,12 @@
         <div class="cp-masonry" id="cp-home-wall-masonry"></div>
       </section>
 
-      <footer class="cp-footer">
-        <div class="cp-footer-mark">made for two</div>
-        <div class="cp-footer-line"></div>
-      </footer>
+      <!--
+        「made for two」落款 + 装饰横线已删除。
+        它和设置页／世界书页的英文小字落款属于同一套装饰语言，
+        没有功能，只在照片墙末尾多占一屏底部空间。
+        删掉后页面底部直接接照片墙。
+      -->
     </div>
 
     <div class="cp-ripple-wrap">
@@ -3920,7 +3937,7 @@
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
   <script defer src="js1/miya-chat-album-picker.js?v=1"></script>
   <script defer src="js1/miya-chat-group-ledger.js?v=2"></script>
-  <script defer src="js1/miya-chat-group-settings.js?v=20"></script>
+  <script defer src="js1/miya-chat-group-settings.js?v=21"></script>
   <script defer src="js1/miya-appointment-store.js?v=48"></script>
   <script defer src="js2/miya-offline-source-ref.js?v=8"></script>
   <script defer src="js2/miya-offline-beautify.js?v=17"></script>
@@ -3940,7 +3957,7 @@
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=6"></script>
   <script defer src="js1/miya-chat-me.js?v=27"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=64"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=65"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=4"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=4"></script>

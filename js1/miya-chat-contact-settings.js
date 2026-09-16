@@ -1457,11 +1457,11 @@
           '<button type="button" class="st-action-btn st-action-btn--danger" data-mq-set-delete-contact>删除这个联系人</button>'
         , 'mi-set-danger-card'))
       ) +
-
-      '<footer class="st-footer">' +
-        '<div class="st-footer-brand">Chat Preferences</div>' +
-        '<div class="st-footer-version">Karin · 2026</div>' +
-      '</footer>' +
+      /*
+       * 页脚（Chat Preferences / Karin · 2026）已删除。
+       * 与世界书列表页、设置页的页脚是同一套装饰语言：
+       * Playfair Display 意大利体英文小字，无按钮无交互，只占末尾一行高度。
+       */
     '</div>';
   }
 

@@ -12,7 +12,7 @@
     },
     coupleUi: {
       css: [
-        'css/miya-couple.css?v=12',
+        'css/miya-couple.css?v=13',
         'css/miya-couple-whisper.css?v=9',
         'css/miya-couple-photos.css?v=4'
       ],

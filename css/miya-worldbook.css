@@ -150,7 +150,19 @@
   transform: scale(0.95);
 }
 
-.miya-worldbook-app.has-editor .st-wb-add-btn {
+/*
+ * ⚠️ 编辑器打开时，必须把「＋ 新建片段」藏掉。
+ *
+ * 原先这条规则认的是 .st-wb-add-btn（刊头右上角那个浮在绝对定位上的按钮）。
+ * 列表页改成标准导航栏后，该按钮换成了 .ins-wb-navsave，
+ * 类名不对这条规则就不再生效 —— 表现为：点开某个条目编辑，
+ * 编辑器划进来之后，「＋」还浮在导航栏右侧，看起来像是编辑页上的按钮。
+ * 所以新类名也必须一并纳入隐藏规则。
+ *
+ * （.ins-wb-add-btn 是更早一版的类名，HTML 里已无引用，保留仅为兜底。）
+ */
+.miya-worldbook-app.has-editor .st-wb-add-btn,
+.miya-worldbook-app.has-editor .ins-wb-navsave {
   opacity: 0;
   pointer-events: none;
 }
@@ -187,10 +199,79 @@
 }
 
 /* ─── Header ─── */
+/*
+ * 列表页顶栏已从「刊头」换成标准导航栏（.st-navbar.mi-set-navbar），
+ * 与「联系人聊天设置」观感一致。
+ *
+ * 下面这条 .st-header 规则保留着，是给【条目编辑页】用的
+ * （编辑页的 <header class="st-navbar"> 在 .ins-wb-editor 内，
+ *   另有 .miya-worldbook-app .ins-wb-editor .st-navbar 覆盖）。
+ * ⚠️ 列表页已不再有 .st-header 节点，这条规则在列表页不再生效。
+ */
 .miya-worldbook-app .st-header {
   padding-top: 8px;
   padding-bottom: 28px;
   position: relative;
+}
+
+/* ─── 列表页顶栏（标准导航栏版）─── */
+/*
+ * 基础样式（.st-navbar / .st-navback / .st-navtitle）已在上面的
+ * 「Navbar」段落里按 .miya-worldbook-app 命名空间定义好了，
+ * 结构直接生效，这里只覆盖世界书列表页需要的三处差异：
+ *
+ *   1. 不透明底 + 底部分隔线。
+ *      原来顶栏是「(245,243,239) 渐变到全透明」的，滚动时列表内容
+ *      会从底下透上来，看起来像两层文字叠在一起。
+ *      联系人设置那边用的是 var(--st-bg) 纯色底，这里跟它对齐。
+ *
+ *   2. 左右内边距 20px → 14px。
+ *      和「联系人聊天设置」的 14px 一致，返回键因此比原来靠边一点。
+ *      注意这里不跟 .st-container 的 20px 对齐 —— 顶栏比正文略微外扩
+ *      是有意的，让返回键在视觉上更靠边、更像一个「系统级」返回。
+ *
+ *   3. gap 12px → 10px，与联系人设置一致。
+ *
+ * 高度不用管：两者都靠 .st-navback 的内边距撑起来，尺寸自然相同。
+ */
+.miya-worldbook-app .ins-wb-navbar {
+  background: var(--st-bg);
+  border-bottom: 1px solid var(--st-border);
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 8px;
+}
+
+/*
+ * 右侧「＋ 新建片段」。
+ * 就是个图标按钮，所以给正方形比例（不是保存键那种带文字的胶囊），
+ * 但**配色与阴影完全照抄**「联系人聊天设置」的保存键
+ * （同款 --st-accent → #5AC8FA 渐变 + 蓝色投影），
+ * 这样两个页面的顶栏右侧看起来是同一套东西。
+ * 尺寸取 34px，比 .st-navback 的高度略小一点点，
+ * 避免它顶得比返回键高、把导航栏撑起来。
+ */
+.miya-worldbook-app .ins-wb-navsave {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.miya-worldbook-app .ins-wb-navsave:active {
+  transform: scale(0.94);
 }
 
 .miya-worldbook-app .st-header-badge {
@@ -660,6 +741,15 @@
 }
 
 /* ─── Footer ─── */
+/*
+ * ⚠️ 页脚已被删除（index.html 里 <footer class="st-footer"> 整块移除）。
+ * 下面三条 .st-footer / .st-footer-brand / .st-footer-version 规则
+ * 因此【在世界书页面不再有节点可命中】。
+ *
+ * 之所以留着不删：这类「装饰性文本块」的样式很容易在别处被复用，
+ * 且它们本身就带 .miya-worldbook-app 前缀，不会污染全局。
+ * 若确认长期不用，可连同 index.html 里那段注释一起清理。
+ */
 .miya-worldbook-app .st-footer {
   margin-top: 36px;
   text-align: center;

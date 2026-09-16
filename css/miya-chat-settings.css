@@ -633,6 +633,16 @@
 .mi-set-page .st-chevron { color: var(--st-text-muted); flex-shrink: 0; }
 .mi-set-page .mi-set-action-row--warn .st-card-label { color: var(--st-accent-warm); }
 
+/*
+ * ⚠️ 页脚已删除 —— 联系人聊天设置 / 群聊设置两处动态模板里的
+ * <footer class="st-footer"> 均已移除（见 miya-chat-contact-settings.js、
+ * miya-chat-group-settings.js），设置页 index.html 里那处也同样删掉了。
+ * 下面三条 .st-footer / .st-footer-brand / .st-footer-version 规则
+ * 因此【已无节点可命中】。
+ *
+ * 保留原因：它们是 .mi-set-page 命名空间下的定义，不会影响全局；
+ * 若日后想加回统一的英文落款，直接复用即可。
+ */
 .mi-set-page .st-footer {
   margin-top: 18px;
   text-align: center;
