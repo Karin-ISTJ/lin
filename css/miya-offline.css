@@ -351,6 +351,7 @@
 }
 
 .xw-vault-recover {
+  position: relative;
   margin: 0 0 18px;
   padding: 14px 16px;
   border-radius: 14px;
@@ -358,8 +359,39 @@
   background: color-mix(in srgb, var(--xw-paper) 88%, var(--xw-accent, #8b7355) 12%);
 }
 
+/*
+ * 恢复横幅的关闭键。
+ *
+ * 横幅占一整块高度，而它挂着的条件（线上还留着线下镜像）可能长期成立 ——
+ * 用户判断「我不需要这个」时必须有地方把它收掉，否则它就常驻在卷宗页顶上。
+ * 视觉上刻意做轻：一个细叉，不与下方实心主按钮抢注意力。
+ */
+.xw-vault-recover__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--xw-soft);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.xw-vault-recover__close:hover,
+.xw-vault-recover__close:active {
+  opacity: 1;
+  background: color-mix(in srgb, var(--xw-hair) 60%, transparent);
+}
+
 .xw-vault-recover__hint {
   margin: 0 0 12px;
+  padding-right: 22px;
   font-size: 13px;
   line-height: 1.65;
   color: var(--xw-soft);

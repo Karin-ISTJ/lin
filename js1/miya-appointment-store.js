@@ -1124,9 +1124,56 @@
         };
     }
 
-    function previewChatMirrorRecovery() {
+    /**
+     * 该会话下，用户是否已选择「不再提示从线上记忆恢复」。
+     *
+     * 存在 byChat[chatId].mirrorHoldDismissedAt（时间戳）。
+     * 每个会话分别记 —— 在某个会话里嫌横幅碍事，就只让那个会话不再提示，
+     * 别的会话真丢了数据时仍然会救人。
+     */
+    function isMirrorHoldDismissed(chatId) {
+        var cid = String(chatId || '').trim();
+        if (!cid) return false;
+        load();
+        var row = cache && cache.byChat && cache.byChat[cid];
+        return !!(row && Number(row.mirrorHoldDismissedAt) > 0);
+    }
+
+    /** 记下「不再提示」。再次主动恢复出新内容时会被清掉（见 restoreFromChatMirrors）。 */
+    function dismissMirrorHold(chatId) {
+        var cid = String(chatId || '').trim();
+        if (!cid) return;
+        load();
+        if (!cache.byChat) cache.byChat = {};
+        if (!cache.byChat[cid]) cache.byChat[cid] = { sessions: [], activeSessionId: '' };
+        cache.byChat[cid].mirrorHoldDismissedAt = Date.now();
+        save();
+    }
+
+    function previewChatMirrorRecovery(chatId) {
         var pack = recoverSessionsFromChatMirrors();
         if (!pack || !pack.byChat) return { sessions: 0, messages: 0, chats: 0 };
+        /*
+         * 【只在本地一卷都没有的会话里报「待恢复」】
+         *
+         * 背景：判定原本是「镜像的 appointmentSessionId 在本地找不到同名会话 → 算 1 卷待恢复」，
+         * 这个口径会把【孤儿镜像】也算进来 —— 比如本地卷宗被换过 id、换过设备、
+         * 清过站点数据，聊天里却还留着老 sid 的镜像。这些镜像永远找不到归宿，
+         * 于是横幅一旦出现就再也消不掉（用户反馈「莫名其妙出现，有点碍事」）。
+         *
+         * 现在收紧口径：只有该 chat 本地确实一卷都没有时才提示。
+         * 那才是真正需要救援的场景 —— 本地空了，但线上还留着痕迹。
+         * 本地已经有卷的情况下，缺的那几条消息不值得拿一条常驻横幅去换。
+         *
+         * chatId 可选；不传时退化为旧的统计口径（供恢复流程内部判断用）。
+         */
+        var cid = String(chatId || '').trim();
+        if (cid) {
+            if (isMirrorHoldDismissed(cid)) return { sessions: 0, messages: 0, chats: 0 };
+            var bucket = cache && cache.byChat && cache.byChat[cid];
+            var localCount = bucket && Array.isArray(bucket.sessions) ? bucket.sessions.length : 0;
+            if (localCount > 0) return { sessions: 0, messages: 0, chats: 0 };
+        }
         return countPendingMirrorRecovery(pack.byChat);
     }
 
@@ -1565,6 +1612,8 @@
         removeAllForContact: removeAllForContact,
         recoverFromChatMirrors: recoverSessionsFromChatMirrors,
         previewChatMirrorRecovery: previewChatMirrorRecovery,
+        isMirrorHoldDismissed: isMirrorHoldDismissed,
+        dismissMirrorHold: dismissMirrorHold,
         restoreFromChatMirrors: function () {
             var chatBoot = Promise.resolve();
             if (global.miyaChatStore && typeof global.miyaChatStore.init === 'function') {
@@ -1581,6 +1630,20 @@
                 }
                 var result = mergeRecoveredByChat(recovered.byChat);
                 var ok = result.totalSessions > 0 || result.messages > 0;
+                if (ok) {
+                    /*
+                     * 恢复成功后，把本次涉及的会话的「不再提示」标记清掉。
+                     *
+                     * 理由：这个标记表达的是「我现在不需要救援」，而用户刚刚
+                     * 主动点了恢复 —— 说明情况变了。清掉之后，将来这批会话
+                     * 若真再次丢失，横幅还能重新出现。
+                     */
+                    Object.keys(recovered.byChat || {}).forEach(function (cid) {
+                        var row = cache && cache.byChat && cache.byChat[cid];
+                        if (row && row.mirrorHoldDismissedAt) delete row.mirrorHoldDismissedAt;
+                    });
+                    save();
+                }
                 return {
                     ok: ok,
                     reason: ok ? 'restored' : 'already_up_to_date',

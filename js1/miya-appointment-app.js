@@ -1134,10 +1134,25 @@
     function renderHistoryRecoverBanner() {
         var st = apStore();
         if (!st || typeof st.previewChatMirrorRecovery !== 'function') return '';
-        var preview = st.previewChatMirrorRecovery();
+        /*
+         * 把 chatId 传进去 —— 判定逻辑靠它做两件事：
+         *   1. 只在【这个会话本地一卷都没有】时才提示（避免孤儿镜像造成常驻误报）
+         *   2. 查这个会话是否已被用户「不再提示」
+         * 不传的话退化为旧口径，那正是横幅之前「一旦出现就消不掉」的原因。
+         */
+        var preview = st.previewChatMirrorRecovery(ui.chatId);
         if (!preview || (!preview.sessions && !preview.messages)) return '';
         return (
             '<div class="xw-vault-recover">' +
+            /*
+             * 加一个关闭键。
+             *
+             * 横幅是「本地空了、线上还有痕迹」时的救援入口，但它毕竟占一整块高度。
+             * 用户判断「我不需要这个」的时候，得有个地方能把它收掉 ——
+             * 否则只要有残留镜像在，它就永远贴在卷宗页顶上（这正是上一版的毛病）。
+             * 关闭是【按会话】记的，不影响别的会话。
+             */
+            '<button type="button" class="xw-vault-recover__close" data-ap-dismiss-recover aria-label="不再提示">×</button>' +
             '<p class="xw-vault-recover__hint">聊天里仍存着 ' +
             String(preview.messages || 0) +
             ' 条线下镜像，可重建约 ' +
@@ -1145,6 +1160,15 @@
             ' 卷封存记录（即线上 AI 记得的那些剧情）。</p>' +
             '<button type="button" class="xw-btn xw-btn--solid" data-ap-recover-mirrors>从线上记忆恢复</button></div>'
         );
+    }
+
+    /** 用户点「不再提示」：记下这个会话不再显示恢复横幅。 */
+    function dismissRecoverBanner() {
+        var st = apStore();
+        if (st && typeof st.dismissMirrorHold === 'function') {
+            st.dismissMirrorHold(ui.chatId);
+        }
+        render();
     }
 
     function recoverFromOnlineMemory() {
@@ -5134,6 +5158,13 @@ function renderWriter() {
         document.querySelectorAll('[data-ap-recover-mirrors]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 recoverFromOnlineMemory();
+            });
+        });
+
+        /* 「不再提示」：把恢复横幅收掉，并按会话记住这个选择。 */
+        document.querySelectorAll('[data-ap-dismiss-recover]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                dismissRecoverBanner();
             });
         });
 
