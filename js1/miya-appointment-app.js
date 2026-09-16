@@ -3003,6 +3003,33 @@ function renderWriter() {
         }
     }
 
+    /*
+     * ── 线下生成完毕的提示音 ───────────────────────────────────
+     *
+     * 为什么**不能**直接挂在 endWriterGeneration() 上 ——
+     * 它被 4 处调用的方式是 `.finally(endWriterGeneration)`，
+     * 也就是**成功、失败、用户中止都会走**。挂在那里的话，
+     * 接口报错、「刷新中断」、用户点停止 全都会「叮」一声 ——
+     * 而那一声本来的意思是「角色写完了，可以看了」，
+     * 在失败时响等于报假信，用户会白等一下。
+     *
+     * 所以只在**真正生成成功**的 .then() 分支里显式调这个函数。
+     * 调用点有 4 个（发消息 / 重生成 / 开场白 等），
+     * 都紧跟在 runAppointmentCompletion 成功之后。
+     *
+     * 走 playForOfflineDone() 而不是 play()：受总开关控制，
+     * 但不受「聊天室开着就不响」那条规则约束 —— 这条规则是给
+     * 新消息用的（防止你正看着聊天还响铃），而生成完毕时
+     * 你本来就盯着屏幕等结果，正需要这一声。
+     */
+    function playOfflineDoneSound() {
+        try {
+            if (global.MiyaMsgSound && typeof global.MiyaMsgSound.playForOfflineDone === 'function') {
+                global.MiyaMsgSound.playForOfflineDone();
+            }
+        } catch (e) {}
+    }
+
     /* 生成结束时统一把输入框交还给用户（原来 5 处各写了一遍） */
     function restoreWriterInput() {
         var input = $('xw-writer-input');
@@ -3457,6 +3484,11 @@ function renderWriter() {
                     }
                     return eng.sendAppointment(ui.chatId, ui.sessionId, text, handlers);
                 })
+                .then(function (r) {
+                    /* 到这里才算真的写完了。失败/中止不会进这个分支（走 finally）。 */
+                    playOfflineDoneSound();
+                    return r;
+                })
                 .finally(function () {
                     endWriterGeneration();
                 })
@@ -3663,6 +3695,10 @@ function renderWriter() {
                         }
                     );
                 })
+                .then(function (r) {
+                    playOfflineDoneSound();
+                    return r;
+                })
                 .catch(function (err) {
                     restoreFloorAfterFailedRegenerate(m);
                     patchStoryBody();
@@ -3756,6 +3792,10 @@ function renderWriter() {
                         ui.sessionId,
                         Object.assign(streamHandlers(), { keepRegenCandidate: false })
                     );
+                })
+                .then(function (r) {
+                    playOfflineDoneSound();
+                    return r;
                 })
                 .catch(function (err) {
                     /* 失败把刚才删掉的楼层原样放回，这条 user 从头到尾没被碰过 */
@@ -4428,6 +4468,10 @@ function renderWriter() {
                                 Object.assign(streamHandlers(), { keepRegenCandidate: false })
                             );
                         })
+                        .then(function (r) {
+                            playOfflineDoneSound();
+                            return r;
+                        })
                         .catch(function (err) {
                             restoreMessageSnapshot(userSnap);
                             renderStory();
@@ -4532,6 +4576,10 @@ function renderWriter() {
                              */
                             keepRegenCandidate: false
                         });
+                    })
+                    .then(function (r) {
+                        playOfflineDoneSound();
+                        return r;
                     })
                     .catch(function (err) {
                         restoreMessageSnapshot(snap);

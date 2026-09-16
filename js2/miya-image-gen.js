@@ -359,6 +359,45 @@
     return i >= 0 ? s.slice(i + 1) : s;
   }
 
+  /*
+   * ── dataUrl → Blob（multipart 垫图必需）──────────────────────
+   *
+   * /images/edits **只收 multipart 文件上传**，文件字段必须是一个真的
+   * Blob/File（带 MIME、带 filename），扔 base64 字符串进去服务端不认。
+   *
+   * 所以这里要能把垫图的 dataUrl 还原成二进制。js2/miya-storage.js 里
+   * 有个同名的 dataUrlToBlob，但它没挂到全局，本文件拿不到 —— 与其去
+   * 改另一个模块的导出面（牵动备份/序列化那条链路），不如就地实现，
+   * 二十行、零依赖、出问题也只影响本文件。
+   */
+  function dataUrlMime(dataUrl) {
+    var m = String(dataUrl || '').match(/^data:([^;,]+)/i);
+    return m ? m[1] : 'image/png';
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    var s = String(dataUrl || '');
+    var comma = s.indexOf(',');
+    if (comma < 0) return null;
+    var b64 = s.slice(comma + 1);
+    try {
+      var bin = atob(b64);
+      var u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return new Blob([u8], { type: dataUrlMime(s) });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* 按 MIME 猜个扩展名 —— 有的网关会拿 filename 后缀判断类型。 */
+  function extFromMime(mime) {
+    var m = String(mime || '').toLowerCase();
+    if (m.indexOf('jpeg') >= 0 || m.indexOf('jpg') >= 0) return 'jpg';
+    if (m.indexOf('webp') >= 0) return 'webp';
+    return 'png';
+  }
+
   function blobToDataUrl(blob) {
     return new Promise(function (resolve, reject) {
       if (!blob) return reject(new Error('no_blob'));
@@ -454,59 +493,175 @@
     }
 
     if (opts.referenceDataUrl) {
-      var refB64 = dataUrlToBase64(opts.referenceDataUrl);
-      var editPayload = {
-        model: cfg.openai.model,
-        prompt: trim(opts.prompt),
-        n: 1,
-        size: size,
-        response_format: 'b64_json',
-        image: refB64
-      };
       /*
-       * ── 走了 /images/edits 却没拿到图时，**回退要能被看见** ──────────
+       * ── 垫图必须走 multipart，这是协议要求，不是口味问题 ──────────
        *
-       * 原先这里是静默 `return callGenerations()`：垫图失败就悄悄按纯文生图
-       * 再发一次，用户完全不知道自己的垫图被丢掉了 —— 看到一张图，
-       * 只是跟垫图毫无关系，只会以为「垫图功能坏了」。
+       * 原先这里发的是 `Content-Type: application/json` + `image: <base64>`。
+       * 但 /images/edits **官方只收 multipart/form-data**：
+       *   Azure 官方文档原话「The Image Edit API takes multipart/form
+       *   data, not JSON data.」，示例是 -F "image[]=@beach.png"；
+       *   OpenAI 开发者社区对同类报错的答复也是同一句
+       *   「explicitly requires multipart form data with the image
+       *   provided as an actual file upload」。
        *
-       * 现在给回退结果打个 fellBack 标记，一路透到 UI 上去提示
-       * 「当前模型未走垫图，已按纯文生图生成」。
+       * 后果是：只要带垫图就 400，然后静默回退纯文生图 —— 用户看到
+       * 一张图，跟垫图毫无关系，只会以为「垫图功能坏了」。实际上
+       * OpenAI 这条路径上的垫图**一次都没成功过**。
        *
-       * 做法是在 Blob 上挂属性而不是改返回类型 —— 返回类型是 Blob，
-       * 调用方有聊天、朋友圈、测试生图、自由生图四处，改类型会牵连一大片。
-       * Blob 是对象，挂个额外属性不影响它照常当 Blob 用。
+       * 现在的策略是「multipart 优先，JSON 兜底」：
+       *
+       *   1. 先按官方形状发 multipart（单张图用单数 `image` 文件字段）；
+       *   2. 若返回形状类错误（4xx），再按 JSON 发一次 ——官方 JSON 形状
+       *      的字段名是 `images`（数组），给那些改写过 edits 的中转站
+       *      另附 image / image_url 两种土写法；
+       *   3. 两次都拿不到图，才 markFellBack() 回退纯文生图并告知用户。
+       *
+       * 之所以不「JSON 优先」，是因为官方路径是绝大多数情况，把它放
+       * 第一位能让正常用户少一次必然失败的往返。
        */
-      return fetch(root + '/images/edits', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + cfg.openai.apiKey
-        },
-        body: JSON.stringify(editPayload)
-      }).then(function (r) {
+      var refBlob = dataUrlToBlob(opts.referenceDataUrl);
+
+      function editError(msg) {
+        var e = new Error(msg);
+        e.miyaEditShapeError = true;
+        return e;
+      }
+
+      /* 把一次 fetch 响应解析成 Blob；拿不到图就抛（带形状标记）。 */
+      function parseEditResponse(r, tag) {
         return r.text().then(function (t) {
-          if (r.ok) {
-            var j;
-            try { j = JSON.parse(t); } catch (e) { j = null; }
-            var item = j && j.data && j.data[0];
-            if (item && item.b64_json) {
-              var bin = atob(item.b64_json);
-              var u8 = new Uint8Array(bin.length);
-              for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-              return new Blob([u8], { type: 'image/png' });
-            }
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) { j = null; }
+          if (!r.ok) {
+            throw editError(tag + '_http_' + r.status + (t ? ': ' + t.slice(0, 160) : ''));
           }
-          return markFellBack(callGenerations());
+          var item = j && j.data && j.data[0];
+          if (item && item.b64_json) {
+            var bin = atob(item.b64_json);
+            var u8 = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+            return new Blob([u8], { type: 'image/png' });
+          }
+          if (item && item.url) {
+            return fetch(item.url).then(function (imgR) {
+              if (!imgR.ok) throw editError(tag + '_url_fetch_failed');
+              return imgR.blob();
+            });
+          }
+          throw editError(tag + '_no_image_data');
         });
-      }).catch(function () {
-        return markFellBack(callGenerations());
-      });
+      }
+
+      /* 路径一：官方 multipart 形状。 */
+      function callEditsMultipart() {
+        /*
+         * 垫图二进制都解不出来（dataUrl 损坏）就直接放弃这条路径，
+         * 交给 JSON 兜底试一把。
+         */
+        if (!refBlob) return Promise.reject(editError('ref_decode_failed'));
+        var fd = new FormData();
+        var mime = refBlob.type || 'image/png';
+        var fname = 'reference.' + extFromMime(mime);
+        /*
+         * ⚠️ 只发**一个** image 字段名，且用单数 `image`。
+         *
+         * 踩过的坑，记下来免得后人再试：一开始想「image[] 和 image 都塞上，
+         * 多出来的服务端会忽略」—— 这个假设是错的。OpenAI 对重复字段名是
+         * **严格报错**，实测结论是 "repeated image is rejected with
+         * duplicate_parameter"（langchain4j 那个 PR 里跑了真机验证）。
+         * 两个都塞的结果是 multipart 必然 400，每次都白白多走一次 JSON 兜底。
+         *
+         * 单张图用单数 `image`（langchain4j 的实测口径：single-image uses
+         * field name `image`；多张才用 repeated `image[]`）。我们只传一张，
+         * 所以单数就对了。
+         */
+        fd.append('image', refBlob, fname);
+        fd.append('model', cfg.openai.model);
+        fd.append('prompt', trim(opts.prompt));
+        fd.append('n', '1');
+        fd.append('size', size);
+        /*
+         * response_format 只对 dall-e-2 有意义，GPT-Image 系列会**拒绝**
+         * 这个字段。我们无法在这里可靠地判断模型代际，就没必要冒这个险 ——
+         * GPT-Image 本来就总是返回 base64，少发这个字段不影响我们取图。
+         * （parseEditResponse 同时认 b64_json 和 url，两种返回都能吃下。）
+         */
+        /* ⚠️ 不要手动设 Content-Type：boundary 由浏览器生成。 */
+        return fetch(root + '/images/edits', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + cfg.openai.apiKey },
+          body: fd
+        }).then(function (r) { return parseEditResponse(r, 'multipart'); });
+      }
+
+      /* 路径二：JSON 兜底（给只认 JSON 的中转站留后路）。 */
+      function callEditsJson() {
+        /*
+         * ⚠️ JSON 形状的字段名是 **images（数组）**，不是 image；
+         * 而且数组元素是**对象**，不是裸字符串。官方示例逐字如下：
+         *
+         *   "images": [ { "image_url": "https://example.com/source-image.png" } ]
+         *
+         * 这两个坑我都踩过一次，记在这里：
+         *   · 形状：edits 的主路径是 multipart，JSON 只是备选 —— 旧实现
+         *     把它当主路径发，就已经偏了；
+         *   · 字段名：旧实现发 `image: <base64>`，那是 multipart 那边的
+         *     名字，官方明确说 "Do not use the multipart field name image"；
+         *   · 元素类型：elements 是 {image_url|file_id} 对象，扔裸字符串
+         *     同样不被接受。
+         *
+         * 三条全错，所以旧实现在这条路径上从没成功过。
+         *
+         * 后面额外带上 image / image_url 两个土写法，是给中转站留的 ——
+         * JSON 多几个未知键通常会被忽略，风险远小于 multipart 那边
+         * （multipart 的重复字段名是硬报错，见上面 callEditsMultipart）。
+         */
+        var refDataUrl = String(opts.referenceDataUrl || '');
+        var editPayload = {
+          model: cfg.openai.model,
+          prompt: trim(opts.prompt),
+          n: 1,
+          size: size,
+          /* 官方 JSON 形状：对象数组，元素用 image_url 引用 */
+          images: [{ image_url: refDataUrl }],
+          image: dataUrlToBase64(refDataUrl),
+          image_url: refDataUrl
+        };
+        return fetch(root + '/images/edits', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + cfg.openai.apiKey
+          },
+          body: JSON.stringify(editPayload)
+        }).then(function (r) { return parseEditResponse(r, 'json'); });
+      }
+
+      /*
+       * ── 兜底的兜底：JSON 那条只在「形状被拒」时才试 ──────────────
+       *
+       * 如果 multipart 是**网络层**就挂了（断网、跨域被拦、超时），
+       * 换成 JSON 大概率也是同样的网络错误 —— 白白多发一次请求，
+       * 还让用户多等一个超时。只有服务端明确回了错误（拿到了 HTTP
+       * 响应，说明网络是通的，只是请求形状它不认），才值得换姿势再试。
+       */
+      return callEditsMultipart()
+        .catch(function (err) {
+          if (err && err.miyaEditShapeError) return callEditsJson();
+          throw err;
+        })
+        .catch(function () { return markFellBack(callGenerations()); });
     }
     return callGenerations();
   }
 
-  /* 给回退出来的 Blob 盖个章，供 UI 判断要不要提示用户。失败不影响主流程。 */
+  /*
+   * 给回退出来的 Blob 盖个章，供 UI 判断要不要提示用户。失败不影响主流程。
+   *
+   * 做法是在 Blob 上挂属性而不是改返回类型 —— 返回类型是 Blob，调用方有
+   * 聊天、朋友圈、测试生图、自由生图四处，改类型会牵连一大片。Blob 是对象，
+   * 挂个额外属性不影响它照常当 Blob 用。
+   */
   function markFellBack(promise) {
     return Promise.resolve(promise).then(function (blob) {
       try { if (blob && typeof blob === 'object') blob.miyaRefFellBack = true; } catch (e) {}
@@ -645,7 +800,42 @@
   function storeImageBlob(blob) {
     var st = getStore();
     if (!st || typeof st.storeMediaBlob !== 'function') return Promise.reject(new Error('store_missing'));
-    return st.storeMediaBlob(blob, 'chat');
+    return st.storeMediaBlob(blob, 'chat').then(function (blobId) {
+      /*
+       * ── 生图成功的提示音，在这里收口 ─────────────────────────────
+       *
+       * 为什么选这里：storeImageBlob 是**聊天生图**与**朋友圈配图**
+       * 两条成功路径的公共出口（失败路径走不到这儿），
+       * 挂在这里就等于一次性覆盖两处，不用在 5 个 .then(blob) 里各抄一遍
+       * —— 抄多了一定会漏，漏的那个场景就会「有时候没声」。
+       *
+       * 注意时机：必须在**真正入库成功之后**再响。
+       * 如果放在 generateImageForScene 的 resolve 里，那么
+       * 「图下来了但存不进 IndexedDB」这种情况下照样会响 ——
+       * 用户听到声响、抬头一看界面上是失败提示，那声提示音就成了噪音。
+       */
+      maybePlayImageGenDone();
+      return blobId;
+    });
+  }
+
+  /*
+   * 播生图成功的提示音。
+   *
+   * 走 MiyaMsgSound.playForImageGenDone() 而不是 play()：
+   * 这个音是「你等的图好了」的反馈，受总开关控制，
+   * 但**不该**被「聊天室正开着就不响」那条新消息抑制规则挡掉 ——
+   * 生成时用户本来就盯着屏幕等，正需要这一声。
+   *
+   * 整个调用包在 try 里：提示音是锦上添花，
+   * 音频 API 在部分浏览器/隐私模式下会直接抛错，绝不能因此把出图搞失败。
+   */
+  function maybePlayImageGenDone() {
+    try {
+      if (global.MiyaMsgSound && typeof global.MiyaMsgSound.playForImageGenDone === 'function') {
+        global.MiyaMsgSound.playForImageGenDone();
+      }
+    } catch (e) {}
   }
 
   function markChatMessagePending(chatId, msgId) {
@@ -1002,6 +1192,8 @@
     previewEl.innerHTML = '<div class="miya-ig-test miya-ig-test--busy"><span class="miya-ig-test__spin"></span><p>生成中…</p></div>';
     return generateImageForScene('', testPrompt, { skipContactCheck: true, referenceDataUrl: '' })
       .then(function (blob) {
+        /* 这两条路径不经过 storeImageBlob（用完即弃、不入库），所以单独响一次 */
+        maybePlayImageGenDone();
         return blobToDataUrl(blob).then(function (url) {
           previewEl.innerHTML = '<div class="miya-ig-test miya-ig-test--done"><img src="' + esc(url) + '" alt="测试生图"></div>';
         });
@@ -1246,6 +1438,8 @@
       size: getFreeSize()
     })
       .then(function (blob) {
+        /* 自由生图的图不入库（只存在内存里等用户下载），单独响一次 */
+        maybePlayImageGenDone();
         /* 引导语只影响发出去的提示词，不改用户看到/下载的那段原文 */
         return blobToDataUrl(blob).then(function (url) {
           freeGenState.blob = blob;
@@ -1256,8 +1450,14 @@
             /*
              * 用户定的规则：模型不支持垫图时**自动回退 + 明确告知**。
              * 但不能说成「失败」—— 图是出来了的，只是没用上垫图。
+             *
+             * 文案里补一句「模型是否支持图片输入」，是因为我们现在已经
+             * 把官方要求的两种请求形状（multipart / JSON）都试过了，
+             * 都拿不到图，剩下的可能性就只剩模型/网关本身不做图生图。
+             * 这样用户知道该去查哪儿，而不是反复重试。
              */
-            refNote = '<p class="miya-ig-free-refwarn">当前模型未走垫图，已按纯文生图生成</p>';
+            refNote = '<p class="miya-ig-free-refwarn">当前模型未走垫图，已按纯文生图生成' +
+              '<br><span class="miya-ig-free-refwarn-sub">请确认该模型支持图片输入，或换用支持图生图的模型</span></p>';
           } else if (useRef) {
             refNote = '<p class="miya-ig-free-refok">已按垫图（' +
               (refMode === REF_MODE_REDRAW ? '照着重画' : '参考风格') + '）生成</p>';

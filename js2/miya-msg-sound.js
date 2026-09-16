@@ -25,6 +25,8 @@
   var playingAudio = null;
   var blobUrlCache = Object.create(null);
   var uiBound = false;
+  /* 最近一次「UI 反馈音」的播放记录，供排查与测试断言（headless 下听不到声） */
+  var lastPlay = null;
 
   function $(id) { return document.getElementById(id); }
 
@@ -251,6 +253,41 @@
     stopPlaying();
     if (preset.builtin) return playBuiltin(preset.id);
     return playCustom(preset.id);
+  }
+
+  /*
+   * ── 两个新的播放入口：生图成功 / 线下生成完毕 ──────────────────
+   *
+   * 为什么不让调用方直接用 playSelected() ——
+   * playSelected 只受总开关（settings.enabled）控制，语义是「无条件播一声」。
+   * 而这两处是**用户正在界面上操作**时的反馈音，跟「来了新消息」不是一回事：
+   *
+   *   · 它们**不该**受 shouldPlayForChat 里那条「聊天室开着就不响」的规则约束
+   *     （那条是给新消息用的，防止你正看着聊天还响铃；而生成完成时
+   *      你本来就盯着屏幕等结果，正需要这一声）。
+   *   · 但它们**该**受总开关约束 —— 设置里关掉提示音，这几处也不该响，
+   *     否则「关了还在响」会让人以为开关坏了。
+   *
+   * 所以这里只查总开关，不查聊天室前台。命名上明确是「UI 反馈」，
+   * 免得以后有人顺手把消息那套抑制规则也套上来。
+   */
+  function playUiFeedback(reason) {
+    if (!settings.enabled) return Promise.resolve();
+    /* 记一个轻量标记，便于排查「到底响没响、为什么响」，
+       也供自动化测试断言（测试跑在无音频输出的 headless 里，
+       光听是听不到的）。 */
+    lastPlay = { at: Date.now(), reason: String(reason || 'ui') };
+    return playSelected();
+  }
+
+  /* 生图成功（线上角色发图 / 自由生图 / 测试生图 / 线下配图）*/
+  function playForImageGenDone() {
+    return playUiFeedback('image-gen');
+  }
+
+  /* 线下（约会场景）整段生成完毕 */
+  function playForOfflineDone() {
+    return playUiFeedback('offline-done');
   }
 
   function preview(id) {
@@ -491,7 +528,23 @@
     preview: preview,
     playForIncomingMessage: playForIncomingMessage,
     shouldPlayForChat: shouldPlayForChat,
+    /* 场景化播放入口（生图成功 / 线下生成完毕）*/
+    playUiFeedback: playUiFeedback,
+    playForImageGenDone: playForImageGenDone,
+    playForOfflineDone: playForOfflineDone,
+    /* 测试后门：读最近一次 UI 反馈音的记录（headless 里听不到声，只能看记录）*/
+    __testLastPlay: function () { return lastPlay ? Object.assign({}, lastPlay) : null; },
+    __testResetLastPlay: function () { lastPlay = null; },
     isEnabled: function () { return settings.enabled; },
+    /*
+     * 开关的对外读写。
+     *
+     * 之前只有 isEnabled（只读），写入口是 UI 上那个开关独占的。
+     * 现在三个场景都要受它管辖，测试也得能直接开合 ——
+     * 否则「关掉总开关后到底还响不响」这条根本没法验证。
+     * 顺手也让其它模块（比如将来的静音管理）有正规途径改这个状态。
+     */
+    setEnabled: setEnabled,
     getSettings: function () {
       return {
         enabled: settings.enabled,

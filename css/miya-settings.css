@@ -1802,3 +1802,10 @@
   line-height: 1.5;
   color: #b4761b;
 }
+
+/* 回退提示的第二行（排查建议），比主句再轻一档，别喧宾夺主 */
+.miya-ig-free-refwarn-sub {
+  display: inline-block;
+  margin-top: 2px;
+  color: var(--st-text-tertiary, #999);
+}
