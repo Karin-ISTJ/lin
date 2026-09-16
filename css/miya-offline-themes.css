@@ -506,7 +506,8 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
-.miya-offline-app.xw-theme-korean .xw-journal-writer__plus,
+/* 注：`.xw-journal-writer__plus`（重回 ↶）已随按钮移除，
+   这里只保留 __ico / __send 两枚。 */
 .miya-offline-app.xw-theme-korean .xw-journal-writer__ico,
 .miya-offline-app.xw-theme-korean .xw-journal-writer__send {
   flex-shrink: 0;
@@ -520,7 +521,6 @@
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 
-.miya-offline-app.xw-theme-korean .xw-journal-writer__plus,
 .miya-offline-app.xw-theme-korean .xw-journal-writer__ico {
   width: 34px;
   height: 34px;
@@ -529,13 +529,11 @@
   color: #262626;
 }
 
-.miya-offline-app.xw-theme-korean .xw-journal-writer__plus:active,
 .miya-offline-app.xw-theme-korean .xw-journal-writer__ico:active {
   background: rgba(0, 0, 0, 0.05);
   opacity: 0.72;
 }
 
-.miya-offline-app.xw-theme-korean .xw-journal-writer__plus svg,
 .miya-offline-app.xw-theme-korean .xw-journal-writer__ico svg {
   width: 22px;
   height: 22px;

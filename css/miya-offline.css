@@ -792,12 +792,18 @@
   padding: 12px;
 }
 
-/* 底部输入条 */
+/* 底部输入条
+ *
+ * 布局说明（v67 更新）：原来这里是 grid 三列 `auto 1fr auto`，对应的
+ * 是「工具组 / 输入框 / 发送键」三件套之外的 `xw-writer__undo`（重回 ↶）。
+ * 那个键已移除，现在这一栏只剩「工具组 + 输入框 + 发送键」，
+ * 用 flex 表达更直接：输入框吃掉剩余宽度，两端各靠 flex-shrink:0 钉住。
+ * 注意 input 必须 flex:1 1 auto + min-width:0，否则长文本会把整条撑破。
+ */
 .xw-writer {
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: end;
+  display: flex;
+  align-items: center;
   gap: 10px;
   padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0));
   border-top: 2px solid var(--xw-ink);
@@ -805,25 +811,25 @@
   backdrop-filter: blur(12px);
 }
 
-.xw-writer__undo {
-  width: 40px;
-  height: 40px;
-  border: 2px solid var(--xw-ink);
-  background: #fff;
-  border-radius: 10px;
-  padding: 0;
-  font-size: 20px;
-  line-height: 1;
-  color: var(--xw-ink);
-  cursor: pointer;
-  margin-bottom: 2px;
-  flex-shrink: 0;
+/* 工具组与发送键固定宽，输入框独占剩余空间 */
+.xw-writer__tools,
+.xw-writer__go {
+  flex: 0 0 auto;
 }
 
-.xw-writer__undo:active {
-  background: var(--xw-ink);
-  color: #fff;
+.xw-writer__field {
+  flex: 1 1 auto;
+  min-width: 0;
 }
+
+/*
+ * `.xw-writer__undo`（重回 ↶）的样式已随按钮一起移除。
+ *
+ * 保留这段注释是为了让后来者知道此处曾有一个键：它和楼层右下角的
+ * 候选切换键 › 做的是同一件事（regenerateAppointment），属于重复入口。
+ * 若日后要把它加回来，请连同「楼层自带版本切换」的定位一起重新想清楚，
+ * 不要再造两个语义重叠的入口。
+ */
 
 .xw-writer__field {
   width: 100%;
@@ -1898,7 +1904,7 @@
   font-size: 11px !important;
   text-align: left !important;
 }
-#miya-offline-app .xw-writer__undo,
+/* 工具组固定在 34px 见方；发送键单独给尺寸（原名单里的 __undo 已移除） */
 #miya-offline-app .xw-writer__go {
   flex: 0 0 34px !important;
   width: 34px !important;

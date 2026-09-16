@@ -116,7 +116,15 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" ' + _I + '/></svg>';
     var ICON_EMOJI =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" ' + _I + '/><path d="M9 10.2h.01M15 10.2h.01M8.8 14.4c1.1 1.3 2.3 1.9 3.2 1.9s2.1-.6 3.2-1.9" ' + _I + '/></svg>';
-    var ICON_UNDO =
+    /*
+     * 刷新（循环箭头）。
+     *
+     * 原来这里叫 ICON_UNDO，配的是输入框左边的「重回 ↶」键 —— 那个键已移除。
+     * 图形本身（顺时针回环）正是「重来一遍」的意思，与现在
+     * 「刷新这一层」的语义完全对得上，所以直接沿用图形、改名归位，
+     * 挂到我发的消息楼层上（见 refreshToolHtml）。
+     */
+    var ICON_REFRESH =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H4.5v4.5" ' + _I + '/><path d="M5 12.5a7 7 0 1 0 2.1-5" ' + _I + '/></svg>';
     var ICON_SEND =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5L10.2 14.2" ' + _I + '/><path d="M21.5 3.5L14.8 21l-3.3-7.5L4 10.2 21.5 3.5z" ' + _I + '/></svg>';
@@ -559,7 +567,29 @@
         if (ui.view !== 'story' || !ui.chatId || !ui.sessionId) return false;
         if (ui.viewingArchive) return true;
         var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
-        return msgs.length > 0 || ui.streamingLines.length > 0 || ui.status === 'coming';
+        if (msgs.length > 0 || ui.streamingLines.length > 0 || ui.status === 'coming') return true;
+        /*
+         * ⚠️ 还要看「原始会话里有没有行」，不能只看活着的消息。
+         *
+         * 场景：用户点楼层右下角的 › 刷新某一层。刷新的时序是
+         * 「先把那一层软删（存成候选锚点）→ 再让引擎重答」。
+         * 如果那一层正好是场上**唯一**的楼层（比如只有一层角色回复，
+         * 或生成失败后只剩一条我发的消息），软删之后
+         * getSessionMessages() 就返回空数组 —— 上面两行为 false，
+         * 于是 storyHasContent() 判假，render() 直接把整个场景
+         * **换成了开场白选择页**。
+         *
+         * 用户的体感正是：「我一刷新，整场戏没了，跳回了选开场白」。
+         * 这不是刷新该有的样子 —— 刷新只是要把那一层重生成一遍，
+         * 场景本身还在，屏上应当只剩一个「书写中」。
+         *
+         * 所以这里补一条：只要原始会话里还留有任何一行（软删的行也在
+         * 数组里，只是 content 被清空），就认为场景有内容，
+         * 从而留在正片视图里等生成回填。
+         */
+        var sess = apStore().getSession(ui.chatId, ui.sessionId);
+        var raw = (sess && sess.messages) || [];
+        return raw.length > 0;
     }
 
     function sessionHasUserMessages() {
@@ -575,6 +605,31 @@
             esc(msgId) +
             '" title="重发" aria-label="重发">' +
             ICON_RESEND +
+            '</button>'
+        );
+    }
+
+    /*
+     * 「我发的消息」楼层上的刷新键。
+     *
+     * 为什么只给 user 楼层、assistant 楼层不给：
+     *
+     *   角色楼层的重刷入口是右下角的 ‹ › —— 那里既是「再生成一版」
+     *   也是「翻看已有候选」，语义完整、位置也贴着这一层。再塞一个刷新键
+     *   就是同一层两个做同一件事的按钮，正是这次要清理掉的那种重复。
+     *
+     *   而我发的消息楼层**没有**候选表这个概念（没有人会要「我这句的
+     *   另一个版本」），但它在一种情况下必须能重刷：上一轮生成失败时，
+     *   最新楼层就停在这条 user 上，屏上再没有别的入口可以「重试」。
+     *   此时这个键的预期行为是「保留我这句话，让角色重新答一次」——
+     *   对应 regenerateAfterUserFloor()。
+     */
+    function refreshToolHtml(msgId) {
+        return (
+            '<button type="button" class="xw-block__tool" data-ap-msg-refresh="' +
+            esc(msgId) +
+            '" title="刷新这一层（保留这条消息，重新生成）" aria-label="刷新">' +
+            ICON_REFRESH +
             '</button>'
         );
     }
@@ -1471,6 +1526,8 @@
                 ICON_EDIT +
                 '</button>' +
                 resendToolHtml(m.id) +
+                /* 我发的消息额外给一个刷新键：生成失败后最新楼层会停在它上面 */
+                (isUser ? refreshToolHtml(m.id) : '') +
                 '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
                 esc(m.id) +
                 '" title="删除" aria-label="删除">' +
@@ -1667,80 +1724,21 @@
     }
 
     /**
-     * 给指定楼层**再生成一版**候选。
+     * 楼层右下角 › 键在「只有一版」时的动作：给这一层再生成一版。
      *
-     * 与「重回」（quickRedoLastAssistant）的关系：
-     *   · 重回作用于**末尾那一轮**，入口在上方工具栏；
-     *   · 这个方法作用于**被点的那一层**，入口在楼层自己的右下角。
-     * 底层走的是同一个引擎接口 regenerateAppointment，所以候选的归档、
-     * 上限截断、楼层写回位置这些规则完全一致，不需要两套逻辑。
+     * 这里只剩一层薄薄的转接 —— 真正的实现在 regenerateFloor() 那一族里，
+     * 和「我发的消息」楼层的刷新键共用同一条路径。
+     * 候选的归档、上限截断、楼层写回位置这些规则自然也都在那边统一处理，
+     * 不需要在这里再维护第二套逻辑。
      *
-     * 对被点楼层的要求：它必须是 assistant 且不是最后一层之外的怪状态
-     * （比如该层后面还有更新的楼层）。这种情况也允许 —— 重答会就地
-     * 替换这一层的候选，后面的楼层不受影响，因为它们只把这一层
-     * **当前显示的那一版**当作历史，而我们要做的正是把当前这版换掉。
+     * 之所以要留这个包装而不是直接改名：
+     *   · 调用点（applyOfflineSwipe）的语义是「› 推进一下」，
+     *     「推进」在一版时就是「生成新的一版」，这个意图值得在调用点保留；
+     *   · 而「刷新」是另一条入口（点在 user 楼层上，语义是「重试生成」）。
+     *     两者对用户是两件事，对底层是同一族能力。
      */
     function generateSwipeForMessage(m) {
-        if (!m || m.role !== 'assistant') return;
-        var eng = apEngine();
-        if (!eng) return;
-        if (eng.isBusy(ui.chatId, ui.sessionId)) {
-            toast('等上一镜结束再说');
-            return;
-        }
-        /*
-         * 生成前先把目标层软删 —— 与 quickRedoLastAssistant 同一套时序。
-         *
-         * softDeleteForRegenerate 会在清空正文前把当前这一版归档成
-         * swipes[0] 当对照锚点，所以第一次点 › 之后：
-         *   原内容 → 候选 1，新生成 → 候选 2，切换器随即变成 ‹ 1/2 ›。
-         * 这正是「保留原内容」的实现方式，不需要我们手动拼候选表。
-         */
-        var aps = apStore();
-        if (aps && typeof aps.softDeleteForRegenerate === 'function') {
-            aps.softDeleteForRegenerate(ui.chatId, ui.sessionId, m.id);
-        } else if (aps && typeof aps.deleteMessage === 'function') {
-            aps.deleteMessage(ui.chatId, ui.sessionId, m.id);
-        }
-        patchStoryBody();
-
-        var input = $('xw-writer-input');
-        if (input) input.disabled = true;
-        var sendBtn = $('xw-writer-go');
-        if (sendBtn) sendBtn.disabled = true;
-        beginWriterGeneration();
-        var priorSwipes = Array.isArray(m.swipes) ? m.swipes.length : 0;
-        runStream(
-            Promise.resolve()
-                .then(function () {
-                    return eng.regenerateAppointment(
-                        ui.chatId,
-                        ui.sessionId,
-                        streamHandlers(),
-                        {
-                            replaceTargetId: m.id,
-                            /* 次数直接取候选表长度：候选表就是「刷过几次」的权威记录 */
-                            attempt: Math.max(1, priorSwipes)
-                        }
-                    );
-                })
-                .catch(function (err) {
-                    /*
-                     * 失败要把这一层放回去 —— 上面已经把它软删了。
-                     * 不还原的话，用户点一下 › 遇到网络问题，
-                     * 这一层就凭空消失（正文空、面板也不显示）。
-                     */
-                    if (aps && typeof aps.restoreMessage === 'function') {
-                        aps.restoreMessage(ui.chatId, ui.sessionId, m);
-                    }
-                    patchStoryBody();
-                    toast('没生成出来，已把这一层放回去');
-                    if (global.console && console.warn) console.warn('[swipe] generate failed', err);
-                })
-                .finally(function () {
-                    endWriterGeneration();
-                })
-        );
+        regenerateFloor(m);
     }
 
     function messageBlockHtml(m, canEdit) {
@@ -1811,6 +1809,8 @@
             ICON_EDIT +
             '</button>' +
             resendToolHtml(m.id) +
+            /* 我发的消息额外给一个刷新键：生成失败后最新楼层会停在它上面 */
+            (m.role === 'user' ? refreshToolHtml(m.id) : '') +
             '<button type="button" class="xw-block__tool xw-block__tool--drop" data-ap-msg-del="' +
             esc(m.id) +
             '" title="删除" aria-label="删除">' +
@@ -2594,11 +2594,16 @@
                 '</div></div>';
         }
         var ribbon = archivRibbon;
+        /*
+         * 与 storyHasContent() 同一口径：刷新期间被刷的那一层处于软删态，
+         * msgs 会是空数组，但场景并没有消失 —— 不能因此把正片换成空白页。
+         */
         var hasStory =
             ui.viewingArchive ||
             msgs.length > 0 ||
             ui.streamingLines.length > 0 ||
-            ui.status === 'coming';
+            ui.status === 'coming' ||
+            ((sess && sess.messages) || []).length > 0;
         var charCount = msgs.reduce(function (n, m) {
             return n + String(m.content || '').length;
         }, 0);
@@ -2775,7 +2780,17 @@ function renderWriter() {
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-prefs">调参</button>' +
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-vault">卷宗</button>' +
             '</div></div>' +
-            '<button type="button" class="xw-writer__undo" id="xw-writer-undo" title="重回" aria-label="重回">↶</button>' +
+            /*
+             * 「重回」键已移除（原来在输入框左边，id 为 xw-writer-undo）。
+             *
+             * 它的功能和楼层右下角的候选切换键 ‹ › 完全重叠 —— 两者最终都走
+             * 引擎的 regenerateAppointment（让角色把这一轮重答一次），
+             * 只是入口一左一右。两个入口做同一件事，用户反而要猜该点哪个。
+             *
+             * 现在统一以「楼层自带的重刷入口」为准：每一层右下角的 › 
+             * 既是「再生成一版」，也是「翻看已有候选」，语义归属明确
+             * （它是这一层的版本，不是整个场景的），位置也不占输入栏。
+             */
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder=""></textarea>' +
             '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
             '</footer>'
@@ -2794,8 +2809,7 @@ function renderWriter() {
     function renderJournalWriter() {
         return (
             '<footer class="xw-journal-writer">' +
-            '<button type="button" class="xw-journal-writer__plus" id="xw-writer-undo" title="重回" aria-label="重回">' +
-            ICON_UNDO + '</button>' +
+            /* 同 renderWriter：「重回」键已移除，重刷走楼层右下角的 › */
             '<div class="xw-journal-writer__input">' +
             '<textarea class="xw-journal-writer__field" id="xw-writer-input" rows="1" placeholder="输入消息..."></textarea></div>' +
             '<button type="button" class="xw-journal-writer__send" id="xw-writer-go" title="发送" aria-label="发送">' +
@@ -3346,131 +3360,158 @@ function renderWriter() {
         );
     }
 
-    function getTrailingAssistantRound(msgs) {
-        var list = (msgs || []).filter(function (m) {
-            return m && !m.deleted;
-        });
-        var round = [];
-        var i;
-        for (i = list.length - 1; i >= 0; i--) {
-            if (list[i].role === 'assistant') round.unshift(list[i]);
-            else break;
-        }
-        return round;
-    }
+    /*
+     * ═══════════════════════════════════════════════════════════
+     * 楼层刷新（统一的「再生成一版」入口）
+     * ═══════════════════════════════════════════════════════════
+     *
+     * 历史沿革 —— 这里原来有两个入口，做的是同一件事：
+     *
+     *   · quickRedoLastAssistant()  —— 输入框左边的「重回 ↶」键，
+     *     只作用于**末尾那一轮**，而且是全局按钮（不指向任何具体楼层）。
+     *   · generateSwipeForMessage() —— 楼层右下角的候选键 ›，
+     *     作用于**被点的那一层**。
+     *
+     * 两者最终都调引擎的 regenerateAppointment（让角色把这一轮重答一次），
+     * 只是作用范围与落点不同。用户面对两个做同一件事的按钮，只能靠试错
+     * 去猜该点哪个 —— 而它们的差别（末轮 vs 指定层）在界面上完全看不出来。
+     *
+     * 现在统一成一条路径：**刷新是楼层自己的能力**。
+     * 入口只剩一个（楼层右下角的 ›），语义也唯一 ——
+     * 「这一层，再给我一版」。输入框左边的「重回 ↶」已移除。
+     *
+     * 三条不变式（改这里之前请先读完）：
+     *
+     *   ① 刷新谁，就只动谁。
+     *      软删范围 == 写回范围 == 被点的那一层。绝不能顺手删整轮 ——
+     *      引擎只复活 replaceTargetId 指向的那一层，多删的层会永久消失。
+     *
+     *   ② 原版必须留成候选锚点。
+     *      走 softDeleteForRegenerate，它会先把当前正文归档进 swipes[0]，
+     *      这样「原版 / 历次刷新 / 最新」从第一次起就都在，
+     *      右下角的 ‹ › 也能立刻用起来。
+     *
+     *   ③ 刷新的过程要「看得见」。
+     *      被刷的那一层立刻从屏上消失，原地只剩一个「书写中」。
+     *      不复用旧正文做占位 —— 那会让人以为「点了没反应」。
+     *
+     * 注：原来这里还有一个 getTrailingAssistantRound()，用来给「重回」
+     * 找「末尾那一轮的角色楼层」。那个键移除后它就没有调用点了 ——
+     * 现在目标层由点击事件直接带过来（data-ap-msg-* 上的 id），
+     * 不再需要「猜末轮」这种间接做法，所以一并删掉。
+     */
 
     /*
-     * 末尾这一轮角色回复里，是不是已经攒了多个候选（swipes 多于一条）？
+     * 目标楼层现在有几个候选？
      *
-     * 「重回」的语义是「让角色把这一轮重答一次」。若这层已经在 swipe 里
-     * 躺过若干候选，说明它本身就是被重答过的产物 —— 此时再走一次
-     * regenerateAppointment（replaceLastAssistant=true）只会把新内容
-     * 继续 push 进同一层的 swipes 数组、并让视角停在最新的那条上。
+     * 这个数字有两个用途：
+     *   · 作为 regenerateAppointment 的 attempt（告诉模型「这是第几次重答」）。
+     *     连点两三次刷新后仍出同一段话是很常见的抱怨，根因是每轮 prompt
+     *     几乎一模一样、模型不知道自己正在重答（详见引擎侧
+     *     buildRegenerateHintBlock 的说明）。把序号带上，至少让「再刷一次」
+     *     在输入侧是可区分的。
+     *   · 判断刷新后要不要提示「可以用 ‹ › 翻看」。
      *
-     * 结果就是用户看到的现象：
-     *   点「重回」N 次 → 楼层数不变、DOM 结构不变、当前显示的第 N 个候选
-     *   跟前一个往往还是同一段话（模型对着同一份上下文重答），
-     *   于是「刷新三四次还是一模一样的内容」。
-     * 看上去像刷新失败，其实是「刷新成功了，但结果被叠进了同一层」。
+     * 为什么用候选表长度而不是自己维护计数器：候选表就是「这一层被重答过
+     * 几次」的权威记录，跟随软删/复活/切换候选自动同步，不会漂。
+     * 取 0 时调用方兜底成 1（第一次重答）。
      */
-    function trailingAssistantHasSwipes(msgs) {
-        var round = getTrailingAssistantRound(msgs);
-        for (var i = 0; i < round.length; i++) {
-            var sw = round[i] && round[i].swipes;
-            if (sw && sw.length > 1) return true;
-        }
-        return false;
+    function floorSwipeCount(m) {
+        return m && Array.isArray(m.swipes) ? m.swipes.length : 0;
     }
 
-    function quickRedoLastAssistant() {
+    /**
+     * 刷新失败时的统一兜底：把被刷的那一层原样放回去。
+     *
+     * 为什么必须还原：上面已经把这一层软删了（正文清空、content 变 ''）。
+     * 只要这一次生成没成功（断网、额度、接口报错、用户中途停止），
+     * 这一层就已经永久空了 —— 用户点一下按钮等于把内容删掉，还没有撤销。
+     * 这和重发（redoFromMessage）暴露的是同一类问题，处理方式也一致：
+     * 失败就把存好的那一版放回原位，并明确告诉用户「已放回去」。
+     */
+    function restoreFloorAfterFailedRegenerate(m) {
+        var aps = apStore();
+        if (!aps || !m) return;
+        if (typeof aps.restoreMessage === 'function') {
+            aps.restoreMessage(ui.chatId, ui.sessionId, m);
+        }
+    }
+
+    /**
+     * 让指定楼层「再生成一版」。
+     *
+     * 现在有两个调用方，语义各自明确：
+     *
+     *   · 楼层右下角的候选键 ›  —— 点在**角色楼层**上，重刷这一层自己。
+     *   · 楼层的刷新键          —— 点在**我发的消息**上（生成失败后它就
+     *     成了最新楼层），此时要「保留我发的这条、在它后面生成新楼层」，
+     *     而不是重写我自己写的话。
+     *
+     * 后者是本次新增的能力，详见下面按 role 分流的注释。
+     */
+    function regenerateFloor(m) {
+        if (!m || !m.id) return;
         var eng = apEngine();
-        if (!eng || eng.isBusy(ui.chatId, ui.sessionId)) {
+        if (!eng) return;
+        if (eng.isBusy(ui.chatId, ui.sessionId)) {
             toast('等上一镜结束再说');
             return;
         }
-        var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
-        var round = getTrailingAssistantRound(msgs);
-        if (!round.length) {
-            toast('没有可重回的角色回复');
+        if (m.role === 'assistant') {
+            regenerateAssistantFloor(m);
             return;
         }
-        /*
-         * 这一轮里的 assistant 楼层就是「要覆盖的目标」。
-         *
-         * 必须显式把 id 交给引擎，不能让它自己找。原因是下面会先软删这一层，
-         * 而引擎的查找逻辑会跳过 deleted 行、一路往上摸到**更早的、不相干**的
-         * 一层 —— 结果新内容写进了别的楼层，用户看到的是「重答跑位了」。
-         */
-        var targetAsst = null;
-        round.forEach(function (m) {
-            if (!targetAsst && m && m.role === 'assistant') targetAsst = m;
-        });
-        var replaceTargetId = targetAsst ? targetAsst.id : '';
-        /*
-         * 不再清空 swipes —— 那正是「刷新后看不到之前内容」的原因。
-         *
-         * 旧实现在这里把这层的候选清光后再重答，等于每刷新一次就丢掉所有历史版本，
-         * 用户只能看到最新那一条。现在保留候选，让引擎把新内容 push 成新候选，
-         * 这样右下角的 ‹ › 就能在「原版 / 以前刷出来的 / 最新」之间来回翻。
-         * 候选数量由引擎侧的 SWIPE_MAX 封顶，不会无限膨胀。
-         */
-        var hadSwipes = trailingAssistantHasSwipes(msgs);
-        /*
-         * ⚠️ 只软删「要覆盖的那一层」，不能删整轮。
-         *
-         * 旧实现是 round.forEach(...) —— 把末轮**所有** assistant 楼层一起软删。
-         * 但引擎写回时只会复活其中一层（replaceTargetId 指向的那个），
-         * 于是「连续两层及以上角色回复」的场次一刷就净亏楼层：
-         *
-         *   1:user  2:assistant  3:assistant  4:assistant
-         *   点刷新 → 2、3、4 全软删 → 引擎只写回第 2 层
-         *   结果 → 只剩 2 层，第 3、4 层的内容永久消失
-         *
-         * 用户看到的正是「上一楼生成的内容被吞了」。
-         *
-         * 为什么 round 会多于一层：重发（redoFromMessage）走的是
-         * regenerateAppointment，它把新内容并进**已有那层**的 swipes 而不新增楼层；
-         * 多角色/多段落回复、或历史数据里本来就挨着两条 assistant，都会让
-         * 末轮出现连续多层。这不是异常数据，是正常可达的状态。
-         *
-         * 现在明确：软删范围 == 写回范围 == 只有 replaceTargetId 那一层。
-         */
-        var victim = targetAsst;
-        if (victim) {
-            /*
-             * 用 softDeleteForRegenerate 而不是普通 deleteMessage：
-             * 它会在清空正文之前，把当前这一版存成候选锚点（swipes[0]）。
-             * 否则第一次刷新就把原版弄丢了 —— 候选表只剩新刷出来那一条，
-             * 右下角的 ‹ › 因为「不足两条候选」根本不渲染，用户也就
-             * 「看不到之前的内容、也没有切换键」。
-             */
-            var store = apStore();
-            if (store && typeof store.softDeleteForRegenerate === 'function') {
-                store.softDeleteForRegenerate(ui.chatId, ui.sessionId, victim.id);
-            } else {
-                store.deleteMessage(ui.chatId, ui.sessionId, victim.id);
-            }
+        regenerateAfterUserFloor(m);
+    }
+
+    /**
+     * 角色楼层刷新：就地再生成一版，写回**同一层**。
+     *
+     * 前置校验只有一条 —— 它得是有正文的角色回复。
+     * 允许它不是最后一层：重答会就地替换这一层当前显示的那版，
+     * 它后面的楼层不受影响（后面的内容只把这一层的**当前版**当历史，
+     * 而我们要做的正是把当前这版换掉）。
+     */
+    function regenerateAssistantFloor(m) {
+        if (!String(m.content || '').trim()) {
+            toast('这一层还没有内容，先让它生成完');
+            return;
         }
-        patchStoryBody();
-        var input = $('xw-writer-input');
-        if (input) input.disabled = true;
-        var sendBtn = $('xw-writer-go');
-        if (sendBtn) sendBtn.disabled = true;
-        beginWriterGeneration();
+        var eng = apEngine();
+        var aps = apStore();
+        var attempt = Math.max(1, floorSwipeCount(m));
+        var hadSwipes = floorSwipeCount(m) >= 2;
+
         /*
-         * 重答次数 —— 直接由「这一层现在有几个候选」推出来。
+         * ⚠️ 顺序很重要：先进入「生成中」，再重绘。
          *
-         * 为什么需要它：连点两三次「重回」后仍出同一段话，是很常见的抱怨。
-         * 根因是每一轮送出去的 prompt 几乎一模一样，模型没有任何「这是第几次」
-         * 的概念（详见引擎侧 buildRegenerateHintBlock 的说明）。
-         * 把序号带上，至少让「再刷一次」在输入侧是可区分的。
-         *
-         * 这里用候选表长度而不是自己维护计数器：候选表就是「这一层被重答过
-         * 几次」的权威记录，跟随软删/复活/切换候选自动同步，不会漂。
-         * 取 0 时兜底成 1（第一次重答）。
+         * 反过来（先 patchStoryBody 再 beginWriterGeneration）会有两个后果：
+         *   1. 被刷的那一层已经软删、屏上是空的，而此刻 ui.status 还是 idle
+         *      —— 「书写中」没有任何东西去渲染它，用户看到的是**一片空白**，
+         *      要等 runStream 把 status 置成 coming 之后才补上提示，
+         *      中间那一下空白就是「点了刷新，楼层直接没了」的观感来源。
+         *   2. storyHasContent() 在软删后依赖「原始会话还有行」才判真
+         *      （见该函数的说明），早一步进入 coming 状态可以让它多一层保险。
          */
-        var priorSwipes = targetAsst && Array.isArray(targetAsst.swipes) ? targetAsst.swipes.length : 0;
-        var attempt = Math.max(1, priorSwipes);
+        beginWriterGeneration();
+
+        /* 归档原版 → 软删这一层。候选锚点就在这里留下。 */
+        if (aps && typeof aps.softDeleteForRegenerate === 'function') {
+            aps.softDeleteForRegenerate(ui.chatId, ui.sessionId, m.id);
+        } else if (aps && typeof aps.deleteMessage === 'function') {
+            aps.deleteMessage(ui.chatId, ui.sessionId, m.id);
+        }
+
+        /*
+         * 就地重绘：被刷的那一层此刻已经是软删态，
+         * renderStoryLines 会跳过它 —— 屏上只剩正文里别的楼层 + 一个「书写中」。
+         * 这正是需求要的「刷新之后这一层消失，只留书写中的提示」。
+         */
+        var inp = $('xw-writer-input');
+        if (inp) inp.disabled = true;
+        patchStoryBody();
+        patchStreamMount();
+
         runStream(
             Promise.resolve()
                 .then(function () {
@@ -3478,17 +3519,103 @@ function renderWriter() {
                         ui.chatId,
                         ui.sessionId,
                         streamHandlers(),
-                        { replaceTargetId: replaceTargetId, attempt: attempt }
+                        { replaceTargetId: m.id, attempt: attempt }
                     );
+                })
+                .catch(function (err) {
+                    restoreFloorAfterFailedRegenerate(m);
+                    patchStoryBody();
+                    toast('没生成出来，已把这一层放回去');
+                    if (global.console && console.warn) {
+                        console.warn('[floor] regenerate failed', err);
+                    }
                 })
                 .finally(function () {
                     endWriterGeneration();
                 })
         );
+
         if (hadSwipes) {
-            /* 明确告知：这次是又加了一个候选，可以用 ‹ › 翻回去看。 */
             toast('已刷新，用右下角 ‹ › 翻看各个版本');
         }
+    }
+
+    /**
+     * 「我发的消息」楼层刷新：保留这条消息，在它**后面**生成新楼层。
+     *
+     * 场景（用户报的）：上一轮生成失败，于是最新楼层停在「我发的那条」上。
+     * 这时用户点这一层的刷新键，期望显然是「再试一次、让角色答我」——
+     * 而不是把**我自己写的那句话**重写一遍。
+     *
+     * 所以这里和角色楼层走的是两条路径：
+     *
+     *   · 角色楼层 → regenerateAppointment(replaceTargetId=本层)
+     *     写回本层，本层内容被替换成新候选。
+     *
+     *   · 我发的消息 → 先删掉它**之后**的所有楼层（失败时留下的空壳、
+     *     或半截回复），**保留这条 user 本身**，再让引擎接着往下写。
+     *     新内容以一条**新的角色楼层**出现，我发的那条原封不动。
+     *
+     * 为什么用 runAppointmentCompletion 而不是 sendAppointment：
+     * 那条 user 楼层**已经在库里了**，不能再 addMessage 一遍 ——
+     * 那会凭空多出一条同内容楼层（这正是「删了楼再重发结果还是老样子」
+     * 的成因之一）。runAppointmentCompletion 不写 user、只生成 assistant，
+     * 语义正好是「上下文已经摆好，请接着答」。
+     *
+     * 为什么只删「之后」而不是「含自己」：见上面 redoFromMessage 里那段
+     * 长注释 —— 删掉自己再重发会让 prompt 里出现两份同样的问题，
+     * 模型读到的就是「问题A、问题A」，重答出来的内容必然高度雷同。
+     */
+    function regenerateAfterUserFloor(m) {
+        var store = apStore();
+        var sess = store.getSession(ui.chatId, ui.sessionId);
+        if (!sess || !Array.isArray(sess.messages)) return;
+        var idx = sess.messages.findIndex(function (x) {
+            return x && x.id === m.id;
+        });
+        if (idx < 0) return;
+
+        /*
+         * 快照 + 删除，都走 redoFromMessage 里那套经过验证的区间语义：
+         * removeMessagesFrom 自己枚举、自己删，全部成功才返回 true。
+         * 失败就把快照原样放回，绝不留下「删了一半」的中间态。
+         */
+        var snap = snapshotMessagesFrom(sess, idx + 1);
+        if (!removeMessagesFrom(idx + 1)) {
+            toast('刷新中断：没能清掉后面的楼层');
+            return;
+        }
+
+        beginWriterGeneration();
+        var inp = $('xw-writer-input');
+        if (inp) inp.disabled = true;
+        /* 删完立刻重绘：这条 user 还在屏上，它后面干净的等新内容 */
+        patchStoryBody();
+        patchStreamMount();
+
+        var eng = apEngine();
+        runStream(
+            Promise.resolve()
+                .then(function () {
+                    return eng.runAppointmentCompletion(
+                        ui.chatId,
+                        ui.sessionId,
+                        streamHandlers()
+                    );
+                })
+                .catch(function (err) {
+                    /* 失败把刚才删掉的楼层原样放回，这条 user 从头到尾没被碰过 */
+                    restoreMessageSnapshot(snap);
+                    patchStoryBody();
+                    toast('刷新失败，已还原原来的楼层');
+                    if (global.console && console.warn) {
+                        console.warn('[floor] regenerate after user failed', err);
+                    }
+                })
+                .finally(function () {
+                    endWriterGeneration();
+                })
+        );
     }
 
     function openSettingsSheet() {
@@ -4222,10 +4349,10 @@ function renderWriter() {
                         return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers(), {
                             replaceTargetId: msg.id,
                             /*
-                             * 同样带上重答次数：楼层内的「重发」和工具栏的
-                             * 「重回」在语义上是同一件事（让角色把这一轮重答），
+                             * 同样带上重答次数：楼层内的「重发」和楼层自身的
+                             * 「刷新」在语义上是同一件事（让角色把这一轮重答），
                              * 所以也需要让模型知道「这不是第一次」。
-                             * 候选表长度就是权威计数，见 quickRedoLastAssistant 的说明。
+                             * 候选表长度就是权威计数，见 floorSwipeCount 的说明。
                              */
                             attempt: Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0)
                         });
@@ -4877,6 +5004,32 @@ function renderWriter() {
                     redoFromMessage(msgResend, true);
                     return;
                 }
+                /*
+                 * 「我发的消息」楼层的刷新键。
+                 *
+                 * 和上面的「重发」只差在预期：重发会先把这条 user 之后的
+                 * 楼层全清掉再重答（包括可能已经写成一半的角色回复），
+                 * 而刷新只做「让我这条话被重新回答一次」——
+                 * 走 regenerateAfterUserFloor，语义是
+                 * 「保留我这条，在后面生成新楼层」。
+                 *
+                 * 两者最终都把 user 本身留在原位，所以这里共用同一段
+                 * 「先按 id 取活行、再判忙」的前置逻辑，不重复写。
+                 */
+                var refreshBtn = e.target.closest('[data-ap-msg-refresh]');
+                if (refreshBtn) {
+                    e.stopPropagation();
+                    var refreshId = refreshBtn.getAttribute('data-ap-msg-refresh');
+                    var sessRefresh = apStore().getSession(ui.chatId, ui.sessionId);
+                    var msgRefresh = sessRefresh
+                        ? (sessRefresh.messages || []).find(function (m) {
+                              return m && m.id === refreshId && !m.deleted;
+                          })
+                        : null;
+                    if (!msgRefresh || msgRefresh.role === 'system') return;
+                    regenerateFloor(msgRefresh);
+                    return;
+                }
                 var openingDelBtn = e.target.closest('[data-ap-opening-del]');
                 if (openingDelBtn) {
                     e.stopPropagation();
@@ -4905,8 +5058,12 @@ function renderWriter() {
             sendMessage();
         });
 
-        var quickRedo = $('xw-writer-undo');
-        if (quickRedo) quickRedo.addEventListener('click', quickRedoLastAssistant);
+        /*
+         * 「重回」键的绑定已随按钮一并移除。
+         * 重刷入口现在只有一处：楼层右下角的候选切换键 ›，
+         * 它由 bindFloorToolsDelegate() 的事件委托统一接住 ——
+         * 委托是必要的，因为 patchStoryBody() 会重建楼层 DOM。
+         */
     }
 
     function applyOfflineBeautify() {
