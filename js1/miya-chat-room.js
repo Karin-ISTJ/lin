@@ -2780,12 +2780,43 @@
       ? calls.formatCallDuration(cap.durationSec)
       : '00:00';
     var callId = String(cap.callId || m.callId || '');
-    var text = dur;
+    var isVideo = cap.kind === 'video';
+    var status = String(cap.status || 'ended');
+
+    /*
+     * 未接通的通话不显示「00:00」这种时长。
+     *
+     * 时长对没接通的电话没有意义 —— 显示 00:00 会让人以为是
+     * 「接通后立刻挂了」，那是完全不同的语义。
+     * 改成状态文案，信息量才对得上。
+     */
+    var text;
+    var iconPath;
+    if (status === 'ended') {
+      text = (isVideo ? '视频通话 ' : '语音通话 ') + dur;
+      iconPath = 'M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z';
+    } else {
+      /*
+       * 非正常结束：文案从 MiyaChatCalls 统一取，避免与 API 层说两套话。
+       * 拿不到模块时降级成通用文案，不至于渲染出空白。
+       */
+      var desc = calls && typeof calls.describeCallStatus === 'function'
+        ? calls.describeCallStatus(status, cap.direction, calls.capsuleIsInitiatedByUser(cap))
+        : { short: '通话未接通' };
+      text = (isVideo ? '视频通话 · ' : '语音通话 · ') + (desc.short || '未接通');
+      /*
+       * 未接/拒接用一个「电话未接」的图标，与正常通话的摄像机图标区分开。
+       * 保持同样是 24x24 viewBox，布局不会跳。
+       */
+      iconPath = 'M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z';
+    }
+
     return '<div class="mc-call-record-wrap qq-room__sys qq-room__sys--call" data-msg-id="' + esc(m.id) + '">' +
-      '<button type="button" class="mc-call-record" data-qq-call-capsule data-chat-id="' +
+      '<button type="button" class="mc-call-record' + (status === 'ended' ? '' : ' mc-call-record--unconnected') +
+      '" data-qq-call-capsule data-chat-id="' +
       esc(state.chatId || '') + '" data-call-id="' + esc(callId) + '">' +
       '<svg class="mc-call-record-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' +
-      '<path fill="currentColor" d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg>' +
+      '<path fill="currentColor" d="' + iconPath + '"/></svg>' +
       '<span class="mc-call-record-text">' + esc(text) + '</span>' +
       '</button></div>';
   }

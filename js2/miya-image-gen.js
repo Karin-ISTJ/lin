@@ -151,7 +151,22 @@
         steps: 28,
         scale: 5,
         sm: false,
-        smDyn: false
+        smDyn: false,
+        /*
+         * ── 以下两项为解决「直连 NovelAI 失败」而加 ──────────────
+         *
+         * proxyUrl：部分网络/浏览器下直连 image.novelai.net 会被 CORS
+         *   拦成 "Failed to fetch"。填一个反向代理地址即可绕过，
+         *   请求会打到 `{proxyUrl}/ai/generate-image`。
+         *   留空 = 直连（默认行为，与改动前一致）。
+         *
+         * translateCjk：是否启用中文→Danbooru 标签翻译。
+         *   默认**开启** —— 因为角色卡里的外貌描述基本都是中文，
+         *   不翻译的话 NovelAI 基本看不懂。关了它就回到改动前的行为。
+         */
+        proxyUrl: '',
+        translateCjk: true,
+        seed: -1
       }
     };
   }
@@ -175,6 +190,7 @@
     var na = raw.novelai && typeof raw.novelai === 'object' ? raw.novelai : {};
     var steps = parseInt(na.steps, 10);
     var scale = parseFloat(na.scale);
+    var seedRaw = parseInt(na.seed, 10);
     out.novelai = {
       baseUrl: trim(na.baseUrl) || d.novelai.baseUrl,
       apiKey: trim(na.apiKey),
@@ -183,7 +199,17 @@
       steps: Number.isFinite(steps) ? Math.min(50, Math.max(1, steps)) : d.novelai.steps,
       scale: Number.isFinite(scale) ? Math.min(10, Math.max(0, scale)) : d.novelai.scale,
       sm: !!na.sm,
-      smDyn: !!(na.smDyn != null ? na.smDyn : na.sm_dyn)
+      smDyn: !!(na.smDyn != null ? na.smDyn : na.sm_dyn),
+      proxyUrl: trim(na.proxyUrl).replace(/\/+$/, ''),
+      /*
+       * translateCjk 默认 true。
+       *
+       * 这里不能用 `!!na.translateCjk` —— 老配置里这个字段不存在，
+       * 会得到 false，把新功能默认关掉。必须显式判断「是否 === false」：
+       * 只有用户主动关掉才关，字段缺失一律视为开启。
+       */
+      translateCjk: na.translateCjk !== false,
+      seed: Number.isFinite(seedRaw) ? seedRaw : d.novelai.seed
     };
     return out;
   }
@@ -277,11 +303,52 @@
     }
   }
 
-  function novelAiEndpoint(base) {
+  /*
+   * ── 端点解析 ──────────────────────────────────────────────────
+   *
+   * 支持三种情况：
+   *   1. 配了 proxyUrl → `{proxyUrl}/ai/generate-image`（绕 CORS）
+   *   2. baseUrl 已经带完整路径 → 原样用
+   *   3. 只给了域名 → 拼 /ai/generate-image
+   *
+   * proxyUrl 优先级最高：用户填它就是为了绕开直连问题，
+   * 此时忽略 baseUrl 才符合直觉。
+   */
+  function novelAiEndpoint(base, proxyUrl) {
+    var proxy = trim(proxyUrl).replace(/\/+$/, '');
+    if (proxy) {
+      if (/\/ai\/generate-image$/i.test(proxy)) return proxy;
+      return proxy + '/ai/generate-image';
+    }
     var t = trim(base).replace(/\/+$/, '');
     if (!t) t = 'https://image.novelai.net';
     if (/\/ai\/generate-image$/i.test(t)) return t;
     return t + '/ai/generate-image';
+  }
+
+  /* 模型是否属于 V4 系列（决定用哪套参数模板） */
+  function isNovelAiV4(model) {
+    return /^nai-diffusion-4/i.test(trim(model));
+  }
+
+  /*
+   * ── 中文提示词翻译 ────────────────────────────────────────────
+   *
+   * 依赖 js2/miya-image-gen-dict.js。那个模块可能还没加载
+   * （脚本顺序、懒加载等原因），所以这里做存在性判断：
+   * 翻译器不可用就原样返回，绝不因为缺个可选模块而让生图失败。
+   */
+  function translatePromptIfNeeded(prompt, enabled) {
+    var src = trim(prompt);
+    if (!enabled || !src) return src;
+    var dict = global.MiyaImageGenDict;
+    if (!dict || typeof dict.translate !== 'function') return src;
+    try {
+      return dict.translate(src);
+    } catch (e) {
+      /* 翻译出错不该阻断生图 —— 退回原文，宁可用中文也别不出图 */
+      return src;
+    }
   }
 
   function extractPersonaAppearance(contact) {
@@ -324,6 +391,41 @@
     return { positive: '', negative: '' };
   }
 
+  /*
+   * 把多个提示词片段拼成标签串，并**按标签去重**。
+   *
+   * ── 为什么需要去重 ────────────────────────────────────────────
+   *
+   * 三个来源会自然地写出重复标签：
+   *   · 用户在设置里填的固定正向词：masterpiece, best quality
+   *   · 本函数尾部硬编码的画质兜底词：masterpiece, best quality, ...
+   *   · 角色卡里的外貌描述，有时也会写画质词
+   *
+   * 重复标签在 NovelAI 里等于**隐式加权** —— 出现两次就会被强调两遍，
+   * 可能把画面带偏（比如过度锐化、风格失真）。而且白占 token。
+   *
+   * 去重规则：
+   *   · 按逗号切分，逐段 trim 后归一化比较（忽略大小写与多余空格）
+   *   · 保留**首次出现**的位置和原文，保持提示词顺序稳定
+   *   · 多词标签整体比较（`best quality` 是一个单位，不会被拆成
+   *     `best` 和 `quality` 分别去重）
+   */
+  function dedupeTags(parts) {
+    var seen = Object.create(null);
+    var out = [];
+    var joined = (parts || []).filter(Boolean).join(', ');
+    var items = joined.split(',');
+    for (var i = 0; i < items.length; i++) {
+      var tag = trim(items[i]);
+      if (!tag) continue;
+      var key = tag.toLowerCase().replace(/\s+/g, ' ');
+      if (seen[key]) continue;
+      seen[key] = 1;
+      out.push(tag);
+    }
+    return out.join(', ');
+  }
+
   function buildPromptBundle(contactId, sceneDesc) {
     var cfg = getImageGenConfig();
     var contact = null;
@@ -348,8 +450,8 @@
     if (genderTags.negative) negParts.push(genderTags.negative);
     negParts.push('lowres, bad anatomy, bad hands, blurry, watermark, text, logo, cropped, worst quality');
     return {
-      positive: posParts.filter(Boolean).join(', '),
-      negative: negParts.filter(Boolean).join(', ')
+      positive: dedupeTags(posParts),
+      negative: dedupeTags(negParts)
     };
   }
 
@@ -669,30 +771,279 @@
     });
   }
 
+  /*
+   * ── NovelAI V4 / V3 参数模板 ──────────────────────────────────
+   *
+   * 两代模型的参数结构**不兼容**，混用会直接被服务端拒掉（HTTP 500）。
+   * 关键差异：
+   *
+   *   V4（nai-diffusion-4-*）
+   *     · params_version = 3
+   *     · ucPreset = 3（新版负面预设）
+   *     · noise_schedule = 'karras'
+   *     · 需要 v4_prompt / v4_negative_prompt 结构（V4 用它做正负向描述）
+   *     · **SMEA 不支持** —— 传了会被忽略，个别情况还会触发 500，
+   *       所以这里强制关掉，并给出 console 提示
+   *
+   *   V3 及更早（nai-diffusion-3 / furry-3 / 2 / 1）
+   *     · params_version = 1
+   *     · ucPreset = 0
+   *     · noise_schedule = 'native'
+   *     · 无 v4_prompt 系列字段
+   *     · SMEA 正常生效，跟随用户设置
+   *
+   * 两套模板都把 `add_original_image` / `cfg_rescale` / `legacy` 等
+   * 固定值写死，避免用户误配导致出图异常。
+   */
+  function buildNovelAiParameters(na, dim, prompt, negative, seed) {
+    var v4 = isNovelAiV4(na.model);
+    var params = {
+      width: dim.width,
+      height: dim.height,
+      scale: na.scale,
+      sampler: na.sampler,
+      steps: na.steps,
+      n_samples: 1,
+      seed: seed,
+      negative_prompt: trim(negative) || '',
+      qualityToggle: true,
+      add_original_image: true,
+      cfg_rescale: 0,
+      controlnet_strength: 1,
+      legacy: false,
+      dynamic_thresholding: false,
+      /*
+       * skip_cfg_above_sigma = null 是 NovelAI 的默认值。
+       * V4 下服务端会按模型内置值处理；V3 下同样接受 null。
+       * 显式写出来是因为部分代理/网关会对缺失字段报错。
+       */
+      skip_cfg_above_sigma: null
+    };
+
+    if (v4) {
+      if (na.sm || na.smDyn) {
+        console.warn('[MiyaImageGen] NovelAI V4 模型不支持 SMEA，已自动关闭（模型：' + na.model + '）');
+      }
+      params.params_version = 3;
+      params.ucPreset = 3;
+      params.noise_schedule = 'karras';
+      /* V4 下 SMEA 相关字段一律为 false，见上方说明 */
+      params.sm = false;
+      params.sm_dyn = false;
+      /*
+       * V4 的双通道提示词结构。
+       *
+       * base_caption 才是真正生效的正向描述；
+       * char_captions 用于多角色分别描述（这里单角色，留空）。
+       * 负向同理。不传这两个字段的话，V4 会退化成只读 input，
+       * 负向词完全失效。
+       */
+      params.v4_prompt = {
+        caption: { base_caption: prompt, char_captions: [] },
+        use_coords: false,
+        use_order: true
+      };
+      params.v4_negative_prompt = {
+        caption: { base_caption: trim(negative) || '', char_captions: [] },
+        use_coords: false,
+        use_order: true
+      };
+      /* V4 的多角色与参考图扩展字段，单角色场景留空数组即可 */
+      params.characterPrompts = [];
+      params.negativeCharacterPrompts = [];
+      params.use_coords = false;
+      params.prefer_brownian = true;
+      params.deliberate_euler_ancestral_bug = false;
+    } else {
+      params.params_version = 1;
+      params.ucPreset = 0;
+      params.noise_schedule = 'native';
+      params.sm = !!na.sm;
+      params.sm_dyn = !!na.smDyn;
+      params.legacy_v3_extend = false;
+    }
+
+    return params;
+  }
+
+  /*
+   * 退避等待。
+   *
+   * 单独抽出来是为了让重试逻辑读起来清楚，
+   * 也方便将来换成带抖动的退避策略。
+   */
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  /*
+   * 把 HTTP 状态码翻译成人能看懂的提示。
+   *
+   * 之前只有一个「HTTP 4xx: 原始报文」，用户看不懂也不知道怎么办。
+   * 这几个码是 NovelAI 最常见且**各有明确处置方式**的：
+   *   401 → 去设置里改 Key
+   *   402 → 去续费 / 等 Anlas 恢复
+   *   429 → 等一会儿再试（下面会自动重试）
+   *   500 → 参数不兼容，换模型或换分辨率
+   */
+  function describeNovelAiHttpError(status, bodyText, model) {
+    var detail = trim(bodyText).slice(0, 150);
+    var v4 = isNovelAiV4(model);
+    switch (status) {
+      case 401:
+        return new Error('NovelAI API Key 无效或已过期，请到设置里重新填写');
+      case 402:
+        return new Error('NovelAI 订阅已过期或 Anlas 点数不足，请检查账户状态');
+      case 429:
+        return new Error('请求过于频繁，请稍后再试');
+      case 500:
+        return new Error(
+          'NovelAI 服务器内部错误 (500, ' + (v4 ? 'V4' : 'V3') + ' 模型)。' +
+            '可能是该模型与当前参数不兼容，建议切换模型或调整分辨率。' +
+            (detail ? ' 详情：' + detail : '')
+        );
+      default:
+        return new Error('NovelAI API 错误 (HTTP ' + status + ')' + (detail ? '：' + detail : ''));
+    }
+  }
+
+  /*
+   * 发起一次生成请求，带自动重试。
+   *
+   * 重试策略：
+   *   · 429（限流）与网络错误 → 重试，退避 3s / 6s / 9s 递增
+   *   · 401 / 402 / 500 → **不重试**。这些是配置或参数问题，
+   *     重试一百次结果一样，只会让用户多等
+   *   · 最多 3 次
+   *
+   * 返回 Response；全部失败则抛最后一次的错误。
+   */
+  function requestNovelAiWithRetry(url, apiKey, body, opts) {
+    opts = opts || {};
+    var maxAttempts = Number.isFinite(opts.maxAttempts) ? opts.maxAttempts : 3;
+    var useProxy = !!opts.useProxy;
+    var lastErr = null;
+    var attempt = 0;
+
+    function once() {
+      attempt += 1;
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey
+        },
+        body: JSON.stringify(body)
+      })
+        .then(function (r) {
+          if (r.ok) return r;
+          /*
+           * 限流：可重试。其它 4xx/5xx 直接抛出，不浪费时间。
+           */
+          if (r.status === 429 && attempt < maxAttempts) {
+            var wait = 3000 * attempt;
+            console.warn(
+              '[MiyaImageGen] NovelAI 限流 (429)，' + wait + 'ms 后重试（第 ' + attempt + '/' + maxAttempts + ' 次）'
+            );
+            return sleep(wait).then(once);
+          }
+          return r.text().then(function (t) {
+            throw describeNovelAiHttpError(r.status, t, body.model);
+          });
+        })
+        .catch(function (err) {
+          lastErr = err;
+          /*
+           * 已经是我们自己包装过的 HTTP 错误 → 不再重试。
+           * 只有网络层错误（TypeError: Failed to fetch 等）才值得重试。
+           */
+          var isHttpError = /^NovelAI /.test(String(err && err.message || ''));
+          if (isHttpError || attempt >= maxAttempts) throw err;
+
+          var wait = 2000 * attempt;
+          console.warn(
+            '[MiyaImageGen] NovelAI 网络错误（第 ' + attempt + '/' + maxAttempts + ' 次）：' +
+              (err && err.message) + '，' + wait + 'ms 后重试'
+          );
+          return sleep(wait).then(once);
+        });
+    }
+
+    return once().catch(function (err) {
+      /*
+       * 网络错误且没配代理 → 补一句可操作的提示。
+       *
+       * "Failed to fetch" 对普通用户毫无信息量，但它几乎总是 CORS 问题，
+       * 而解法就是填个代理地址。这里直接把话说明白。
+       */
+      var msg = String((lastErr && lastErr.message) || (err && err.message) || '');
+      if (!useProxy && /failed to fetch|network|load failed/i.test(msg)) {
+        throw new Error(
+          '网络错误：无法连接 NovelAI（' + msg + '）。' +
+            '若持续出现，请在生图设置里填写「反向代理地址」绕过 CORS 限制。'
+        );
+      }
+      throw lastErr || err;
+    });
+  }
+
+  /*
+   * ── 生成主流程 ────────────────────────────────────────────────
+   *
+   * 改动前后行为差异一览：
+   *
+   *   [新增] 中文提示词自动翻译成 Danbooru 标签（可用 translateCjk 关掉）
+   *   [新增] proxyUrl 走反向代理
+   *   [新增] V4/V3 参数模板分流，V4 补上 v4_prompt 结构
+   *   [新增] 429 / 网络错误自动重试
+   *   [新增] 401/402/500 给可操作的错误提示
+   *   [变更] seed 可配（-1 = 随机）
+   *
+   * ⚠️ 提示词**不在这里拼接**。
+   *
+   * buildPromptBundle 已经把正向词（cfg.positivePrompt）、性别标签、
+   * 角色设定、场景描述、画质词全部拼好了，负向词同理。
+   * 这里再拼一次 cfg.positivePrompt 会导致「masterpiece」重复三遍 ——
+   * 既浪费 token，还可能因为权重叠加把画面带偏。
+   *
+   * 本函数对提示词的唯一职责是：**翻译中文**。
+   */
   function generateNovelAi(opts) {
     var cfg = getImageGenConfig();
     var na = cfg.novelai;
     if (!na.apiKey || !na.model) return Promise.reject(new Error('novelai_not_configured'));
     var dim = parseSize(opts.size || cfg.size);
+
+    /*
+     * 中文翻译。
+     *
+     * opts.prompt 是 buildPromptBundle 拼好的完整正向串，
+     * 里面的中文部分（角色外貌描述、场景描述）需要转成 Danbooru 标签；
+     * 已经是英文的标签会被翻译器原样放过（它的「不足 2 个汉字就返回原串」
+     * 规则保证了这一点）。
+     */
+    var finalPrompt = translatePromptIfNeeded(opts.prompt, na.translateCjk);
+    var finalNegative = trim(opts.negative);
+
+    /*
+     * seed：-1 表示随机，与 NovelAI 官方约定一致。
+     * 落到具体数值时用 32 位无符号范围，避免超出服务端接受的范围。
+     */
+    var seed =
+      na.seed === -1 || !Number.isFinite(na.seed)
+        ? Math.floor(Math.random() * 4294967295)
+        : na.seed;
+
+    var params = buildNovelAiParameters(na, dim, finalPrompt, finalNegative, seed);
     var body = {
-      input: trim(opts.prompt),
+      input: finalPrompt,
       model: na.model,
       action: 'generate',
-      parameters: {
-        width: dim.width,
-        height: dim.height,
-        scale: na.scale,
-        sampler: na.sampler,
-        steps: na.steps,
-        n_samples: 1,
-        seed: Math.floor(Math.random() * 999999999),
-        negative_prompt: trim(opts.negative) || '',
-        sm: !!na.sm,
-        sm_dyn: !!na.smDyn,
-        qualityToggle: true,
-        ucPreset: 0
-      }
+      parameters: params
     };
+
     if (opts.referenceDataUrl) {
       body.parameters.reference_image_multiple = [dataUrlToBase64(opts.referenceDataUrl)];
       /*
@@ -708,21 +1059,22 @@
       body.parameters.reference_strength_multiple = [
         Number.isFinite(refStrength) ? Math.min(1, Math.max(0, refStrength)) : 0.6
       ];
+      /*
+       * V4 需要平行的 information_extracted 数组。留空数组即可 ——
+       * 传具体数值反而会因为长度不匹配被拒。
+       */
+      if (isNovelAiV4(na.model)) {
+        body.parameters.reference_information_extracted_multiple = [];
+      }
       body.parameters.add_original_image = true;
     }
-    return fetch(novelAiEndpoint(na.baseUrl), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + na.apiKey
-      },
-      body: JSON.stringify(body)
+
+    var url = novelAiEndpoint(na.baseUrl, na.proxyUrl);
+
+    return requestNovelAiWithRetry(url, na.apiKey, body, {
+      useProxy: !!na.proxyUrl,
+      maxAttempts: 3
     }).then(function (r) {
-      if (!r.ok) {
-        return r.text().then(function (t) {
-          throw new Error('HTTP ' + r.status + (t ? ': ' + t.slice(0, 160) : ''));
-        });
-      }
       var ct = (r.headers.get('content-type') || '').toLowerCase();
       if (ct.indexOf('json') >= 0) {
         return r.json().then(function (j) {
@@ -758,6 +1110,13 @@
     }
     if (code === 'contact_disabled') return '该联系人未开启生图';
     if (code === 'empty_prompt') return '图片描述为空，无法生图';
+    if (code === 'invalid_novelai_json') return 'NovelAI 返回的数据格式异常，请稍后重试';
+    /*
+     * 新的 NovelAI 错误本身就是**可读的中文句子**
+     * （如「NovelAI API Key 无效或已过期，请到设置里重新填写」），
+     * 直接透传即可，不要再套一层「生图失败：」把它埋掉。
+     */
+    if (/^NovelAI |^网络错误：/.test(code)) return code;
     if (code.indexOf('HTTP ') === 0) return '生图 API 返回错误：' + code.slice(0, 120);
     if (code) return '生图失败：' + code.slice(0, 120);
     return '生图失败，请检查配置与网络';
@@ -2039,7 +2398,16 @@
         steps: Number.isFinite(steps) ? steps : 28,
         scale: Number.isFinite(scale) ? scale : 5,
         sm: toggleOn('miya-st-ig-na-sm'),
-        smDyn: toggleOn('miya-st-ig-na-smdyn')
+        smDyn: toggleOn('miya-st-ig-na-smdyn'),
+        proxyUrl: val('miya-st-ig-na-proxy'),
+        /*
+         * 这个开关的 DOM 默认是 aria-checked="true"（面板 HTML 里写死），
+         * 所以直接读 class 即可。但若元素缺失（旧缓存页面），
+         * 按「开启」处理 —— 与服务端 normalizeImageGenConfig 的默认值一致。
+         */
+        translateCjk: document.getElementById('miya-st-ig-na-cjk')
+          ? toggleOn('miya-st-ig-na-cjk')
+          : true
       }
     };
   }
@@ -2129,6 +2497,8 @@
     setVal('miya-st-ig-na-scale', cfg.novelai.scale);
     setToggle('miya-st-ig-na-sm', cfg.novelai.sm);
     setToggle('miya-st-ig-na-smdyn', cfg.novelai.smDyn);
+    setVal('miya-st-ig-na-proxy', cfg.novelai.proxyUrl);
+    setToggle('miya-st-ig-na-cjk', cfg.novelai.translateCjk !== false);
     fillModelSelect(document.getElementById('miya-st-ig-na-model'), NOVELAI_MODELS, cfg.novelai.model);
     var samplerSel = document.getElementById('miya-st-ig-na-sampler');
     if (samplerSel && !samplerSel.options.length) {
@@ -2226,6 +2596,13 @@
         var sdOn = !sd.classList.contains('is-on');
         sd.classList.toggle('is-on', sdOn);
         sd.setAttribute('aria-checked', sdOn ? 'true' : 'false');
+        return;
+      }
+      if (t.closest('#miya-st-ig-na-cjk')) {
+        var cj = t.closest('#miya-st-ig-na-cjk');
+        var cjOn = !cj.classList.contains('is-on');
+        cj.classList.toggle('is-on', cjOn);
+        cj.setAttribute('aria-checked', cjOn ? 'true' : 'false');
         return;
       }
       if (t.closest('[data-ig-contact-toggle]')) {
@@ -2363,6 +2740,23 @@
     setFreeBusy(false);
   }
 
+  /*
+   * ── 与翻译器的双向挂载 ────────────────────────────────────────
+   *
+   * miya-image-gen-dict.js 里有一段「若 MiyaImageGen 已存在就把
+   * translate 挂上去」的逻辑。但脚本加载顺序是 dict 在**前**、
+   * 本模块在**后**，所以那段判断必然落空 —— 挂载点得在这里补。
+   *
+   * 两处都写是有意为之：谁先加载都能正确挂上，不依赖加载顺序。
+   */
+  function attachDictBridge() {
+    var dict = global.MiyaImageGenDict;
+    if (dict && typeof dict.translate === 'function') {
+      global.MiyaImageGen.translatePrompt = dict.translate;
+      global.MiyaImageGen.dictStats = dict.stats;
+    }
+  }
+
   global.MiyaImageGen = {
     PRESETS_KEY: PRESETS_KEY,
     REF_LEGAL_NOTE: REF_LEGAL_NOTE,
@@ -2444,4 +2838,7 @@
     },
     __testFreeRefDataUrl: function () { return String(freeGenState.refDataUrl || ''); }
   };
+
+  /* 导出完成后立刻补上翻译器桥接，见 attachDictBridge 的说明 */
+  attachDictBridge();
 })(typeof window !== 'undefined' ? window : globalThis);

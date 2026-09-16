@@ -1144,11 +1144,87 @@
         startCamera();
     }
 
-    function saveCallCapsule() {
-        if (!active || !active.startedAt) return Promise.resolve();
+    /*
+     * ── 通话状态常量 ──────────────────────────────────────────────
+     *
+     * 一通电话的结局有四种，含义各不相同：
+     *
+     *   ended      接通后正常挂断（唯一有时长和对白的）
+     *   rejected   对方明确拒绝（点红键）
+     *   missed     响了没人接（超时，或用户压根没看手机）
+     *   cancelled  拨出去自己取消了 / 对方还没接你就挂了
+     *
+     * ⚠️ 区分这四态不是为了好看 —— 它直接决定 AI 下一轮怎么接话。
+     * 「她拒接了我」和「她没接到」在剧情上是两件事：
+     * 前者该委屈、该追问，后者该只是「刚才在忙」。
+     * 之前这些通话完全不落记录，AI 根本无从得知，只能装傻。
+     */
+    var CALL_STATUS = {
+        ENDED: 'ended',
+        REJECTED: 'rejected',
+        MISSED: 'missed',
+        CANCELLED: 'cancelled'
+    };
+
+    /*
+     * 来电超时时长。
+     *
+     * 10 秒：比真实电话短得多，但这里是模拟场景，
+     * 用户看得到屏幕、反应比接真电话快；
+     * 太长会让「跳过这通电话」变成一种折磨。
+     */
+    var MISSED_TIMEOUT_MS = 10000;
+
+    /* 来电超时定时器。接听/拒接/挂断都必须清掉，否则会误触发未接。 */
+    var ringTimeoutId = null;
+
+    function clearRingTimeout() {
+        if (ringTimeoutId) {
+            clearTimeout(ringTimeoutId);
+            ringTimeoutId = null;
+        }
+    }
+
+    /*
+     * 写一条通话记录。
+     *
+     * ── 与旧版的区别 ──────────────────────────────────────────────
+     *
+     * 旧版开头是 `if (!active || !active.startedAt) return`，
+     * 意味着**没接通的通话一个字都不存** —— 拒接、未接、取消
+     * 在聊天记录里完全不留痕。
+     *
+     * 现在改为：只要 active 在，就落记录；有没有 startedAt
+     * 只决定「时长」字段怎么算，不再决定要不要存。
+     *
+     * @param {string} status CALL_STATUS 之一
+     */
+    function saveCallCapsule(status) {
+        if (!active) return Promise.resolve();
         var st = store();
         if (!st) return Promise.resolve();
-        var dur = Math.floor((Date.now() - active.startedAt) / 1000);
+
+        var finalStatus = status || CALL_STATUS.ENDED;
+
+        /*
+         * 只有真正接通过的才有「时长」。
+         *
+         * 未接通的情况用 startedAt 算时长会得出一个荒谬的大数字
+         * （因为 startedAt 是 null，减出来是当前时间戳），
+         * 所以这里必须按状态分流。
+         */
+        var dur = 0;
+        if (active.startedAt) {
+            dur = Math.max(0, Math.floor((Date.now() - active.startedAt) / 1000));
+        }
+
+        /*
+         * 未接通时不保留对白 —— 那会儿还没开始说话。
+         * 保留一个空 items，让渲染层和 API 层都能照常处理，
+         * 不用到处判空。
+         */
+        var items = active.startedAt ? active.lines.slice() : [];
+
         return st.addMessage(active.chatId, {
             role: 'system',
             type: 'call_capsule',
@@ -1157,21 +1233,156 @@
             content: formatCallDuration(dur),
             callCapsule: {
                 kind: active.kind,
-                status: 'ended',
+                status: finalStatus,
+                /*
+                 * direction 单独存一份，不依赖内存里的 active.direction。
+                 *
+                 * 原因：写记录时 active 可能已经被清空（比如超时分支），
+                 * 而 direction 决定了文案说「来电」还是「去电」，
+                 * 这是记录本身必须自带的信息，不该依赖外部状态。
+                 */
+                direction: active.direction || 'outgoing',
                 durationSec: dur,
-                startedAt: active.startedAt || Date.now(),
+                startedAt: active.startedAt || null,
                 endedAt: Date.now(),
                 callId: active.callId,
-                items: active.lines.slice()
+                items: items
             }
         });
     }
 
-    function endCall() {
+    /*
+     * ── 音效适配层 ────────────────────────────────────────────────
+     *
+     * miya-chat-call-sound.js 可能没加载（旧缓存、脚本顺序问题），
+     * 所以每个调用点都做存在性判断，缺了就当静音处理 ——
+     * 绝不能因为缺个可选模块让通话流程中断。
+     */
+    function sound() {
+        return global.MiyaChatCallSound || null;
+    }
+
+    function playCallTone(kind) {
+        var s = sound();
+        if (!s || typeof s.playOnce !== 'function') return;
+        try {
+            s.playOnce(kind);
+        } catch (_) {}
+    }
+
+    function startCallRing(kind) {
+        var s = sound();
+        if (!s || typeof s.startLoop !== 'function') return;
+        try {
+            /*
+             * 来电用 voiceCall/videoCall 铃声区分类型；
+             * 去电一律用 outgoing 等待音。
+             */
+            var pattern = kind === 'video' ? 'videoCall' : 'voiceCall';
+            s.startLoop(pattern);
+        } catch (_) {}
+    }
+
+    function startOutgoingTone() {
+        var s = sound();
+        if (!s || typeof s.startLoop !== 'function') return;
+        try {
+            s.startLoop('outgoing');
+        } catch (_) {}
+    }
+
+    function stopCallSound() {
+        var s = sound();
+        if (!s || typeof s.stop !== 'function') return;
+        try {
+            s.stop();
+        } catch (_) {}
+    }
+
+    /*
+     * 结束通话。
+     *
+     * @param {string} [status] 结束状态。不传时按「接通过 → ended，
+     *        没接通 → cancelled」自动判定 —— 这是用户主动挂断的语义：
+     *        通话中挂断是正常结束，响铃中挂断是取消呼叫。
+     */
+    /*
+     * ── 通话状态的展示文案 ────────────────────────────────────────
+     *
+     * 渲染层（聊天里的胶囊）和 API 层（喂给模型的历史）都要用这套文案。
+     * 放在这里统一提供，是为了避免两边各写一份、日后改一处忘一处 ——
+     * 那会导致「界面上显示未接，但 AI 以为是通话结束」这种
+     * 极难排查的不一致。
+     *
+     * 文案分两层：
+     *   short  —— 界面上那行短字（空间有限）
+     *   full   —— 喂给模型的完整描述（要交代清楚发生了什么）
+     */
+    function describeCallStatus(status, direction, isSelf) {
+        var dirIn = direction === 'incoming';
+        var s = status || CALL_STATUS.ENDED;
+
+        if (s === CALL_STATUS.REJECTED) {
+            /*
+             * 拒接的文案要分「谁拒谁」，这是全篇最需要区分的地方。
+             * 用户拒了角色，和角色拒了用户，情绪走向完全相反。
+             */
+            return {
+                short: isSelf ? '对方已拒绝' : '已拒绝',
+                full: isSelf ? '你拨出的通话被对方拒绝了' : '对方来电被用户拒绝了'
+            };
+        }
+        if (s === CALL_STATUS.MISSED) {
+            return {
+                short: dirIn ? '未接听' : '对方未接听',
+                full: dirIn ? '对方来电，但用户没有接听' : '你拨出的通话，对方没有接听'
+            };
+        }
+        if (s === CALL_STATUS.CANCELLED) {
+            return {
+                short: isSelf ? '已取消' : '对方已取消',
+                full: isSelf ? '你取消了尚未接通的呼叫' : '对方取消了呼叫（尚未接通）'
+            };
+        }
+        return {
+            short: '',
+            full: '双方已正常结束通话'
+        };
+    }
+
+    /*
+     * 判断一条胶囊记录对「当前视角」而言是不是自己发起的。
+     *
+     * direction 记的是**发起方**：incoming = 角色打给用户，
+     * outgoing = 用户拨给角色。
+     * 但渲染时我们站在用户视角看，所以 incoming（角色来电）
+     * 对用户来说是「收到的」。
+     */
+    function capsuleIsInitiatedByUser(cap) {
+        return String(cap && cap.direction || '') === 'outgoing';
+    }
+
+    function endCall(status) {
         if (!active) return Promise.resolve();
+
+        /*
+         * 超时定时器必须最先清。
+         *
+         * 否则会出现这样的竞态：用户在第 9.9 秒点了接听，
+         * 定时器在第 10 秒仍然触发，把一通正在进行的通话
+         * 标记成「未接」。
+         */
+        clearRingTimeout();
+
         stopTimer();
         stopCamera();
         forceTypingOff();
+        /*
+         * 铃声必须在挂断的第一时间掐掉。
+         * 放在最前面是因为下面连着几个异步步骤，等它们跑完再停
+         * 会听到明显拖尾。
+         */
+        stopCallSound();
         if (global.MiyaChatVoiceRecord && typeof global.MiyaChatVoiceRecord.destroyActive === 'function') {
             global.MiyaChatVoiceRecord.destroyActive();
         }
@@ -1183,8 +1394,21 @@
                 eng.releaseChatApi(chatId);
             } catch (_) {}
         }
-        var hadSession = !!active.startedAt;
-        var done = (hadSession ? saveCallCapsule() : Promise.resolve()).then(function () {
+
+        /*
+         * 状态判定：调用方给了就用，没给就按当前阶段推断。
+         * `status === 'active'` 说明已经接通过，否则还在响铃。
+         */
+        var finalStatus = status;
+        if (!finalStatus) {
+            finalStatus = active.startedAt ? CALL_STATUS.ENDED : CALL_STATUS.CANCELLED;
+        }
+
+        /*
+         * 落记录的条件从「必须接通过」放宽到「只要 active 在」。
+         * 这样取消呼叫、拒接、未接都会留下一条记录。
+         */
+        var done = saveCallCapsule(finalStatus).then(function () {
             active = null;
             setHostOpen(false);
             if (global.miyaChatRoom && global.miyaChatRoom.getOpenChatId() === chatId) {
@@ -1200,13 +1424,69 @@
     }
 
     function finishOutgoingRing(chatId, kind, callId, res) {
-        var meta = res && res.callApiMeta;
-        if (meta && meta.ringRejected) {
-            toast(meta.rejectNote || '对方未接听');
-            active = null;
-            setHostOpen(false);
-            return;
+        var meta = (res && res.callApiMeta) || null;
+
+        /*
+         * ── 先判断「到底接没接通」 ────────────────────────────────
+         *
+         * 这里必须**正面要求一个接通的证据**，不能靠「没拒接就当接通了」。
+         *
+         * 原因：引擎在某些情况下会返回一个既没有 ringRejected、
+         * 也没有任何对白的空结果（模型抽风、被截断、空回复兜底等）。
+         * 旧逻辑在这种情况下会直接走 beginActiveCall，把一通
+         * **根本没人接**的电话变成「正在通话中」—— 用户会卡在一个
+         * 永远没人说话的假通话界面里，计时器还在跳。
+         *
+         * 所以判据收紧为：只有 meta.ringAccepted 为真，
+         * 或者确实带回了对白（ringAccepted 在 parseCallApiLines 里
+         * 已经等价于「有对白」），才认为接通。
+         *
+         * 兜底成「未接」而不是「接通」，是因为误判成未接只是少一次寒暄，
+         * 误判成接通却会让用户困在一个死界面里 —— 两种错的代价差很远。
+         */
+        var accepted = !!(meta && meta.ringAccepted);
+
+        if (!accepted || (meta && meta.ringRejected)) {
+            /* 对方没接：停去电音，给一声提示 */
+            stopCallSound();
+            playCallTone('decline');
+            toast((meta && meta.rejectNote) || '对方未接听');
+
+            /*
+             * 去电未接通也要落记录。
+             *
+             * 旧版这里是直接 `active = null` 走人，聊天里什么都不留 ——
+             * 用户看到的就是「拨出去，然后什么都没发生」，
+             * 而且 AI 下一轮完全不知道刚才被拒了，可能还在追问
+             * 「你刚才打我电话了？」之类的话，很出戏。
+             *
+             * 状态按语义分流：明确拒接 = rejected，
+             * 其余（空回复/超时/静默）= missed，都是「没接通」但
+             * 对 AI 的意味不同 —— 前者是「 TA 不想接」，后者是「TA 没接到」。
+             */
+            var noAnswerStatus = meta && meta.ringRejected
+                ? CALL_STATUS.REJECTED
+                : CALL_STATUS.MISSED;
+            if (active && !active.callId) active.callId = callId;
+            return saveCallCapsule(noAnswerStatus).then(function () {
+                active = null;
+                setHostOpen(false);
+                if (global.miyaChatRoom && global.miyaChatRoom.getOpenChatId() === chatId) {
+                    if (typeof global.miyaChatRoom.refresh === 'function') {
+                        global.miyaChatRoom.refresh();
+                    }
+                }
+                if (global.miyaChatApp && typeof global.miyaChatApp.refreshLists === 'function') {
+                    global.miyaChatApp.refreshLists();
+                }
+            });
         }
+        /*
+         * 对方接了：停掉去电等待音，响一声「接通」。
+         * ingestFromApiResult 是异步的，音效不等它 —— 响铃要跟手感走。
+         */
+        stopCallSound();
+        playCallTone('accept');
         return ingestFromApiResult(res).then(function () {
             beginActiveCall(chatId, kind, callId, 'outgoing', true);
         });
@@ -1246,6 +1526,8 @@
         updateHeader();
         var statusEl = $('mc-call-status');
         if (statusEl) statusEl.textContent = '正在呼叫…';
+        /* 去电等待音：嘟 — 嘟 — */
+        startOutgoingTone();
 
         var ringRules =
             typeof eng.buildCallRingRules === 'function'
@@ -1263,6 +1545,7 @@
                         return;
                     }
                     toast('视频连接失败，请稍后再试');
+                    stopCallSound();
                     if (eng && typeof eng.releaseChatApi === 'function') {
                         try {
                             eng.releaseChatApi(chatId);
@@ -1300,13 +1583,96 @@
         hydrateAvatars();
         showRingUI(true, displayContactName(ctx.contact) + ' · 视频来电');
         updateHeader();
+        /* 来电铃声：视频来电用更亮的三音上行，与语音来电区分 */
+        startCallRing(kind);
+
+        /*
+         * 启动超时倒计时。
+         *
+         * 到点自动转「未接」—— 这是「未接听」状态唯一的触发路径，
+         * 没有它这个状态永远不会出现。
+         *
+         * 用 active.callId 做校验再动手：定时器是异步的，
+         * 这 10 秒里用户可能已经接听、拒接、甚至开始了另一通电话。
+         * 不校验的话，旧定时器会把新通话标记成未接。
+         */
+        clearRingTimeout();
+        ringTimeoutId = setTimeout(function () {
+            ringTimeoutId = null;
+            if (!active || active.callId !== callId) return;
+            if (active.status !== 'ringing') return;
+            if (active.direction !== 'incoming') return;
+            handleIncomingTimeout(chatId);
+        }, MISSED_TIMEOUT_MS);
+    }
+
+    /*
+     * 来电超时：自动记为「未接」。
+     *
+     * 与「拒接」的区别在于这不是用户的决定，而是用户没来得及反应。
+     * 所以提示语和状态都要分开 —— 对用户是「未接来电」，
+     * 对 AI 是「对方打来但用户没接到」，语气上不该带责备。
+     */
+    function handleIncomingTimeout(chatId) {
+        if (!active) return;
+
+        stopCallSound();
+        /* 未接提示音：与拒接区分，用更低的一声 */
+        playCallTone('missed');
+
+        var ctx = getChatContext(chatId);
+        var who = ctx && ctx.contact ? displayContactName(ctx.contact) : '对方';
+        toast('未接来电：' + who);
+
+        var status = CALL_STATUS.MISSED;
+        var callKind = active.kind;
+
+        /*
+         * 先让 AI 知道「这通电话没接通」，再落记录并关闭 UI。
+         *
+         * 顺序有讲究：requestCallApi 需要 active 还在（它要读 chatId、
+         * callId 等上下文）。如果先清 active，这个请求就发不出去了。
+         *
+         * 不通知 AI 的话，它会以为自己刚才真的跟用户通过话，
+         * 下一轮可能说出「刚才电话里说的那件事」—— 直接穿帮。
+         */
+        try {
+            requestCallApi({
+                systemLead:
+                    '【通话未接通】你刚刚给用户打了一通' +
+                    (callKind === 'video' ? '视频' : '语音') +
+                    '电话，但用户在 ' + Math.round(MISSED_TIMEOUT_MS / 1000) +
+                    ' 秒内没有接听（可能没看到手机、在忙、或暂时不方便）。' +
+                    '这通电话**没有接通**，你们之间没有发生任何对话。' +
+                    '请以你的人物性格自然反应（例如失落、担心、稍后再试、发条文字消息等），不要假装刚才通过话。'
+            }).catch(function () {});
+        } catch (_) {}
+
+        var done = saveCallCapsule(status).then(function () {
+            active = null;
+            setHostOpen(false);
+            if (global.miyaChatRoom && global.miyaChatRoom.getOpenChatId() === chatId) {
+                if (typeof global.miyaChatRoom.refresh === 'function') {
+                    global.miyaChatRoom.refresh();
+                }
+            }
+            if (global.miyaChatApp && typeof global.miyaChatApp.refreshLists === 'function') {
+                global.miyaChatApp.refreshLists();
+            }
+        });
+
+        return done;
     }
 
     function acceptIncoming() {
         if (!active || active.status !== 'ringing' || active.direction !== 'incoming') return;
+        /* 接听了，超时定时器必须立刻清掉，否则 10 秒后会被误判为未接 */
+        clearRingTimeout();
         var chatId = active.chatId;
         var kind = active.kind;
         var callId = active.callId;
+        stopCallSound();
+        playCallTone('accept');
         beginActiveCall(chatId, kind, callId, 'incoming', false);
         requestCallApi({
             systemLead:
@@ -1320,9 +1686,30 @@
 
     function declineIncoming() {
         if (!active) return;
+        clearRingTimeout();
+        stopCallSound();
+        playCallTone('decline');
         toast('已拒接');
-        active = null;
-        setHostOpen(false);
+        /*
+         * 拒接要落记录，标记为 rejected。
+         *
+         * 这是用户明确表达「我不想接」的动作，语义上比 missed 强得多 ——
+         * AI 该有反应（失落、赌气、下次小心翼翼地试探），
+         * 而不是像什么都没发生。
+         */
+        var chatId = active.chatId;
+        return saveCallCapsule(CALL_STATUS.REJECTED).then(function () {
+            active = null;
+            setHostOpen(false);
+            if (global.miyaChatRoom && global.miyaChatRoom.getOpenChatId() === chatId) {
+                if (typeof global.miyaChatRoom.refresh === 'function') {
+                    global.miyaChatRoom.refresh();
+                }
+            }
+            if (global.miyaChatApp && typeof global.miyaChatApp.refreshLists === 'function') {
+                global.miyaChatApp.refreshLists();
+            }
+        });
     }
 
     function startOutgoing(chatId) {
@@ -1387,7 +1774,26 @@
         var cap = m.callCapsule;
         var title = $archive('mc-call-archive-title');
         var body = $archive('mc-call-archive-body');
-        if (title) title.textContent = formatCallDuration(cap.durationSec);
+        var capStatus = String(cap.status || CALL_STATUS.ENDED);
+        var capKind = cap.kind === 'video' ? '视频通话' : '语音通话';
+        if (title) {
+            /*
+             * 标题按状态分流。
+             * 未接通显示「语音通话 · 未接听」而不是「00:00」——
+             * 后者会让用户以为接通后立刻就挂了。
+             */
+            if (capStatus === CALL_STATUS.ENDED) {
+                title.textContent =
+                    capKind + ' · ' + formatCallDuration(cap.durationSec);
+            } else {
+                var capDesc = describeCallStatus(
+                    capStatus,
+                    cap.direction,
+                    capsuleIsInitiatedByUser(cap)
+                );
+                title.textContent = capKind + ' · ' + (capDesc.short || '未接通');
+            }
+        }
         var items = Array.isArray(cap.items) ? cap.items : [];
         var ctx = getChatContext(chatId);
         if (!body) return;
@@ -1486,7 +1892,17 @@
             var act = e.target.closest('[data-call-act]');
             if (act) {
                 var key = act.getAttribute('data-call-act');
-                if (key === 'hangup') endCall();
+                if (key === 'hangup') {
+                    /*
+                     * 只有**已经在通话中**才播挂断音。
+                     * 去电尚未接通时按挂断，那是「取消呼叫」，
+                     * 给一声挂断音会显得像真的通过话 —— 停掉等待音即可。
+                     */
+                    var wasConnected = !!(active && active.startedAt);
+                    endCall().then(function () {
+                        if (wasConnected) playCallTone('hangup');
+                    });
+                }
                 else if (key === 'ask-role') askRoleSpeak();
                 else if (key === 'send-user') sendUserLine();
                 else if (key === 'voice-record') openCallVoiceRecord();
@@ -1586,6 +2002,14 @@
         onRoleCallIntent: onRoleCallIntent,
         parseCallApiLines: parseCallApiLines,
         buildActiveTranscriptSystemBlock: buildActiveTranscriptSystemBlock,
-        endCall: endCall
+        endCall: endCall,
+        /* 供其它模块（如消息到达时）触发提示音 */
+        playTone: playCallTone,
+        stopSound: stopCallSound,
+        /* 通话状态：常量与文案，渲染层与 API 层共用 */
+        CALL_STATUS: CALL_STATUS,
+        MISSED_TIMEOUT_MS: MISSED_TIMEOUT_MS,
+        describeCallStatus: describeCallStatus,
+        capsuleIsInitiatedByUser: capsuleIsInitiatedByUser
     };
 })(window);

@@ -3085,27 +3085,60 @@
         return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
     }
 
-    function formatCallCapsuleForApi(m) {
-        if (!m || m.type !== 'call_capsule' || !m.callCapsule) return '';
-        var cap = m.callCapsule;
-        var kind = cap.kind === 'video' ? '视频通话' : '语音通话';
-        var dur = formatCallDurationSec(cap.durationSec);
-        var items = Array.isArray(cap.items) ? cap.items : [];
-        if (!items.length) {
-            return '〔' + kind + '·记录·时长' + dur + '〕（本次通话无文字对白）';
-        }
-        var lines = [
-            '〔' + kind + '·期间对白·时长' + dur + '〕',
-            '【以下为该次' + kind + '中的实时口语，不是微信文字聊天】'
-        ];
-        items.forEach(function (it) {
-            var who = it.role === 'user' ? '用户' : '角色';
-            var t = trim(it.text);
-            if (t) lines.push(who + '：' + t);
-        });
-        lines.push('〔' + kind + '·记录结束〕');
-        return lines.join('\n');
+  function formatCallCapsuleForApi(m) {
+    if (!m || m.type !== 'call_capsule' || !m.callCapsule) return '';
+    var cap = m.callCapsule;
+    var kind = cap.kind === 'video' ? '视频通话' : '语音通话';
+    var dur = formatCallDurationSec(cap.durationSec);
+    var status = String(cap.status || 'ended');
+    var items = Array.isArray(cap.items) ? cap.items : [];
+
+    /*
+     * ── 未接通的通话：只说发生了什么，不要伪造对白 ──────────────
+     *
+     * 这是本次改动最要紧的一处。
+     *
+     * 之前所有胶囊都按「接通了、聊了这些」的格式喂给模型。
+     * 一旦未接/拒接也进了历史（本次新增），如果还沿用旧格式，
+     * AI 会读到一段没有对白的「通话记录」，进而自己脑补
+     * 「刚才我们难道通过话？」—— 直接导致剧情穿帮。
+     *
+     * 所以要显式声明「这通没接通」，并给出准确措辞：
+     *   · 用户拒接 → 对方来电被用户拒绝
+     *   · 用户未接 → 对方来电但用户没接听
+     *   · 自己取消 → 呼叫未接通即取消
+     *   · 被对方拒 → 拨出的通话被对方拒绝
+     * 每条都写明「双方没有发生对话」，堵死脑补空间。
+     */
+    if (status !== 'ended') {
+      var calls = global.MiyaChatCalls;
+      var desc =
+        calls && typeof calls.describeCallStatus === 'function'
+          ? calls.describeCallStatus(status, cap.direction, calls.capsuleIsInitiatedByUser(cap))
+          : { full: '通话未接通' };
+      return (
+        '〔' + kind + '·未接通〕' +
+        (desc.full || '通话未接通') +
+        '。**这通电话没有接通，双方没有发生任何对话。**' +
+        '请勿在后续回复中假装你们刚才通过话。'
+      );
     }
+
+    if (!items.length) {
+      return '〔' + kind + '·记录·时长' + dur + '〕（本次通话无文字对白）';
+    }
+    var lines = [
+      '〔' + kind + '·期间对白·时长' + dur + '〕',
+      '【以下为该次' + kind + '中的实时口语，不是微信文字聊天】'
+    ];
+    items.forEach(function (it) {
+      var who = it.role === 'user' ? '用户' : '角色';
+      var t = trim(it.text);
+      if (t) lines.push(who + '：' + t);
+    });
+    lines.push('〔' + kind + '·记录结束〕');
+    return lines.join('\n');
+  }
 
     function formatDiaryPeekContextForApi(m) {
         var peek = global.miyaDiaryPeek;

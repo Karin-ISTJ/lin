@@ -563,6 +563,22 @@ html.is-ios .mc-call-host.is-video.mc-call--keyboard {
     text-align: left;
 }
 
+/*
+ * 未接通的通话胶囊（未接听 / 已拒绝 / 已取消）。
+ *
+ * 视觉上要一眼能和正常通话分开 —— 正常通话是中性灰，
+ * 未接通偏红（提示「这里有件事没成」），但不做重色块，
+ * 毕竟这只是一条系统提示，不该抢聊天内容的注意力。
+ */
+.mc-call-record--unconnected {
+    color: #c0392b;
+    background: rgba(192, 57, 43, 0.08);
+}
+
+.mc-call-record--unconnected .mc-call-record-icon {
+    opacity: 0.85;
+}
+
 /* —— 通话记录弹层 —— */
 .mc-call-archive {
     position: fixed;
