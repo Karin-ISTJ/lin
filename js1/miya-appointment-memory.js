@@ -30,6 +30,18 @@
      * 当前打开的会话只要有历史，就以它为准（普通回复/续写/重回/主动消息共用）；
      * 仅当当前会话为空时，才回退到同联系人其它线程。
      */
+    /**
+     * 把「零散线程」的 chatId 归一到「规范聊天」。
+     *
+     * v11 加保护（修「聊得好好的会跳到另一个聊天记录的楼里」）：
+     * 原实现只要当前聊天没有【线上消息】就去该角色的另一个聊天顶替，
+     * 完全不管这个聊天自己有没有【线下场次】。于是用户在 chat_B 里
+     * 已经聊了一大段线下剧情，只因 chat_B 没有线上消息，就被解析成 chat_A，
+     * 随后场次迁移把内容搬走 —— 表现为莫名其妙跳到了别的聊天记录。
+     *
+     * 现在的规则：当前聊天只要有线下场次，就认定它是自己的宿主，原样返回。
+     * 只有「线上没消息 且 线下也没场次」的空壳线程才允许被归并。
+     */
     function resolveCanonicalChatId(chatId) {
         var st = global.miyaChatStore;
         if (!st || !chatId) return String(chatId || '').trim();
@@ -38,6 +50,8 @@
         if (!chat || !chat.contactId) return cid;
         if (chat.type === 'group') return cid;
         if (historyCountForChat(st, cid) > 0) return cid;
+        /* 本聊天已有线下场次 —— 它就是自己的宿主，不许被别的聊天顶替 */
+        if (hasOfflineSessions(cid)) return cid;
         var contact = st.findContact(chat.contactId);
         if (!contact) return cid;
         var profileHint = String(chat.profileId || contact.defaultProfileId || '').trim();
@@ -46,6 +60,17 @@
         var any = st.findChatByContact(chat.contactId, '');
         if (any && any.id && historyCountForChat(st, any.id) > 0) return any.id;
         return cid;
+    }
+
+    /** 该聊天名下是否有线下场次（有则视为有内容，不做归一） */
+    function hasOfflineSessions(chatId) {
+        var aps = global.MiyaAppointmentStore;
+        if (!aps || typeof aps.getSessions !== 'function') return false;
+        try {
+            return (aps.getSessions(chatId) || []).length > 0;
+        } catch (e) {
+            return false;
+        }
     }
 
     function formatCrossTime(ts) {

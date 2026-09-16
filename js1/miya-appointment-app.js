@@ -3184,14 +3184,40 @@ function renderWriter() {
 
     function openWithChat(chatId, contactId, castOpt) {
         var mem = global.MiyaAppointmentMemory;
-        var canonId =
-            mem && typeof mem.resolveCanonicalChatId === 'function'
-                ? mem.resolveCanonicalChatId(chatId)
-                : chatId;
-        if (canonId && contactId && typeof apStore().migrateSessionsToCanonicalChat === 'function') {
+        /*
+         * canonical chatId 的默认值就是「用户点进来的这个聊天」。
+         *
+         * v127 修复「聊得好好的会跳到另一个聊天记录的楼里」：
+         * resolveCanonicalChatId 在「当前聊天没有历史消息」时，会去找该角色
+         * 另一个「有历史消息」的聊天顶替上来；随后 migrateSessionsToCanonicalChat
+         * 又把本聊天已有的线下场次搬过去 —— 用户于是被动换了聊天记录。
+         *
+         * 现在的规则：只有在用户没有显式指定目标聊天（群聊入口会传 ctx.chatId）、
+         * 且当前聊天确实是「空壳」时才做规范化；否则一律以用户点进来的聊天为准。
+         * 换句话说：跨聊天归并从「默认动作」降级为「空壳兜底」。
+         */
+        var requestedChatId = String(chatId || '').trim();
+        var canonId = requestedChatId;
+        if (mem && typeof mem.resolveCanonicalChatId === 'function' && requestedChatId) {
+            var resolved = String(mem.resolveCanonicalChatId(requestedChatId) || '').trim();
+            /*
+             * 只在「当前聊天没有任何线下场次」时才接受被换成另一个聊天。
+             * 已经有场次的聊天必须原地续写，不能被顶替。
+             */
+            var hasLocalSessions = false;
+            try {
+                var localList = apStore().getSessions(requestedChatId) || [];
+                hasLocalSessions = localList.length > 0;
+            } catch (eLs) { hasLocalSessions = false; }
+            if (!hasLocalSessions && resolved) canonId = resolved;
+        }
+        /* 归并只在「用户没指定聊天 + 当前聊天确实空壳」时才有意义，
+           且有内容保护的 migrateSessionsToCanonicalChat 自己会再判一次。 */
+        if (canonId && canonId !== requestedChatId && contactId &&
+            typeof apStore().migrateSessionsToCanonicalChat === 'function') {
             apStore().migrateSessionsToCanonicalChat(canonId, contactId);
         }
-        var hostChatId = canonId || chatId;
+        var hostChatId = canonId || requestedChatId;
         var cast = Array.isArray(castOpt)
             ? castOpt
             : [{ contactId: contactId, chatId: hostChatId }];
@@ -3202,10 +3228,13 @@ function renderWriter() {
                 apStore().syncAllSessionsToChat(cChat, cid);
             }
         });
-        /* 未封存场次按出演名单续上（多人此前每次强制新开导致内容像“没保存”） */
+        /*
+         * 未封存场次按出演名单续上（多人此前每次强制新开导致内容像“没保存”）。
+         * 显式传入 hostChatId：要求「先在本聊天里找」，不跨聊天抓。
+         */
         var active =
             typeof apStore().findResumableSessionByCast === 'function'
-                ? apStore().findResumableSessionByCast(cast)
+                ? apStore().findResumableSessionByCast(cast, { chatId: hostChatId })
                 : apStore().getActiveSession(hostChatId);
         var sess = active;
         var brokeNew = false;

@@ -1858,18 +1858,54 @@
                 .join('\0');
         },
         /**
+         * 从出演名单里取出「宿主聊天」—— 即这场戏该归属在哪个聊天记录下。
+         *
+         * 单人入口：cast 里那条就是 { contactId, chatId: 私聊 id }。
+         * 群聊入口：各成员带的是自己的私聊 id（作镜像落点用），
+         *          但场次本身挂在群合成的 chat 上，此时以显式传入的 chatId 为准
+         *          （见 findResumableSessionByCast 的 opts.chatId）。
+         *
+         * 取不到时返回空串，由调用方决定是否回退到跨聊天搜索。
+         */
+        castHostChatId: function (castOpt) {
+            var list = normalizeCast(castOpt);
+            for (var i = 0; i < list.length; i++) {
+                var cid = String((list[i] && list[i].chatId) || '').trim();
+                if (cid) return cid;
+            }
+            return '';
+        },
+        /**
          * 按出演名单找回未封存场次：优先有正文的，其次当前激活，再取最近一场。
          * 多人/单人均适用；找回后会重新标为 active。
+         *
+         * v48 修复「聊得好好的会跳到另一个聊天记录的楼里」：
+         * 原实现遍历 **全部** chat 的 byChat，只要出演名单指纹相同就参与打分，
+         * 且「正文多」权重极高（live * 1e9）。于是当同一个角色在多个聊天里
+         * 都有线下内容时，请求方在 chat_B，却会被带到 chat_A 那条 60 楼的场次里。
+         *
+         * 现在的边界规则（按优先级）：
+         *   1. 先只在「请求方自己的 chat」里找 —— 命中就直接用，绝不跨聊天抓；
+         *   2. 本聊天确实没有可用场次时，才回退到跨聊天搜索，
+         *      且此时只在「该聊天的 bucket」里挑，避免把别的聊天的场次抢过来；
+         *   3. 群聊入口传进来的 cast 自带 chatId，走的是同样规则，行为不变。
+         *
+         * 换言之：跨聊天搜索从「默认行为」降级为「本聊天无场次时的兜底」。
          */
-        findResumableSessionByCast: function (castOpt) {
+        findResumableSessionByCast: function (castOpt, opts) {
             var want = store.castContactKey(castOpt);
             if (!want) return null;
             load();
-            var best = null;
-            var bestScore = -1;
-            Object.keys(cache.byChat || {}).forEach(function (chatKey) {
+            var preferChatId =
+                opts && opts.chatId
+                    ? String(opts.chatId).trim()
+                    : store.castHostChatId(castOpt);
+
+            function pickFromBucket(chatKey) {
                 var b = cache.byChat[chatKey];
-                if (!b || !Array.isArray(b.sessions)) return;
+                if (!b || !Array.isArray(b.sessions)) return null;
+                var hit = null;
+                var hitScore = -1;
                 b.sessions.forEach(function (sess) {
                     if (!sess) return;
                     var key = store.castContactKey(
@@ -1883,12 +1919,44 @@
                     /* 有正文 >> 激活空场 >> 创建时间 */
                     var score =
                         live * 1e9 + (isActive ? 1e6 : 0) + (Number(sess.createdAt) || 0);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        best = sess;
+                    if (score > hitScore) {
+                        hitScore = score;
+                        hit = sess;
                     }
                 });
-            });
+                return hit;
+            }
+
+            var best = null;
+            /* ① 先在本聊天内找 —— 这是绝大多数情况的正确结果 */
+            if (preferChatId) best = pickFromBucket(preferChatId);
+
+            /* ② 本聊天没有可用场次，才允许跨聊天兜底（保持老数据的可续写性） */
+            if (!best) {
+                var bestScore = -1;
+                Object.keys(cache.byChat || {}).forEach(function (chatKey) {
+                    if (chatKey === preferChatId) return;
+                    var b = cache.byChat[chatKey];
+                    if (!b || !Array.isArray(b.sessions)) return;
+                    b.sessions.forEach(function (sess) {
+                        if (!sess) return;
+                        var key = store.castContactKey(
+                            sess.cast,
+                            sess.contactId,
+                            sess.chatId || chatKey
+                        );
+                        if (key !== want) return;
+                        var live = countLiveMessages(sess);
+                        var isActive = !!(b.activeSessionId && b.activeSessionId === sess.id);
+                        var score =
+                            live * 1e9 + (isActive ? 1e6 : 0) + (Number(sess.createdAt) || 0);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            best = sess;
+                        }
+                    });
+                });
+            }
             if (!best) return null;
             var hostId = String(best.chatId || '').trim();
             if (!hostId) return best;
@@ -2446,6 +2514,18 @@
                 return (b.createdAt || 0) - (a.createdAt || 0);
             });
         },
+        /**
+         * 把零散线程上的线下场次归并到「规范聊天」下。
+         *
+         * v48 收紧（修「聊得好好的会跳到另一个聊天记录的楼里」）：
+         * 原实现会把该 contactId 在 **其它所有聊天** 里的场次全部搬到 canonical，
+         * 连根拔起、原地不留。于是用户在 chat_B 里正聊着，一进线下就被搬进 chat_A，
+         * 表现就是「莫名其妙跳到另一个聊天记录的楼里」，且 chat_B 的内容凭空消失。
+         *
+         * 现在的规则：只归并「空壳线程」上的场次 —— 即那个 chat 本身几乎没内容
+         * （没有线上聊天记录、且离线场次仅此一条）。真正有独立内容的聊天，
+         * 其线下场次属于该聊天自己，不再被搬走。
+         */
         migrateSessionsToCanonicalChat: function (canonicalChatId, contactId) {
             var canonId = String(canonicalChatId || '').trim();
             var cid = String(contactId || '').trim();
@@ -2453,9 +2533,30 @@
             load();
             var canonical = chatBucket(canonId);
             if (!canonical) return;
+            var st = global.miyaChatStore;
+            /*
+             * 判断一个 chat 是不是「空壳线程」——只有空壳才允许被归并。
+             * 判据：该聊天没有线上消息（或拿不到 chatStore 时无法证实有内容，
+             * 此时按保守处理：不搬，宁可少归并也不误伤）。
+             */
+            function isHollowChat(chatKey) {
+                if (!st || typeof st.findChat !== 'function') return false;
+                var chat = null;
+                try { chat = st.findChat(chatKey); } catch (e) { chat = null; }
+                /* 聊天已不存在（典型：被删掉的旧线程）—— 属于空壳，可安全归并 */
+                if (!chat) return true;
+                var n = 0;
+                try {
+                    if (typeof st.getMessagesForApi === 'function') {
+                        n = (st.getMessagesForApi(chatKey) || []).length;
+                    }
+                } catch (e2) { n = 0; }
+                return n === 0;
+            }
             var moved = false;
             Object.keys(cache.byChat).forEach(function (chatKey) {
                 if (chatKey === canonId) return;
+                if (!isHollowChat(chatKey)) return;
                 var bucket = cache.byChat[chatKey];
                 if (!bucket || !Array.isArray(bucket.sessions)) return;
                 var keep = [];
