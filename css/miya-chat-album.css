@@ -1103,3 +1103,158 @@
   max-height: 46%;
   overflow-y: auto;
 }
+
+/* ── 「设为头像」目标选择面板 ──────────────────────────────────────────
+ * 这个面板是从 .mi-album-sheet（照片操作面板，z-index 40）里点出来的。
+ *
+ * z-index 给 60 而不是 50：必须**明确高于** .mi-album-grp-panel(50)。
+ * 若恰好同层，谁在上就取决于 DOM 插入顺序 —— 太脆，改一处顺序就翻车。
+ *
+ * 定位：从屏幕底部起浮（bottom:0），但**不能整屏高**。
+ * 首版踩过两个坑，都是实测截图才发现的：
+ *   1. 放在 bottom:92px 居中浮着 → 正好盖住照片预览和「保存到相册」那排按钮；
+ *   2. 改成 bottom:0 但给了 62% 上限 → 5 个角色就长到 369px，
+ *      照样把操作按钮压在下面，用户设完想接着保存得先手动关面板。
+ * 现在压到 46% + 行高收紧：常见 3~5 个角色能在不遮挡预览的范围内显示完，
+ * 角色多时面板内部滚动（只留一层滚动条，避免嵌套滚动手感变差）。
+ */
+.mi-album-avatar-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  max-height: 46%;
+  overflow-y: auto;
+  margin: 0;
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.18);
+  animation: mi-alb-slide-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 目标行 ──
+ * 刻意**不复用** .mi-album-grp-contact：
+ * 那个类是为「<label> + checkbox + 文字」的横排标签设计的（内含 padding
+ * 和 display:flex 的对齐假设）。直接套在 <button> 上，实测会渲染成
+ * 一列带边框的方块、纵向堆叠，长名字还会撑破容器。
+ * 这里独立定义一套按钮行样式 —— 语义不同（这里是可点的行动项，
+ * 不是勾选项），硬复用只会把两边的样式需求搅在一起。
+ */
+.mi-album-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  margin: 0 0 2px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--alb-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+
+.mi-album-avatar-row:last-child {
+  margin-bottom: 0;
+}
+
+.mi-album-avatar-row:active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* 当前正用着这张图当头像的那一行，给个视觉反馈，
+ * 避免用户重复点同一个目标却不知道其实已经设过了 */
+.mi-album-avatar-row.is-current {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mi-album-avatar-row__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #e8e2da;
+}
+
+.mi-album-avatar-row__avatar--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--alb-muted);
+}
+
+.mi-album-avatar-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mi-album-avatar-row__tag {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 11px;
+  color: var(--alb-muted);
+}
+
+.mi-album-avatar-row.is-current .mi-album-avatar-row__tag {
+  background: var(--alb-ink);
+  color: #fff;
+}
+
+/* 面板头部沿用 grp-panel 的 14px/16px 内边距，与面板自身的 padding 叠起来
+ * 会显得过于空旷；这里把头部内边距收掉，交给面板统一控制 */
+.mi-album-avatar-panel .mi-album-grp-panel__head {
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--alb-line);
+  margin-bottom: 8px;
+}
+
+.mi-album-avatar-panel .mi-album-grp-panel__head strong {
+  font-family: var(--alb-serif);
+  font-size: 16px;
+  flex: 1;
+}
+
+/* 返回照片操作的入口。面板是**替换**照片面板出现的，
+ * 需要一条明确的路回去（右上角的「×」语义是「关掉就走」，不够用）。 */
+.mi-album-avatar-panel__back {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--alb-ink);
+  cursor: pointer;
+}
+
+.mi-album-avatar-panel__back svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 目标列表本身也要能滚：角色多的时候（十几个）不能把面板撑爆。
+ * 面板外层已经 max-height:62% + overflow-y:auto，这里不再设限，
+ * 让滚动条只出现一条（嵌套两层滚动容器在手机上手感很糟）。 */
+.mi-album-avatar-panel__list {
+  max-height: none;
+  margin: 0;
+}

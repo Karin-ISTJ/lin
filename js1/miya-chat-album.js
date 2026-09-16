@@ -374,6 +374,16 @@
       album.photos = album.photos.filter(function (p) {
         return ids.indexOf(p.id) < 0;
       });
+    }).then(function (res) {
+      /*
+       * 照片删了，它在「设为谁的头像」面板上的登记项也要跟着清掉。
+       * 不清的话，用户删掉再传一张新图（id 可能复用）时，
+       * 面板会读出陈旧标记，凭空显示「当前」。
+       * 注意：清的是**登记项**，不是角色身上已经设好的头像 ——
+       * 照片删了不能把角色头像也搞没，那两件事是解耦的（头像存的是独立 blob）。
+       */
+      ids.forEach(clearAvatarAppliedForPhoto);
+      return res;
     });
   }
 
@@ -511,28 +521,157 @@
       });
   }
 
-  function setProfileAvatarFromPhoto(profileId, photoId) {
+  /*
+   * 把相册里的某张照片设成头像。
+   *
+   * target 的两种形态（这是本次新增的能力，用户要求「能选择设为我或者
+   * 某个角色的头像」）：
+   *   · { kind: 'me' }                → 设成当前用户档案的头像
+   *   · { kind: 'contact', id: 'ct_x' } → 设成某个角色的头像
+   *
+   * 两条路写的是**完全不同**的存储字段，这点很容易搞混：
+   *   · 用户档案 → profiles[i].avatarId（走 st.setProfileAvatar）
+   *   · 角色     → contacts[i].avatarBlobId（走 st.updateContact）
+   * 角色那边没有 setProfileAvatar 这样的封装，只能自己 storeBlob 拿 id
+   * 再 updateContact 写回去。
+   *
+   * 为什么不复用「设为头像」旧签名（只传 profileId/photoId）：
+   * 旧签名写死了「设成当前用户的」，没有表达「设给谁」的位置。
+   * 但它被外部引用过，所以下面保留了一层兼容 —— 不传 target 时按老行为走。
+   */
+  function setProfileAvatarFromPhoto(profileId, photoId, target) {
     var st = getStore();
     var pid = resolveProfileId(profileId);
     var photo = getAlbum(pid).photos.find(function (p) { return p.id === photoId; });
     if (!st || !pid || !photo) return Promise.reject(new Error('not_found'));
+    var tgt = target && typeof target === 'object' ? target : { kind: 'me' };
+    var tgtKey = tgt.kind === 'contact' ? ('ct:' + trim(tgt.id)) : 'me';
     return st.getAvatarUrl(photo.blobId).then(function (url) {
       if (!url) return Promise.reject(new Error('no_blob'));
       return fetch(url).then(function (res) {
         if (!res.ok) throw new Error('fetch_failed');
         return res.blob();
-      }).then(function (blob) {
-        var file = new File([blob], 'album-avatar.jpg', { type: blob.type || 'image/jpeg' });
-        return st.setProfileAvatar(pid, file).then(function () {
-          if (global.miyaChatApp && global.miyaChatApp.refreshProfileUI) {
-            global.miyaChatApp.refreshProfileUI();
-          }
-          if (global.miyaChatApp && global.miyaChatApp.refreshLists) {
-            global.miyaChatApp.refreshLists({ force: true });
-          }
-          toast('已设为头像');
-        });
       });
+    }).then(function (blob) {
+      if (tgt.kind === 'contact') {
+        return applyPhotoAsContactAvatar(st, tgt.id, blob);
+      }
+      return applyPhotoAsUserAvatar(st, pid, blob);
+    }).then(function (res) {
+      /*
+       * 登记「这张照片设给过谁」，供面板标「当前」。
+       *
+       * ⚠️ 登记写在这里，**不能**交给调用方（UI 事件处理器）去做。
+       * 一开始是写在事件处理器里的，于是只有从相册界面点按钮才会登记；
+       * 任何别的调用方（脚本、未来的其他入口、测试）走这条 API 设头像，
+       * 面板上就不会有「当前」标记 —— 逻辑正确性依赖"谁调用"，这是隐患。
+       * 收口到这条唯一的写库路径上，谁调用都一样。
+       */
+      writeAvatarApplied(photoId, tgtKey);
+      return res;
+    });
+  }
+
+  /*
+   * 换完头像之后，页面上好几处缓存着旧头像的 DOM 都得刷一遍。
+   *
+   * 为什么要拖这么多函数：头像在 App 里散落在至少四个地方
+   * （我的页、会话列表、角色资料页、聊天头部），各自持有一份 objectURL。
+   * 只刷其中一处，用户就会看到「设置成功了但有的地方还是旧头像」，
+   * 这种半生效状态比彻底失败更让人困惑。
+   * 这些 refresh 都是尽力而为的（可能还没加载），所以逐个能力检测。
+   */
+  function refreshAvatarSurfaces() {
+    try {
+      var app = global.miyaChatApp;
+      if (app) {
+        if (typeof app.refreshProfileUI === 'function') app.refreshProfileUI();
+        if (typeof app.refreshLists === 'function') app.refreshLists({ force: true });
+      }
+      var me = global.miyaChatMe;
+      if (me && typeof me.refresh === 'function') me.refresh();
+    } catch (eRefresh) {}
+  }
+
+  /* 设成「我」的头像 */
+  function applyPhotoAsUserAvatar(st, pid, blob) {
+    var file = new File([blob], 'album-avatar.jpg', { type: blob.type || 'image/jpeg' });
+    return st.setProfileAvatar(pid, file).then(function () {
+      refreshAvatarSurfaces();
+      toast('已设为我的头像');
+    });
+  }
+
+  /*
+   * 设成某个角色的头像。
+   *
+   * ⚠️ 角色头像存的是 avatarBlobId，跟用户档案的 avatarId **不是同一个字段**。
+   * 而且这里必须先落一份 blob 拿到 blobId，再把 id 写进角色 ——
+   * 不能直接把 blob/url 塞进去，角色记录是要持久化到 localStorage 的，
+   * 存 blob 或 objectURL 在刷新后必然失效（objectURL 甚至当场就是死的）。
+   *
+   * ⚠️ 接口名踩坑记录：store 的导出里**没有** storeBlob / idbDelete / revokeUrl
+   * 这三个名字（它们在 store 内部是私有函数）。对外只有：
+   *     storeMediaBlob(blob, kind) → Promise<blobId>
+   *     idbDeleteRecord(key)
+   *     invalidateBlobUrl(blobId)
+   * 照着内部函数名写会把设置头像整条链路打空 —— 会 silently resolve 成 undefined
+   * 而抛出 'store_failed'，现象就是「点了没反应」。
+   *
+   * storeMediaBlob 额外挂了个 `setImportOnly` 开关：相册往 IndexedDB 里补一份
+   * 头像 blob 属于纯粹的存储搬运，不该被 store 记进「用户导入记录」，
+   * 否则用户的导入列表里会凭空多出一条来源不明的记录。
+   * 这个开关是**可选**的（老版本 store 上不存在），所以下面用能力检测调用。
+   *
+   * 旧 blob 要顺手删掉，否则每换一次头像就在 IndexedDB 里留一份垃圾，
+   * 用久了存储会被这些再也用不到的图撑满。
+   */
+  function applyPhotoAsContactAvatar(st, contactId, blob) {
+    var cid = String(contactId || '').trim();
+    if (!cid) return Promise.reject(new Error('no_contact'));
+    var file = new File([blob], 'album-contact-avatar.jpg', { type: blob.type || 'image/jpeg' });
+    var prevBlobId = '';
+    try {
+      var cur = (st.getContacts ? st.getContacts('all') : []).find(function (c) { return c && c.id === cid; });
+      prevBlobId = String((cur && cur.avatarBlobId) || '');
+    } catch (ePrev) {
+      /* 拿不到旧 id 不影响设置新头像，只是少清理一份垃圾 */
+    }
+    var put;
+    if (typeof st.storeMediaBlob === 'function') {
+      try {
+        st.storeMediaBlob.setImportOnly = true;
+      } catch (eFlag) {}
+      put = st.storeMediaBlob(blob, 'avatar');
+    } else if (typeof st.storeChatMedia === 'function') {
+      put = st.storeChatMedia(file, 'avatar');
+    } else {
+      put = Promise.reject(new Error('no_store'));
+    }
+    return put.then(function (blobId) {
+      if (!blobId) throw new Error('store_failed');
+      return st.updateContact(cid, { avatarBlobId: blobId }).then(function () {
+        /*
+         * 清理旧头像。放在写入成功**之后** ——
+         * 万一 updateContact 失败，旧头像还得留着用，
+         * 先删就会出现「换了但没换成，而且旧头像也没了」。
+         */
+        if (prevBlobId && prevBlobId !== blobId) {
+          try {
+            if (typeof st.invalidateBlobUrl === 'function') st.invalidateBlobUrl(prevBlobId);
+            if (typeof st.idbDeleteRecord === 'function') st.idbDeleteRecord(prevBlobId);
+          } catch (eClean) {}
+        }
+        return blobId;
+      });
+    }).then(function () {
+      refreshAvatarSurfaces();
+      var name = '';
+      try {
+        var c2 = (st.getContacts ? st.getContacts('all') : []).find(function (c) { return c && c.id === cid; });
+        name = (c2 && (c2.remarkName || c2.name)) || '';
+      } catch (eName) {}
+      toast(name ? ('已设为「' + name + '」的头像') : '已设为角色头像');
     });
   }
 
@@ -817,8 +956,204 @@
     '</div>';
   }
 
-  function renderCarouselCard(group, album, isBack) {
-    var photos = photosInGroup(album, group.id);
+  /*
+   * 「设为头像」的目标选择面板 —— 决定这张照片设给谁。
+   *
+   * 背景：相册里的「设为头像」原本写死成「设为我的头像」，用户想拿同一张图
+   * 去当某个角色的头像时必须绕到角色资料页重新传一遍图，等于同一张照片存两份。
+   *
+   * 三处设计取舍：
+   *
+   * 1. 复用 renderGroupContactsPanel 的 .mi-album-grp-* 行样式，
+   *    只额外挂一个 .mi-album-avatar-panel 控制定位层级（z-index 60）。
+   *    不另起一套样式表 —— 相册里浮层已经有三层了，再加一套视觉语言只会更乱。
+   *
+   * 2. 「我」永远排第一，且不受「全部角色」开关影响 —— 它不是角色，是账号本人。
+   *    角色列表按 getContacts('all') 的原始顺序，不重排：用户对自己角色列表的
+   *    顺序是有记忆的（通常按亲疏排过），自动按字母/拼音排会打乱这份记忆。
+   *
+   * 3. 每一行左边带上该目标**当前**的头像缩略图。
+   *    没有头像的用名字首字占位。这不是装饰 —— 用户在选「设给谁」时，
+   *    认头像比认名字快得多，尤其是重名或起了相似备注名的角色。
+   */
+  /*
+   * 「这张照片被设给过谁」的本地登记表。
+   *
+   * key 形如 "<photoId>|<target>"，value 是设置时间戳。
+   *
+   * 为什么要单独记：设头像会重新存一份独立 blob，写进档案的是新的 avatar_* id，
+   * 跟相册照片的 album_* id 永远不相等，靠 id 比对无法判断"当前"。
+   * 直接记事实最省事，也最不容易出错。
+   *
+   * 照片被删除时（deletePhotos）会连带清掉这张照片的所有登记项 ——
+   * 否则照片 id 复用（或用户删除后再传同一张）会读出陈旧标记。
+   */
+  var AVATAR_APPLIED_KEY = 'miya-album-avatar-applied-v1';
+  var _avatarAppliedCache = null;
+
+  function readAvatarAppliedMap() {
+    if (_avatarAppliedCache) return _avatarAppliedCache;
+    var out = {};
+    try {
+      var raw = global.localStorage ? global.localStorage.getItem(AVATAR_APPLIED_KEY) : '';
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') out = parsed;
+      }
+    } catch (eRead) {
+      /* 读不出来就当空表：这只影响「当前」标签，不能因此让整个面板渲染失败 */
+      out = {};
+    }
+    _avatarAppliedCache = out;
+    return out;
+  }
+
+  function writeAvatarApplied(photoId, target) {
+    var pid = trim(photoId);
+    var tgt = trim(target);
+    if (!pid || !tgt) return;
+    var map = readAvatarAppliedMap();
+    var now = Date.now();
+    /*
+     * 同一个目标只保留**最近一次**：先把所有指向该 target 的旧条目清掉，
+     * 再写新的。否则用户设了 A→我、又设 B→我，面板上 A 和 B 都会标「当前」。
+     */
+    Object.keys(map).forEach(function (k) {
+      if (k.slice(k.indexOf('|') + 1) === tgt) delete map[k];
+    });
+    map[pid + '|' + tgt] = now;
+    /*
+     * 顺带裁剪：只留最近 200 条，防止长年使用把 localStorage 撑爆
+     * （这张表本身不含图片，纯 id 字符串，200 条也就几十 KB）。
+     */
+    var keys = Object.keys(map);
+    if (keys.length > 200) {
+      keys.sort(function (a, b) { return (map[a] || 0) - (map[b] || 0); });
+      keys.slice(0, keys.length - 200).forEach(function (k) { delete map[k]; });
+    }
+    _avatarAppliedCache = map;
+    try {
+      global.localStorage.setItem(AVATAR_APPLIED_KEY, JSON.stringify(map));
+    } catch (eWrite) {
+      /* 写失败只影响下次打开面板时的「当前」标记，不影响头像本身已设置成功 */
+    }
+  }
+
+  /* 照片被删除时，把它的登记项一并清掉 */
+  function clearAvatarAppliedForPhoto(photoId) {
+    var pid = trim(photoId);
+    if (!pid) return;
+    var map = readAvatarAppliedMap();
+    var prefix = pid + '|';
+    var hit = false;
+    Object.keys(map).forEach(function (k) {
+      if (k.indexOf(prefix) === 0) {
+        delete map[k];
+        hit = true;
+      }
+    });
+    if (!hit) return;
+    _avatarAppliedCache = map;
+    try {
+      global.localStorage.setItem(AVATAR_APPLIED_KEY, JSON.stringify(map));
+    } catch (eClear) {}
+  }
+
+  function renderAvatarTargetPanel(data, album, contacts, profile) {
+    var pid = trim(data.avatarSheetPhotoId);
+    if (!pid) return '';
+    var photo = (album.photos || []).find(function (p) { return p.id === pid; });
+    if (!photo) return '';
+
+    function row(opts) {
+      /* 用独立的 .mi-album-avatar-row，不套 .mi-album-grp-contact ——
+       * 后者是给「<label> + checkbox」的勾选行设计的，套在 <button> 上
+       * 会渲染成一列带边框的方块（实测），且长名字会撑破容器。 */
+      var cls = 'mi-album-avatar-row' + (opts.current ? ' is-current' : '');
+      var av = opts.avatarId
+        ? '<img class="mi-album-avatar-row__avatar" data-mq-alb-thumb="' + esc(opts.avatarId) + '" alt="">'
+        : '<span class="mi-album-avatar-row__avatar mi-album-avatar-row__avatar--empty">' + esc(opts.initial || '?') + '</span>';
+      return '<button type="button" class="' + cls + '" data-mq-alb-avatar-target="' + esc(opts.target) + '"' +
+          ' data-mq-alb-avatar-photo="' + esc(pid) + '">' +
+          av +
+          '<span class="mi-album-avatar-row__name">' + esc(opts.name) + '</span>' +
+          (opts.tag ? '<span class="mi-album-avatar-row__tag">' + esc(opts.tag) + '</span>' : '') +
+        '</button>';
+    }
+
+    /*
+     * 「当前」标记的判定。
+     *
+     * ⚠️ 不能直接比对 profile.avatarId === photo.blobId。
+     * 设头像时会**重新存一份独立 blob**（avatar_* 前缀），所以两者 id 永远不等 ——
+     * 拿 id 比对的结果是「永远都不匹配」，用户把同一张图设两次，
+     * 面板上还是显示「我」而不是「当前」，看起来像没生效。
+     *
+     * 这里改为登记「哪些目标确实是从这张照片设过去的」：每次设完
+     * 记一条 (photoId → target) 到 localStorage，读出来就能精确标记。
+     * 不用比像素内容（要异步解码 + 缩放对比，代价大且结果受重压影响），
+     * 也不用猜 id —— 直接记事实。
+     *
+     * 为什么值得做：这是一个纯反馈信号，用户靠它判断「我设过了没」。
+     * 显示错了会让他反复点同一个按钮。
+     */
+    var applied = readAvatarAppliedMap();
+    function isApplied(target) {
+      return String(applied[pid + '|' + target] || '') !== '';
+    }
+
+    /* 用户档案的名字字段是 name（归一化里没有 nickname，写了也只是兜底） */
+    var meName = (profile && (profile.nickname || profile.name)) || '我';
+
+    var rows = [row({
+      target: 'me',
+      name: meName,
+      initial: meName.slice(0, 1),
+      tag: isApplied('me') ? '当前' : '我',
+      /* 我的头像 blobId 就是 profile.avatarId —— 有就渲染出来，没有就走首字占位 */
+      avatarId: (profile && profile.avatarId) || '',
+      current: isApplied('me')
+    })];
+
+    (contacts || []).forEach(function (c) {
+      var cid = trim(c && c.id);
+      if (!cid) return;
+      var name = trim((c && (c.remarkName || c.name)) || '') || '未命名';
+      var cAvatar = trim((c && c.avatarBlobId) || '');
+      var isCur = isApplied('ct:' + cid);
+      rows.push(row({
+        target: 'ct:' + cid,
+        name: name,
+        initial: name.slice(0, 1),
+        tag: isCur ? '当前' : '',
+        avatarId: cAvatar,
+        current: isCur
+      }));
+    });
+
+    /*
+     * 面板标题区带一个「返回照片」的小按钮。
+     * 因为这个面板是**替换**掉照片操作面板出现的，用户点进来后
+     * 需要一条明确的路回到那排按钮（保存 / 发朋友圈 / 识图…）。
+     * 只给右上角一个「×」不够 —— 「×」的语义是「关掉就走」，
+     * 而这里用户多半只是想回头继续操作那张照片。
+     */
+    return '<div class="mi-album-grp-panel mi-album-avatar-panel" data-mq-alb-avatar-panel="' + esc(pid) + '">' +
+      '<div class="mi-album-grp-panel__head">' +
+        '<button type="button" class="mi-album-avatar-panel__back" data-mq-alb-avatar-close aria-label="返回照片操作">' +
+          svgIcon('back') +
+        '</button>' +
+        '<strong>设为谁的头像</strong>' +
+        '<button type="button" class="mi-album-grp-panel__close" data-mq-alb-avatar-close aria-label="关闭">×</button>' +
+      '</div>' +
+      '<div class="mi-album-avatar-panel__list">' + rows.join('') + '</div>' +
+      ((contacts && contacts.length)
+        ? ''
+        : '<p class="mi-empty-hint mi-album-grp-empty">还没有角色，可先设为「我」的头像</p>') +
+    '</div>';
+  }
+
+  function renderCarouselCard(group, album, isBack) {    var photos = photosInGroup(album, group.id);
     var cover = groupCoverPhoto(album, group.id);
     var blob = cover ? albumThumbId(cover) : '';
     var name = displayGroupName(group);
@@ -1102,6 +1437,7 @@
       '</nav>' +
       renderMenuSheet(data, album, groups, contacts, profile, group) +
       renderPhotoSheet(data, album) +
+      renderAvatarTargetPanel(data, album, contacts, profile) +
       (editingGroup ? renderGroupContactsPanel(editingGroup, contacts, draftContactIds) : '') +
       '<input type="file" accept="image/*" multiple hidden data-mq-alb-file>' +
     '</div>';
@@ -1373,7 +1709,6 @@
       el.remove();
     });
   }
-
   function insertAlbumOverlayHtml(app, html) {
     if (!html) return;
     var anchor = app.querySelector('[data-mq-alb-file]');
@@ -1397,6 +1732,7 @@
         var group = resolveAlbumGroup(ctx.groups, data.detailGroupId);
         html += renderMenuSheet(data, ctx.album, ctx.groups, ctx.contacts, ctx.profile, group);
         html += renderPhotoSheet(data, ctx.album);
+        html += renderAvatarTargetPanel(data, ctx.album, ctx.contacts, ctx.profile);
         var editingGroupId = trim(data.editingGroupId) || '';
         if (editingGroupId) {
           var editingGroup = ctx.groups.find(function (g) { return g.id === editingGroupId; });
@@ -1578,7 +1914,7 @@
       var homeBtn = e.target.closest('[data-mq-alb-view-home]');
       if (homeBtn) {
         e.preventDefault();
-        patchNav({ view: 'home', photoSheetId: '', menuOpen: false, editingGroupId: '' });
+        patchNav({ view: 'home', photoSheetId: '', avatarSheetPhotoId: '', menuOpen: false, editingGroupId: '' });
         rerender();
         return;
       }
@@ -1594,6 +1930,7 @@
           detailGroupId: resolved.id,
           menuOpen: false,
           photoSheetId: '',
+          avatarSheetPhotoId: '',
           selectedIds: {}
         });
         rerender();
@@ -1630,7 +1967,7 @@
       var menuOpen = e.target.closest('[data-mq-alb-menu-open]');
       if (menuOpen) {
         e.preventDefault();
-        patchNav({ menuOpen: true, photoSheetId: '' });
+        patchNav({ menuOpen: true, photoSheetId: '', avatarSheetPhotoId: '' });
         patchOverlays();
         return;
       }
@@ -1647,7 +1984,12 @@
       if (photoOpen) {
         e.preventDefault();
         if (navData().batchMode) return;
-        patchNav({ photoSheetId: photoOpen.getAttribute('data-mq-alb-photo-open') || '', menuOpen: false });
+        /* avatarSheetPhotoId 一并清空：换了一张照片，旧的「设给谁」面板就不该再挂着 */
+        patchNav({
+          photoSheetId: photoOpen.getAttribute('data-mq-alb-photo-open') || '',
+          menuOpen: false,
+          avatarSheetPhotoId: ''
+        });
         patchOverlays();
         return;
       }
@@ -1655,7 +1997,7 @@
       var photoClose = e.target.closest('[data-mq-alb-photo-close]');
       if (photoClose) {
         e.preventDefault();
-        patchNav({ photoSheetId: '' });
+        patchNav({ photoSheetId: '', avatarSheetPhotoId: '' });
         patchOverlays();
         return;
       }
@@ -1716,6 +2058,7 @@
           selectedIds: {},
           editingGroupId: '',
           photoSheetId: '',
+          avatarSheetPhotoId: '',
           menuOpen: nextBatch ? false : navData().menuOpen
         });
         rerender();
@@ -1852,7 +2195,7 @@
         if (!dids.length) { toast('请先选择照片'); return; }
         deletePhotos(profile.id, dids).then(function () {
           toast('已删除');
-          patchNav({ selectedIds: {}, photoSheetId: '' });
+          patchNav({ selectedIds: {}, photoSheetId: '', avatarSheetPhotoId: '' });
           patchOverlays();
           refreshAlbumContent();
           patchBatchUI();
@@ -1926,8 +2269,67 @@
       var avBtn = e.target.closest('[data-mq-alb-avatar]');
       if (avBtn) {
         e.preventDefault();
-        setProfileAvatarFromPhoto(profile.id, avBtn.getAttribute('data-mq-alb-avatar')).catch(function () {
-          toast('设置头像失败');
+        /*
+         * 打开「设给谁」面板，而不是直接设成我的头像。
+         *
+         * ⚠️ 这里**要收起**照片操作面板（photoSheetId 清空），不是叠在它上面。
+         * 试过两者同时挂着，实测两个问题：
+         *   1. 选择面板从底部起浮，正好压住照片预览和「保存到相册」那排按钮 ——
+         *      用户设完头像想接着保存，得先手动关面板；
+         *   2. 角色一多面板就长，叠着必然遮住一半操作区。
+         * 改成二选一：面板标题旁有「返回」，关掉它照片面板原样回来
+         * （见 avClose 分支把 photoSheetId 还原），操作不用重走一遍。
+         *
+         * 照片 id 同时记在 avatarSheetPhotoId 和 photoSheetBackId 里：
+         * 前者是当前要设的目标来源，后者用于「返回照片面板」时还原。
+         */
+        var aph = avBtn.getAttribute('data-mq-alb-avatar') || '';
+        patchNav({ avatarSheetPhotoId: aph, photoSheetBackId: aph, photoSheetId: '' });
+        patchOverlays();
+        return;
+      }
+
+      var avClose = e.target.closest('[data-mq-alb-avatar-close]');
+      if (avClose) {
+        e.preventDefault();
+        /* 关闭选择面板：把照片操作面板还原回屏幕上，用户不用重新点开照片 */
+        var backId = trim(navData().photoSheetBackId);
+        patchNav({ avatarSheetPhotoId: '', photoSheetId: backId, photoSheetBackId: '' });
+        patchOverlays();
+        return;
+      }
+
+      var avTarget = e.target.closest('[data-mq-alb-avatar-target]');
+      if (avTarget) {
+        e.preventDefault();
+        var tgtRaw = avTarget.getAttribute('data-mq-alb-avatar-target') || '';
+        var tgtPhotoId = avTarget.getAttribute('data-mq-alb-avatar-photo') ||
+          trim(navData().avatarSheetPhotoId);
+        if (!tgtPhotoId) return;
+        /*
+         * target 编码成 'me' / 'ct:<contactId>'。
+         * 为什么不用两个独立属性：这里只需要一个「谁」的语义，
+         * 拆成 kind + id 两个 data-* 会多一层拼装，且不利于 closest() 直接取。
+         */
+        var target = tgtRaw.indexOf('ct:') === 0
+          ? { kind: 'contact', id: tgtRaw.slice(3) }
+          : { kind: 'me' };
+        if (target.kind === 'contact' && !target.id) { toast('角色不存在'); return; }
+        setProfileAvatarFromPhoto(profile.id, tgtPhotoId, target).then(function () {
+          /* 「当前」标记由 setProfileAvatarFromPhoto 内部收口登记，这里只管界面切换 */
+          /*
+           * 设完把照片操作面板还原回来，而不是留一片空白 ——
+           * 用户的下一步大概率是「存到相册」「发朋友圈」。
+           * 想接着设第二个目标，再点一次「设为头像」即可（面板会重新带上「当前」标记）。
+           */
+          patchNav({ avatarSheetPhotoId: '', photoSheetId: tgtPhotoId, photoSheetBackId: '' });
+          patchOverlays();
+        }).catch(function (err) {
+          var msg = (err && err.message) || '';
+          if (msg === 'no_store') toast('存储未就绪，请稍后重试');
+          else if (msg === 'store_failed') toast('头像写入失败，请重试');
+          else if (msg === 'no_blob') toast('图片已丢失，无法设为头像');
+          else toast('设置头像失败');
         });
         return;
       }
@@ -1988,7 +2390,8 @@
         e.preventDefault();
         deletePhotos(profile.id, delOne.getAttribute('data-mq-alb-del')).then(function () {
           toast('已删除');
-          patchNav({ photoSheetId: '' });
+          /* 照片被删了，「设给谁」面板自然也得跟着收掉，否则它引用的是一个不存在的 id */
+          patchNav({ photoSheetId: '', avatarSheetPhotoId: '' });
           patchOverlays();
           if (trim(navData().view) === 'detail') patchDetailPhotos();
           else patchHomeBody();
@@ -2081,6 +2484,15 @@
     buildAlbumContextBlock: buildAlbumContextBlock,
     recordAvatarChangeInChat: recordAvatarChangeInChat,
     setProfileAvatarFromPhoto: setProfileAvatarFromPhoto,
+    /*
+     * 测试后门：把「设为谁的头像」面板的 HTML 单独拼出来。
+     * 面板是挂在浮层里的，而浮层依赖 nav 栈状态，直接在测试里点按钮
+     * 要先把相册页整条链路跑起来 —— 太脆。这里单独暴露渲染函数，
+     * 让测试能验「行数、target 编码、当前标记」这些纯逻辑。
+     */
+    __renderAvatarTargetPanel: function (data, album, contacts, profile) {
+      return renderAvatarTargetPanel(data || {}, album || getAlbum(), contacts || [], profile || null);
+    },
     publishPhotoToMoments: publishPhotoToMoments,
     renderAlbumPage: renderAlbumPage,
     hydrateThumbs: hydrateThumbs,
