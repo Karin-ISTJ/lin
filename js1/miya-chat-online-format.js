@@ -2607,13 +2607,6 @@
         });
     }
 
-    function stripUnknownStickerLines(lines, catalog) {
-        if (!Array.isArray(lines)) return [];
-        return lines.filter(function (line) {
-            return !isUnknownStickerLine(line, catalog);
-        });
-    }
-
     function parseNarrationLineToBody(text) {
         var raw = String(text == null ? '' : text);
         var line = raw

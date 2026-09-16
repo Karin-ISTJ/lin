@@ -7,21 +7,181 @@
   var PRESETS_KEY = 'miya-image-gen-presets-v1';
   var MAX_PRESETS = 24;
 
-  var OPENAI_SIZES = [
-    { v: '1792x1024', label: '16:9 横版' },
+  /*
+   * ── 尺寸预设 ──────────────────────────────────────────────────
+   *
+   * ⚠️ label 必须写**真实比例**。这里踩过一次坑，记录一下免得重蹈覆辙。
+   *
+   * 832x1216 常被当成「3:4」，但它实际是 13:19 ≈ 0.684 ——
+   * 3:4 是 0.75，它比 3:4 更窄，严格说更接近 2:3（0.667）。
+   * NovelAI 官方只把它称作 portrait（竖版），从没声称是 3:4。
+   *
+   * 那为什么现在列表里有 832x1216 又标「3:4」？——因为**这是错的**，
+   * 本次已改正为 13:19，并把真正的 3:4 用 768x1024 补进来。
+   *
+   * 真 3:4 在「64 倍数、64–1600」约束下是**有解**的：
+   * 768x1024 / 960x1280 / 1152x1536 都精确等于 0.75。
+   * 同理真 4:3 用 1024x768 / 1280x960 即可。
+   *
+   * 各组顺序：竖版 → 正方形 → 横版。
+   */
+
+  /*
+   * ── 尺寸方言（dialect）────────────────────────────────────────
+   *
+   * 关键认知：**决定尺寸约束的是你连的那个端点，不是 model 字段里的字符串。**
+   *
+   * 之前这里按模型名分类（看见 dall-e-3 就套 OpenAI 白名单、看见
+   * gpt-image 就放行任意尺寸），这个做法有个致命前提：model 字段
+   * 真的是 OpenAI 的模型名。
+   *
+   * 但**中转站把这个前提打破了** —— 中转站把 NovelAI 包成 OpenAI 形状时，
+   * model 里填的是 `nai-diffusion-4-5-full` 这种 NovelAI 模型名。
+   * 它一个都不匹配 `dall-e-*` / `gpt-image-*`，于是全部落到兜底的
+   * 「认不出就放行」，校验等于空转；就算匹配上了，拿 OpenAI 的
+   * 约束去卡 NovelAI 的模型也是错的。
+   *
+   * 所以改成**显式声明方言**：用户自己说清连的是什么，我们照对应规则办。
+   * 这比猜准得多 —— 用户点两下就知道自己填的是哪个站。
+   *
+   *   generic   通用：宽高 64 倍数、64–1600。覆盖 NovelAI / SD
+   *             系中转站，也是现在的默认（中转站是主流用法）
+   *   dalle3    DALL·E 3：只认 1024x1024 / 1024x1792 / 1792x1024
+   *   dalle2    DALL·E 2：只认 256/512/1024 正方形
+   *   gptimage  GPT-Image：标准三档 + 任意 %16==0
+   *   custom    自定义：完全不校验，原样发（给特殊中转站留后门）
+   */
+  var SIZE_DIALECTS = {
+    GENERIC: 'generic',
+    DALLE3: 'dalle3',
+    DALLE2: 'dalle2',
+    GPTIMAGE: 'gptimage',
+    CUSTOM: 'custom'
+  };
+
+  /*
+   * 各方言的可选尺寸。generic 直接复用 NovelAI 那套 ——
+   * 因为它们约束完全相同（都是 64 倍数、64–1600），
+   * NovelAI 尺寸集里已经含真 3:4（768x1024）和真 4:3（1024x768）。
+   */
+  var GENERIC_SIZES = [
+    /* 竖版：由窄到宽 */
+    { v: '1024x1536', label: '2:3 竖版' },
+    { v: '832x1216', label: '13:19 竖版（NovelAI 标准）' },
+    { v: '768x1024', label: '3:4 竖版' },
+    { v: '960x1280', label: '3:4 竖版（大）' },
+    { v: '1024x1024', label: '1:1 正方形' },
+    { v: '1472x1472', label: '1:1 正方形（高清）' },
+    /* 横版：由窄到宽 */
+    { v: '1024x768', label: '4:3 横版' },
+    { v: '1280x960', label: '4:3 横版（大）' },
+    { v: '1536x1024', label: '3:2 横版' }
+  ];
+
+  var DALLE3_SIZES = [
     { v: '1024x1792', label: '9:16 竖版' },
+    { v: '1024x1024', label: '1:1 正方形' },
+    { v: '1792x1024', label: '16:9 横版' }
+  ];
+
+  var DALLE2_SIZES = [
     { v: '1024x1024', label: '1:1 正方形' },
     { v: '512x512', label: '1:1 正方形（小）' },
     { v: '256x256', label: '1:1 正方形（极小）' }
   ];
-  var NOVELAI_SIZES = [
-    { v: '1216x832', label: '3:2 横版' },
-    { v: '832x1216', label: '2:3 竖版' },
-    { v: '1536x1024', label: '3:2 横版' },
+
+  var GPTIMAGE_SIZES = [
     { v: '1024x1536', label: '2:3 竖版' },
     { v: '1024x1024', label: '1:1 正方形' },
-    { v: '1472x1472', label: '1:1 正方形（高清）' }
+    { v: '1536x1024', label: '3:2 横版' }
   ];
+
+  function sizeDialectList(dialect) {
+    var d = dialect || SIZE_DIALECTS.GENERIC;
+    if (d === SIZE_DIALECTS.DALLE3) return DALLE3_SIZES;
+    if (d === SIZE_DIALECTS.DALLE2) return DALLE2_SIZES;
+    if (d === SIZE_DIALECTS.GPTIMAGE) return GPTIMAGE_SIZES;
+    if (d === SIZE_DIALECTS.CUSTOM) return GENERIC_SIZES;
+    return GENERIC_SIZES;
+  }
+
+  function normalizeSizeDialect(v) {
+    var s = trim(v).toLowerCase();
+    if (s === 'dalle3') return SIZE_DIALECTS.DALLE3;
+    if (s === 'dalle2') return SIZE_DIALECTS.DALLE2;
+    if (s === 'gptimage') return SIZE_DIALECTS.GPTIMAGE;
+    if (s === 'custom') return SIZE_DIALECTS.CUSTOM;
+    return SIZE_DIALECTS.GENERIC;
+  }
+
+  /*
+   * 按方言校验并（在需要时）纠正尺寸。
+   *
+   * 返回 {size, changed, reason}：
+   *   size    最终要发出去的尺寸
+   *   changed 是否被改过（UI 可以据此提示用户）
+   *   reason  改动的理由，用于拼提示文案
+   *
+   * 纠正策略按方言区分，因为「救回来」和「不要乱动」的取舍不同：
+   *   generic / custom —— 用户可能填了非法数值，就近映射到合法尺寸，
+   *                       因为这些站的规则明确（64 倍数），救得回来
+   *   dalle2/3/gptimage —— **不纠正**。它们的尺寸是硬白名单，
+   *                       猜错模型去替换，很可能改成另一个同样被拒的值，
+   *                       不如原样发出去让服务端明确报错
+   */
+  function resolveSizeForDialect(sizeStr, dialect) {
+    var d = normalizeSizeDialect(dialect);
+    var raw = trim(sizeStr);
+
+    if (d === SIZE_DIALECTS.GENERIC) {
+      var fixed = normalizeNovelAiSize(raw);
+      return {
+        size: fixed,
+        changed: fixed !== raw,
+        reason: fixed !== raw ? '该尺寸不符合 64 倍数规则，已就近调整为 ' + fixed : ''
+      };
+    }
+
+    if (d === SIZE_DIALECTS.CUSTOM) {
+      /* 自定义方言：不校验、不纠正，原样发 —— 这是给特殊站点留的后门 */
+      return { size: raw || '1024x1024', changed: false, reason: '' };
+    }
+
+    /* 三个 OpenAI 方言：只校验，不纠正 */
+    var legal = isOpenAiSizeLegal(raw, d);
+    return {
+      size: raw || '1024x1024',
+      changed: false,
+      reason: legal ? '' : '该尺寸不被所选方言接受，可能被服务端拒绝'
+    };
+  }
+
+  /*
+   * 兼容旧签名（按模型名判断）。
+   *
+   * ⚠️ 保留它只是为了不让外部调用炸掉，**不要在新代码里用** ——
+   * 按模型名猜方言在接入中转站后是不可靠的（见 SIZE_DIALECTS 的说明）。
+   * 新代码请用 resolveSizeForDialect(size, dialect)。
+   */
+  function isOpenAiSizeLegal(v, modelOrDialect) {
+    var d = normalizeSizeDialect(modelOrDialect);
+    var s = trim(v).toLowerCase();
+    if (!s) return false;
+
+    if (d === SIZE_DIALECTS.DALLE2) {
+      return ['256x256', '512x512', '1024x1024'].indexOf(s) >= 0;
+    }
+    if (d === SIZE_DIALECTS.DALLE3) {
+      return ['1024x1024', '1024x1792', '1792x1024'].indexOf(s) >= 0;
+    }
+    if (d === SIZE_DIALECTS.GPTIMAGE) {
+      if (['1024x1024', '1024x1536', '1536x1024'].indexOf(s) >= 0) return true;
+      var pg = parseSizeInput(s);
+      return !!(pg && pg.w && pg.h && pg.w % 16 === 0 && pg.h % 16 === 0);
+    }
+    /* generic / custom：一律放行，具体约束在 resolveSizeForDialect 里处理 */
+    return true;
+  }
 
   var NOVELAI_MODELS = [
     'nai-diffusion-4-5-full',
@@ -40,6 +200,94 @@
     'k_lms',
     'ddim_v3'
   ];
+
+  /*
+   * ── 比例 → 尺寸 对照表 ────────────────────────────────────────
+   *
+   * 用途：把「用户想要的比例」翻译成「该后端真正能出这个比例的那组像素」。
+   *
+   * 关键认知：比例和像素不是一回事，但**真比例是能精确命中的**。
+   * 只要宽高都取 3 和 4 的公倍数（且是 64 的倍数），就能得到精确的 3:4：
+   *   768x1024 / 960x1280 / 1152x1536 三个都精确等于 0.75。
+   *
+   * 别被 832x1216 误导 —— 它常被当成 3:4，实际是 13:19 ≈ 0.684，
+   * 比 3:4 窄。表里 3:4 映射到 768x1024，那才是真 3:4。
+   *
+   * 适用于所有「64 倍数」约束的端点 —— NovelAI 直连、以及把 NovelAI/SD
+   * 包成 OpenAI 形状的**中转站**（generic 方言）。
+   *
+   * 对 DALL·E 那几个硬白名单方言**不用这套**：它们的可选尺寸是固定的
+   * 三两个值，悄悄替换会让用户以为自己选对了，不如让它报错。
+   */
+  var NOVELAI_SIZE_ALIASES = [
+    { ratio: 3 / 4, v: '768x1024' },
+    { ratio: 2 / 3, v: '1024x1536' },
+    { ratio: 4 / 3, v: '1024x768' },
+    { ratio: 3 / 2, v: '1536x1024' },
+    { ratio: 1, v: '1024x1024' },
+    { ratio: 9 / 16, v: '832x1216' },
+    { ratio: 16 / 9, v: '1216x832' }
+  ];
+
+  /*
+   * 把 "3:4" 或 "832x1216" 之类的输入统一解析成 {w,h}。
+   * 解析不出来返回 null，由调用方决定怎么兜底。
+   */
+  function parseSizeInput(v) {
+    var s = trim(v);
+    if (!s) return null;
+    var mx = s.match(/^(\d{2,5})\s*[x*×]\s*(\d{2,5})$/i);
+    if (mx) {
+      return { w: parseInt(mx[1], 10), h: parseInt(mx[2], 10) };
+    }
+    var mr = s.match(/^(\d{1,4})\s*[:：]\s*(\d{1,4})$/);
+    if (mr) {
+      return { ratio: parseInt(mr[1], 10) / parseInt(mr[2], 10) };
+    }
+    return null;
+  }
+
+  /*
+   * 校验并纠正 NovelAI 尺寸。
+   *
+   * NovelAI 的硬约束：宽高都必须是 64 的倍数，且在 64–1600 之间。
+   * 违反约束的请求会被服务端直接拒绝，所以这里先兜一层，
+   * 尽量把一个「能表达意图但数值非法」的尺寸救回来。
+   */
+  function normalizeNovelAiSize(v) {
+    var p = parseSizeInput(v);
+    if (!p) return '1024x1024';
+    if (p.w && p.h) {
+      var ok = function (n) { return n >= 64 && n <= 1600 && n % 64 === 0; };
+      if (ok(p.w) && ok(p.h)) return p.w + 'x' + p.h;
+      /* 数值非法就按它想表达的比例去对照表里找替身 */
+      p = { ratio: p.w / p.h };
+    }
+    if (p.ratio) {
+      var best = null;
+      var bestDiff = Infinity;
+      NOVELAI_SIZE_ALIASES.forEach(function (row) {
+        var diff = Math.abs(row.ratio - p.ratio);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = row.v;
+        }
+      });
+      /* 偏差超过 8% 就不硬凑了 —— 那已经不是「同一个比例」，
+         随便塞一个反而会误导用户以为是自己选的那个比例 */
+      if (best && bestDiff <= 0.08) return best;
+    }
+    return '1024x1024';
+  }
+
+  /*
+   * ⚠️ 这里**曾经**还有一个「按模型名判断」的 isOpenAiSizeLegal（第二份同名定义）。
+   *
+   * 它是个隐蔽的坑：JS 函数声明会提升，同名函数后者覆盖前者 ——
+   * 结果是下面那份显式方言版被这份旧版悄悄顶掉，dialect 被当成模型名去
+   * 匹配 /^dall-e-/，永远匹配不上，一律 return true，**校验完全空转**。
+   * 已删除。若将来要加校验规则，请改上面 dialect 版那一个。
+   */
 
   var REF_LEGAL_NOTE =
     '参考图仅针对支持图片输入的模型生效。严禁上传无版权、无授权的图片信息；严禁未经他人允许上传他人肖像信息。';
@@ -141,7 +389,17 @@
       openai: {
         baseUrl: '',
         apiKey: '',
-        model: ''
+        model: '',
+        /*
+         * 尺寸方言。
+         *
+         * 默认 generic（通用）而不是 dalle3 —— 因为**中转站是现在的主流用法**，
+         * 而 generic 的规则（64 倍数、64–1600）恰好覆盖 NovelAI/SD 系中转站。
+         * 直连 OpenAI 官方的人自己知道自己的模型，会主动去改；
+         * 而中转站用户如果默认被套上 dall-e-3 的三尺寸白名单，
+         * 会直接选不到自己要的比例，且完全不知道为什么。
+         */
+        sizeDialect: 'generic'
       },
       novelai: {
         baseUrl: 'https://image.novelai.net',
@@ -185,7 +443,8 @@
     out.openai = {
       baseUrl: trim(oa.baseUrl),
       apiKey: trim(oa.apiKey),
-      model: trim(oa.model)
+      model: trim(oa.model),
+      sizeDialect: normalizeSizeDialect(oa.sizeDialect)
     };
     var na = raw.novelai && typeof raw.novelai === 'object' ? raw.novelai : {};
     var steps = parseInt(na.steps, 10);
@@ -552,7 +811,20 @@
     if (!root || !cfg.openai.apiKey || !cfg.openai.model) {
       return Promise.reject(new Error('openai_not_configured'));
     }
-    var size = trim(opts.size || cfg.size) || '1024x1024';
+    /*
+     * 尺寸按用户声明的**方言**处理。
+     *
+     * 这一步是给中转站兜底的：中转站把 NovelAI 包成 OpenAI 形状，
+     * 尺寸约束继承的是 NovelAI 那套（64 倍数、64–1600），
+     * 而不是 OpenAI 的三尺寸白名单。generic 方言就干这个 ——
+     * 用户填了 742x990 这类非法值会就近映射到合法尺寸，
+     * 而不是原样发出去撞一个 400。
+     */
+    var sizeResolved = resolveSizeForDialect(
+      trim(opts.size || cfg.size),
+      cfg.openai.sizeDialect
+    );
+    var size = sizeResolved.size || '1024x1024';
     var payload = {
       model: cfg.openai.model,
       prompt: trim(opts.prompt),
@@ -1014,7 +1286,13 @@
     var cfg = getImageGenConfig();
     var na = cfg.novelai;
     if (!na.apiKey || !na.model) return Promise.reject(new Error('novelai_not_configured'));
-    var dim = parseSize(opts.size || cfg.size);
+    /*
+     * 尺寸先过一道 NovelAI 的合法性纠正：
+     * 宽高必须是 64 的倍数、且在 64–1600 内，否则服务端直接拒绝。
+     * 用户若填了「看着像 3:4 但数值非法」的尺寸（如 768x1024），
+     * 这里会就近映射到 832x1216，而不是原样发出去撞报错。
+     */
+    var dim = parseSize(normalizeNovelAiSize(opts.size || cfg.size));
 
     /*
      * 中文翻译。
@@ -1955,10 +2233,10 @@
     return downloadFreeGeneration();
   }
 
-  function syncFreeSizeOptions(provider, keepValue) {
+  function syncFreeSizeOptions(provider, keepValue, dialect) {
     var sel = document.getElementById('miya-st-ig-free-size');
     if (!sel) return;
-    fillSizeSelect(sel, provider, keepValue);
+    fillSizeSelect(sel, provider, keepValue, dialect);
   }
 
   function resetFreeGenPreview() {
@@ -2388,7 +2666,8 @@
       openai: {
         baseUrl: val('miya-st-ig-oa-base'),
         apiKey: val('miya-st-ig-oa-key'),
-        model: val('miya-st-ig-oa-model')
+        model: val('miya-st-ig-oa-model'),
+        sizeDialect: normalizeSizeDialect(val('miya-st-ig-oa-dialect'))
       },
       novelai: {
         baseUrl: val('miya-st-ig-na-base') || 'https://image.novelai.net',
@@ -2437,11 +2716,16 @@
     sel.dataset.modelIds = idsKey;
   }
 
-  function fillSizeSelect(sel, provider, keepValue) {
+  function fillSizeSelect(sel, provider, keepValue, dialect) {
     if (!sel) return;
     var cur = trim(keepValue || sel.value) || '1024x1024';
     sel.innerHTML = '';
-    var sizes = provider === 'novelai' ? NOVELAI_SIZES : OPENAI_SIZES;
+    /*
+     * NovelAI 走自己那套（约束与 generic 相同，就是 GENERIC_SIZES）；
+     * OpenAI 兼容端按用户声明的**方言**取表 —— 因为决定尺寸约束的是
+     * 端点而不是模型名（中转站的模型名是 NovelAI 的）。
+     */
+    var sizes = provider === 'novelai' ? GENERIC_SIZES : sizeDialectList(dialect);
     sizes.forEach(function (item) {
       var op = document.createElement('option');
       op.value = item.v;
@@ -2454,10 +2738,21 @@
     if (!sizes.some(function (x) { return x.v === cur; })) {
       var custom = document.createElement('option');
       custom.value = cur;
-      custom.textContent = cur;
+      custom.textContent = cur + '（自定义）';
       sel.appendChild(custom);
     }
     sel.value = cur;
+  }
+
+  /*
+   * 从 UI 里读当前选中的尺寸方言。
+   * 读不到（面板没渲染 / 老版本 HTML）就回退 generic ——
+   * 那是覆盖面最广的一档，回退到它最不容易出错。
+   */
+  function currentDialectFromUi() {
+    var sel = document.getElementById('miya-st-ig-oa-dialect');
+    if (!sel) return SIZE_DIALECTS.GENERIC;
+    return normalizeSizeDialect(sel.value);
   }
 
   function syncProviderPanels(provider) {
@@ -2465,8 +2760,9 @@
     var na = document.getElementById('miya-st-ig-novelai-block');
     if (oa) oa.hidden = provider !== 'openai';
     if (na) na.hidden = provider !== 'novelai';
-    fillSizeSelect(document.getElementById('miya-st-ig-size'), provider);
-    syncFreeSizeOptions(provider);
+    var dialect = currentDialectFromUi();
+    fillSizeSelect(document.getElementById('miya-st-ig-size'), provider, null, dialect);
+    syncFreeSizeOptions(provider, null, dialect);
     var contactsBlock = document.getElementById('miya-st-ig-contacts-block');
     if (contactsBlock) contactsBlock.hidden = !isFormEnabled();
   }
@@ -2510,8 +2806,13 @@
       });
     }
     if (samplerSel) samplerSel.value = cfg.novelai.sampler || NOVELAI_SAMPLERS[0];
-    fillSizeSelect(document.getElementById('miya-st-ig-size'), cfg.provider, cfg.size);
-    syncFreeSizeOptions(cfg.provider, cfg.size);
+    /* 先把方言回填到 UI，再刷尺寸表 —— 顺序不能反，
+       否则尺寸表会按旧方言渲染，用户看到的选项和实际生效的对不上 */
+    var dialectSel = document.getElementById('miya-st-ig-oa-dialect');
+    if (dialectSel) dialectSel.value = cfg.openai.sizeDialect || SIZE_DIALECTS.GENERIC;
+    var dialect = cfg.openai.sizeDialect || SIZE_DIALECTS.GENERIC;
+    fillSizeSelect(document.getElementById('miya-st-ig-size'), cfg.provider, cfg.size, dialect);
+    syncFreeSizeOptions(cfg.provider, cfg.size, dialect);
     syncProviderPanels(cfg.provider);
     syncContactsBlockVisibility();
     renderContactToggleList();
@@ -2720,6 +3021,18 @@
       if (e.target && e.target.name === 'miya-st-ig-provider') {
         syncProviderPanels(e.target.value === 'novelai' ? 'novelai' : 'openai');
       }
+      /*
+       * 切换尺寸方言要**立刻重刷尺寸下拉**。
+       *
+       * 不刷的话，用户切到 dall-e-3 之后，下拉里还留着 3:4 / 4:3
+       * 这些它并不接受的选项 —— 选了下单必被服务端拒。
+       * 让选项跟着方言走，用户就不会选到一个注定失败的值。
+       */
+      if (e.target && e.target.id === 'miya-st-ig-oa-dialect') {
+        var providerEl = document.querySelector('input[name="miya-st-ig-provider"]:checked');
+        var prov = providerEl ? providerEl.value : 'openai';
+        syncProviderPanels(prov === 'novelai' ? 'novelai' : 'openai');
+      }
       if (e.target && e.target.id === 'miya-st-ig-preset-pick') {
         var pickName = trim(e.target.value);
         syncPresetNameInput(pickName);
@@ -2761,6 +3074,18 @@
     PRESETS_KEY: PRESETS_KEY,
     REF_LEGAL_NOTE: REF_LEGAL_NOTE,
     NOVELAI_MODELS: NOVELAI_MODELS,
+    /* 尺寸预设与校验：设置面板与测试都要用，导出来免得两边各写一份 */
+    SIZE_DIALECTS: SIZE_DIALECTS,
+    sizeDialectList: sizeDialectList,
+    normalizeSizeDialect: normalizeSizeDialect,
+    resolveSizeForDialect: resolveSizeForDialect,
+    GENERIC_SIZES: GENERIC_SIZES,
+    DALLE3_SIZES: DALLE3_SIZES,
+    DALLE2_SIZES: DALLE2_SIZES,
+    GPTIMAGE_SIZES: GPTIMAGE_SIZES,
+    parseSizeInput: parseSizeInput,
+    normalizeNovelAiSize: normalizeNovelAiSize,
+    isOpenAiSizeLegal: isOpenAiSizeLegal,
     defaultImageGenConfig: defaultImageGenConfig,
     normalizeImageGenConfig: normalizeImageGenConfig,
     normalizeContactImageGen: normalizeContactImageGen,

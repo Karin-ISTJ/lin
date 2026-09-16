@@ -973,6 +973,19 @@
               </div>
               <label class="ins-field-label" for="miya-st-ig-oa-model">模型</label>
               <select class="ins-select" id="miya-st-ig-oa-model"><option value="">选择模型</option></select>
+              <!-- 尺寸方言：决定「这个端点接受哪些宽高」。
+                   中转站把 NovelAI 包成 OpenAI 形状时，model 里填的是
+                   nai-diffusion-* 之类的名字，靠模型名猜不出约束，
+                   所以让用户直接声明连的是什么端点。 -->
+              <label class="ins-field-label" for="miya-st-ig-oa-dialect">尺寸方言</label>
+              <select class="ins-select" id="miya-st-ig-oa-dialect">
+                <option value="generic">通用（64 倍数）· 推荐，适配中转站 / NovelAI / SD</option>
+                <option value="gptimage">GPT-Image（含 2:3 / 3:2）</option>
+                <option value="dalle3">DALL·E 3（仅 3 种尺寸）</option>
+                <option value="dalle2">DALL·E 2（仅正方形）</option>
+                <option value="custom">自定义（不校验，原样发送）</option>
+              </select>
+              <p class="st-form-hint">走中转站请保持「通用」—— 这样 3:4、4:3 等比例才可选</p>
               <!-- 接口预设：与「对话 API」面板同款（下拉载入 + ✓ 保存 + × 删除） -->
               <label class="ins-field-label" for="miya-st-ig-oa-preset-pick">载入预设</label>
               <div class="ins-inline-field">
@@ -3860,7 +3873,7 @@
   <script defer src="js1/miya-beautify-app.js?v=41"></script>
   <script defer src="js2/miya-msg-sound.js?v=2"></script>
   <script defer src="js2/miya-image-gen-dict.js?v=1"></script>
-  <script defer src="js2/miya-image-gen.js?v=11"></script>
+  <script defer src="js2/miya-image-gen.js?v=12"></script>
   <script defer src="js2/miya-settings-app.js?v=65"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
@@ -3880,7 +3893,7 @@
   <script defer src="js1/miya-chat-emoji-url.js?v=1"></script>
   <script defer src="js1/miya-chat-contacts-sync.js?v=3"></script>
   <script defer src="js1/miya-chat-awareness.js?v=12"></script>
-  <script defer src="js1/miya-chat-online-format.js?v=59"></script>
+  <script defer src="js1/miya-chat-online-format.js?v=60"></script>
   <script defer src="js1/miya-chat-summary.js?v=9"></script>
   <script defer src="js1/miya-chat-memory-extract.js?v=3"></script>
   <script defer src="js1/miya-chat-translate.js?v=10"></script>
