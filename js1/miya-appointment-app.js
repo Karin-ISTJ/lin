@@ -1277,14 +1277,19 @@
         return !preset || preset.showThinking !== false;
     }
 
+    /**
+     * 正文美化是否启用。
+     *
+     * 【恒为 true】
+     * 对应的「正文美化」开关已从调参抽屉移除（见 renderSheet 里那段说明），
+     * 这里不再读 preset.textDecor —— 否则以前手动关过的用户，存量数据里
+     * 存着 false，而 UI 已没有打开的入口，会永久停在「正文没美化」的状态。
+     *
+     * 保留这个函数而不是把调用点直接写 true：调用点有好几处（保底回退、
+     * 渲染分支等），留一个语义化的名字更好读；日后若想恢复开关，改这里即可。
+     */
     function resolveTextDecor() {
-        if (!ui.chatId) return true;
-        var st = chatStore();
-        if (!st) return true;
-        var chat = st.findChat(ui.chatId);
-        if (!chat) return true;
-        var preset = apStore().resolvePresetForContact(chat.contactId);
-        return !preset || preset.textDecor !== false;
+        return true;
     }
 
     function thinkingToggleHtml(thinking, extraAttrs) {
@@ -3953,27 +3958,23 @@ function renderWriter() {
                 ? '<option value="true" selected>开</option><option value="false">关</option>'
                 : '<option value="true">开</option><option value="false" selected>关</option>') +
             '</select></div>' +
-            '<div class="xw-field xw-field--panel"><label>正文美化</label>' +
-            '<select id="mol-text-decor">' +
-            (preset.textDecor !== false
-                ? '<option value="true" selected>开</option><option value="false">关</option>'
-                : '<option value="true">开</option><option value="false" selected>关</option>') +
-            '</select>' +
-            '<p class="xw-field__hint">关则引号、括号等恢复为普通正文；按当前角色单独保存</p></div>' +
-            '<div class="xw-field xw-field--panel"><label>状态栏</label>' +
-            '<select id="mol-status-fab">' +
-            (function () {
-                var sb =
-                    typeof apStore().getStatusBar === 'function' ? apStore().getStatusBar() : { enabled: true };
-                var on = !sb || sb.enabled !== false;
-                return on
-                    ? '<option value="true" selected>开</option><option value="false">关</option>'
-                    : '<option value="true">开</option><option value="false" selected>关</option>';
-            })() +
-            '</select>' +
-            '<p class="xw-field__hint">关则每轮不要求输出状态（单人/多人共用）</p></div>' +
             /*
-             * 「开场白预设」面板已从这里移除。
+             * 「正文美化」与「状态栏」两个开关已从调参抽屉移除，
+             * 改为**恒定开启**（见 resolveTextDecor() 与 MiyaOfflineStatus.isEnabled()）。
+             *
+             * 为什么删：这两项开着才是「正常好看」的状态，几乎没人会去关；
+             * 留着开关反而让抽屉更长，还把「关掉后正文变丑」这种坑暴露给用户。
+             *
+             * 为什么是强制开、而不是「只看默认值」：
+             * 以前手动关过的用户，存量数据里存的就是 false。UI 一删，
+             * 他们就再也找不到打开的入口，会永久停在关闭状态 —— 那是个死胡同。
+             * 所以判定逻辑直接恒返回 true，旧数据里的 false 不再生效。
+             *
+             * ⚠️ 字段本身（preset.textDecor / statusBar.enabled）仍然保留在数据层：
+             *    不去清理用户数据，万一以后要恢复开关，值还在。
+             */
+            /*
+             * 「开场白预设」面板也已从这里移除。
              *
              * 原因：它和联系人 App 档案里的「开场白」功能重复，而且位置在调参抽屉
              * 底部 —— 预设一多，整个抽屉要下滑很久才能摸到下面的「额外挂世界书」
@@ -4065,12 +4066,21 @@ function renderWriter() {
              */
             var summaryTrigger =
                 preset && preset.summaryTrigger != null ? preset.summaryTrigger : 0;
+            /*
+             * textDecor 恒为 true：对应的「正文美化」开关已从抽屉移除，
+             * $('mol-text-decor') 不再存在（直接读 .value 会抛 TypeError）。
+             *
+             * 为什么不写成「沿用 preset 原值」：
+             * 那样旧数据里的 false 会被一直续写下去，用户永远停在「正文没美化」
+             * 且无法恢复的状态。这里直接置 true，下次保存就把旧值覆盖掉，
+             * 等于顺手完成一次温和的数据修正。
+             */
             return {
                 summaryTrigger: summaryTrigger,
                 summaryPrompt: String((preset && preset.summaryPrompt) || '').trim(),
                 showThinking: $('mol-show-thinking').value !== 'false',
                 enterToSend: $('mol-enter-send').value !== 'false',
-                textDecor: $('mol-text-decor').value !== 'false'
+                textDecor: true
             };
         }
 
@@ -4094,9 +4104,7 @@ function renderWriter() {
             if ($('mol-enter-send')) {
                 $('mol-enter-send').value = params.enterToSend !== false ? 'true' : 'false';
             }
-            if ($('mol-text-decor')) {
-                $('mol-text-decor').value = params.textDecor !== false ? 'true' : 'false';
-            }
+            /* textDecor 回填已移除：对应开关不在抽屉里了（恒为开）。 */
         }
 
         function refreshPresetSelect(selectedId) {
@@ -4116,9 +4124,13 @@ function renderWriter() {
                     return { entryId: r.entryId, order: i };
                 })
             );
-            var statusSel = $('mol-status-fab');
-            if (statusSel && typeof apStore().saveStatusBar === 'function') {
-                apStore().saveStatusBar({ enabled: statusSel.value !== 'false' });
+            /*
+             * 状态栏恒为开：对应的开关已从抽屉移除，$('mol-status-fab') 不再存在。
+             * 但仍然显式写一次 enabled: true —— 这是把旧数据里可能残留的 false
+             * 「扶正」的唯一时机（用户下次点「保存参数」时就顺手修好了）。
+             */
+            if (typeof apStore().saveStatusBar === 'function') {
+                apStore().saveStatusBar({ enabled: true });
             }
             syncStatusFab();
             ui.stableStoryKey = '';

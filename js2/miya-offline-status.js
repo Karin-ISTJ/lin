@@ -78,9 +78,19 @@
         return getStatusSettings();
     }
 
+    /**
+     * 状态栏是否启用。
+     *
+     * 【恒为 true】
+     * 对应的「状态栏」开关已从调参抽屉移除（见 miya-appointment-app.js 里
+     * renderSheet 的说明），这里不再读 settings.enabled —— 否则以前手动关过的
+     * 用户，存量数据里存着 false，而 UI 已没有打开的入口，会永久停在关闭状态。
+     *
+     * getStatusSettings / saveStatusSettings 仍然保留：presetName 等字段还在用，
+     * 且「保存参数」时会把 enabled 显式写回 true，顺手修正旧数据。
+     */
     function isEnabled() {
-        var s = getStatusSettings();
-        return !s || s.enabled !== false;
+        return true;
     }
 
     /* 与心声侧 miya-chat-heartvoice-templates 保持一致的截断上限。
