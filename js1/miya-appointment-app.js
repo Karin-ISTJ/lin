@@ -1812,9 +1812,17 @@
      *     「推进」在一版时就是「生成新的一版」，这个意图值得在调用点保留；
      *   · 而「刷新」是另一条入口（点在 user 楼层上，语义是「重试生成」）。
      *     两者对用户是两件事，对底层是同一族能力。
+     *
+     * ⚠️ keepVersion 必须显式传 true，不能靠默认值。
+     *
+     * › 是全应用**唯一**允许归档候选的入口：它要把当前这版存进
+     * swipes，用户才能按 ‹ 翻回去。刷新键走的则是不归档的 false 分支。
+     * 早先 refreshToolHtml 默认传 true，害得刷新键也长出了候选、
+     * 跟 › 完全重复 —— 所以现在把「归档候选」这件事写死在这一个调用点上，
+     * regenerateFloor 的缺省值也改成了 false，不再有第二个地方能误开。
      */
     function generateSwipeForMessage(m) {
-        regenerateFloor(m);
+        regenerateFloor(m, true);
     }
 
     function messageBlockHtml(m, canEdit) {
@@ -3526,18 +3534,27 @@ function renderWriter() {
     /**
      * 让指定楼层「再生成一版」。
      *
-     * 三个调用方，语义两两不同 —— keepVersion 就是用来区分它们的：
+     * 三个调用方，语义两两不同：
      *
      *   · 楼层右下角的候选键 ›  —— 点在**角色楼层**上，重刷这一层自己。
-     *     语义是「多来一版」，所以 **保留**旧版（keepVersion 默认 true）。
+     *     语义是「多来一版」，所以要把旧版**归档成候选**（可 ‹ 翻回）。
+     *     这是**唯一**会产生候选项的入口 —— 只有它传 keepVersion=true。
      *
-     *   · 删除键旁边的刷新键    —— 也在**角色楼层**上，同样是重刷这一层。
-     *     语义是「这一版不要了，重写」，所以 **不保留**旧版（false）。
+     *   · 刷新键                —— 也在**角色楼层**上，同样是重刷这一层。
+     *     语义是「这一版不要了，重写一版干净的」，**绝不留下候选**。
      *
      *   · 刷新键                —— 点在**我发的消息**上（生成失败后它就
      *     成了最新楼层），此时要「保留我发的这条、在它后面生成新楼层」，
      *     而不是重写我自己写的话。这一条不看 keepVersion（user 楼层压根
      *     没有候选表的概念），详见 regenerateAfterUserFloor 的注释。
+     *
+     * ⚠️ 曾经踩过的坑：早期把 refreshToolHtml 的 keep 参数默认成 true，
+     * 于是角色楼层的刷新键走的是 keepVersion=true —— 那和 › 键**完全等价**，
+     * 连「生成出候选内容、显示 2 / 2」都一模一样。用户一眼就看穿了：
+     * 「刷新键怎么会生成出候选内容啊，这不是 › 键的活吗」—— 说得对。
+     * 候选归档从此只属于 ›（见 applyOfflineSwipe → generateSwipeForMessage），
+     * 刷新键一律 keepVersion=false，默认值也跟着调成 false，
+     * 免得再有调用方漏传参数就悄悄变成「第二个 › 键」。
      */
     function regenerateFloor(m, keepVersion) {
         if (!m || !m.id) return;
@@ -3561,13 +3578,20 @@ function renderWriter() {
      * 允许它不是最后一层：重答会就地替换这一层当前显示的那版，
      * 它后面的楼层不受影响（后面的内容只把这一层的**当前版**当历史，
      * 而我们要做的正是把当前这版换掉）。
+     *
+     * keepVersion **没有「默认保留」语义**，缺省即 false（不留候选）。
+     *
+     * 只有 › 键那条路（generateSwipeForMessage）显式传 true 才会归档旧版。
+     * 这个默认值的方向是刻意选的：漏传参数的代价是「少一个候选项」，
+     * 而不是「凭空多出一个和 › 重复的行为」—— 后者正是这次修掉的问题。
      */
     function regenerateAssistantFloor(m, keepVersion) {
         if (!String(m.content || '').trim()) {
             toast('这一层还没有内容，先让它生成完');
             return;
         }
-        var keep = keepVersion !== false;
+        /* 缺省 false：不归档候选。候选只属于 › 键 */
+        var keep = keepVersion === true;
         var eng = apEngine();
         var aps = apStore();
         var attempt = Math.max(1, floorSwipeCount(m));
@@ -3589,12 +3613,12 @@ function renderWriter() {
         /*
          * 归档原版 → 软删这一层。
          *
-         * keep = true（右下角 ›）：走 softDeleteForRegenerate。
+         * keep === true（**只有右下角 › 会走到**）：走 softDeleteForRegenerate。
          *   它会把当前正文归档进 swipes[0] 作为锚点，所以引擎随后
          *   「不重复补第一条候选」的判断也认这个标记 —— 见引擎侧那段
-         *   keepRegenCandidate 的说明。
+         *   keepRegenCandidate 的说明。这是全应用**唯一**生成候选的入口。
          *
-         * keep = false（删除键旁的刷新键）：走 deleteMessage，传入
+         * keep === false（刷新键，也是缺省）：走 deleteMessage，传入
          *   swipes: [] 顺手把候选表清空，「不保留」才是一句真话 ——
          *   否则旧候选还挂在行上，用户翻 ‹ 依然能看到它们。
          *   这里也**不**通过 extra 传 content，deleteMessage 自己会置 ''。
@@ -5128,17 +5152,26 @@ function renderWriter() {
                  * 角色楼层的那一枚已按用户要求撤掉（它和「重发」完全等价，
                  * 见 refreshToolHtml 的说明）。
                  *
-                 * regenerateFloor 里仍保留 assistant 分支：
-                 * 万一以后从别处再挂出这个属性，它会走
-                 * regenerateFloor(msg, false) —— 不保留这一版、就地重写，
-                 * 行为仍然正确，不会出现「点了没反应」的死键。
+                 * regenerateFloor 里仍保留 assistant 分支，且**一律传
+                 * keepVersion=false**：就地重写本层、不归档候选。
+                 * 候选归档是 › 键的专属行为，刷新键绝不碰 ——
+                 * 万一以后从别处再挂出这个属性，走的也是这条正确的路，
+                 * 不会变成「第二个 › 键」，也不会是「点了没反应的死键」。
                  */
                 var refreshBtn = e.target.closest('[data-ap-msg-refresh]');
                 if (refreshBtn) {
                     e.stopPropagation();
                     var refreshId = refreshBtn.getAttribute('data-ap-msg-refresh');
-                    /* 缺字段时按「保留」兜底，和 refreshToolHtml 的默认值对齐 */
-                    var refreshKeep = refreshBtn.getAttribute('data-ap-refresh-keep') !== '0';
+                    /*
+                     * 一律 false：刷新键不保留旧版、不生成候选。
+                     *
+                     * 曾经读 data-ap-refresh-keep 来决定，结果角色楼层的
+                     * 那枚被写成 "1"，行为就跟 › 键一模一样（连 2 / 2 的
+                     * 候选条都出来了）。用户直接质问「刷新键怎么会生成出
+                     * 候选内容」。现在这个属性只用于「我发的消息」楼层自己
+                     * 的分支判断，不再驱动候选归档。
+                     */
+                    var refreshKeep = false;
                     var sessRefresh = apStore().getSession(ui.chatId, ui.sessionId);
                     var msgRefresh = sessRefresh
                         ? (sessRefresh.messages || []).find(function (m) {

@@ -2182,9 +2182,23 @@
                          * 「重回」和「楼层右下角 ›」两条路径共用同一份实现，
                          * 避免改一处漏一处（见该函数的说明：候选不进 prompt，
                          * 所以按字符总量而非条数来限）。
+                         *
+                         * ⚠️ keepCand=false 时**连新内容也不进 swipes**。
+                         *
+                         * 曾经这里是无条件 pushSwipeCandidate(prevSwipes, content)，
+                         * 于是「不保留」只做到了「不把旧版塞进来」，
+                         * 新写回的正文还是被塞成了 swipes[0] —— 结果楼层
+                         * 带着一份长度为 1 的候选表，语义上仍然是「有候选」。
+                         * 用户质疑「刷新键怎么会生成出候选内容」时抓的正是这个：
+                         * 候选表的产生必须只属于 › 键，刷新键写完就该是干干净净
+                         * 的一版（swipes 为空数组，前端不渲染任何候选条）。
                          */
-                        prevSwipes = pushSwipeCandidate(prevSwipes, content);
-                        var swipeId = prevSwipes.length - 1;
+                        if (keepCand) {
+                            prevSwipes = pushSwipeCandidate(prevSwipes, content);
+                        } else {
+                            prevSwipes = [];
+                        }
+                        var swipeId = prevSwipes.length ? prevSwipes.length - 1 : 0;
                         msg = aps.updateMessage(chatId, sessionId, lastAsst.id, {
                             content: content,
                             thinking: thinking || lastAsst.thinking || '',
