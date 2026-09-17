@@ -668,12 +668,16 @@
       row.className = 'ins-app-font-row' + (hasOverride ? ' is-custom' : '');
       row.setAttribute('data-app-font-key', t.key);
       row.innerHTML =
-        '<span class="ins-app-font-row__name">' + t.label + '</span>' +
-        '<div class="ins-app-font-row__ctrl">' +
+        '<div class="ins-app-font-row__head">' +
+          '<span class="ins-app-font-row__name">' + t.label + '</span>' +
           '<span class="ins-app-font-row__val">' + label + '</span>' +
-          '<input type="range" class="ins-range ins-range--compact" data-app-font-range="' + t.key + '" min="12" max="36" step="0.5" value="' + val + '">' +
+          '<button type="button" class="ins-chip ins-chip--dim ins-app-font-row__reset" data-app-font-reset="' + t.key + '"' + (hasOverride ? '' : ' hidden') + '>默认</button>' +
         '</div>' +
-        '<button type="button" class="ins-chip ins-chip--dim ins-app-font-row__reset" data-app-font-reset="' + t.key + '"' + (hasOverride ? '' : ' hidden') + '>默认</button>';
+        '<div class="ins-app-font-row__ctrl">' +
+          /* 上限 22 与 miya-theme.js 的 MAX_FONT_PREVIEW_SIZE 保持一致。
+             原先写死 36，和校验逻辑各写各的，改一处漏一处。 */
+          '<input type="range" class="ins-range ins-range--compact" data-app-font-range="' + t.key + '" min="12" max="22" step="0.5" value="' + val + '">' +
+        '</div>';
       listEl.appendChild(row);
     });
   }
@@ -1110,7 +1114,22 @@
     }
     var previewSize = $('miya-bf-font-preview-size');
     if (previewSize) {
+      /*
+       * 默认字号的写入分两步走，避免"手指划过滑块"就把字号永久改掉。
+       *
+       * 原实现在 input 事件里直接落盘（miyaSetTheme）。input 在拖动过程中
+       * 会连续触发，等于每移动一格就写一次存储 —— 手机上一记误触的滑动
+       * 就足以把默认字号从 18 带到 32，而用户完全不会意识到自己改过。
+       *
+       * 现在：input 只做实时预览（改 DOM 观感），change（松手）才落盘。
+       * 这样拖动过程中依然所见即所得，但只有用户真正停下手指才写存储。
+       */
       previewSize.addEventListener('input', function () {
+        updateFontPreview();
+        syncAllAppFontSizeRows();
+        if (global.miyaApplyFontSize) global.miyaApplyFontSize();
+      });
+      previewSize.addEventListener('change', function () {
         global.miyaSetTheme({ fontPreviewSize: previewSize.value });
         updateFontPreview();
         syncAllAppFontSizeRows();
@@ -1120,15 +1139,24 @@
 
     var appFontList = $('miya-bf-app-font-list');
     if (appFontList) {
+      /* 与「默认字号」同一套策略：input 只更新数值显示（实时反馈），
+         change（松手）才把值写进存储。避免拖动途中反复落盘。 */
+      var applyAppFontRange = function (range) {
+        var appKey = range.getAttribute('data-app-font-range');
+        var defaultSize = parseFloat(global.miyaGetTheme().fontPreviewSize || 18);
+        setAppFontSize(appKey, range.value, defaultSize);
+      };
       appFontList.addEventListener('input', function (e) {
         var range = e.target.closest('[data-app-font-range]');
         if (!range) return;
-        var appKey = range.getAttribute('data-app-font-range');
-        var defaultSize = parseFloat(global.miyaGetTheme().fontPreviewSize || 18);
         var row = range.closest('.ins-app-font-row');
         var valEl = row ? row.querySelector('.ins-app-font-row__val') : null;
         if (valEl) valEl.textContent = formatSizeLabel(range.value);
-        setAppFontSize(appKey, range.value, defaultSize);
+      });
+      appFontList.addEventListener('change', function (e) {
+        var range = e.target.closest('[data-app-font-range]');
+        if (!range) return;
+        applyAppFontRange(range);
       });
       appFontList.addEventListener('click', function (e) {
         var resetBtn = e.target.closest('[data-app-font-reset]');

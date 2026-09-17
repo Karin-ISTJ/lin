@@ -1348,7 +1348,7 @@ html.is-custom-wg-editing .desk-custom-viewport {
 .desk-custom__grid .desk-custom__ic .ic__box[data-i],
 .desk-custom__cell .desk-custom__ic .ic__box.glass,
 .desk-custom__cell .desk-custom__ic .ic__box[data-i] {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   border: none !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
@@ -1375,7 +1375,7 @@ html.is-custom-wg-editing .desk-custom-viewport {
 
 /* ③ 程序坞图标：同样保留白色圆角底板 */
 .foot__dock--custom .desk-custom__dock-ic .foot__dock-btn {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   border: none !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
@@ -1401,7 +1401,7 @@ html.is-custom-wg-editing .desk-custom-viewport {
       用 :where() 把权重压到 0，靠 source order 生效，避免与上面规则互相打架。 */
 :where(html) :where(body) :where(.desk-custom__grid, .desk-custom__cell, #desk-custom-viewport)
   .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   border: none !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;

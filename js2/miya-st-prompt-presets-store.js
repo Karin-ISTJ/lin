@@ -33,7 +33,19 @@
       contextLength: Math.max(0, num(g.contextLength, 2000000)),
       maxTokens: Math.max(1, num(g.maxTokens != null ? g.maxTokens : g.max_tokens, 50000)),
       n: Math.max(1, Math.min(8, Math.floor(num(g.n, 1)))),
-      stream: g.stream !== false,
+      /*
+       * stream 必须能存住 false。
+       *
+       * 旧写法是 `g.stream !== false`，数学上等价于「只有原值恰好是布尔 false
+       * 才保留 false，其余一律 true」。看起来像在保留用户设置，实际有两个坑：
+       *   1. 前端表单传来的可能是 'false' / 0 / null 等非布尔值 ——
+       *      它们都 !== false，于是被静默改写成 true。
+       *   2. 用户取消勾选后存进去的 false，下一次 normalize 时若上游
+       *      有任何环节把它转成了字符串，就会被翻回 true，
+       *      表现就是「保存了却弹回流式」。
+       * 这里显式识别「明确的否」：布尔 false、数字 0、字符串 'false'/'0'。
+       */
+      stream: !(g.stream === false || g.stream === 0 || g.stream === '0' || g.stream === 'false'),
       temperature: Math.max(0, Math.min(2, num(g.temperature, 1))),
       frequencyPenalty: Math.max(-2, Math.min(2, num(g.frequencyPenalty != null ? g.frequencyPenalty : g.frequency_penalty, 0))),
       presencePenalty: Math.max(-2, Math.min(2, num(g.presencePenalty != null ? g.presencePenalty : g.presence_penalty, 0))),

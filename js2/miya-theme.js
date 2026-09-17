@@ -105,6 +105,23 @@
   var DEFAULT_FONT_PREVIEW_SIZE = 18;
   var FONT_SIZE_SCALE_RATE = 0.007;
 
+  /*
+   * 字号上限从 36 收到 22。
+   *
+   * 原上限 36 的问题不是"允许放大"，而是**误触代价太大**：字号滑块在手机上
+   * 极易被滑动手势带偏，而 12–36 的行程里，18 到 36 只占一半行程，
+   * 手指划过就能把界面字号顶到两倍观感。实测有用户因此把默认字号存成 32，
+   * 之后进聊天界面整屏字都变大，却完全想不起自己调过。
+   *
+   * 12–22 的实际覆盖：缩小到放大都有余量，而 scale 换算 1 + (size-18)*0.007
+   * 最大也只有 1.028，肉眼可见的调节空间足够，且不会失控。
+   *
+   * ⚠ 已有数据里超出上限的旧值（如 32）会由 clampPreviewSize 自动收敛到 22，
+   *   不需要用户手动回调。
+   */
+  var MIN_FONT_PREVIEW_SIZE = 12;
+  var MAX_FONT_PREVIEW_SIZE = 22;
+
   var APP_FONT_TARGETS = [
     { key: 'chat', label: '聊天', selectors: ['.miya-chat-app'] },
     { key: 'chat-timestamp', label: '聊天时间戳' },
@@ -748,7 +765,9 @@
     var n = parseFloat(v);
     if (!Number.isFinite(n)) return DEFAULT_FONT_PREVIEW_SIZE;
     n = Math.round(n * 2) / 2;
-    return Math.min(36, Math.max(12, n));
+    /* 上下限统一走常量，避免"UI 改了上限、校验还停在 36"这种两处不一致。
+       历史数据里超限的旧值（实测有 32）会在这里被收敛到上限。 */
+    return Math.min(MAX_FONT_PREVIEW_SIZE, Math.max(MIN_FONT_PREVIEW_SIZE, n));
   }
 
   function sizeToFontScale(size) {

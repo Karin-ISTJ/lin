@@ -848,11 +848,18 @@ body.miya-app-open .phone {
   margin-top: 10px;
 }
 
+/* ── 各软件字号 · 行布局 ────────────────────────────────────────────
+   改成上下两段式：上段「名称 …… 数值 + 默认按钮」，下段滑块独占整宽。
+
+   原先是一行三列（72px 1fr auto），中间列还要再切 28px 给数值，
+   滑块实测只剩 117px —— 12 到 22 共 20 格挤在 117px 里，每格不到 6px，
+   手指按不准，这才是"调起来不精准"的根源。
+   现在滑块拿到整行宽度（实测约 240px），每格约 12px，手感明显改善。
+   ─────────────────────────────────────────────────────────────────── */
 .ins-app-font-row {
-  display: grid;
-  grid-template-columns: 72px 1fr auto;
-  align-items: center;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 10px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.45);
@@ -864,34 +871,124 @@ body.miya-app-open .phone {
   background: rgba(255, 255, 255, 0.72);
 }
 
+/* 上段：名称靠左，数值与「默认」按钮靠右 */
+.ins-app-font-row__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ins-app-font-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   color: var(--ins-ink);
   letter-spacing: 0.02em;
 }
 
+/* 下段：滑块独占一行，宽度拉满 */
 .ins-app-font-row__ctrl {
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  align-items: center;
-  gap: 8px;
+  display: block;
+  width: 100%;
 }
 
 .ins-app-font-row__val {
+  flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
   color: var(--ins-ink-dim);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
+/* 「默认」按钮只在自定义状态下显示（hidden 由 JS 控制） */
 .ins-app-font-row__reset {
-  padding: 6px 8px !important;
+  flex: 0 0 auto;
+  padding: 3px 8px !important;
   font-size: 9px !important;
   letter-spacing: 0.04em;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
 }
+.ins-app-font-row__reset[hidden] { display: none !important; }
 
 .ins-range--compact {
+  /* 原为 18px 高，触控命中区偏小；22px 保证拇指按得稳 */
+  height: 22px;
+}
+
+/* 每个软件字号行的滑块：占满整行宽度，显著拉长行程 */
+.ins-app-font-row .ins-range--compact {
+  width: 100%;
+}
+
+/* ── 默认字号滑块 ───────────────────────────────────────────────────
+   加宽 + 加高。原来铺满 265px、高 16px，纵向太薄不好抓；
+   这里统一到 26px 高，并把轨道做粗、滑块做大，方便精细拖动。 */
+.ins-range--wide {
+  width: 100%;
+  height: 26px;
+  cursor: pointer;
+  /* 手机上拖动滑块时不要让页面跟着滚 */
+  touch-action: none;
+}
+
+.ins-range--wide::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.1);
+}
+.ins-range--wide::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--ins-gold, #c9a86a);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.ins-range--wide::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.1);
+}
+.ins-range--wide::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ins-gold, #c9a86a);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 各软件字号行的滑块同样加大拇指，便于精细调节 */
+.ins-range--compact::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
   height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--ins-gold, #c9a86a);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.ins-range--compact::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.1);
+}
+.ins-range--compact {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.ins-range--wide {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
 }
 
 .ins-color-well {
@@ -1950,7 +2047,7 @@ html.miya-custom-desk-icon-frameless :is(
 /* 普通图标（未上传自定义图片）保留白色圆角底板 */
 html.miya-custom-desk-icon-frameless
   .desk-custom__grid .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   border: none !important;
@@ -2713,7 +2810,7 @@ html.miya-custom-desk-icon-frameless
 :where(html) :where(body) .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass,
 :where(html) :where(body) .desk-custom__ic:not(.has-custom-icon) > .ic__box[data-i],
 :where(html) :where(body) .desk-custom__cell .ic__box.glass:not([data-custom-image]) {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   border: none !important;
@@ -2730,7 +2827,7 @@ html.miya-custom-desk-icon-frameless
 
 /* 程序坞图标白底（子节点是裸 span[data-i]，不带 .ic__box/.glass） */
 :where(html) :where(body) .foot__dock--custom .desk-custom__dock-ic:not(.has-custom-icon) .foot__dock-btn {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   border: none !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
