@@ -937,7 +937,7 @@
         var mem = global.MiyaAppointmentMemory;
         var cross =
             mem && typeof mem.buildAppointmentCrossMemory === 'function'
-                ? mem.buildAppointmentCrossMemory(canonId, contact, profile, settings)
+                ? mem.buildAppointmentCrossMemory(canonId, contact, profile, settings, { sessionId: sessionId })
                 : null;
         var worldbookContextText = buildWorldbookContextText(canonId, slice, userText, settings, cross);
 

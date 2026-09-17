@@ -343,7 +343,7 @@
         return blocks;
     }
 
-    function collectOfflineSlotsForOnline(chatId, contact, profile, memoryCount) {
+    function collectOfflineSlotsForOnline(chatId, contact, profile, memoryCount, opts) {
         var aps = apStore();
         if (!aps) return { slotItems: [] };
         var contactId = resolveContactIdFromInput(chatId, contact);
@@ -353,19 +353,48 @@
          * exportForMemory 会按 contactId 取回该角色的**全部**会话，其中就包括
          * 用户此刻正在玩的那一场。而那一场的正文本来就已经在本轮请求的历史区里
          * （appendSessionHistory 负责拼进去）。若不排除，同一段正文会被**再一次**
-         * 格式化进「记忆档案」块，造成两个后果：
+         * 格式化进「记忆档案」块，造成三个后果：
          *   1) 白烧 token —— 同一段文字本轮付费两次；
          *   2) 提示缓存每轮必然重建 —— 该块位于历史之前的前缀区，而它每轮都会
          *      多追加一条「本场刚生成的消息」，前缀被改写，缓存 100% 失效。
+         *   3) ⚠️ **最严重的**：同一段对话被贴上「跨场景记忆·已发生」的标签
+         *      送进请求，而它在历史区里同时又作为「本轮要回应的新消息」出现。
+         *      模型读到两个互相冲突的身份，会倾向把「记忆」当作既定事实继续，
+         *      于是回到旧话题 —— 用户实测的「点刷新仍生成一模一样的内容」、
+         *      「昨天下的飞机今天还答在飞机上吃了」，根源都在这里。
          * 记忆块的立意是「补上那些不在当前上下文里的过往」，本场内容无需它补。
+         *
+         * ⚠️ 排除必须**双保险**，只靠 activeSessionId 是不够的：
+         *   getActiveSession 读的是 bucket.activeSessionId，而该字段只在
+         *   「用户从界面正常进入某场次」时才被写上。若它为空（新建后未激活、
+         *   数据迁移、或调用方直接按 sessionId 构造请求），排除就会静默失效，
+         *   上面第 3 条的故障会原样复现。
+         *   所以再接受一个显式的 excludeSessionId —— 调用方本来就知道自己在
+         *   为哪一场构造请求，把它传进来是最可靠的判据。
          */
         var activeSessionId = '';
         try {
-            if (typeof aps.getActiveSession === 'function') {
-                var activeSess = aps.getActiveSession(chatId);
-                activeSessionId = String((activeSess && activeSess.id) || '');
-            }
-        } catch (eActive) {}
+            var wantSid = String((opts && opts.sessionId) || '').trim();
+            if (wantSid) activeSessionId = wantSid;
+        } catch (eWant) {}
+        if (!activeSessionId) {
+            try {
+                if (typeof aps.getActiveSessionId === 'function') {
+                    activeSessionId = String(aps.getActiveSessionId(chatId) || '');
+                }
+            } catch (eActiveId) {}
+        }
+        if (!activeSessionId) {
+            try {
+                if (typeof aps.getActiveSession === 'function') {
+                    var activeSess = aps.getActiveSession(chatId);
+                    activeSessionId = String((activeSess && activeSess.id) || '');
+                }
+            } catch (eActive) {}
+        }
+        /* 最后一道兜底：会话桶里的 activeSessionId 若存在，也纳入排除 */
+        var alsoExclude = Object.create(null);
+        if (activeSessionId) alsoExclude[activeSessionId] = true;
         var sessions = (aps.exportForMemory(chatId, contactId) || []).filter(function (sess) {
             if (!sess) return false;
             /*
@@ -375,7 +404,7 @@
              *
              * 排除本场仍然靠下面的 activeSessionId 判定，这条才是真正必要的。
              */
-            if (activeSessionId && String(sess.id) === activeSessionId) return false;
+            if (alsoExclude[String(sess.id)]) return false;
             return true;
         });
         var limit = clampInt(memoryCount, 1, 500, 40);
@@ -429,10 +458,10 @@
         return { slotItems: trimSlotsByTime(items, limit) };
     }
 
-    function collectOfflineCrossForAppointment(chatId, contact, profile, settings, memoryCount) {
+    function collectOfflineCrossForAppointment(chatId, contact, profile, settings, memoryCount, opts) {
         var limit = clampInt(memoryCount, 1, 500, 40);
         var online = collectOnlineSlots(chatId, contact, profile, settings, memoryCount);
-        var offline = collectOfflineSlotsForOnline(chatId, contact, profile, memoryCount);
+        var offline = collectOfflineSlotsForOnline(chatId, contact, profile, memoryCount, opts);
         var offlineMsgs = (offline.slotItems || []).filter(function (it) {
             return it && it.kind === 'message';
         });
@@ -565,22 +594,22 @@
         filterOfflineMirrorsForApiHistory: filterOfflineMirrorsForApiHistory,
         messageIndexCovered: messageIndexCovered,
 
-        /** 线上 buildApiMessages 用：注入线下记忆 */
-        buildOnlineCrossMemory: function (chatId, contact, profile, settings) {
+        /** 线上 buildApiMessages 用：注入线下记忆。opts.sessionId 可选，用于显式排除本场 */
+        buildOnlineCrossMemory: function (chatId, contact, profile, settings, opts) {
             var memoryCount =
                 settings && settings.memoryCount ? clampInt(settings.memoryCount, 1, 500, 40) : 40;
-            var pack = collectOfflineSlotsForOnline(chatId, contact, profile, memoryCount);
+            var pack = collectOfflineSlotsForOnline(chatId, contact, profile, memoryCount, opts);
             return {
                 systemBlock: buildCrossMemorySystemBlock(pack.slotItems),
                 slotItems: pack.slotItems
             };
         },
 
-        /** 线下 buildApiMessages 用 */
-        buildAppointmentCrossMemory: function (chatId, contact, profile, settings) {
+        /** 线下 buildApiMessages 用。opts.sessionId = 当前场次，用于把本场内容排除在「跨场景记忆」之外 */
+        buildAppointmentCrossMemory: function (chatId, contact, profile, settings, opts) {
             var memoryCount =
                 settings && settings.memoryCount ? clampInt(settings.memoryCount, 1, 500, 40) : 40;
-            var pack = collectOfflineCrossForAppointment(chatId, contact, profile, settings, memoryCount);
+            var pack = collectOfflineCrossForAppointment(chatId, contact, profile, settings, memoryCount, opts);
             var summaryText = buildSummaryBlocksText(pack.summaryBlocks);
             var slotBlock = buildCrossMemorySystemBlock(pack.slotItems);
             return {

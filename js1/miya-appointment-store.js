@@ -1927,6 +1927,21 @@
             if (!sess) return null;
             return sess;
         },
+        /**
+         * 取该聊天下「当前激活场次」的 id。
+         *
+         * 与 getActiveSession 的区别：这里只回 id 字符串，拿不到时回空串，
+         * 不会因为「场次不存在」而返回 null 掩盖原因。给记忆层做「排除本场」
+         * 判据用 —— 那边只需要一个 id，不需要整个 session 对象。
+         */
+        getActiveSessionId: function (chatId) {
+            try {
+                var b = chatBucket(chatId);
+                return b && b.activeSessionId ? String(b.activeSessionId) : '';
+            } catch (e) {
+                return '';
+            }
+        },
         /** 出演名单指纹（与顺序无关），用于续上场次 */
         castContactKey: function (castOpt, fallbackContactId, fallbackChatId) {
             return normalizeCast(castOpt, fallbackContactId, fallbackChatId)
