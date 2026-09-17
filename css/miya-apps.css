@@ -454,6 +454,39 @@ body.miya-app-open .phone {
   gap: 20px;
 }
 
+/* 侧栏（壁纸按钮组）：纵向紧凑排列。
+   注：该容器此前无样式声明，按钮与链接输入框在窄栏里会被挤成
+   「placeholder 只剩一个字 + 按钮换行」，此处补上排版。 */
+.ins-atelier-showcase-side {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ins-atelier-showcase-side .ins-chip {
+  width: 100%;
+  text-align: center;
+}
+
+/* 侧栏内的链接替换：窄栏下改为上下两行，避免输入框被压扁 */
+.ins-atelier-showcase-side .ins-url-replace {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ins-atelier-showcase-side .ins-url-replace .ins-chip {
+  width: 100%;
+}
+
+@media (min-width: 360px) {
+  .ins-atelier-showcase-side .ins-url-replace {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (min-width: 360px) {
   .ins-atelier-showcase {
     grid-template-columns: 1.05fr 0.95fr;

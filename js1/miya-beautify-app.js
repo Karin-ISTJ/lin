@@ -165,19 +165,9 @@
      相关 fixed 分支连同 `mode === 'custom' ? A : B` 三元已全部折叠为确定值。 */
   function syncLayoutModeUi() {
     /* 布局切换选择器 #miya-bf-layout-pick 及 [data-bf-layout] 按钮
-       全仓无 DOM 声明（曾经存在、随「固定布局」一并移除），故此处无高亮态需同步。 */
-    var hint = $('miya-bf-layout-hint');
-    if (hint) {
-      hint.textContent = '自定义布局 · 壁纸、图标与字体独立保存；左滑翻页可自动增加空白页';
-    }
-    var presetTitle = $('miya-bf-preset-title');
-    var presetHint = $('miya-bf-preset-hint');
-    if (presetTitle) {
-      presetTitle.textContent = '自定义布局方案';
-    }
-    if (presetHint) {
-      presetHint.textContent = '保存壁纸、图标、字体、桌面布局与自定义小组件库';
-    }
+       全仓无 DOM 声明（曾经存在、随「固定布局」一并移除），故此处无高亮态需同步。
+       原 #miya-bf-layout-hint（00 · 布局卡片）已随该卡片一并移除，相应同步逻辑删除。
+       原 #miya-bf-preset-title / #miya-bf-preset-hint 已随各面板标题区整体移除。 */
     var app = $('miya-beautify-app');
     if (app) {
       /* B15：固定布局与 P2/P3/P4 旧桌面已整体移除，

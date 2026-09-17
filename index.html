@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="css/miya-desk-wg-2x2.css?v=10">
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=5">
   <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=4">
-  <link rel="stylesheet" href="css/miya-apps.css?v=35">
+  <link rel="stylesheet" href="css/miya-apps.css?v=37">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=27">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=32">
@@ -420,21 +420,25 @@
 
       <div class="ins-atelier-panels">
         <section class="ins-atelier-panel is-active" data-bf-panel="scene">
-          <article class="ins-atelier-splash-card">
-            <div class="ins-atelier-splash-card__head">
-              <p class="ins-atelier-panel-kicker">00 · 布局</p>
-              <h2 class="ins-atelier-panel-title">主屏幕布局</h2>
-              <p class="ins-atelier-panel-desc">自定义主屏幕：4×7 图标网格，长按拖动至任意空格或与其他图标互换位置。</p>
+          <div class="ins-atelier-showcase">
+            <div class="ins-atelier-frame">
+              <div class="ins-atelier-frame-notch"></div>
+              <div class="ins-atelier-frame-screen ins-atelier-frame-screen--pick" id="miya-bf-wall-preview" data-bf-wall-pick role="button" tabindex="0" aria-label="点击上传壁纸">
+                <span class="ins-atelier-frame-label">点击上传壁纸</span>
+              </div>
+              <span class="ins-atelier-frame-corner"></span>
             </div>
-            <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-layout-hint">当前为自定义布局（4×7 图标网格）</p>
-          </article>
-
+            <div class="ins-atelier-showcase-side">
+              <button type="button" class="ins-chip ins-chip--gold" data-bf-wall-pick>上传壁纸</button>
+              <button type="button" class="ins-chip ins-chip--dim" data-bf-wall-clear>恢复默认</button>
+              <div class="ins-url-replace">
+                <input type="url" class="ins-text-input" id="miya-bf-wall-url" placeholder="图片链接" autocomplete="off" spellcheck="false">
+                <button type="button" class="ins-chip" data-bf-wall-url-apply>应用链接</button>
+              </div>
+            </div>
+          </div>
 
           <article class="ins-atelier-lock-card">
-            <p class="ins-atelier-panel-kicker">01 · 锁屏</p>
-            <h2 class="ins-atelier-panel-title">锁屏与安全</h2>
-            <p class="ins-atelier-panel-desc">锁屏壁纸与四位密码可独立开关；默认关闭，不会随装修包导出</p>
-
             <div class="ins-atelier-splash-pill ins-atelier-splash-pill--card ins-atelier-splash-pill--lock">
               <div>
                 <strong>锁屏壁纸</strong>
@@ -476,31 +480,9 @@
 
             <p class="ins-atelier-lock-note">开启后，仅在重新打开网页（完全退出后再进入）时显示锁屏；切换后台应用再返回不会重复锁屏。若设置了密码，需输入正确四位数字才能进入。</p>
           </article>
-
-          <div class="ins-atelier-showcase">
-            <div class="ins-atelier-frame">
-              <div class="ins-atelier-frame-notch"></div>
-              <div class="ins-atelier-frame-screen ins-atelier-frame-screen--pick" id="miya-bf-wall-preview" data-bf-wall-pick role="button" tabindex="0" aria-label="点击上传壁纸">
-                <span class="ins-atelier-frame-label">点击上传壁纸</span>
-              </div>
-              <span class="ins-atelier-frame-corner"></span>
-            </div>
-            <div class="ins-atelier-showcase-side">
-              <p class="ins-atelier-panel-kicker">02 · 壁纸</p>
-              <h2 class="ins-atelier-panel-title">主屏壁纸</h2>
-              <button type="button" class="ins-chip ins-chip--gold" data-bf-wall-pick>上传壁纸</button>
-              <button type="button" class="ins-chip ins-chip--dim" data-bf-wall-clear>恢复默认</button>
-              <div class="ins-url-replace">
-                <input type="url" class="ins-text-input" id="miya-bf-wall-url" placeholder="图片链接" autocomplete="off" spellcheck="false">
-                <button type="button" class="ins-chip" data-bf-wall-url-apply>应用链接</button>
-              </div>
-            </div>
-          </div>
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="glyph" hidden>
-          <p class="ins-atelier-panel-kicker">02 · 图标</p>
-          <h2 class="ins-atelier-panel-title">应用图标</h2>
           <div class="ins-atelier-splash-pill ins-atelier-splash-pill--card">
             <div>
               <strong>去掉图标外框</strong>
@@ -519,9 +501,6 @@
 
         <section class="ins-atelier-panel" data-bf-panel="object" hidden>
           <div class="is-custom-layout-only">
-            <p class="ins-atelier-panel-kicker">03 · 组件</p>
-            <h2 class="ins-atelier-panel-title">桌面小组件</h2>
-            <p class="ins-atelier-panel-desc">自定义布局可用组件一览；回到主屏点按小组件即可编辑内容与图片，每个实例独立保存。</p>
             <div class="ins-dual-actions ins-dual-actions--tight">
               <button type="button" class="ins-chip ins-chip--gold" data-bf-open-custom-wg-tpl>制作自定义小组件</button>
               <button type="button" class="ins-chip" data-bf-import-custom-wg>导入小组件 JSON</button>
@@ -531,8 +510,6 @@
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="type" hidden>
-          <p class="ins-atelier-panel-kicker">04 · 字体</p>
-          <h2 class="ins-atelier-panel-title">全局字体</h2>
           <div class="ins-atelier-type-stack">
             <div class="ins-atelier-type-card ins-atelier-type-card--color">
               <label class="ins-field-label">主屏文字颜色</label>
@@ -580,9 +557,6 @@
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="vault" hidden>
-          <p class="ins-atelier-panel-kicker">05 · 方案</p>
-          <h2 class="ins-atelier-panel-title" id="miya-bf-preset-title">外观方案</h2>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-preset-hint">保存壁纸、图标与字体组合，可随时切换</p>
           <div class="ins-vault-compose">
             <input type="text" class="ins-text-input" id="miya-bf-preset-name" placeholder="给这套外观起名…" maxlength="32">
             <button type="button" class="ins-chip ins-chip--gold ins-chip--block" data-bf-preset-save>保存当前方案</button>
@@ -3884,7 +3858,7 @@
   <script defer src="js2/miya-desk-custom-widget-templates.js?v=5"></script>
   <script defer src="js2/miya-desk-custom.js?v=59"></script>
   <script defer src="js2/miya-lockscreen.js?v=10"></script>
-  <script defer src="js1/miya-beautify-app.js?v=42"></script>
+  <script defer src="js1/miya-beautify-app.js?v=43"></script>
   <script defer src="js2/miya-msg-sound.js?v=3"></script>
   <script defer src="js2/miya-image-gen-dict.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=12"></script>
