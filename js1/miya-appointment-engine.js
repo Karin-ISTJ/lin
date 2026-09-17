@@ -517,12 +517,6 @@
         return lines.join('\n');
     }
 
-    function appendRegenerateHint(apiMessages, attempt) {
-        var block = buildRegenerateHintBlock(attempt);
-        if (!block || !Array.isArray(apiMessages)) return;
-        apiMessages.push({ role: 'system', content: block });
-    }
-
     function htmlApi() {
         return global.MiyaChatHtml || null;
     }
@@ -544,7 +538,9 @@
      * 直接取该合并段即可 —— 合并段本身就是「最后一次提问」的完整形态。
      *
      * 注意：这个函数只负责定位「当前轮讲的是什么」，不负责标记来源。
-     * 「当前轮是重答」这件事由 appendRegenerateHint 显式告知模型。
+     * 「当前轮是重答」这件事由 buildApiMessages 里那段注入逻辑显式告知模型
+     * （它要把提示块插到当前 user **之前**，不能简单 append，所以直接内联，
+     *  不再走一个独立的小转发函数）。
      */
     function resolveTurnUserText(messages, extra) {
         var t = String(extra || '').trim();
@@ -1088,16 +1084,6 @@
             });
         }
         appendOfflineUserMetaTail(apiMessages, turnUserText);
-        /*
-         * 重答提示：必须在「历史之后、当前 user 之前」，紧贴生成点。
-         *
-         * 「刷新后还是同一段话」的正面修复就在这里 —— 见 buildRegenerateHintBlock
-         * 的详细说明。只在重答路径注入，正常发送完全不受影响。
-         */
-        if (isRegenerateRun(opts)) {
-            appendRegenerateHint(apiMessages, opts.regenerateAttempt);
-        }
-
 
         /* 当前轮 user 永远是最后一条消息：ST/HTML/元指令全部位于 user 之前。 */
         if (extra) {
@@ -1106,6 +1092,75 @@
                 last.content = last.content ? last.content + USER_MSG_JOIN + extra : extra;
             } else {
                 apiMessages.push({ role: 'user', content: extra });
+            }
+        }
+
+        /*
+         * 重答提示：必须插在**当前轮 user 之前**，紧贴生成点。
+         *
+         * ── 为什么要「插在 user 之前」而不是 append 到末尾 ──
+         *
+         * 这段代码原来是无脑 append 的，位置在「元指令尾之后、当前 user 之前」。
+         * 那个位置在**正常发送**路径上是对的：appendSessionHistory 已经把
+         * 当前轮 user 写进历史、成为最后一条，append 上去的提示块正好落在
+         * user 之前。原注释也是照这个情形写的。
+         *
+         * 但**重答路径**（刷新 / 重发 / › 键）的形态完全不同：
+         *
+         *   · 被刷的那一层已经被软删，getSessionMessages 把它滤掉了；
+         *   · runAppointmentCompletion 调 buildApiMessages 时传的 extra 是空串
+         *     （见那里 `buildApiMessages(chatId, sessionId, '', {...})`），
+         *     所以下面那个 `if (extra)` 分支**根本不会执行**。
+         *
+         * 两件事叠起来：历史里最后一条活着的恰好就是那条 user（被刷的
+         * assistant 已经软删了），appendSessionHistory 把它正常 push 进去，
+         * 于是提示块 append 到它**后面**，请求尾巴长成：
+         *
+         *     … user:你还记得去年那场雨吗？
+         *       system:【重答要求·…】        ← 最后一条是 system
+         *
+         * 最后一条不是 user，这是对话补全里最容易出事的一种形态：
+         * 多数网关/模型会把它读成「系统在补充规则、还没轮到我说」，
+         * 于是要么续写得很保守、要么直接照着上一条 assistant 的语感收尾 ——
+         * 表现就是**刷新出来的内容跟刚才高度雷同**。
+         *
+         * 正确形态是提示块插在 user 之前、user 仍然垫底：
+         *
+         *     … system:【重答要求·…】
+         *       user:你还记得去年那场雨吗？   ← 最后一条是 user
+         *
+         * ── 怎么定位插入点 ──
+         *
+         * 从末尾往前找第一条 user，插在它前面。这样不论 extra 分支跑没跑、
+         * 历史里有没有 user，落点都对：
+         *   · 正常发送 → user 是最后一条，提示块插到它前面（与此前一致）；
+         *   · 重答     → 命中历史里那条 user，提示块不再跑到它后面。
+         *
+         * 找不到 user 时退化为 append（并把 user 补回去，见下），
+         * 保证「最后一条永远是 user」这条不变式无论如何都成立。
+         *
+         * 只在重答路径注入，正常发送完全不受影响。
+         */
+        if (isRegenerateRun(opts)) {
+            var hintBlock = buildRegenerateHintBlock(opts.regenerateAttempt);
+            var lastUserIdx = -1;
+            for (var ui2 = apiMessages.length - 1; ui2 >= 0; ui2--) {
+                if (apiMessages[ui2] && apiMessages[ui2].role === 'user') {
+                    lastUserIdx = ui2;
+                    break;
+                }
+            }
+            if (lastUserIdx >= 0) {
+                apiMessages.splice(lastUserIdx, 0, { role: 'system', content: hintBlock });
+            } else {
+                /*
+                 * 极罕见：整段上下文里一条 user 都没有（比如用户把提问层
+                 * 也删了再刷新）。此时提示块 append 上去会把 system 顶到
+                 * 末尾，所以补一条空的 user 垫底 —— 后面若还有 extra 分支
+                 * 也会正确合并进这一条。
+                 */
+                apiMessages.push({ role: 'system', content: hintBlock });
+                apiMessages.push({ role: 'user', content: '' });
             }
         }
 

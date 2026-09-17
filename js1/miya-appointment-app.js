@@ -1977,7 +1977,17 @@
                       (m.hidden ? ICON_EYE_OFF : ICON_EYE) + '</button>' +
                       '</div>' : '';
                 html += '<section class="xw-floor' + hiddenCls + '" data-ap-floor="' + esc(m.id) + '">' +
-                    '<header class="xw-floor__head"><span' + (m.hidden ? ' data-floor-tag="hidden"' : '') + '>第 ' + String(floorNo) + ' 层' +
+                    /*
+                     * 编号单独包一层 .xw-floor__no。
+                     *
+                     * 以前「第 N 层」和「 · 已隐藏」是同一个 span 里的裸文本，
+                     * 想给编号单独加粗染色都没法下手。拆开之后：
+                     *   · 编号 → .xw-floor__no，常态就是加粗的深色字
+                     *   · 「已隐藏」→ 留在外层，跟着 hidden 标记走
+                     * 视觉目标：翻找时编号一眼可见（用户反馈编号不明显、容易翻过头）。
+                     */
+                    '<header class="xw-floor__head"><span' + (m.hidden ? ' data-floor-tag="hidden"' : '') + '>' +
+                    '<span class="xw-floor__no">第 ' + String(floorNo) + ' 层</span>' +
                     (m.hidden ? ' · 已隐藏' : '') + '</span>' + floorTools + '</header>' + block + '</section>';
             }
         });
@@ -2953,6 +2963,31 @@ function renderWriter() {
     }
 
     /*
+     * 这一个错误是不是「用户主动停止」造成的？
+     *
+     * 为什么要单独抽成函数：
+     *   原先只有 runStream 内部的 catch 认得 abort（见那里的 isAbort 判断），
+     *   而 runStream 外面还有 3 个调用点各自挂了 .catch() 做「失败后还原楼层」。
+     *   用户点停止时，内部 catch 静默 return 了，异常却继续往外冒到那 3 个外层 catch，
+     *   于是被当成故障处理 —— 弹「没生成出来」的错、把楼层恢复、再重绘一次。
+     *   重绘会把正在生成的那层重新挂上「书写中」提示，而停止流程已经结束了，
+     *   没有任何东西再去清它 —— 表现就是「停止后书写中还在，要重进界面才消失」。
+     *
+     *   所以 abort 判定必须是每个 catch 都能用的公共能力，而不是某处的局部变量。
+     */
+    function isAbortError(err) {
+        if (!err) return false;
+        var genLife = global.MiyaGenerationLifecycle;
+        return !!(
+            err.name === 'AbortError' ||
+            err.message === 'aborted' ||
+            err.message === 'abort' ||
+            err.code === 'aborted' ||
+            (genLife && genLife.isAbortError && genLife.isAbortError(err))
+        );
+    }
+
+    /*
      * 停止线下生成。
      *
      * 引擎侧早就备好了 MiyaAppointmentEngine.stopAppointment(chatId, sessionId)，
@@ -3424,15 +3459,7 @@ function renderWriter() {
                 resetStreamUi();
                 patchStoryBody();
                 /* 用户主动停止：不是故障，别弹「没连上」吓人 */
-                var genLife = global.MiyaGenerationLifecycle;
-                var isAbort = !!(err && (
-                    err.name === 'AbortError' ||
-                    err.message === 'aborted' ||
-                    err.message === 'abort' ||
-                    err.code === 'aborted' ||
-                    (genLife && genLife.isAbortError && genLife.isAbortError(err))
-                ));
-                if (isAbort) return;
+                if (isAbortError(err)) return;
                 if (err && err.message === 'api_not_configured') toast('请先在「设置」里填好 API');
                 else if (err && err.message === 'session_not_found') toast('会话无效，请返回重选角色');
                 else if (err && err.message === 'busy') toast('请稍候');
@@ -3734,6 +3761,12 @@ function renderWriter() {
                     return r;
                 })
                 .catch(function (err) {
+                    /*
+                     * 用户点「停止」也走这里 —— 那不是故障，别把楼层搬回去、
+                     * 别弹错、更别重绘（重绘会把「书写中」重新挂回去并残留）。
+                     * 停止该做的事只有一件：把界面放回可交互，收尾交给 .finally。
+                     */
+                    if (isAbortError(err)) return;
                     restoreFloorAfterFailedRegenerate(m);
                     patchStoryBody();
                     toast('没生成出来，已把这一层放回去');
@@ -3832,6 +3865,8 @@ function renderWriter() {
                     return r;
                 })
                 .catch(function (err) {
+                    /* 用户主动停止：同上层，不当故障处理 */
+                    if (isAbortError(err)) return;
                     /* 失败把刚才删掉的楼层原样放回，这条 user 从头到尾没被碰过 */
                     restoreMessageSnapshot(snap);
                     patchStoryBody();
@@ -4481,6 +4516,8 @@ function renderWriter() {
                             return r;
                         })
                         .catch(function (err) {
+                            /* 用户主动停止：别弹「没发出去」，也别重绘 */
+                            if (isAbortError(err)) return;
                             restoreMessageSnapshot(userSnap);
                             renderStory();
                             toast('没发出去，已把这层放回去');

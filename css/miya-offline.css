@@ -7,6 +7,14 @@
   --xw-ink: #141414;
   --xw-soft: rgba(20, 20, 20, 0.46);
   --xw-hair: rgba(20, 20, 20, 0.09);
+  /*
+   * 楼层编号的标记色。「已隐藏」的楼层用它把编号染出来。
+   *
+   * 为什么不直接用 --xw-ink：编号本身已经用 --xw-ink 了，
+   * 两者同色就分不出「正常」和「已隐藏」。这里刻意拆出一个独立变量，
+   * 让各主题可以单独调（不定义时回退到 --xw-ink，视觉上仍然协调）。
+   */
+  --xw-floor-mark: #8b7355;
   --xw-serif: "Cormorant Garamond", "Noto Serif SC", serif;
   --xw-sans: "Jost", "Noto Sans SC", sans-serif;
   position: fixed;
@@ -1787,7 +1795,58 @@
 }
 
 /* v38 floor/chat-record mode */
-.xw-floor{position:relative;margin:0 0 14px}.xw-floor__head{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:3px 6px;opacity:.72;font-size:12px}.xw-floor__tools{display:flex;gap:4px}.xw-floor__tool{width:28px;height:28px;border:0;background:transparent;padding:5px;border-radius:8px;cursor:pointer}.xw-floor__tool svg{width:100%;height:100%}.xw-floor__tool.is-off{background:rgba(0,0,0,.07);color:inherit;opacity:.9}.xw-floor__tool.is-off:hover{background:rgba(0,0,0,.11)}.xw-floor.is-floor-hidden .xw-floor__head span[data-floor-tag='hidden']{font-weight:600;opacity:.95}.xw-floor.is-floor-hidden .xw-floor__head{opacity:.85}.xw-floor.is-floor-hidden>*:not(.xw-floor__head){display:none!important}.xw-floor.is-floor-hidden .xw-block__body,.xw-floor.is-floor-hidden [data-ap-msg-id]{display:none!important}.xw-floor.is-floor-hidden:after{content:'这一层已隐藏 · 不参与生成 · 点楼层眼睛恢复';display:block;padding:12px 14px;border:1px dashed currentColor;opacity:.42;border-radius:10px;font-size:12px}.xw-vault__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.xw-vault__actions{display:flex;gap:6px;flex-wrap:wrap}
+.xw-floor{position:relative;margin:0 0 14px}
+/*
+ * 楼层编号（「第 N 层」）加粗提亮。
+ *
+ * 原来这里是 opacity:.72; font-size:12px —— 整行都很淡。
+ * 平时读正文无所谓，但【翻找】的时候编号太轻，一眼扫不到，
+ * 很容易翻过头（用户反馈）。所以：
+ *   · 字重 300 → 600（这个 App 全局 font-weight:300，600 已是明显对比）
+ *   · 整行透明度 .72 → .85，再给编号加一小块素纸淡底
+ *   · 编号本身用 tabular-nums，多位数字宽度一致，翻页时不会左右跳
+ *
+ * 【为什么不动字号】
+ * 一开始想过把 12px 调大，但这个 App 的「素纸」主题靠小字 + 细笔画撑克制感。
+ * 编号一旦超过 13px，就会比日期分隔线（「正片」那行）还大、逼近正片 16px 的正文，
+ * 层级立刻乱掉，看起来像内容而不是标号。所以改用【底色块】——它只把编号「框出来」，
+ * 字的大小和位置都不变，翻找时眼睛有落点，排版节奏却不受影响。
+ */
+.xw-floor__head{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:3px 6px;font-size:12px}
+.xw-floor__no{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:6px;
+  /* 素纸淡底：极浅暖灰 + 一根细描边，贴在纸面上但不跳出来 */
+  background:rgba(20,20,20,.055);
+  border:1px solid rgba(20,20,20,.07);
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  color:var(--xw-ink);
+  line-height:1.45;
+}
+/* 编号之外的部分（「· 已隐藏」）仍然柔和，不跟编号抢 */
+.xw-floor__head>span:not(.xw-floor__no){opacity:.8}
+.xw-floor__tools{display:flex;gap:4px}
+.xw-floor__tool{width:28px;height:28px;border:0;background:transparent;padding:5px;border-radius:8px;cursor:pointer}
+.xw-floor__tool svg{width:100%;height:100%}
+.xw-floor__tool.is-off{background:rgba(0,0,0,.07);color:inherit;opacity:.9}
+.xw-floor__tool.is-off:hover{background:rgba(0,0,0,.11)}
+/*
+ * 「已隐藏」的楼层：编号改用主题标记色。
+ *
+ * 以前这一态靠 font-weight:600 区分，但常态现在也是 600 了，字重这招失效。
+ * 改用颜色 —— 比字重更经得起「常态也已经加粗」这种前提变化，
+ * 而且和已有的一整层变暗、虚线提示、结尾说明字是同一套语义（「这层不参与生成」）。
+ * 只染编号本身，后面的「· 已隐藏」保持原来的柔和色，两者不抢。
+ */
+.xw-floor.is-floor-hidden .xw-floor__head span[data-floor-tag='hidden'] .xw-floor__no{
+  color:var(--xw-floor-mark, var(--xw-ink));
+  /* 底色一并换成标记色系，整块「换个颜色」比只换字色更一眼可辨 */
+  background:rgba(139,115,85,.12);
+  border-color:rgba(139,115,85,.22);
+}
+.xw-floor.is-floor-hidden .xw-floor__head{opacity:.85}.xw-floor.is-floor-hidden>*:not(.xw-floor__head){display:none!important}.xw-floor.is-floor-hidden .xw-block__body,.xw-floor.is-floor-hidden [data-ap-msg-id]{display:none!important}.xw-floor.is-floor-hidden:after{content:'这一层已隐藏 · 不参与生成 · 点楼层眼睛恢复';display:block;padding:12px 14px;border:1px dashed currentColor;opacity:.42;border-radius:10px;font-size:12px}.xw-vault__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.xw-vault__actions{display:flex;gap:6px;flex-wrap:wrap}
 
 
 /* v39: 顶部工具栏布局优化 */
