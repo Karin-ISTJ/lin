@@ -1441,3 +1441,30 @@ html.is-mobile body.miya-mode-phone:not(.miya-app-open) .desk-custom__grid .desk
   background: transparent !important;
   box-shadow: none !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   桌面分页指示器 · 完全隐藏
+   说明：原先 .desk-pager 的 4 个圆点在自定义布局下被缩到 4×4px，
+   当前页那个是 11×4px 的胶囊，视觉上只剩一条「横杠」。
+   此处统一隐藏，桌面更干净；JS 的分页切换逻辑不受影响。
+   ═══════════════════════════════════════════════════════════ */
+html body .desk-pager,
+html body .desk-pager__dot,
+html[data-miya-desk-layout="custom"] body .desk-pager,
+html[data-miya-desk-layout="custom"] body .desk-pager__dot,
+html[data-miya-desk-layout="custom"] .foot .desk-pager,
+html[data-miya-desk-layout="custom"] .foot .desk-pager__dot {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 分页器隐藏后同步收紧 .foot 顶部留白（原先 28px 是为分页器预留的） */
+html[data-miya-desk-layout="custom"] .foot {
+  padding: 14px 20px calc(4px + env(safe-area-inset-bottom, 0px));
+}
