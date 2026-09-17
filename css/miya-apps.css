@@ -69,10 +69,6 @@
   background: rgba(255, 255, 255, 0.92);
 }
 
-.miya-beautify-app .ins-atelier-masthead-folio {
-  border-color: rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.88);
-}
 
 .miya-beautify-app .ins-atelier-frame {
   background: linear-gradient(145deg, #fafafa 0%, #e8e8e8 100%);
@@ -308,6 +304,13 @@ body.miya-app-open .phone {
   padding: calc(env(safe-area-inset-top, 0px) + 12px) 18px calc(24px + env(safe-area-inset-bottom, 0px)) 14px;
 }
 
+/* 「退出」按钮为 sticky + float:right，已脱离文档流。
+   原 masthead 大标题充当它的占位，标题移除后首个面板会与按钮重叠。
+   此处让面板容器清除浮动，使内容从按钮下方开始排布。 */
+.ins-atelier-panels {
+  clear: both;
+}
+
 .ins-atelier-dismiss {
   position: sticky;
   top: 0;
@@ -336,68 +339,12 @@ body.miya-app-open .phone {
   border: 1px solid var(--ins-gold);
 }
 
-.ins-atelier-masthead {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 22px;
-  clear: both;
-}
 
-.ins-atelier-eyebrow,
-.ins-vault-eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.38em;
-  text-transform: uppercase;
-  color: var(--ins-rose);
-  margin-bottom: 6px;
-}
 
-.ins-atelier-headline,
-.ins-vault-title {
-  font-family: var(--ins-display);
-  font-size: clamp(36px, 9vw, 48px);
-  font-weight: 300;
-  line-height: 1.05;
-  letter-spacing: 0.04em;
-  color: var(--ins-ink);
-}
 
-.ins-atelier-lede,
-.ins-vault-lede {
-  margin-top: 10px;
-  max-width: 28em;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--ins-ink-dim);
-  font-weight: 300;
-}
 
-.ins-atelier-masthead-folio {
-  flex-shrink: 0;
-  padding: 12px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.88);
-  text-align: center;
-  transform: rotate(3deg);
-  box-shadow: var(--ins-shadow);
-}
 
-.ins-atelier-folio-tag {
-  display: block;
-  font-size: 8px;
-  letter-spacing: 0.4em;
-  color: var(--ins-gold);
-}
 
-.ins-atelier-folio-no {
-  display: block;
-  margin-top: 4px;
-  font-family: var(--ins-display);
-  font-size: 20px;
-  font-style: italic;
-}
 
 .ins-atelier-panel {
   animation: ins-panel-in 0.4s ease;

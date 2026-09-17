@@ -178,14 +178,9 @@
       var activePanel = app.querySelector('[data-bf-panel].is-active');
       if (activePanel && activePanel.hidden) switchBeautifyTab('scene');
     }
-    var lede = $('miya-bf-masthead-lede');
-    if (lede) {
-      lede.textContent = '在这里换壁纸和图标；桌面小组件请回到主屏点按编辑，每个实例独立保存。';
-    }
-    var wallTitle = document.querySelector('[data-bf-panel="scene"] .ins-atelier-showcase-side .ins-atelier-panel-title');
-    if (wallTitle) {
-      wallTitle.textContent = '自定义壁纸';
-    }
+    /* 原 #miya-bf-masthead-lede（「表层」大标题下的描述）已随 masthead 整块移除；
+       原 [data-bf-panel="scene"] 内的壁纸标题 h2 也已随壁纸区上移一并移除，
+       两处同步逻辑均删除。 */
     buildCustomWidgetGallery();
   }
 
