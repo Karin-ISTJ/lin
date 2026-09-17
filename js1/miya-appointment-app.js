@@ -952,10 +952,26 @@
         return '<div class="xw-bg xw-bg--journal" aria-hidden="true"></div>';
     }
 
-    function renderVaultBackBtn(extraClass) {
+    /*
+     * 「← 返回」按钮。
+     *
+     * 关于 id：默认是 xw-exit（正片页/卷宗页那枚，由 bindEvents 的 $('xw-exit')
+     * 统一接管）。但**浮层里的返回键不能复用这个 id** ——
+     * $('xw-exit') 取的是文档里第一个同 id 元素，抽屉后插入却 id 相同，
+     * 于是浮层里那枚会被错绑成「回到正片」，点一下人没退出去反而换了视图。
+     * 所以给调用方留一个 idOverride，浮层自带自己的 id 与自己的处理器。
+     *
+     * 关于 class：extraClass 是**追加**的。这枚键的绝对定位与外观全靠
+     * .xw-vault-back.xw-exit 这条规则（见 css/miya-offline.css），
+     * 早先写成 class="xw-vault-back ' + extraClass + '" 把 xw-exit 整个顶掉了 ——
+     * 调用方（卷宗页）自己传了 xw-exit 才没暴雷；调参页传的是 xw-sheet-back，
+     * 结果拿到一个 position:static 的裸按钮，直接贴在屏幕最顶上。
+     */
+    function renderVaultBackBtn(extraClass, idOverride) {
         return (
-            '<button type="button" class="xw-vault-back' + (extraClass ? ' ' + extraClass : '') +
-            '" id="xw-exit" aria-label="返回">' +
+            '<button type="button" class="xw-vault-back xw-exit' +
+            (extraClass ? ' ' + extraClass : '') +
+            '" id="' + (idOverride || 'xw-exit') + '" aria-label="返回">' +
             '<svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true"><path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
             '<span>返回</span></button>'
         );
@@ -4002,11 +4018,19 @@ function renderWriter() {
         }
 
         sheet.innerHTML =
-            '<div class="xw-drawer__panel">' +
+            '<div class="xw-drawer__nav">' +
+            renderVaultBackBtn('xw-sheet-back', 'xw-sheet-back') +
+            '</div>' +
+            '<div class="xw-drawer__panel is-flexfill">' +
+            '<div class="xw-drawer__sheet">' +
             '<div class="xw-drawer__head xw-manga-head">' +
             '<span class="xw-drawer__kicker">线下 · 设置</span>' +
             '<h3>这一场的设置</h3>' +
             '<p>文风、人称、篇幅与分段完全由 ST 预设控制；这里仅保留线下模块自身的功能设置。</p></div>' +
+            /* 两块面板并排（窄屏自动退化为单列，见 .xw-manga-grid）：
+               左列是「参数」，右列是「内容绑定」。这样两边都能一眼看全，
+               不必像单列时那样为了够到「本卷纪要」往下滑两三屏。 */
+            '<div class="xw-manga-grid">' +
             '<section class="xw-manga-panel">' +
             '<div class="xw-field xw-field--panel"><label>参数预设</label>' +
             '<div class="xw-field--split">' +
@@ -4093,10 +4117,17 @@ function renderWriter() {
             '<div class="xw-note-list" id="xw-note-list">' +
             renderSumList() +
             '</div></div></section>' +
+            '</div>' +
             '<div class="xw-drawer__foot xw-manga-foot">' +
             '<button type="button" id="mol-params-save" class="xw-btn xw-btn--solid">保存参数</button>' +
             '<button type="button" id="xw-note-run" class="xw-btn">生成纪要</button>' +
-            '<button type="button" id="mol-sheet-close">收起</button></div></div>';
+            /*
+             * 这枚键已从抽屉形态的「收起」改名为「返回」——
+             * 现在它是整页，语义和左上角那枚一样是「退出这一页」；
+             * 底部保留一份是为了拇指不用回到屏幕顶端。
+             */
+            '<button type="button" id="mol-sheet-close" class="xw-btn">返回</button></div>' +
+            '</div></div>';
 
         document.body.appendChild(sheet);
         requestAnimationFrame(function () {
@@ -4373,10 +4404,13 @@ function renderWriter() {
             toast('已读取预设，点「保存参数」写入当前角色');
         });
 
-        $('mol-sheet-close').addEventListener('click', closeSheet);
-        sheet.addEventListener('click', function (e) {
-            if (e.target === sheet) closeSheet();
+        /* 两个返回入口：左上角的「← 返回」和底部的「返回」。
+           两者都只关掉这一页（离开前会先把表单落盘，见 closeSheet）。 */
+        sheet.querySelectorAll('#mol-sheet-close, #xw-sheet-back').forEach(function (btn) {
+            btn.addEventListener('click', closeSheet);
         });
+        /* 背板不再吃点击：整页形态下没有「点空白关闭」的空间 ——
+           点哪儿都是页面本身。要退出就用上面两枚键。 */
 
         function closeSheet() {
             try {

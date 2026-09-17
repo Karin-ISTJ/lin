@@ -3,14 +3,49 @@
    与基础款共用 xw- 类名 · 正文卡片居中宽栏
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── 样式抽屉 ── */
+/* ── 样式页（全屏）── */
 .xw-drawer--beautify .xw-bf-panel {
   --xw-ink: #141414;
   --xw-paper: #ffffff;
   --xw-soft: rgba(20, 20, 20, 0.55);
   --xw-hair: rgba(20, 20, 20, 0.12);
   background: #f8f8f6;
-  border-left: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+/*
+ * 左右分栏：左「主题 + 选择器参考」，右「自定义 CSS + 预设」。
+ *
+ * 为什么不并成一列：主题卡片是「选一次就完事」的短列表，
+ * CSS 文本框却是要反复改、还要对着参考类名改的长内容。
+ * 一列排下来，主题只占顶部一小块，剩下全是文本框，
+ * 视觉上「样式页 = 一个巨大的文本框」，主题反而像附属品。
+ * 分栏后两件事各占一半，谁都不是谁的注脚。
+ *
+ * 560px 以下退化为单列（到不了并排所需的最小可读宽度）。
+ */
+.xw-bf-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (min-width: 561px) {
+  .xw-drawer--beautify .xw-drawer__sheet { max-width: 860px; }
+  .xw-bf-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+}
+
+/*
+ * 每列内部：让主题卡只占自己那一列，不要被 grid 拉到与右列等高。
+ * （grid 默认 align-items:stretch，若不加这行，主题卡会跟着右列
+ *   那个很高的文本框一起被拉长，卡片中间空出一大片。）
+ */
+.xw-bf-col {
+  min-width: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .xw-bf-head h3 {
@@ -18,6 +53,9 @@
   font-weight: 400;
   letter-spacing: 0.12em;
 }
+
+.xw-drawer--beautify .xw-drawer__head h3 { font-size: 24px; }
+.xw-drawer--beautify .xw-drawer__head p { font-size: 12.5px; }
 
 .xw-bf-section { margin-bottom: 18px; }
 
@@ -52,9 +90,17 @@
   color: rgba(20, 20, 20, 0.42);
 }
 
+/*
+ * 主题卡片。
+ *
+ * 宽度问题：单列时卡片会被 560~860px 的内容列拉成一条超宽的长条，
+ * 左侧 52px 的色块和右侧一大片空白完全失衡。
+ * 用 grid 自适应列（每列至少 220px）让它们自动排成 2~3 张一行，
+ * 卡片回到接近正方形的比例，色块与文案也挨得近。
+ */
 .xw-bf-themes {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 8px;
 }
 
@@ -110,31 +156,44 @@
 
 .xw-bf-css {
   width: 100%;
-  min-height: 120px;
+  min-height: 200px;
   padding: 10px 12px;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 8px;
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.6;
   resize: vertical;
 }
 
+/*
+ * 「选择器参考」这块只读文本。
+ *
+ * 两个刻意的取舍：
+ *   1. white-space: pre + overflow:auto —— 内容是一份 markdown 表格，
+ *      折行会把表格结构拆散，滚着看反而清楚。
+ *   2. resize: vertical 关掉，改成固定高 + 内部滚动条。
+ *      原本可拖拽调高时，textarea 的自身滚动条与外层的滚动条会同时出现，
+ *      两条并排看着像 bug；高度固定后只剩里面那一条。
+ * 宽屏下它左边还有主题卡，不必再靠限高来抢空间，所以放高到 260px。
+ */
 .xw-bf-src {
+  display: block;
   width: 100%;
-  min-height: 160px;
-  max-height: 240px;
+  height: 260px;
   padding: 10px 12px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   font-family: ui-monospace, Menlo, monospace;
   font-size: 10px;
   line-height: 1.45;
-  resize: vertical;
+  resize: none;
   background: #fff;
   color: #1a1a1a;
   user-select: text;
   -webkit-user-select: text;
+  white-space: pre;
+  overflow: auto;
 }
 
 .xw-bf-src-row {
@@ -191,6 +250,23 @@
 
 .xw-bf-foot { margin-top: 8px; }
 
+/* 底部操作条：与调参页同一套钉底处理（见 .xw-drawer__foot），
+   这里只补一条与纸底相接的分隔，避免内容和按钮糊在一起。 */
+.xw-drawer--beautify .xw-drawer__foot {
+  padding: 12px 0 14px;
+  background: #f8f8f6;
+  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.08);
+}
+
+/*
+ * 宽屏（内容列限在 860px 内居中）时，底部那枚「返回」是多余的：
+ * 整页只有一屏多高，左上角那枚始终在视野里，两枚并存反而让人犹豫点哪个。
+ * 窄屏（手机全宽）滚动距离长，底部那枚留着给拇指。
+ */
+@media (min-width: 561px) {
+  .xw-drawer--beautify .xw-bf-foot { display: none; }
+}
+
 .xw-drawer--beautify .xw-btn {
   display: inline-flex;
   align-items: center;
@@ -227,14 +303,11 @@
   min-width: 0;
 }
 
-.xw-drawer--beautify .xw-drawer__foot {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  margin-top: 12px;
-  padding-top: 12px;
-  background: linear-gradient(180deg, rgba(248, 248, 246, 0) 0%, #f8f8f6 28%);
-}
+/* 注：这里原有 `.xw-drawer--beautify .xw-drawer__foot { position: sticky; … }`
+   一段（含一条向上渐隐的遮罩渐变）。整页化之后 general 的 .xw-drawer__foot
+   已经统一做了钉底，且不再需要渐隐 ——
+   页面底色是纯 #f8f8f6，用实底比渐变更干净，也不会在滚动时透出内容。
+   故整段删除，避免两条 sticky 规则互相覆盖。 */
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -321,8 +394,18 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/*
+ * 手帐主题的正片页自带悬浮纸签顶栏（含自己的返回键），
+ * 所以应用自带的那枚 .xw-exit 要藏起来，否则会顶栏外面多冒一个。
+ *
+ * ⚠️ 但**不能连浮层里的返回键一起藏**：调参页 / 样式页整页化之后，
+ *    它们的返回键也带 .xw-exit（复用同一套定位与外观），
+ *    这条 !important 的 display:none 一旦命中，用户在手帐主题下
+ *    进了设置页就再也退不出来。
+ *    所以用 :not(.xw-drawer *) 把浮层内部排除掉。
+ */
 .miya-offline-app.xw-theme-korean .xw-dock,
-.miya-offline-app.xw-theme-korean .xw-exit {
+.miya-offline-app.xw-theme-korean .xw-exit:not(.xw-drawer .xw-exit) {
   display: none !important;
 }
 

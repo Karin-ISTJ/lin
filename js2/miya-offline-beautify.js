@@ -425,17 +425,37 @@
     sheet.setAttribute('aria-label', '现场样式');
 
     sheet.innerHTML =
-      '<div class="xw-drawer__panel xw-bf-panel">' +
+      '<div class="xw-drawer__nav">' +
+      /* 返回键与调参页、卷宗页共用同一枚（.xw-vault-back.xw-exit），
+         三处的「怎么退出去」长得一样，用户不用每页重新找。 */
+      '<button type="button" class="xw-vault-back xw-exit" data-xw-bf-back aria-label="返回">' +
+      '<svg width="10" height="18" viewBox="0 0 10 18" fill="none" aria-hidden="true">' +
+      '<path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round"/></svg><span>返回</span></button>' +
+      '</div>' +
+      '<div class="xw-drawer__panel xw-bf-panel is-flexfill">' +
+      '<div class="xw-drawer__sheet">' +
       '<header class="xw-drawer__head xw-bf-head">' +
       '<span class="xw-drawer__kicker">现场 · 界面</span>' +
-      '<h3>现场样式</h3></header>' +
+      '<h3>现场样式</h3>' +
+      '<p>主题决定正文的底色、版心与气泡样式；只有「自定义」才读取下面的 CSS。</p></header>' +
+      /* 宽屏下左右分栏：左边挑主题，右边写 CSS 并看参考。
+         这两件事本来就要对着看（改了 CSS 想看主题会不会被顶掉），
+         塞在一列里就得上下翻着比对。 */
+      '<div class="xw-bf-grid">' +
+      '<div class="xw-bf-col">' +
       '<section class="xw-bf-section">' +
       '<span class="xw-bf-section__label">主题</span>' +
       '<div class="xw-bf-themes" data-xw-bf-themes>' + buildThemePickerHtml(activeTheme) + '</div></section>' +
       buildSourceReferenceHtml() +
+      '</div>' +
+      '<div class="xw-bf-col">' +
       buildCustomCssHtml(bf) +
+      '</div>' +
+      '</div>' +
       '<footer class="xw-drawer__foot xw-bf-foot">' +
-      '<button type="button" class="xw-btn" data-xw-bf-close>收起</button></footer></div>';
+      '<button type="button" class="xw-btn" data-xw-bf-back>返回</button></footer>' +
+      '</div></div>';
 
     document.body.appendChild(sheet);
 
@@ -454,7 +474,6 @@
     }
 
     sheet.addEventListener('click', function (e) {
-      if (e.target === sheet) closeDrawer();
       var themeBtn = e.target.closest('[data-xw-bf-theme]');
       if (themeBtn) {
         var tid = themeBtn.getAttribute('data-xw-bf-theme');
@@ -599,7 +618,7 @@
         });
         return;
       }
-      if (e.target.closest('[data-xw-bf-close]')) closeDrawer();
+      if (e.target.closest('[data-xw-bf-back]')) closeDrawer();
     });
   }
 
