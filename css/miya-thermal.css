@@ -398,3 +398,19 @@ html.miya-is-scrolling :is(
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   主屏图标底板 · 增强对比度
+   成因：原底板为 rgba(255,255,255,0.82) + 极淡阴影，
+   在浅色/自定义壁纸下与背景融为一体，圆角方形边界几乎不可见。
+   修复：提高不透明度、加深边框与阴影，让图标「方」的形状清晰可辨。
+   ═══════════════════════════════════════════════════════════ */
+html.is-mobile body.miya-mode-phone:not(.miya-app-open) :is(
+  .ic__box.glass,
+  .foot__dock.glass
+) {
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+}

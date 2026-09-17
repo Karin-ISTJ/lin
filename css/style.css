@@ -1348,3 +1348,54 @@ a .mi-ico-img,
 .st-wb-add-btn.mi-ico-btn--solid .mi-ico-img {
   filter: invert(1);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   壁纸满屏修复 · 消除底部白带
+   成因：html/body/.phone/.phone__wall 四处写死 #ffffff，
+   而 .phone__wall 是 position:fixed;inset:0，在移动端 dvh 与布局视口
+   高度不一致时，底部会露出 html 的纯白底色，导致「换任何壁纸都有白边」。
+   修复：底层改为 transparent，让壁纸铺到屏幕最底部。
+   ═══════════════════════════════════════════════════════════ */
+html,
+body {
+  background: transparent !important;
+}
+
+.phone {
+  background: transparent !important;
+}
+
+.phone__wall {
+  /* 有自定义壁纸时铺满；无壁纸时仍保留白底观感 */
+  background-color: transparent;
+  /* 向下多延伸一段，抵消移动端视口高度取整误差 */
+  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  min-height: 100%;
+}
+
+/* 未设置自定义壁纸时，兜底为纯白，避免露出页面底色
+   （注意：has-custom-wall 类加在 .phone__wall 元素自身，见 applyWallToPhone） */
+.phone__wall:not(.has-custom-wall) {
+  background-color: #ffffff;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   .foot 底部白底渐变修复
+   成因：.foot 的背景是 linear-gradient(→ rgba(255,255,255,0.82))，
+   叠加 36px 顶部 padding，在屏幕底部形成一条明显的白色带。
+   修复：自定义布局下取消该白色渐变，让壁纸透出；保留 dock 自身的玻璃底。
+   ═══════════════════════════════════════════════════════════ */
+html[data-miya-desk-layout="custom"] .foot {
+  background: none !important;
+}
+
+/* 无自定义壁纸时（纯白底）保留原有渐变，避免桌面底部显得空
+   ——用 .has-custom-wall 的否定形式限定：仅当壁纸层没有自定义壁纸时生效 */
+html[data-miya-desk-layout="custom"] .phone:not(:has(.phone__wall.has-custom-wall)) .foot {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 62%,
+    rgba(255, 255, 255, 0.82) 100%
+  ) !important;
+}
