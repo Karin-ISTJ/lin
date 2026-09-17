@@ -688,7 +688,8 @@
             summaryList: [],
             megaSummaryList: [],
             charMemoryList: [],
-            memoryAutoRoundTrigger: 0,
+            /* 默认 10 轮：新会话开箱即用；设为 0 可关闭。与「自动总结触发」无关。 */
+            memoryAutoRoundTrigger: 10,
             memoryAutoPrompt: '',
             megaSummaryPrompt: '',
             roleReplyBubbleMin: 1,

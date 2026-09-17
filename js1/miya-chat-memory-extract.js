@@ -170,34 +170,52 @@
         });
     }
 
+    /**
+     * 注入 prompt 的角色记忆条数上限（仅裁剪「发给模型的量」，不影响 charMemoryList 的实际保存）。
+     * 每条约 30 token，15 条 ≈ 450 token；超出时只保留最近 15 条，避免长会话下上下文无限膨胀。
+     */
+    var CHAR_MEMORY_INJECT_LIMIT = 15;
+
     function buildCharMemoryContextBlock(chatSettings) {
         if (chatSettings && chatSettings.memoryInterop === false) return '';
         var list = chatSettings && Array.isArray(chatSettings.charMemoryList) ? chatSettings.charMemoryList : [];
         if (!list.length) return '';
-        var lines = list
+
+        /* 先按时间正序排好，再截取「最近 N 条」，保证输出的仍是时间线顺序（可读性） */
+        var ordered = list
             .slice()
             .sort(function (a, b) {
                 return (Number(a && a.startIndex) || 0) - (Number(b && b.startIndex) || 0);
             })
-            .map(function (row, i) {
-                var body = String((row && row.content) || '').trim();
-                if (!body) return '';
-                return (
-                    '【角色记忆' +
-                    String(i + 1) +
-                    ' · 消息' +
-                    String(row.startIndex || '?') +
-                    '-' +
-                    String(row.endIndex || '?') +
-                    '】\n' +
-                    body
-                );
-            })
-            .filter(Boolean);
-        if (!lines.length) return '';
+            .filter(function (row) {
+                return !!(row && String(row.content || '').trim());
+            });
+
+        var limit = clampInt(CHAR_MEMORY_INJECT_LIMIT, 1, 500, 15);
+        var clipped = ordered.length > limit;
+        var picked = clipped ? ordered.slice(-limit) : ordered;
+        if (!picked.length) return '';
+
+        var lines = picked.map(function (row) {
+            var body = String((row && row.content) || '').trim();
+            return (
+                '【角色记忆 · 消息' +
+                String(row.startIndex || '?') +
+                '-' +
+                String(row.endIndex || '?') +
+                '】\n' +
+                body
+            );
+        });
+
+        var clippedNote = clipped
+            ? '（早年另有 ' + (ordered.length - limit) + ' 条更早的记忆未展开，如需追溯可在记忆阅览室查看。）'
+            : '';
         return (
             '【长期记忆·角色重要记忆】\n' +
-            '以下为从对话中提炼的、对该角色重要的记忆片段，请结合近期上下文使用，勿与分镜总结重复堆砌。\n\n' +
+            '以下为从对话中提炼的、对该角色重要的记忆片段，请结合近期上下文使用，勿与分镜总结重复堆砌。\n' +
+            clippedNote +
+            (clippedNote ? '\n\n' : '\n') +
             lines.join('\n\n')
         );
     }

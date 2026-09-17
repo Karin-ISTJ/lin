@@ -1206,6 +1206,13 @@
         return String(rs.buildPromptBlockForCharacterId(roleId) || '').trim();
     }
 
+    /**
+     * 注入 prompt 的「未并入合卷的分镜」条数上限（仅裁剪发给模型的量，不影响 summaryList 实际保存）。
+     * 合卷本身是压缩产物且代表长期记忆，因此不设上限；只限制零散分镜，避免长会话下无限膨胀。
+     * 每条约 60-100 token，24 条 ≈ 1500-2400 token，配合合卷后可把总结块稳定在 3000 token 以内。
+     */
+    var SUMMARY_SHOT_INJECT_LIMIT = 24;
+
     function buildSummaryContextBlock(chatSettings) {
         var list = chatSettings && Array.isArray(chatSettings.summaryList) ? chatSettings.summaryList : [];
         var megaList = chatSettings && Array.isArray(chatSettings.megaSummaryList) ? chatSettings.megaSummaryList : [];
@@ -1232,11 +1239,11 @@
                     body
             });
         });
+
+        /* 先收集「未被合卷覆盖」的分镜，再只保留最近 N 条（更早的内容已由合卷承接） */
+        var looseShots = [];
         list.forEach(function (row, i) {
-            if (
-                sumMod &&
-                typeof sumMod.isSummaryShotCovered === 'function'
-            ) {
+            if (sumMod && typeof sumMod.isSummaryShotCovered === 'function') {
                 if (sumMod.isSummaryShotCovered(row, megaList, covered)) return;
             } else {
                 var sid = row && row.id ? String(row.id) : '';
@@ -1244,8 +1251,9 @@
             }
             var body = String((row && row.content) || '').trim();
             if (!body) return;
-            items.push({
+            looseShots.push({
                 order: Number(row && row.startIndex) || 0,
+                seq: i + 1,
                 text:
                     '【分镜' +
                     String(i + 1) +
@@ -1257,14 +1265,27 @@
                     body
             });
         });
+        looseShots.sort(function (a, b) {
+            return (a.order || 0) - (b.order || 0);
+        });
+        var shotLimit = Math.min(500, Math.max(1, SUMMARY_SHOT_INJECT_LIMIT));
+        var droppedShots = Math.max(0, looseShots.length - shotLimit);
+        var keptShots = droppedShots > 0 ? looseShots.slice(-shotLimit) : looseShots;
+        keptShots.forEach(function (it) { items.push(it); });
+
         items.sort(function (a, b) {
             return (a.order || 0) - (b.order || 0);
         });
         var lines = items.map(function (it) { return it.text; }).filter(Boolean);
         if (!lines.length) return '';
+        var droppedNote = droppedShots > 0
+            ? '（早年另有 ' + droppedShots + ' 条更早的分镜已略去，其内容通常已被合卷承接。）\n'
+            : '';
         return (
             '【长期记忆·对话总结】\n' +
-            '以下为已沉淀的对话记忆（含合卷与未被合并的分镜），每轮请求均须阅读；与下方「上下文对话」衔接，勿与近期原文重复叙述。\n\n' +
+            '以下为已沉淀的对话记忆（含合卷与未被合并的分镜），每轮请求均须阅读；与下方「上下文对话」衔接，勿与近期原文重复叙述。\n' +
+            droppedNote +
+            '\n' +
             lines.join('\n\n')
         );
     }
