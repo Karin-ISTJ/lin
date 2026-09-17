@@ -25,11 +25,6 @@
   --lks-paper: #F5F3EF;
   --lks-accent: #C4A882;
 
-  /* 密码区专用墨色：数字键与取消键底下压的是半透明白圆，
-     用 --lks-ink 的正黑在这层白上显得过硬，参考图里是深灰。 */
-  --lks-key-ink: #2B2B2B;
-  --lks-key-sub: rgba(70, 78, 88, 0.72);
-
   position: fixed;
   inset: 0;
   z-index: 9400;                      /* 低于开屏遮罩 9500，高于全部应用层 */
@@ -131,56 +126,46 @@ body.miya-lock-active {
   line-height: 1;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--lks-ink);
+  /* 与密码键的键面白一致：时间压在壁纸上，用同一种白才像一套 */
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .miya-lockscreen__date {
   margin: 12px 0 0;
   font-size: 13px;
   letter-spacing: 0.16em;
-  color: var(--lks-ink-soft);
+  color: rgba(255, 255, 255, 0.62);
 }
 
-/* ── 上滑解锁区 ───────────────────────────────────────────────────── */
+/* ── 上滑解锁区 ─────────────────────────────────────────────────────
+   这里只保留「看不见的手势热区」：整条区域仍然接收上滑手势，
+   但不渲染任何提示文字与横条。
+   ⚠ 不要把 display 设成 none / 或用 visibility:hidden 隐藏本区域 ——
+     JS 是往 #miya-lock-swipe 上绑 pointerdown 的，元素一旦不渲染，
+     上滑解锁会彻底失效。要「看不见但可用」，只能让内部留空。
+   ─────────────────────────────────────────────────────────────────── */
 
 .miya-lockscreen__swipe {
   margin-top: auto;
-  /* 参考图：提示文字到横条间距 ≈ 31 / 1200 = 2.6% 屏宽，旧值 12px 略松 */
-  padding: 24px 0 20px;
+  /* 保持一块足够大的触控区，方便拇指按压；内部无内容，视觉上完全空 */
+  min-height: 132px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
   cursor: pointer;
   touch-action: none;                 /* 避免与页面滚动/下拉刷新抢手势 */
   -webkit-tap-highlight-color: transparent;
   transition: opacity 0.28s ease;
 }
 
-.miya-lockscreen__hint {
-  margin: 0;
-  font-size: 16px;
-  letter-spacing: 0.14em;
-  /* 参考图：提示文字是浅灰蓝，不是深灰，避免压过壁纸。
-     不加投影：浅字压在亮壁纸上会发虚，加了投影反而更脏。 */
-  color: rgba(255, 255, 255, 0.62);
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
+/* 原「向上轻扫以解锁」与主页横条已移除。
+   类名保留为空规则，避免 JS 里对 .miya-lockscreen__hint 的样式操作报错
+   （js2/miya-lockscreen.js 拖拽时会写 hint.style.transform / opacity）。 */
+.miya-lockscreen__hint,
 .miya-lockscreen__home-bar {
-  display: block;
-  /* 参考图实测：横条宽 482 / 屏宽 1200 = 40.2%，高 16 / 1200 = 1.33%，
-     端头是整圆。以 390px 视口换算 ≈ 157 × 5.2px。
-     旧值固定 132 × 5px 在手机上明显偏短偏瘦。
-     不加深色投影：纯白横条压在水纹上本来就不显眼，投影只会描出一圈脏边。 */
-  width: min(240px, 40vw);
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-}
-
-.miya-lockscreen__swipe.is-dragging .miya-lockscreen__home-bar {
-  background: rgba(255, 255, 255, 0.78);
+  display: none;
 }
 
 /* ── 密码区 ───────────────────────────────────────────────────────── */
@@ -207,19 +192,13 @@ body.miya-lock-active {
 }
 
 .miya-lockscreen__keypad-wrap {
-  /* 参考图实测：三列圆心间距 ≈ 屏幕宽的 24.6%，按键直径 ≈ 屏幕宽的 17.8%。
-     这里改用「屏幕宽占比」定义，比例就与真机截图一致；上限 96px 防止平板上
-     按键被拉得过大。300px 的旧值在 390px 视口下只有 76.9vw，比参考图窄一截。 */
-  width: min(319px, calc(100% + 48px));
-  margin-inline: -24px;
+  width: min(300px, 78vw);
 }
 
 .miya-lockscreen__keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  /* 列间距 10px：配合 17.8vw 的键径，圆心间距 = 键径 + 10 ≈ 24.4% 屏宽，
-     与参考图实测的 24.6% 对齐（参考图 1→2 为 295/1200，2→3 为 291/1200）。 */
-  gap: 6px 10px;
+  gap: 14px 18px;
   justify-items: center;
 }
 
@@ -229,17 +208,14 @@ body.miya-lock-active {
   align-items: center;
   justify-content: center;
   gap: 1px;
-  /* 直径 = 17.8% 屏宽，上限 96px（防平板过大） */
-  width: min(96px, 17.8vw);
-  height: min(96px, 17.8vw);
+  width: 66px;
+  height: 66px;
   margin: 0;
   padding: 0;
-  border: none;
+  border: 1px solid rgba(26, 26, 26, 0.1);
   border-radius: 50%;
-  /* 参考图实测：暗背景处圆内/外灰阶 218 → 137/125，解出白色覆盖度 α≈0.70。
-     原先的 rgba(255,255,255,0.66) 配 1px 深色描边，在浅色壁纸上会糊成一团。 */
-  background: rgba(255, 255, 255, 0.62);
-  color: var(--lks-key-ink);
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--lks-ink);
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -247,20 +223,20 @@ body.miya-lock-active {
 }
 
 .miya-lockscreen__key:active {
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(196, 168, 130, 0.24);
   transform: scale(0.92);
 }
 
 .miya-lockscreen__key-num {
-  font-size: min(37px, 9.5vw);
+  font-size: 25px;
   font-weight: 300;
   line-height: 1;
 }
 
 .miya-lockscreen__key-sub {
-  font-size: min(12px, 3.1vw);
+  font-size: 9px;
   letter-spacing: 0.14em;
-  color: var(--lks-key-sub);
+  color: var(--lks-ink-faint);
   transform: scale(0.92);
 }
 
@@ -276,28 +252,25 @@ body.miya-lock-active {
 }
 
 .miya-lockscreen__key--delete:active {
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(26, 26, 26, 0.06);
 }
 
 .miya-lockscreen__key--delete img {
-  width: min(30px, 7.7vw);
-  height: min(30px, 7.7vw);
-  /* 参考图：删除图标近黑，介于数字（全黑）与角标（浅灰）之间 */
-  opacity: 0.8;
+  width: 26px;
+  height: 26px;
+  opacity: 0.62;
   display: block;
 }
 
 .miya-lockscreen__pass-cancel {
-  margin: 32px 0 0;
-  padding: 11px 38px;
-  border: none;
+  margin: 22px 0 0;
+  padding: 9px 26px;
+  border: 1px solid rgba(26, 26, 26, 0.12);
   border-radius: 999px;
-  /* 参考图实测：胶囊内部 (179,192,204) 对背景 (110,142,163)，白色覆盖度 α≈0.55，
-     且胶囊是横向拉长的（≈1.2:1），不是圆点按钮。 */
-  background: rgba(255, 255, 255, 0.52);
-  color: var(--lks-key-sub);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--lks-ink-soft);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 12px;
   letter-spacing: 0.18em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -357,24 +330,15 @@ body.miya-lock-active {
   .miya-lockscreen__main {
     padding-top: calc(env(safe-area-inset-top, 0px) + 40px);
   }
-  .miya-lockscreen__keypad-wrap {
-    width: min(273px, calc(100% + 48px));
-  }
   .miya-lockscreen__key {
-    width: min(84px, 19vw);
-    height: min(84px, 19vw);
+    width: 58px;
+    height: 58px;
   }
   .miya-lockscreen__keypad {
-    gap: 4px 10px;
+    gap: 10px 16px;
   }
   .miya-lockscreen__key-num {
-    font-size: min(32px, 10vw);
-  }
-  .miya-lockscreen__key-sub {
-    font-size: min(11px, 3.2vw);
-  }
-  .miya-lockscreen__pass-cancel {
-    margin-top: 24px;
+    font-size: 22px;
   }
 }
 
