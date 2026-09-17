@@ -420,6 +420,55 @@
   var APP_LAUNCH_GUARD_MS = 500;
   var lastLaunchedApp = { id: '', at: 0 };
 
+  /*
+   * 合成 click 的全屏屏蔽层 —— 修「进美化就弹本地相册」的真正病根。
+   *
+   * 病因（已用真实 CDP 触摸序列在安卓 UA 下复现）：
+   *   ① 手指按下桌面「美化」图标 → pointerup 落在图标上，拖拽系统在此刻
+   *      就调用 launchApp() 打开 App；
+   *   ② App 的 is-open 走的是 opacity/visibility 过渡（0.38s），内容在
+   *      pointerup 之后的一两帧内就已经可命中；
+   *   ③ 浏览器随后才派发触摸的合成 mousedown/mouseup/click。此时手指
+   *      下方已经是美化面板，于是 click 的 target 变成
+   *      H2.ins-atelier-panel-title —— 第一下点按凭空被 App 内部吃掉。
+   *   实测到的序列：
+   *     pointerup  SPAN.ic__box
+   *     mousedown  H2.ins-atelier-panel-title
+   *     click      H2.ins-atelier-panel-title
+   *   至于「弹相册」：app 根的 click 委托把这类落在面板上的 click 当成
+   *   用户点击，命中 [data-bf-wall-pick] 一族选择器后调
+   *   miyaTriggerFileInput()，把隐藏 file input 的 click 合成出去。
+   *   早先给 .ins-file 加 display:none 只压住了「命中隐藏 input」这条路，
+   *   没解释 click 为什么会落到新界面上，所以真机照旧。
+   *
+   * 治本：在 launchApp 真正把界面放出来之前，先铺一层只吃 click 的
+   * 全屏屏蔽层。它从打开 App 的那一刻起立即接管整块屏，
+   * 承接并吞掉这一轮触摸残留的合成 click，到期自动移除。
+   *
+   * 刻意只拦 click、不拦 pointerdown/pointerup：
+   * 拦 pointer 事件会打断用户「快速连点进 App 再立即操作」的节奏，
+   * 而误触只发生在那一次遗留 click 上。只吃 click 足够精准。
+   */
+  var OPEN_CLICK_SHIELD_MS = 420;
+  var clickShieldEl = null;
+  var clickShieldTimer = 0;
+
+  function armClickShield() {
+    if (!clickShieldEl) {
+      clickShieldEl = document.createElement('div');
+      clickShieldEl.className = 'miya-open-click-shield';
+      clickShieldEl.setAttribute('aria-hidden', 'true');
+      clickShieldEl.hidden = true;
+      document.body.appendChild(clickShieldEl);
+    }
+    clickShieldEl.hidden = false;
+    if (clickShieldTimer) clearTimeout(clickShieldTimer);
+    clickShieldTimer = setTimeout(function () {
+      clickShieldTimer = 0;
+      if (clickShieldEl) clickShieldEl.hidden = true;
+    }, OPEN_CLICK_SHIELD_MS);
+  }
+
   function launchApp(id) {
     if (!id) return false;
 
@@ -430,6 +479,11 @@
     }
     lastLaunchedApp.id = id;
     lastLaunchedApp.at = now;
+
+    /* 先铺合成 click 屏蔽层，再放出 App 界面。
+       放界面的动作（miyaLazyEnsureApp 或同步 run）都在本函数之后发生，
+       所以屏蔽层一定赶在「界面可命中」之前生效。 */
+    armClickShield();
 
     if (APP_HANDLERS[id]) {
       var run = function () {
@@ -572,7 +626,7 @@
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=82').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=83').then(function (reg) {
         try { reg.update(); } catch (e) {}
       }).catch(function () {});
     });

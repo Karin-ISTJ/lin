@@ -176,6 +176,26 @@ body.miya-app-open .phone {
   transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), filter 0.4s ease;
 }
 
+/* ── 合成 click 屏蔽层（配合 js1/app.js 的 armClickShield） ──
+   打开 App 的那一次触摸，其合成 click 会在 App 已经铺满屏幕后才落下，
+   落到新界面的控件上（美化面板 → 误触上传按钮 → 弹相册）。
+   本层在 App 放出来之前铺满全屏，专门承接并吞掉这一次 click。
+
+   z-index 高于所有 App 层（设置层 520 最高）但低于锁屏 9400 与开屏遮罩 9500：
+   万一屏蔽层还没摘掉用户就划出锁屏，锁屏仍然拿得到点击。
+   只吃 click，不挡 pointer 事件，所以不影响快速连续操作。 */
+.miya-open-click-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 530;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.miya-open-click-shield[hidden] {
+  display: none !important;
+}
+
 /* ═══════════════ 美化 · 表层 ═══════════════ */
 /* 顶部导航 + 内容两行。原先左侧竖排导航占掉 72px 横向空间，
    导致内容区仅 300px、标签文字被迫竖排；改为顶部横排后内容区满宽。 */

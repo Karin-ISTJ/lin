@@ -17,6 +17,7 @@
   var phase = 'clock';
   var enteredDigits = [];
   var shakeTimer = null;
+  var msgTimer = null;
 
   function $(id) { return document.getElementById(id); }
 
@@ -130,6 +131,7 @@
 
   function clearDigits() {
     enteredDigits = [];
+    if (msgTimer) { clearTimeout(msgTimer); msgTimer = null; }
     setPassMsg('');
   }
 
@@ -165,6 +167,19 @@
 
   function failPasscode() {
     if (!overlayEl) return;
+    /*
+     * 抖动动画 0.5s，但提示文字不能跟着一起消失。
+     *
+     * 原实现把 clearDigits()（内部会 setPassMsg('')）挂在 520ms 上，
+     * 和抖动动画同步 —— 结果「密码不正确，请重试」只亮半秒就没了，
+     * 用户眨个眼就看不到，只会觉得「输了没反应」。
+     * 现在拆成三件事：
+     *   ① 立即清空已输入的 4 位，用户可直接重输，不必先按删除；
+     *   ② 写入提示文字（必须放在 clearDigits 之后，否则会被它抹掉）；
+     *   ③ 抖动 0.5s 后摘掉 is-shake；提示文字留满 4s 再清。
+     *      4s 是权衡：够用户读完，又不会长久占着键区上方那一行。
+     */
+    clearDigits();
     setPassMsg('密码不正确，请重试');
     overlayEl.classList.remove('is-shake');
     void overlayEl.offsetWidth;
@@ -172,8 +187,12 @@
     if (shakeTimer) clearTimeout(shakeTimer);
     shakeTimer = setTimeout(function () {
       if (overlayEl) overlayEl.classList.remove('is-shake');
-      clearDigits();
     }, 520);
+    if (msgTimer) clearTimeout(msgTimer);
+    msgTimer = setTimeout(function () {
+      msgTimer = null;
+      if (phase === 'passcode') setPassMsg('');
+    }, 4000);
   }
 
   function tryPasscode() {
@@ -236,17 +255,34 @@
     return showOverlay();
   }
 
-  /* ── Swipe up gesture ── */
+  /* ── Swipe up gesture ──
+   *
+   * 手势绑在「时钟页整块」上，而不是底部那条 88px 的隐形热区。
+   *
+   * 历史坑：早先只把 touchstart 绑在 #miya-lock-swipe（min-height:88px，
+   * 布局后位于屏幕最下方 y∈[799,887]）。用户在屏幕中部随手往上一划，
+   * touchstart 落在 .miya-lockscreen__main 上，事件到不了热区，
+   * 手势被静默丢弃 —— 观感就是「划一下没反应，得再划一下」，而用户
+   * 每次起手的位置略有不同，于是时好时坏。
+   * 现在整页可起手：从屏幕上任何位置往上滑都能解锁，
+   * 顶部 120px 留空避免与系统下拉通知手势打架。
+   */
   function bindSwipe() {
     var zone = $('miya-lock-swipe');
     if (!zone) return;
+    /* 监听目标：时钟页主体；拿不到就退回热区，保证旧结构也能用 */
+    var surface = document.querySelector('.miya-lockscreen__main') || zone;
 
     var startY = 0;
     var dragging = false;
     var hint = $('miya-lock-hint');
 
+    /* 顶部安全区：这一段内的 touchstart 不接管，交给系统手势 */
+    var TOP_SAFE_PX = 120;
+
     function onStart(y) {
       if (phase !== 'clock') return;
+      if (y < TOP_SAFE_PX) return;
       dragging = true;
       startY = y;
       zone.classList.add('is-dragging');
@@ -270,21 +306,21 @@
         hint.style.opacity = '';
       }
       /*
-       * 只有真的上滑了才解锁。阈值 72px 与热区高度（88px）配套：
-       * 热区略高于阈值，保证在热区内起手就能划够行程。
+       * 只有真的上滑了才解锁。阈值 72px：
+       * 竖屏拇指从任意位置起手都能舒服划够这个行程。
        */
       if ((startY - y) > 72) requestUnlockFromClock();
     }
 
-    zone.addEventListener('touchstart', function (e) {
+    surface.addEventListener('touchstart', function (e) {
       if (e.touches.length === 1) onStart(e.touches[0].clientY);
     }, { passive: true });
 
-    zone.addEventListener('touchmove', function (e) {
+    surface.addEventListener('touchmove', function (e) {
       if (e.touches.length === 1) onMove(e.touches[0].clientY);
     }, { passive: true });
 
-    zone.addEventListener('touchend', function (e) {
+    surface.addEventListener('touchend', function (e) {
       var y = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : startY;
       onEnd(y);
     });
@@ -298,7 +334,8 @@
      * 让这一次轻点既不解锁、也不落到下面的元素上 —— 也就是"白按一下"。
      * 现在不再阻断点击链路，只在多击时避免选中文字。
      */
-    zone.addEventListener('mousedown', function (e) {
+    surface.addEventListener('mousedown', function (e) {
+      if (e.clientY < 120) return;
       onStart(e.clientY);
       if (e.detail > 1) e.preventDefault();
     });
@@ -314,14 +351,8 @@
     /*
      * 这里**故意不再**监听 click 解锁。
      *
-     * 历史问题：本区域原先同时接受"轻点"和"上滑"两种解锁方式。
-     * 提示文字与横条移除后，这块区域变成 88px 高的隐形热区 —— 它就在
-     * 屏幕底部，正是拇指的自然落点。于是用户在时钟页想直接按数字键时，
-     * 第一下落在热区上被我吃掉（用于解锁），必须再按一下才输得进第一位，
-     * 表现为「按第一下没反应」。实测在时钟页点击空白处也会莫名跳进密码页。
-     *
-     * 现在只认上滑（见 onEnd 里的 72px 判定）：手势语义单一，且与
-     * 键盘区完全不重叠，时钟页底部不会再吞掉任何一次点击。
+     * 整个时钟页都接受上滑（见 onEnd 的 72px 判定），手势语义单一；
+     * 密码页 .is-clock 失效后数字键不受影响，不会吞掉任何一次点击。
      */
   }
 

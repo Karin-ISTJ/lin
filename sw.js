@@ -1,7 +1,46 @@
-var CACHE = 'miya-v223-karin';
+var CACHE = 'miya-v224-karin';
 var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './js1/app.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */
 var STATIC_LIVE = /\.(?:html|css|js|webmanifest|json)$|\/$|miya-icon(?:-\d+)?\.png/;
+
+/*
+ * 同源同路径、只是 ?v= 不同——视为同一份资源。
+ *
+ * 背景（「刷新两次才有反应」那类交替失效的元凶之一）：
+ * index.html 引用的是带版本参数的 js/css（app.js?v=90），而这些文件
+ * 又都在 STATIC_LIVE 名单里走高优先网络（networkFirst）。离线或网络
+ * 抖动时 networkFirst 会回退到 caches.match(request)，而 cache key
+ * 是「含 ?v= 的完整 URL」。只要某次请求漏掉参数（或参数变了），
+ * cache 就是未命中 → 返回 503 空响应 → 脚本静默不执行。
+ * 于是同一台设备两次刷新的结果可以完全不同：一次命中缓存跑新代码，
+ * 一次拿到 503 跑空。用户看到的就是「一遍没反应、再刷一遍有反应」。
+ *
+ * 这条兜底让回退按「路径」再找一遍任意 ?v= 的缓存副本：
+ * 版本号更新时宁可先用一份稍旧的实现把界面跑起来，
+ * 也好过整份脚本消失、页面半死不活。
+ */
+function matchIgnoringVersion(request) {
+  return caches.open(CACHE).then(function (c) {
+    return c.match(request).then(function (exact) {
+      if (exact) return exact;
+      var u;
+      try { u = new URL(request.url); } catch (e) { return undefined; }
+      if (!u.search) return undefined;
+      /* 去掉查询串再匹配；cache.put 时写入的是原始 URL，
+         所以这里需要自己遍历 keys 找同路径的副本 */
+      return c.keys().then(function (reqs) {
+        for (var i = 0; i < reqs.length; i++) {
+          var ku;
+          try { ku = new URL(reqs[i].url); } catch (e2) { continue; }
+          if (ku.origin === u.origin && ku.pathname === u.pathname) {
+            return c.match(reqs[i]);
+          }
+        }
+        return undefined;
+      });
+    });
+  });
+}
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }));
@@ -75,11 +114,14 @@ self.addEventListener('fetch', function (e) {
 
   function networkFirst(request) {
     return fetch(request).then(function (res) {
-      var copy = res.clone();
-      caches.open(CACHE).then(function (c) { c.put(request, copy); });
+      if (res && res.ok) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(request, copy); }).catch(function () {});
+      }
       return res;
     }).catch(function () {
-      return caches.match(request).then(function (r) {
+      /* 离线/网络失败：先精确匹配，再按路径忽略 ?v= 兜底 */
+      return matchIgnoringVersion(request).then(function (r) {
         return r || new Response('', { status: 503, statusText: 'Offline' });
       });
     });
@@ -91,7 +133,7 @@ self.addEventListener('fetch', function (e) {
   }
 
   e.respondWith(cacheFirst(e.request).catch(function () {
-    return caches.match(e.request).then(function (r) {
+    return matchIgnoringVersion(e.request).then(function (r) {
       return r || new Response('', { status: 503, statusText: 'Offline' });
     });
   }));

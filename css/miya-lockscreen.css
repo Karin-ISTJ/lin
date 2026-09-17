@@ -138,19 +138,21 @@ body.miya-lock-active {
 }
 
 /* ── 上滑解锁区 ─────────────────────────────────────────────────────
-   这里只保留「看不见的手势热区」：整条区域仍然接收上滑手势，
-   但不渲染任何提示文字与横条。
+   时钟页整块都可起手上滑（见下方 .is-clock .miya-lockscreen__main），
+   本元素只是 flex 布局里的「把内容推到底部」的容器，不再单独限高。
    ⚠ 不要把 display 设成 none / 或用 visibility:hidden 隐藏本区域 ——
      JS 是往 #miya-lock-swipe 上绑 pointerdown 的，元素一旦不渲染，
-     上滑解锁会彻底失效。要「看不见但可用」，只能让内部留空。
-   ─────────────────────────────────────────────────────────────────── */
+     上滑解锁会彻底失效。
 
+   历史坑（导致「第一下没反应 / 要滑两次」）：
+   这里原本是 min-height:88px 的隐形热区，而 JS 把 touchstart 绑在
+   本元素上。屏幕高 915px 时热区只有 y∈[799,887] 这一条 —— 用户在
+   屏幕中部随手往上滑，touchstart 落在 .miya-lockscreen__main 上，
+   事件压根到不了热区，手势被静默丢弃。用户必须精确摸到最下面那条
+   才解得了锁，观感就是「划一下没反应，再划一下才行」。
+   现在热区扩到整个时钟页，起手位置不再挑。 */
 .miya-lockscreen__swipe {
   margin-top: auto;
-  /* 热区高度 = 上滑判定阈值（72px）+ 一点余量。
-     这块区域现在是"看不见的"（提示文字与横条已移除），
-     高度越大，就越容易在时钟页挡住拇指的自然落点、吃掉第一下点击。
-     收到 88px 后仍能舒服地完成上滑，同时把误吞点击的面积压到最小。 */
   min-height: 88px;
   width: 100%;
   display: flex;
@@ -158,8 +160,7 @@ body.miya-lock-active {
   align-items: center;
   justify-content: flex-end;
   cursor: pointer;
-  /* 保留 none：这块区域要独占上滑手势，不能把触摸交给页面滚动。
-     轻点不受影响 —— 点击的合成走的是 click 链路，与 touch-action 无关。 */
+  /* 保留 none：这块区域要独占上滑手势，不能把触摸交给页面滚动。 */
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   transition: opacity 0.28s ease;
@@ -296,6 +297,16 @@ body.miya-lock-active {
 .miya-lockscreen.is-clock .miya-lockscreen__swipe {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* 时钟页：整页接管上滑手势。
+   见 .miya-lockscreen__swipe 注释 —— 只靠底部 88px 热区会让用户
+   在屏幕中部起手的上滑被静默丢弃，表现为「第一下没反应」。
+   时钟页不存在需要精确定位的控件（唯一的交互就是上滑进密码页），
+   所以此处整页 touch-action:none 不会误吞任何点击；
+   到了密码页本规则随 .is-clock 一起失效，数字键恢复 normal。 */
+.miya-lockscreen.is-clock .miya-lockscreen__main {
+  touch-action: none;
 }
 
 .miya-lockscreen.is-clock .miya-lockscreen__pass {
