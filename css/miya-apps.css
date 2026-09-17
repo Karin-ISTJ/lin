@@ -1950,7 +1950,7 @@ html.miya-custom-desk-icon-frameless :is(
 /* 普通图标（未上传自定义图片）保留白色圆角底板 */
 html.miya-custom-desk-icon-frameless
   .desk-custom__grid .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass {
-  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   border: none !important;
@@ -2713,7 +2713,7 @@ html.miya-custom-desk-icon-frameless
 :where(html) :where(body) .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass,
 :where(html) :where(body) .desk-custom__ic:not(.has-custom-icon) > .ic__box[data-i],
 :where(html) :where(body) .desk-custom__cell .ic__box.glass:not([data-custom-image]) {
-  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   border: none !important;
@@ -2730,7 +2730,7 @@ html.miya-custom-desk-icon-frameless
 
 /* 程序坞图标白底（子节点是裸 span[data-i]，不带 .ic__box/.glass） */
 :where(html) :where(body) .foot__dock--custom .desk-custom__dock-ic:not(.has-custom-icon) .foot__dock-btn {
-  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
   border: none !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;

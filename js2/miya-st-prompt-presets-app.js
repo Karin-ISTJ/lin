@@ -161,18 +161,14 @@
     if ($('stp-gen-stream')) $('stp-gen-stream').checked = g.stream !== false;
 
     /*
-     * 摘要反映**存储里真正存了什么**。
+     * 摘要必须反映**请求层真正用了什么**，而不是用户存了什么。
      *
-     * 这里曾经把「非流式」写死，理由是请求层固定 stream:false。
-     * 但那会让用户永远看不到自己存的值 —— 选了流式、保存成功，摘要
-     * 还是显示非流式，看起来就像「保存不了 / 弹回去了」。
-     * 摘要归摘要（陈述存储事实），请求层的限制另用一行小字说明。
+     * 请求层目前硬编码 stream:false（见 miya-chat-engine.js 的 reqPayload.stream），
+     * 所以无论这里存的是 true 还是 false，实际都是非流式。
+     * 摘要写死「非流式」——它描述的是事实，不是开关状态。
      */
     var summary = $('stp-gen-summary');
-    if (summary) {
-      summary.textContent = '温度 ' + g.temperature + ' · Top P ' + g.topP +
-        ' · ' + (g.stream !== false ? '流式' : '非流式');
-    }
+    if (summary) summary.textContent = '温度 ' + g.temperature + ' · Top P ' + g.topP + ' · 非流式';
   }
 
   function openEditor(id) {

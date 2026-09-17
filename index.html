@@ -17,9 +17,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link id="miya-google-fonts" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/style.css?v=45">
+  <link rel="stylesheet" href="css/style.css?v=43">
   <link rel="stylesheet" href="css/miya-desk-p1-weekcal.css?v=12">
-  <link rel="stylesheet" href="css/miya-desk-custom.css?v=53">
+  <link rel="stylesheet" href="css/miya-desk-custom.css?v=52">
   <link rel="stylesheet" href="css/miya-desk-wg-4x1.css?v=9">
   <link rel="stylesheet" href="css/miya-desk-wg-4x2.css?v=13">
   <link rel="stylesheet" href="css/miya-desk-wg-4x3.css?v=11">
@@ -27,8 +27,8 @@
   <link rel="stylesheet" href="css/miya-desk-wg-2x2.css?v=10">
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=5">
   <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=4">
-  <link rel="stylesheet" href="css/miya-apps.css?v=43">
-  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=28">
+  <link rel="stylesheet" href="css/miya-apps.css?v=42">
+  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=27">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=32">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=13">
@@ -47,9 +47,9 @@
   <link rel="stylesheet" href="css/miya-offline-themes.css?v=42">
   <link rel="stylesheet" href="css/miya-chat-call.css?v=2">
   <link rel="stylesheet" href="css/miya-chat-notify.css?v=6">
-  <link rel="stylesheet" href="css/miya-thermal.css?v=15">
+  <link rel="stylesheet" href="css/miya-thermal.css?v=14">
   <link rel="stylesheet" href="css/miya-ios-no-blue.css?v=2">
-  <link rel="stylesheet" href="css/miya-lockscreen.css?v=12">
+  <link rel="stylesheet" href="css/miya-lockscreen.css?v=10">
   <!-- 登录包：仅部署版上传 miya-auth/ 时生效；开源版无此文件夹则跳过登录 -->
   <script src="miya-auth/config.js?v=3"></script>
   <script src="miya-auth/boot.js?v=3"></script>
@@ -3710,14 +3710,11 @@
           <label><span>上下文长度 (Token)</span><input id="stp-gen-context" type="number" min="0" step="1000"></label>
           <label><span>最大回复长度 (Token)</span><input id="stp-gen-max" type="number" min="1" step="100"></label>
           <label><span>每次生成备选回复</span><input id="stp-gen-n" type="number" min="1" max="8" step="1"></label>
-          <!-- 流式传输：可真实切换并保存。
-               注意：请求层目前硬编码 stream:false（见 miya-chat-engine.js 的
-               reqPayload.stream），所以这里存什么，实际请求都走非流式。
-               本开关的价值是「把用户意图存下来」，等请求层支持 SSE 后即可生效。 -->
-          <label class="stp-gen-check"><span>流式传输</span>
-            <input id="stp-gen-stream" type="checkbox" role="switch">
-            <small>保存有效。注：当前请求层尚未支持流式解析，实际请求仍按非流式发出</small>
-          </label>
+          <!-- 流式传输：当前请求层固定非流式，这里只做状态说明，不再是可切换开关。
+               保留 id 是为了让 renderGeneration / saveGenerationFromUi 的
+               `$('stp-gen-stream')` 查找不报错；但**不要**再把它当开关用。 -->
+          <div class="stp-gen-check stp-gen-readonly"><span>流式传输</span><span class="stp-gen-badge" id="stp-gen-stream-state">非流式（当前版本固定）</span><small>请求层尚未支持流式解析，此选项暂不可切换</small></div>
+          <input id="stp-gen-stream" type="checkbox" hidden aria-hidden="true" tabindex="-1">
           <label><span>温度</span><input id="stp-gen-temperature" type="number" min="0" max="2" step="0.01"></label>
           <label><span>频率惩罚</span><input id="stp-gen-frequency" type="number" min="-2" max="2" step="0.01"></label>
           <label><span>存在惩罚</span><input id="stp-gen-presence" type="number" min="-2" max="2" step="0.01"></label>
@@ -3955,8 +3952,8 @@
   <script defer src="js2/miya-mode-switch.js?v=4"></script>
 
   <script defer src="miya-auth/auth.js?v=5"></script>
-  <script defer src="js2/miya-st-prompt-presets-store.js?v=33"></script>
-  <script defer src="js2/miya-st-prompt-presets-app.js?v=33"></script>
+  <script defer src="js2/miya-st-prompt-presets-store.js?v=32"></script>
+  <script defer src="js2/miya-st-prompt-presets-app.js?v=32"></script>
   <script defer src="js1/app.js?v=89"></script>
 </body>
 </html>

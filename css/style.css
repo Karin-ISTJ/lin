@@ -3,8 +3,6 @@
 :root {
   --white: rgba(255, 255, 255, 0.98);
   --glass-bg: rgba(255, 255, 255, 0.96);
-  /* 主屏 / 程序坞图标底板的白度。集中成一个变量，便于整体微调。 */
-  --miya-icon-plate-a: 0.55;
   --glass-line: rgba(230, 230, 230, 0.85);
   --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.98);
   --ink: rgba(55, 58, 62, 0.88);
@@ -1065,7 +1063,7 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
 .foot__dock-btn {
   width: 46px;
   height: 46px;
-  background: rgba(255, 255, 255, var(--miya-icon-plate-a));
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 14px;
   border: 1px solid rgba(230, 230, 230, 0.8);
   display: flex;

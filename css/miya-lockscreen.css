@@ -126,46 +126,49 @@ body.miya-lock-active {
   line-height: 1;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  /* 与密码键的键面白一致：时间压在壁纸上，用同一种白才像一套 */
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--lks-ink);
 }
 
 .miya-lockscreen__date {
   margin: 12px 0 0;
   font-size: 13px;
   letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--lks-ink-soft);
 }
 
-/* ── 上滑解锁区 ─────────────────────────────────────────────────────
-   这里只保留「看不见的手势热区」：整条区域仍然接收上滑手势，
-   但不渲染任何提示文字与横条。
-   ⚠ 不要把 display 设成 none / 或用 visibility:hidden 隐藏本区域 ——
-     JS 是往 #miya-lock-swipe 上绑 pointerdown 的，元素一旦不渲染，
-     上滑解锁会彻底失效。要「看不见但可用」，只能让内部留空。
-   ─────────────────────────────────────────────────────────────────── */
+/* ── 上滑解锁区 ───────────────────────────────────────────────────── */
 
 .miya-lockscreen__swipe {
   margin-top: auto;
-  /* 保持一块足够大的触控区，方便拇指按压；内部无内容，视觉上完全空 */
-  min-height: 132px;
-  width: 100%;
+  padding: 24px 0 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  gap: 12px;
   cursor: pointer;
   touch-action: none;                 /* 避免与页面滚动/下拉刷新抢手势 */
   -webkit-tap-highlight-color: transparent;
   transition: opacity 0.28s ease;
 }
 
-/* 原「向上轻扫以解锁」与主页横条已移除。
-   类名保留为空规则，避免 JS 里对 .miya-lockscreen__hint 的样式操作报错
-   （js2/miya-lockscreen.js 拖拽时会写 hint.style.transform / opacity）。 */
-.miya-lockscreen__hint,
+.miya-lockscreen__hint {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--lks-ink-faint);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
 .miya-lockscreen__home-bar {
-  display: none;
+  display: block;
+  width: 132px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.24);
+}
+
+.miya-lockscreen__swipe.is-dragging .miya-lockscreen__home-bar {
+  background: rgba(26, 26, 26, 0.4);
 }
 
 /* ── 密码区 ───────────────────────────────────────────────────────── */
