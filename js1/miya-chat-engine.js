@@ -3000,6 +3000,31 @@
         if (charMemBlock) {
             apiMessages.push({ role: 'system', content: charMemBlock });
         }
+        /*
+         * 【时间线纪律】防「时空错位」的硬约束。
+         *
+         * 用户实测症状：昨天下的飞机，今天说「那你路上吃点东西」，角色答「在飞机上吃了」。
+         * 根因是模型把历史里的旧场景当成了「当下」，拿过期事件回答新问题。
+         *
+         * 只看近期原文窗口是不够的 —— 旧事件往往还在窗口内，模型仍可能误判。
+         * 所以这里显式写死三条判读规则：以最新一条消息为「现在」，旧事件的完成态不得
+         * 当成当下进行态，需要旧细节时以总结/记忆为准而非脑补。
+         * 仅在时间运转开启时注入（时间关闭时无从判断先后，加了反而误导）。
+         */
+        try {
+            var taCfg = settings && settings.timeAwareness;
+            if (taCfg && taCfg.enabled && taCfg.mode === 'real') {
+                var timelineDiscipline = [
+                    '【时间线纪律·强制】',
+                    '1、判断「现在」只依据最新一条消息；更早消息里的场景属于过去，已完成的事不得当成正在发生。',
+                    '2、历史消息前缀 ⧗…› 是该条真实发送时刻，与「现在」可能有数天差距；跨天时按天差理解，勿把昨天的场景接到今天。',
+                    '3、用户提到的事若与某条旧消息冲突，以「时间更晚的那条」为准；不确定时先如实说记不清，禁止拿旧细节硬编成当下。',
+                    '4、已知发生过的事（如已抵达、已结束）不要重复提议「现在去做/现在去经历」。',
+                    '5、需要追溯窗口外的细节时，优先依据上方【长期记忆】块，而不是自行补全。'
+                ].join('\n');
+                apiMessages.push({ role: 'system', content: timelineDiscipline });
+            }
+        } catch (eTimeline) {}
         var mmApi = global.MiyaChatMoments;
         var momentsBlock =
             mmApi && typeof mmApi.buildMomentsContextBlock === 'function'

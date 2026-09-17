@@ -679,10 +679,26 @@
                 tz;
         } catch (eTz) {}
         return {
-            memoryCount: 40,
+            /*
+             * 默认 80 条（约 40 轮）。
+             *
+             * 原默认 40 条只覆盖最近 20 轮 —— 用户反馈「记不住二十层前的细节」，
+             * 20 层以外只剩角色记忆那几十字的压缩提要，细节必然丢失。加到 80 条后
+             * 近期原文窗口翻倍，配合 summaryTrigger 默认开启的分镜沉淀，形成
+             * 「近处看原文、远处看总结」的两级覆盖。
+             * 仍需 500 上限兜底，避免超长会话把上下文撑爆。
+             */
+            memoryCount: 80,
             attachCount: 200,
             messageRenderLimit: 100,
-            summaryTrigger: 0,
+            /*
+             * 默认 10 条触发一次分镜总结。
+             *
+             * 原默认 0 = 关闭，导致分镜从未产出 → 没有分镜就没有合卷 →
+             * 「长期记忆」这条通道整个是空的，窗口外的内容全部失忆。
+             * 改默认 10 后新会话开箱即有长期记忆；用户仍可在设置里改回 0 关闭。
+             */
+            summaryTrigger: 10,
             summaryPrompt: '',
             summaryLength: '100-300字',
             summaryList: [],
@@ -718,7 +734,18 @@
                 hvCustomCss: '',
                 presetName: ''
             },
-            timeAwareness: { enabled: false, mode: 'real', real: { userTz: tz, roleTz: tz, strength: 'strong' } },
+            /*
+             * 默认开启时间运转。
+             *
+             * 原默认 false，使 isTimeStampEnabled() 恒为假，于是：
+             *   ① 历史消息不带 ⧗用户·7/16·周三·14:30› 前缀
+             *   ② 系统提示里没有「现在几点」和「用户最新发言距现在多久」
+             *   模型因此完全分不清「昨天」和「今天」—— 用户昨天下的飞机，
+             *   今天说「路上吃点东西」，角色会答「在飞机上吃了」。
+             * 开启后每条历史带真实发送时刻，模型可自行对照「现在」判断先后。
+             * 用户仍可在设置里关闭。
+             */
+            timeAwareness: { enabled: true, mode: 'real', real: { userTz: tz, roleTz: tz, strength: 'strong' } },
             weatherAwareness: {
                 enabled: false,
                 placeUser: '',
