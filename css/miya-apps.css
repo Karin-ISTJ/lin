@@ -1870,13 +1870,26 @@ html.is-mobile.miya-icon-frameless body.miya-mode-phone:not(.miya-app-open) :is(
 }
 
 /* 自定义布局 · 压过 thermal 主屏白底外框 */
-html.is-mobile.miya-custom-desk-icon-frameless body.miya-mode-phone:not(.miya-app-open) :is(
-  .desk-custom__grid .ic__box.glass,
+/* 仅对「确实上传了自定义图标」的项去掉底板，让图片铺满圆角。
+   注意：.desk-custom__grid .ic__box.glass 分支必须限定 has-custom-icon，
+   否则会把所有普通图标的白底一并清空（原 bug）。 */
+html.miya-custom-desk-icon-frameless :is(
+  .desk-custom__grid .desk-custom__ic.has-custom-icon > .ic__box.glass,
   .foot__dock--custom .has-custom-icon .foot__dock-btn,
   .foot__dock--custom .foot__dock-btn.has-custom-icon
 ) {
   background: transparent !important;
   box-shadow: none !important;
+  border: none !important;
+}
+
+/* 普通图标（未上传自定义图片）保留白色圆角底板 */
+html.miya-custom-desk-icon-frameless
+  .desk-custom__grid .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass {
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   border: none !important;
 }
 
@@ -2622,19 +2635,19 @@ html.is-mobile.miya-custom-desk-icon-frameless body.miya-mode-phone:not(.miya-ap
 }
 
 /* ═══════════════════════════════════════════════════════════
-   修复：主屏图标底板被误清空
-   成因：上方「自定义布局 · 压过 thermal 主屏白底外框」规则里，
-   :is(.desk-custom__grid .ic__box.glass, ...) 分支缺少 has-custom-icon 限定，
-   导致所有主屏图标的底板（玻璃外框）都被设为 transparent，
-   即便用户并未上传自定义图标，圆角方形边界也完全不可见。
-   修复：仅当图标确实带自定义图片（has-custom-icon）时才去掉底板；
-   普通图标保留玻璃底板，恢复圆角方形外观。
+   主屏图标白底 · 无条件兜底（放在文件最末，优先级最高）
+   背景：之前依赖 html.is-mobile / miya-custom-desk-icon-frameless 等可选类，
+   任一条件不满足规则即失效。此处不设任何前置条件，确保主屏图标
+   始终带白色圆角底板。
+   如需「自定义图片铺满无边」，改用下方注释里的选择器。
    ═══════════════════════════════════════════════════════════ */
-html.is-mobile.miya-custom-desk-icon-frameless body.miya-mode-phone:not(.miya-app-open)
-  .desk-custom__grid .desk-custom__ic:not(.has-custom-icon) .ic__box.glass {
+.desk-custom__grid .desk-custom__ic .ic__box.glass,
+body.miya-mode-phone .desk-custom__grid .desk-custom__ic .ic__box.glass {
   background: rgba(255, 255, 255, 0.94) !important;
   box-shadow:
     0 2px 10px rgba(100, 110, 125, 0.16),
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   border: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
