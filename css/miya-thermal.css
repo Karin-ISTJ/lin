@@ -78,7 +78,7 @@ body.miya-mode-phone :is(
 ) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, var(--miya-icon-plate-a, 0.30)) !important;
   box-shadow:
     0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
 }
