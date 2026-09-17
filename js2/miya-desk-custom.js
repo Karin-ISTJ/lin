@@ -5890,12 +5890,37 @@
     }
   }
 
+  /*
+   * 锁屏（时钟页 / 密码页）可见时，桌面层必须彻底让路。
+   *
+   * 本函数挂在手机层上且是 capture 阶段，会**先于**锁屏 overlay 收到 touchend。
+   * 早先没有这层判断，于是锁屏出现后桌面仍在按坐标找小组件：
+   * 手指在密码键盘上落下的第一下被当成「点小组件」消费掉，
+   * 表现为「锁屏密码第一下没反应，要按第二下」。
+   */
+  function isLockscreenBlocking() {
+    var lock = $('miya-lockscreen');
+    if (!lock) return false;
+    if (lock.hidden) return false;
+    if (lock.getAttribute('aria-hidden') === 'true') return false;
+    var cs = null;
+    try { cs = getComputedStyle(lock); } catch (err) { return false; }
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    if (parseFloat(cs.opacity || '1') === 0) return false;
+    return true;
+  }
+
+  /* 暴露给自动化测试，生产逻辑不使用。 */
+  window.miyaIsLockscreenBlocking = isLockscreenBlocking;
+
   function onAndroidTouchEndFallback(e) {
     if (!document.documentElement.classList.contains('is-android') &&
         !(document.documentElement.classList.contains('is-mobile') &&
           !document.documentElement.classList.contains('is-ios'))) {
       return;
     }
+    /* 锁屏在最上层：不参与桌面点按。 */
+    if (isLockscreenBlocking()) return;
     /* B14：前半恒 false，已折叠。 */
     if (editMode || drag.active) return;
     if (Date.now() < dragConsumedUntil || wgEditorState.open) return;
@@ -5911,6 +5936,8 @@
   }
 
   function onWidgetClickFallback(e) {
+    /* 锁屏在最上层：不参与桌面点按（同 onAndroidTouchEndFallback 的理由）。 */
+    if (isLockscreenBlocking()) return;
     /* B14：前半恒 false，已折叠。 */
     if (editMode || drag.active || drag.pending) return;
     if (Date.now() < dragConsumedUntil) return;
@@ -5922,6 +5949,7 @@
   }
 
   function onEditModeTap(e) {
+    if (isLockscreenBlocking()) return;
     if (!editMode || drag.active || drag.pending) return;
     if (Date.now() < dragConsumedUntil) return;
     /* B14：原 `if (getLayoutMode() !== 'custom') return;` 恒不成立，已删除。 */

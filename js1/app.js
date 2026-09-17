@@ -402,8 +402,35 @@
 
   window.miyaArmOpenClickGuard = armOpenClickGuard;
 
+  /*
+   * 打开 App。
+   *
+   * 关于「第一下被吞 / 误触发」的背景：
+   * 桌面图标由拖拽系统在 pointerup 阶段启动（miya-desk-custom.js），
+   * 而这里通过 miyaLazyEnsureApp() 异步加载后才真正 run()。
+   * 若加载+渲染在合成 click 之前完成，App 已铺在手指下方，
+   * 那次 click 就会打到新界面的元素上——表现为「第一下没反应」，
+   * 或误触新界面里的控件（例如隐藏的 file input 被点开，弹出相册）。
+   *
+   * 这里做两道保险：
+   * ① 把「本 App 刚刚已被打开过」记下来，短时间内重复调用直接忽略，
+   *    挡住 pointerup 与 click 兜底两条通道撞车导致的重复打开；
+   * ② 记录打开时刻，供桌面层判断是否需要吃掉紧随其后的合成 click。
+   */
+  var APP_LAUNCH_GUARD_MS = 500;
+  var lastLaunchedApp = { id: '', at: 0 };
+
   function launchApp(id) {
     if (!id) return false;
+
+    /* 保险①：同一 App 在保护窗口内只放行一次。 */
+    var now = Date.now();
+    if (lastLaunchedApp.id === id && (now - lastLaunchedApp.at) < APP_LAUNCH_GUARD_MS) {
+      return true;
+    }
+    lastLaunchedApp.id = id;
+    lastLaunchedApp.at = now;
+
     if (APP_HANDLERS[id]) {
       var run = function () {
         APP_HANDLERS[id]();
@@ -423,6 +450,19 @@
     return true;
   }
 
+  /*
+   * 保险②：供桌面层查询「刚打开的是不是同一个 App」。
+   * 桌面层的 click 兜底通道据此跳过，避免把合成 click 当成第二次点按；
+   * 传 id 时只在该 id 命中才拦，因此快速点另一个图标仍能正常打开。
+   */
+  window.miyaAppJustLaunched = function (id, withinMs) {
+    var win = withinMs || APP_LAUNCH_GUARD_MS;
+    if (!lastLaunchedApp.id) return false;
+    if (Date.now() - lastLaunchedApp.at >= win) return false;
+    if (id && String(id) !== lastLaunchedApp.id) return false;
+    return true;
+  };
+
   window.miyaLaunchApp = launchApp;
 
   var phoneLayer = document.getElementById('miya-phone-layer');
@@ -430,9 +470,21 @@
     phoneLayer.addEventListener('click', function (e) {
     if (window.miyaCustomDragDidConsume && window.miyaCustomDragDidConsume()) return;
     if (window.miyaCustomEditModeActive && window.miyaCustomEditModeActive()) return;
+    /*
+     * 拖拽系统已在 pointerup 阶段开过 App 时，这一次 click 只是触摸的合成产物，
+     * 不能再当成「又点了一次」——否则会重复打开，或在 App 已铺开后
+     * 把 click 打到新界面的控件上（隐藏的 file input 便会弹出相册）。
+     */
     var btn = e.target.closest('[data-app]');
     if (!btn) return;
-    launchApp(btn.getAttribute('data-app'));
+    /*
+     * 拖拽系统已在 pointerup 阶段开过这个 App 时，这一次 click 只是触摸的合成产物，
+     * 不能再当成「又点了一次」——否则会重复打开，或在 App 已铺开后
+     * 把 click 打到新界面的控件上（隐藏的 file input 便会弹出相册）。
+     */
+    var appId = btn.getAttribute('data-app');
+    if (window.miyaAppJustLaunched && window.miyaAppJustLaunched(appId)) return;
+    launchApp(appId);
   });
   }
 
