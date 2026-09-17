@@ -2635,14 +2635,18 @@ html.miya-custom-desk-icon-frameless
 }
 
 /* ═══════════════════════════════════════════════════════════
-   主屏图标白底 · 无条件兜底（放在文件最末，优先级最高）
-   背景：之前依赖 html.is-mobile / miya-custom-desk-icon-frameless 等可选类，
-   任一条件不满足规则即失效。此处不设任何前置条件，确保主屏图标
-   始终带白色圆角底板。
-   如需「自定义图片铺满无边」，改用下方注释里的选择器。
+   主屏图标白底 · 兜底规则（放在文件最末，优先级最高）
+   真实 DOM（经手机端源码核实）：
+     #desk-custom-viewport > .desk-custom__cell > .ic.desk-custom__ic > .ic__box.glass[data-i]
+   注意：本项目主屏并不使用 .desk-custom__grid（那是另一套布局分支），
+   早期以 .desk-custom__grid 为前缀的规则全部无法命中，故此处改用
+   [data-i] 属性 + .desk-custom__cell 双重锚点，覆盖所有实际结构。
    ═══════════════════════════════════════════════════════════ */
+.ic__box[data-i],
+.desk-custom__ic > .ic__box.glass,
+.desk-custom__cell .ic__box.glass,
 .desk-custom__grid .desk-custom__ic .ic__box.glass,
-body.miya-mode-phone .desk-custom__grid .desk-custom__ic .ic__box.glass {
+body.miya-mode-phone .ic__box[data-i] {
   background: rgba(255, 255, 255, 0.94) !important;
   box-shadow:
     0 2px 10px rgba(100, 110, 125, 0.16),
@@ -2650,4 +2654,12 @@ body.miya-mode-phone .desk-custom__grid .desk-custom__ic .ic__box.glass {
   border: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+/* 上传了自定义图标的项：保持图片铺满、不要白底
+   （本项目真实结构下 has-custom-icon 加在 .desk-custom__ic 上） */
+.desk-custom__ic.has-custom-icon > .ic__box[data-i],
+.has-custom-icon > .ic__box.glass {
+  background: transparent !important;
+  box-shadow: none !important;
 }
