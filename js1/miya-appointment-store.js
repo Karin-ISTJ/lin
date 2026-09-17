@@ -359,6 +359,22 @@
             hidden: !!row.hidden,
             editedAt: Number(row.editedAt) || 0
         };
+        /*
+         * 该楼层被「刷新 / 重回」重答过的累计次数。
+         *
+         * ⚠️ 为什么必须单独存一个字段、而不能从 swipes.length 推：
+         *   刷新键（不保留旧版）走 deleteMessage 并显式传 { swipes: [] }，
+         *   候选表被清空 → swipes.length 恒为 0。早先 attempt 就取
+         *   floorSwipeCount（= swipes.length），于是**每次刷新 attempt 都被
+         *   重置回 1**，引擎那句「这是同一提问的第 N 次重答，请比上一次差异
+         *   更明显」永远发不出去（见 buildRegenerateHintBlock 的 n > 1 分支）。
+         *   模型每轮收到的输入完全相同，输出自然高度雷同 —— 这正是
+         *   「刷新又生成一模一样内容」的根因。
+         *   此字段与候选表解耦，只在重答成功后自增，清空 swipes 不影响它。
+         */
+        if (Number.isFinite(Number(row.regenCount)) && Number(row.regenCount) > 0) {
+            out.regenCount = Math.floor(Number(row.regenCount));
+        }
         if (row.chatMirrorId) out.chatMirrorId = String(row.chatMirrorId).trim();
         var thinking = String(row.thinking || '').trim();
         if (thinking) out.thinking = thinking;
@@ -2359,6 +2375,42 @@
              */
             if (!swipes.length && text) swipes.push(text);
             return store.deleteMessage(chatId, sessionId, messageId, { swipes: swipes });
+        },
+        /**
+         * 重答次数 +1（该楼层被刷新/重回的累计次数）。
+         *
+         * 与 swipes 解耦：刷新键会显式清空 swipes，若把计数寄存在候选表长度上，
+         * 计数会每次归零，导致引擎的「第 N 次重答」提示发不出去 —— 见
+         * normalizeMessage 里 regenCount 字段的说明。
+         *
+         * 在**重答成功写入新内容之后**调用，失败/中止不计数，
+         * 这样「连续失败几次再成功」不会虚增序号。
+         */
+        bumpRegenCount: function (chatId, sessionId, messageId) {
+            var sess = store.getSession(chatId, sessionId);
+            if (!sess || !messageId) return 0;
+            var cur = 0;
+            (sess.messages || []).forEach(function (m) {
+                if (m && m.id === messageId && Number(m.regenCount) > cur) {
+                    cur = Math.floor(Number(m.regenCount));
+                }
+            });
+            var next = cur + 1;
+            store._patchAllById(chatId, sessionId, messageId, { regenCount: next });
+            flushSave();
+            return next;
+        },
+        /** 读取某楼层累计重答次数（无记录返回 0） */
+        getRegenCount: function (chatId, sessionId, messageId) {
+            var sess = store.getSession(chatId, sessionId);
+            if (!sess || !messageId) return 0;
+            var cur = 0;
+            (sess.messages || []).forEach(function (m) {
+                if (m && m.id === messageId && Number(m.regenCount) > cur) {
+                    cur = Math.floor(Number(m.regenCount));
+                }
+            });
+            return cur;
         },
         syncAllSessionsToChat: function (chatId, contactId) {
             var cid = String(contactId || '').trim();

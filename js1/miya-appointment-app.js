@@ -3696,7 +3696,26 @@ function renderWriter() {
         var keep = keepVersion === true;
         var eng = apEngine();
         var aps = apStore();
-        var attempt = Math.max(1, floorSwipeCount(m));
+        /*
+         * attempt = 「这是同一提问的第几次重答」，不是候选表长度。
+         *
+         * ⚠️ 这里原来取 floorSwipeCount(m)（= m.swipes.length），是错的：
+         *   刷新键的语义是「不保留这一版」，紧接着就会 deleteMessage(..., { swipes: [] })
+         *   把候选表清空 —— 于是 attempt 恒为 1，引擎的 buildRegenerateHintBlock
+         *   永远进不去 n > 1 分支，那句「这是第 N 次重答，请差异更明显」发不出去。
+         *   每轮输入完全相同，模型输出自然高度雷同（用户报的「刷新又出现一模一样的
+         *   内容」）。现改用与候选表解耦的持久化计数器 regenCount。
+         */
+        var attempt = 1;
+        try {
+            if (aps && typeof aps.getRegenCount === 'function') {
+                attempt = Math.max(1, Math.floor(Number(aps.getRegenCount(ui.chatId, ui.sessionId, m.id)) || 0) + 1);
+            } else {
+                attempt = Math.max(1, floorSwipeCount(m));
+            }
+        } catch (eAttempt) {
+            attempt = Math.max(1, floorSwipeCount(m));
+        }
         var hadSwipes = floorSwipeCount(m) >= 2;
 
         /*
@@ -3757,6 +3776,17 @@ function renderWriter() {
                     );
                 })
                 .then(function (r) {
+                    /*
+                     * 重答成功才计数。失败/用户中止走 .catch，不经过这里，
+                     * 所以「连续失败几次再成功」不会虚增序号。
+                     * 计数用于下一轮 buildRegenerateHintBlock 的「第 N 次重答」提示，
+                     * 是压住「刷新出来还是一样的内容」的关键输入信号。
+                     */
+                    try {
+                        if (aps && typeof aps.bumpRegenCount === 'function') {
+                            aps.bumpRegenCount(ui.chatId, ui.sessionId, m.id);
+                        }
+                    } catch (eBump) {}
                     playOfflineDoneSound();
                     return r;
                 })

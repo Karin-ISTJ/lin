@@ -3740,7 +3740,7 @@
           <label class="stp-editor__field"><span>触发器</span><select id="stp-edit-trigger" title="当前版本所有启用条目均无条件注入，此选项暂不生效"><option value="normal">正常</option><option value="continue">续写</option><option value="impersonate">代写</option><option value="swipe">切换回复</option><option value="regenerate">重新生成</option><option value="quiet">静默</option></select></label>
           <label class="stp-editor__field"><span>位置</span><select id="stp-edit-position"><option value="relative">相对 · Relative</option><option value="in_chat">In-chat · 聊天记录内</option></select></label>
         </div>
-        <label class="stp-editor__field stp-content-field"><span>提示词</span><textarea id="stp-edit-content" rows="14" placeholder="输入 ST Prompt Entry 正文"></textarea></label>
+        <label class="stp-editor__field stp-content-field"><span>提示词</span><textarea id="stp-edit-content" rows="14" placeholder="输入 ST Prompt Entry 正文"></textarea><small>支持变量：<code>{{char}}</code> 角色名、<code>{{user}}</code>/<code>{{persona}}</code> 用户名、<code>{{time}}</code> 当前时间、<code>{{date}}</code> 日期、<code>{{weekday}}</code> 星期、<code>{{datetime}}</code> 完整时间、<code>{{lastMessage}}</code> 最近一句、<code>{{random:a,b,c}}</code> 随机、<code>{{roll:1d6}}</code> 掷骰。不认识的写法会原样保留。</small></label>
         <div class="stp-editor__grid stp-inchat-grid">
           <label class="stp-editor__field"><span>In-Chat 深度</span><input id="stp-edit-depth" type="number" min="0" max="100" step="1" value="0"><small>仅 In-chat 生效；0 = 紧贴最新历史。</small></label>
           <label class="stp-editor__field"><span>In-Chat 优先级</span><input id="stp-edit-injection-order" type="number" step="1" value="100"><small>同一深度按 injection_order 排序。</small></label>
@@ -3900,20 +3900,20 @@
   <script defer src="js2/miya-memory-table-app.js?v=3"></script>
   <script defer src="js1/miya-chat-time-events.js?v=3"></script>
   <script defer src="js1/miya-chat-farm.js?v=6"></script>
-  <script defer src="js1/miya-chat-engine.js?v=48"></script>
+  <script defer src="js1/miya-chat-engine.js?v=49"></script>
   <script defer src="js1/miya-chat-group.js?v=12"></script>
   <script defer src="js1/miya-chat-group-redpacket.js?v=9"></script>
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
   <script defer src="js1/miya-chat-album-picker.js?v=1"></script>
   <script defer src="js1/miya-chat-group-ledger.js?v=2"></script>
   <script defer src="js1/miya-chat-group-settings.js?v=21"></script>
-  <script defer src="js1/miya-appointment-store.js?v=50"></script>
+  <script defer src="js1/miya-appointment-store.js?v=51"></script>
   <script defer src="js2/miya-offline-source-ref.js?v=9"></script>
   <script defer src="js2/miya-offline-beautify.js?v=17"></script>
   <script defer src="js2/miya-offline-text-decor.js?v=1"></script>
   <script defer src="js1/miya-appointment-memory.js?v=12"></script>
-  <script defer src="js1/miya-appointment-engine.js?v=122"></script>
-  <script defer src="js1/miya-appointment-app.js?v=134"></script>
+  <script defer src="js1/miya-appointment-engine.js?v=123"></script>
+  <script defer src="js1/miya-appointment-app.js?v=135"></script>
   <script defer src="js1/miya-chat-heartvoice-templates.js?v=16"></script>
   <script defer src="js1/miya-chat-heartvoice.js?v=11"></script>
   <script defer src="js2/miya-offline-card.js?v=9"></script>

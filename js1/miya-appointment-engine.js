@@ -950,8 +950,11 @@
         var stPresetBackMessages = [];
         if (stEngine && typeof stEngine.buildStPresetMessages === 'function') {
             try {
-                stPresetFrontMessages = stEngine.buildStPresetMessages('front') || [];
-                stPresetBackMessages = stEngine.buildStPresetMessages('back') || [];
+                /* 带上 contact / profile / slice，让条目正文里的 {{char}} {{user}} {{lastMessage}}
+                   等宏解析成真实值（与线上保持同一套解析器） */
+                var stMacroOpts = { contact: contact, profile: profile, history: slice };
+                stPresetFrontMessages = stEngine.buildStPresetMessages('front', stMacroOpts) || [];
+                stPresetBackMessages = stEngine.buildStPresetMessages('back', stMacroOpts) || [];
                 stPresetFrontMessages.forEach(function (m) {
                     if (!m || !String(m.content || '').trim()) return;
                     apiMessages.push({

@@ -1274,6 +1274,153 @@
     }
 
     /**
+     * ST 预设条目的宏（占位符）解析。
+     *
+     * SillyTavern 的条目正文里可以写 {{char}} {{user}} 这类占位符，发送前替换成真实值，
+     * 于是同一条预设能跨角色复用，不必为每个角色各写一份。
+     *
+     * 兼容原则：**向后兼容，不认识的原样放行**。
+     * 老预设正文里没有 {{...}}，替换器扫不到任何东西，输出与改动前逐字节一致；
+     * 万一条目里本来就写了 {{某某}} 而这里不认识，也原样保留，不会被吞掉。
+     *
+     * 支持列表（大小写不敏感，内部空白容忍，如 {{ char }} / {{CHAR}} 均可）：
+     *   {{char}}             当前角色名
+     *   {{user}}             当前用户名（未设置时为「用户」）
+     *   {{persona}}          同 {{user}}，兼容 ST 习惯称呼
+     *   {{time}}             当前时间 HH:MM
+     *   {{date}}             当前日期 YYYY-MM-DD
+     *   {{weekday}}          星期几，如「星期三」
+     *   {{datetime}}         完整日期时间
+     *   {{isotime}}          ISO 时间戳
+     *   {{lastMessage}}      最近一条对话消息正文
+     *   {{random:a,b,c}}     随机取一项
+     *   {{roll:1d6}}         掷骰
+     *   {{cron}}             cron 表达式（ST 兼容，本轮不解析，原样保留）
+     *
+     * 未知宏（含 {{}} 空内容）一律原样保留，保证不会把用户正文吃掉。
+     */
+    var ST_MACRO_CJK_WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+    function stMacroPad2(n) {
+        return (Number(n) < 10 ? '0' : '') + Number(n);
+    }
+
+    function stMacroNow() {
+        return new Date();
+    }
+
+    function stMacroTimeText(d) {
+        return stMacroPad2(d.getHours()) + ':' + stMacroPad2(d.getMinutes());
+    }
+
+    function stMacroDateText(d) {
+        return d.getFullYear() + '-' + stMacroPad2(d.getMonth() + 1) + '-' + stMacroPad2(d.getDate());
+    }
+
+    /** 掷骰：支持 1d6 / 2d20+3 / d6 等写法 */
+    function stMacroRoll(expr) {
+        var m = /^\s*(\d*)\s*d\s*(\d+)\s*([+-]\s*\d+)?\s*$/i.exec(String(expr || ''));
+        if (!m) return null;
+        var count = m[1] ? Math.max(1, Math.min(100, parseInt(m[1], 10))) : 1;
+        var faces = Math.max(2, Math.min(1000000, parseInt(m[2], 10)));
+        var mod = m[3] ? parseInt(String(m[3]).replace(/\s+/g, ''), 10) : 0;
+        var sum = 0;
+        for (var i = 0; i < count; i++) sum += Math.floor(Math.random() * faces) + 1;
+        return sum + mod;
+    }
+
+    /**
+     * 解析单条正文里的宏。
+     *
+     * ctx: { char, user, lastMessage }
+     */
+    function resolveStMacros(text, ctx) {
+        var src = text == null ? '' : String(text);
+        if (!src) return src;
+        /* 没有 {{ 就直接返回，零开销、绝对不影响既有内容 */
+        if (src.indexOf('{{') < 0) return src;
+
+        var c = ctx && typeof ctx === 'object' ? ctx : {};
+        var charName = String(c.char == null ? '' : c.char);
+        var userName = String(c.user == null ? '' : c.user);
+        var lastMessage = String(c.lastMessage == null ? '' : c.lastMessage);
+
+        return src.replace(/\{\{([^{}]*)\}\}/g, function (whole, rawName) {
+            var name = String(rawName == null ? '' : rawName).trim();
+            if (!name) return whole;
+            var lower = name.toLowerCase();
+            /* 带参数的宏先处理（random / roll），它们的参数里可能有冒号 */
+            var mm = /^(random|roll)\s*:\s*([\s\S]*)$/i.exec(name);
+            if (mm) {
+                var kind = mm[1].toLowerCase();
+                var arg = mm[2];
+                if (kind === 'random') {
+                    var pool = String(arg || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s !== ''; });
+                    if (!pool.length) return whole;
+                    return pool[Math.floor(Math.random() * pool.length)];
+                }
+                var rolled = stMacroRoll(arg);
+                return rolled == null ? whole : String(rolled);
+            }
+            switch (lower) {
+                case 'char':
+                    return charName || whole;
+                case 'user':
+                case 'persona':
+                    return userName || whole;
+                case 'time':
+                    return stMacroTimeText(stMacroNow());
+                case 'date':
+                    return stMacroDateText(stMacroNow());
+                case 'weekday': {
+                    var d = stMacroNow();
+                    return '星期' + ST_MACRO_CJK_WEEK[d.getDay()];
+                }
+                case 'datetime': {
+                    var dt = stMacroNow();
+                    return stMacroDateText(dt) + ' ' + stMacroTimeText(dt);
+                }
+                case 'isotime':
+                    return new Date().toISOString();
+                case 'lastmessage':
+                    return lastMessage || whole;
+                default:
+                    /* 不认识的宏 —— 原样保留，绝不吞内容 */
+                    return whole;
+            }
+        });
+    }
+
+    /**
+     * 按当前会话组装宏上下文。
+     * 拿不到就留空字符串，resolveStMacros 那边会退回原样输出，不会产生「undefined」字样。
+     */
+    function buildStMacroContext(contact, profile, history) {
+        var ctx = { char: '', user: '', lastMessage: '' };
+        try {
+            ctx.char = String((contact && (contact.name || contact.nickname)) || '').trim();
+        } catch (e1) {}
+        try {
+            ctx.user = String((profile && profile.name) || '').trim() || '用户';
+        } catch (e2) {
+            ctx.user = '用户';
+        }
+        try {
+            if (Array.isArray(history) && history.length) {
+                for (var i = history.length - 1; i >= 0; i--) {
+                    var h = history[i];
+                    var body = String((h && h.content) || '').trim();
+                    if (body) {
+                        ctx.lastMessage = body;
+                        break;
+                    }
+                }
+            }
+        } catch (e3) {}
+        return ctx;
+    }
+
+    /**
      * ST-compatible prompt export.
      *
      * SillyTavern does NOT implement "back" as simply appending a system message.
@@ -1284,8 +1431,18 @@
      *
      * Miya's UI keeps the friendly front/back labels, but the request layer now
      * preserves these ST semantics.
+     *
+     * opts（可选）: { contact, profile, history } —— 用于解析条目正文里的 {{char}} 等宏。
+     * 不传时宏不解析、原样输出，等价于改动前的行为。
      */
-    function buildStPresetMessages(position) {
+    function buildStPresetMessages(position, opts) {
+        var macroCtx = null;
+        try {
+            var o = opts && typeof opts === 'object' ? opts : null;
+            if (o) macroCtx = buildStMacroContext(o.contact, o.profile, o.history);
+        } catch (eMacroCtx) {
+            macroCtx = null;
+        }
         var out = [];
         var wanted = position === 'back' ? 'back' : position === 'front' ? 'front' : '';
         try {
@@ -1296,6 +1453,13 @@
             entries.forEach(function (entry, idx) {
                 var body = String(entry && entry.content || '').trim();
                 if (!body) return;
+                /* 宏解析：只在传了上下文时执行；未传则 body 原样返回，行为与改动前一致 */
+                if (macroCtx) {
+                    try {
+                        body = resolveStMacros(body, macroCtx);
+                    } catch (eResolve) {}
+                }
+                if (!String(body || '').trim()) return;
                 var entryPosition = entry && (entry.position === 'back' || Number(entry.injection_position) === 1) ? 'back' : 'front';
                 if (wanted && entryPosition !== wanted) return;
                 var role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : 'system';
@@ -2715,9 +2879,11 @@
         /*
          * ST 预设分成相对聊天记录的「前置 / 后置」两层。
          * 前置保留背景设定语义；后置在历史注入后再追加，给人称/格式/行为等强执行规则更高的就近性。
+         * 传 contact / profile / sliceContext 进去，让条目正文里的 {{char}} / {{user}} / {{lastMessage}}
+         * 等宏能被解析成真实值；同一条预设因此可以跨角色复用。
          */
-        var stPresetFrontMessages = buildStPresetMessages('front');
-        var stPresetBackMessages = buildStPresetMessages('back');
+        var stPresetFrontMessages = buildStPresetMessages('front', { contact: contact, profile: profile, history: sliceContext });
+        var stPresetBackMessages = buildStPresetMessages('back', { contact: contact, profile: profile, history: sliceContext });
 
         var wbBundle = buildWorldbookBundle(contact, contextText, null, {
             promptContext: 'online',
