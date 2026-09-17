@@ -304,6 +304,90 @@ body.miya-app-open .phone {
   padding: calc(env(safe-area-inset-top, 0px) + 12px) 18px calc(24px + env(safe-area-inset-bottom, 0px)) 14px;
 }
 
+/* 锁屏壁纸预览框（模拟手机锁屏：大时间 + 小日期）。
+   注：该组件在原作者代码中整块缺少样式声明，
+   placeholder / time / date 三者字号均继承根元素 16px，
+   与面板内 10~13px 的正文体系不协调，此处统一补齐。 */
+.ins-atelier-lock-preview {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 12px;
+}
+
+.ins-atelier-lock-preview__screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 150px;
+  aspect-ratio: 9 / 16;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px dashed rgba(0, 0, 0, 0.16);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.03) center / cover no-repeat;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ins-atelier-lock-preview__placeholder {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(85, 85, 85, 0.72);
+  text-align: center;
+}
+
+.ins-atelier-lock-preview__time {
+  font-family: var(--ins-display, inherit);
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: rgba(17, 17, 17, 0.9);
+}
+
+.ins-atelier-lock-preview__date {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(85, 85, 85, 0.8);
+}
+
+/* 未上传壁纸时隐藏时间与日期，只留提示文字。
+   注意：JS 用的标记类是 .has-image（见 miya-beautify-app.js 的
+   refreshLockWallPreview），不是 has-wall。 */
+.ins-atelier-lock-preview__screen:not(.has-image) .ins-atelier-lock-preview__time,
+.ins-atelier-lock-preview__screen:not(.has-image) .ins-atelier-lock-preview__date {
+  display: none;
+}
+
+/* 已上传壁纸：文字转为白字并加投影，保证在任意壁纸上可读 */
+.ins-atelier-lock-preview__screen.has-image .ins-atelier-lock-preview__time,
+.ins-atelier-lock-preview__screen.has-image .ins-atelier-lock-preview__date,
+.ins-atelier-lock-preview__screen.has-image .ins-atelier-lock-preview__placeholder {
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.ins-atelier-lock-preview__screen.has-image {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 锁屏卡片底部长说明。
+   原先该类无任何样式声明，字号直接继承根元素 16px，
+   而面板内其他正文均为 10~13px，视觉上明显突兀一大圈。
+   此处对齐面板描述规格（12px / 行高 1.55 / 次级灰）。 */
+.ins-atelier-lock-note {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ins-ink-dim, rgba(85, 85, 85, 0.82));
+  font-weight: 400;
+}
+
 /* 「退出」按钮为 sticky + float:right，已脱离文档流。
    原 masthead 大标题充当它的占位，标题移除后首个面板会与按钮重叠。
    此处让面板容器清除浮动，使内容从按钮下方开始排布。 */
