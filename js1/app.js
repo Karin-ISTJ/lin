@@ -96,7 +96,8 @@
   }
 
   function syncAppIconStyle(on) {
-    document.documentElement.classList.toggle('miya-alt-app-icons', !!on);
+    /* 「切换初始图标样式」功能已移除：只清理残留类，不再启用实心图标包。 */
+    document.documentElement.classList.remove('miya-alt-app-icons');
     fillAppIcons();
   }
 

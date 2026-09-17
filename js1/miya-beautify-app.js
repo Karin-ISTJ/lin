@@ -622,19 +622,6 @@
     }
   }
 
-  function syncAltIconStyleUi(theme) {
-    var on = !!(theme && theme.altIconStyle);
-    var sw = $('miya-bf-alt-icon-switch');
-    if (sw) {
-      sw.classList.toggle('is-on', on);
-      sw.setAttribute('aria-checked', on ? 'true' : 'false');
-    }
-    var status = $('miya-bf-alt-icon-status');
-    if (status) {
-      status.textContent = on ? '已开启 · 实心初始图标（已自定义图片不受影响）' : '已关闭 · 使用线稿初始图标';
-    }
-  }
-
   function refreshDefaultIconGlyphs() {
     document.querySelectorAll('[data-bf-glyph]').forEach(function (glyph) {
       var key = glyph.getAttribute('data-bf-glyph');
@@ -647,7 +634,6 @@
     syncLayoutModeUi();
     var theme = getActiveSurfaceTheme();
     syncIconFrameUi(theme);
-    syncAltIconStyleUi(theme);
     refreshWallPreview();
     syncLockUi();
     syncTextModeUi(theme);
@@ -1085,20 +1071,6 @@
         global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
         syncIconFrameUi(getActiveSurfaceTheme());
         toast(on ? '已去掉图标外框' : '已恢复图标外框');
-      });
-    }
-
-    var altIconSw = $('miya-bf-alt-icon-switch');
-    if (altIconSw) {
-      altIconSw.addEventListener('click', function () {
-        var on = !altIconSw.classList.contains('is-on');
-        /* B14：布局恒为 custom（原 if/else 已折叠）。 */
-        global.miyaSetCustomDeskTheme({ altIconStyle: on });
-        global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-        syncAltIconStyleUi(getActiveSurfaceTheme());
-        refreshDefaultIconGlyphs();
-        refreshIconPreviews();
-        toast(on ? '已切换为实心初始图标' : '已恢复线稿初始图标');
       });
     }
 

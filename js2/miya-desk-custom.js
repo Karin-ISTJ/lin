@@ -126,7 +126,6 @@
     icons: {},
     textColorMode: 'black',
     iconFrameless: false,
-    altIconStyle: false,
     profileBg: null,
     memoAvas: {},
     polaroids: {},
@@ -2275,7 +2274,6 @@
     customThemeState.polaroids = Object.assign({}, raw.polaroids || {});
     customThemeState.copy = Object.assign({}, raw.copy || {});
     customThemeState.iconFrameless = raw.iconFrameless === true;
-    customThemeState.altIconStyle = raw.altIconStyle === true;
     customThemeState.layout = normalizeLayout(raw.layout);
     layoutFromFallback = false;
     return customThemeState;
@@ -2351,7 +2349,6 @@
       icons: Object.assign({}, customThemeState.icons || {}),
       textColorMode: customThemeState.textColorMode,
       iconFrameless: customThemeState.iconFrameless,
-      altIconStyle: customThemeState.altIconStyle === true,
       profileBg: customThemeState.profileBg || null,
       memoAvas: Object.assign({}, customThemeState.memoAvas || {}),
       polaroids: Object.assign({}, customThemeState.polaroids || {}),
@@ -4164,10 +4161,12 @@
     document.documentElement.classList.toggle('miya-custom-desk-icon-frameless', !!(theme && theme.iconFrameless));
   }
 
-  function applyCustomAltIconStyle(theme) {
-    var on = !!(theme && theme.altIconStyle);
-    if (global.miyaSyncAppIconStyle) global.miyaSyncAppIconStyle(on);
-    else document.documentElement.classList.toggle('miya-alt-app-icons', on);
+  /* 「切换初始图标样式」功能已移除：始终使用线稿初始图标。
+     保留函数与调用点，但强制关闭，并主动清理残留的 miya-alt-app-icons 类，
+     避免老用户数据中残留的 altIconStyle:true 继续生效。 */
+  function applyCustomAltIconStyle() {
+    if (global.miyaSyncAppIconStyle) global.miyaSyncAppIconStyle(false);
+    document.documentElement.classList.remove('miya-alt-app-icons');
   }
 
   function applyHomeCopyToCustomWidgets() {

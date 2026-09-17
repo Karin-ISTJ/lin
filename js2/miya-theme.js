@@ -96,7 +96,6 @@
     fontId: null,
     fontName: null,
     iconFrameless: false,
-    altIconStyle: false,
     fontPreviewText: '',
     fontPreviewSize: 18,
     appFontSizes: {},
@@ -706,7 +705,6 @@
           merged.copy = Object.assign({}, defaultCopy, p.copy || {});
           merged.copy = migrateProfileCopy(merged.copy);
           merged.iconFrameless = p.iconFrameless === true;
-          merged.altIconStyle = p.altIconStyle === true;
           merged.fontPreviewText = String(p.fontPreviewText || '');
           merged.fontPreviewSize = clampPreviewSize(p.fontPreviewSize);
           merged.appFontSizes = normalizeAppFontSizes(p.appFontSizes);
@@ -738,7 +736,6 @@
       fontId: theme.fontId,
       fontName: theme.fontName,
       iconFrameless: theme.iconFrameless === true,
-      altIconStyle: theme.altIconStyle === true,
       fontPreviewText: String(theme.fontPreviewText || ''),
       fontPreviewSize: clampPreviewSize(theme.fontPreviewSize),
       appFontSizes: normalizeAppFontSizes(theme.appFontSizes),
@@ -1368,9 +1365,9 @@
   }
 
   function applyAltIconStyle(theme) {
-    var on = !!(theme && theme.altIconStyle);
-    if (global.miyaSyncAppIconStyle) global.miyaSyncAppIconStyle(on);
-    else document.documentElement.classList.toggle('miya-alt-app-icons', on);
+    /* 「切换初始图标样式」功能已移除：强制关闭并清理残留类，保留函数签名兼容旧调用。 */
+    if (global.miyaSyncAppIconStyle) global.miyaSyncAppIconStyle(false);
+    document.documentElement.classList.remove('miya-alt-app-icons');
   }
 
   global.miyaApplyFont = function (theme) {

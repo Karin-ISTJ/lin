@@ -2620,3 +2620,21 @@ html.is-mobile.miya-custom-desk-icon-frameless body.miya-mode-phone:not(.miya-ap
   letter-spacing: 0.08em;
   color: #888888;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   修复：主屏图标底板被误清空
+   成因：上方「自定义布局 · 压过 thermal 主屏白底外框」规则里，
+   :is(.desk-custom__grid .ic__box.glass, ...) 分支缺少 has-custom-icon 限定，
+   导致所有主屏图标的底板（玻璃外框）都被设为 transparent，
+   即便用户并未上传自定义图标，圆角方形边界也完全不可见。
+   修复：仅当图标确实带自定义图片（has-custom-icon）时才去掉底板；
+   普通图标保留玻璃底板，恢复圆角方形外观。
+   ═══════════════════════════════════════════════════════════ */
+html.is-mobile.miya-custom-desk-icon-frameless body.miya-mode-phone:not(.miya-app-open)
+  .desk-custom__grid .desk-custom__ic:not(.has-custom-icon) .ic__box.glass {
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+  border: none !important;
+}

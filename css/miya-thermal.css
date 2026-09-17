@@ -405,10 +405,33 @@ html.miya-is-scrolling :is(
    在浅色/自定义壁纸下与背景融为一体，圆角方形边界几乎不可见。
    修复：提高不透明度、加深边框与阴影，让图标「方」的形状清晰可辨。
    ═══════════════════════════════════════════════════════════ */
-html.is-mobile body.miya-mode-phone:not(.miya-app-open) :is(
-  .ic__box.glass,
-  .foot__dock.glass
-) {
+html.is-mobile body.miya-mode-phone:not(.miya-app-open)
+  .desk-custom__grid .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass,
+html.is-mobile body.miya-mode-phone:not(.miya-app-open)
+  .desk-custom__grid .ic:not(.has-custom-icon) > .ic__box.glass,
+html.is-mobile body.miya-mode-phone:not(.miya-app-open)
+  .desk-custom__dock .foot__dock--custom .foot__dock-btn.glass {
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+}
+
+/* 兜底：非自定义布局的标准主屏图标 */
+html.is-mobile body.miya-mode-phone:not(.miya-app-open)
+  .ic:not(.has-custom-icon) > .ic__box.glass {
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+}
+
+/* 自定义图标（上传了图片）也统一为白色圆角底板，与普通图标视觉一致。
+   若希望自定义图片「铺满无边」，删除本段即可恢复原作者设计。 */
+html.is-mobile body.miya-mode-phone:not(.miya-app-open)
+  .desk-custom__grid .desk-custom__ic.has-custom-icon > .ic__box.glass,
+html.is-mobile body.miya-mode-phone:not(.miya-app-open)
+  .ic.has-custom-icon > .ic__box.glass {
   background: rgba(255, 255, 255, 0.94) !important;
   box-shadow:
     0 2px 10px rgba(100, 110, 125, 0.16),
