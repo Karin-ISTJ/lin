@@ -1837,7 +1837,20 @@ body.miya-app-open .phone {
   margin-top: 0;
 }
 
+/*
+ * 隐藏用的 file input。
+ *
+ * 原实现只靠 width/height:0 + opacity:0 + pointer-events:none，元素仍参与布局
+ * （display 保持默认 block）。这些 input 是 .ins-atelier 网格的直接子元素，
+ * 会被网格自动排到 (0,0)；安卓浏览器对 opacity:0 的控件会扩大命中区域，
+ * 于是触摸顶部栏时会穿透到隐藏 input 上，直接唤起系统相册。
+ *
+ * 加 display:none 让其彻底脱离布局与命中测试。
+ * 注意：miyaTriggerFileInput() 触发前会先摘掉 .ins-file 类并改内联样式，
+ * 因此本行不影响「上传」按钮正常唤起文件选择。
+ */
 .ins-file {
+  display: none;
   position: absolute;
   width: 0;
   height: 0;
