@@ -313,7 +313,10 @@ html[data-miya-desk-layout="custom"] .foot__dock--custom {
   margin-top: -2px;
 }
 
-html.miya-custom-desk-icon-frameless .desk-custom__grid .ic__box.glass {
+/* frameless 开关：只影响「上传了自定义图片」的图标，
+   不再清空内置图标的白色底板 —— 清空会导致主屏看起来「图标没框」。 */
+html.miya-custom-desk-icon-frameless .desk-custom__ic.has-custom-icon .ic__box.glass,
+html.miya-custom-desk-icon-frameless .desk-custom__ic.has-custom-icon .ic__box[data-i] {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -1332,114 +1335,81 @@ html.is-custom-wg-editing .desk-custom-viewport {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Karin 图标皮肤 v1 —— 11 个实心图标（去白底 + 放大）
-   仅作用于下列应用，其余图标保持原有玻璃方块 + 线条风格。
-   应用键：beauty 美化 / imagegen 生图 / chat 聊天 / book 世界书
-          stpreset ST预设 / notes 日记 / contacts 联系人 / memory 记忆
-          itinerary 行程轨迹 / couple 情侣空间 / fun 娱乐
+   Karin 图标皮肤 v2 —— 统一白色圆角底板
+   变更说明（v1 → v2）：
+     v1 曾把这批 App 的玻璃底板强制清成透明，让实心图形直接贴壁纸。
+     实机反馈是「图标看起来没有外框 / 没有白底」，观感上是散落一堆图形。
+     v2 改为：所有图标统一保留白色圆角底板，图形坐在底板上。
+     自定义图片图标（has-custom-icon）仍然保持透明铺满，让图片自己撑满圆角。
    ══════════════════════════════════════════════════════════════ */
 
-/* ① 网格图标：去掉白色玻璃底，实心图形直接贴壁纸 */
-.desk-custom__grid .desk-custom__ic:is(
-  [data-app="beauty"],
-  [data-app="imagegen"],
-  [data-app="chat"],
-  [data-app="book"],
-  [data-app="stpreset"],
-  [data-app="notes"],
-  [data-app="contacts"],
-  [data-app="memory"],
-  [data-app="itinerary"],
-  [data-app="couple"],
-  [data-app="fun"],
-  [data-app="set"]
-) .ic__box.glass {
+/* ① 网格图标：统一白色圆角底板（覆写 miya-thermal.css 的兜底值） */
+.desk-custom__grid .desk-custom__ic .ic__box.glass,
+.desk-custom__grid .desk-custom__ic .ic__box[data-i],
+.desk-custom__cell .desk-custom__ic .ic__box.glass,
+.desk-custom__cell .desk-custom__ic .ic__box[data-i] {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border: none !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ①-b 自定义图片图标：保持透明，让图片铺满圆角 */
+.desk-custom__grid .desk-custom__ic.has-custom-icon .ic__box.glass,
+.desk-custom__grid .desk-custom__ic.has-custom-icon .ic__box[data-i],
+.desk-custom__cell .desk-custom__ic.has-custom-icon .ic__box.glass,
+.desk-custom__cell .desk-custom__ic.has-custom-icon .ic__box[data-i] {
   background: transparent !important;
-  border-color: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-/* ② 网格图标：18px（默认 18px）。
-   注意：这批新图标是「填充式」，图形几乎撑满 1024 画布（占 85%~118%），
-   视觉重量约为原线条图标的两倍。放到 26px 时实际视觉≈28px，明显偏粗；
-   收到 18px 后，视觉体量与原来 24px 的线条图标基本相当。 */
-.desk-custom__grid .desk-custom__ic:is(
-  [data-app="beauty"],
-  [data-app="imagegen"],
-  [data-app="chat"],
-  [data-app="book"],
-  [data-app="stpreset"],
-  [data-app="notes"],
-  [data-app="contacts"],
-  [data-app="memory"],
-  [data-app="itinerary"],
-  [data-app="couple"],
-  [data-app="fun"],
-  [data-app="set"]
-) .ic__box svg {
+/* ② 网格图标：18px（填充式图形，视觉体量与原先 24px 线条图标相当） */
+.desk-custom__grid .desk-custom__ic .ic__box svg {
   width: 18px;
   height: 18px;
 }
 
-/* ③ 程序坞图标（联系人默认在 dock 里）：同样去白底 + 18px */
-.foot__dock--custom .desk-custom__dock-ic:is(
-  [data-app="beauty"],
-  [data-app="imagegen"],
-  [data-app="chat"],
-  [data-app="book"],
-  [data-app="stpreset"],
-  [data-app="notes"],
-  [data-app="contacts"],
-  [data-app="memory"],
-  [data-app="itinerary"],
-  [data-app="couple"],
-  [data-app="fun"],
-  [data-app="set"]
-) .foot__dock-btn {
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
+/* ③ 程序坞图标：同样保留白色圆角底板 */
+.foot__dock--custom .desk-custom__dock-ic .foot__dock-btn {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border: none !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-.foot__dock--custom .desk-custom__dock-ic:is(
-  [data-app="beauty"],
-  [data-app="imagegen"],
-  [data-app="chat"],
-  [data-app="book"],
-  [data-app="stpreset"],
-  [data-app="notes"],
-  [data-app="contacts"],
-  [data-app="memory"],
-  [data-app="itinerary"],
-  [data-app="couple"],
-  [data-app="fun"],
-  [data-app="set"]
-) .foot__dock-btn svg {
+/* ③-b 程序坞自定义图片图标：保持透明 */
+.foot__dock--custom .desk-custom__dock-ic.has-custom-icon .foot__dock-btn,
+.foot__dock--custom .desk-custom__dock-ic .foot__dock-btn.has-custom-icon {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* ③-c 程序坞图标尺寸 */
+.foot__dock--custom .desk-custom__dock-ic .foot__dock-btn svg {
   width: 18px;
   height: 18px;
 }
 
-/* ④ 移动端主屏对 .ic__box.glass 有强制白底（miya-thermal.css），此处压回去 */
-html.is-mobile body.miya-mode-phone:not(.miya-app-open) .desk-custom__grid .desk-custom__ic:is(
-  [data-app="beauty"],
-  [data-app="imagegen"],
-  [data-app="chat"],
-  [data-app="book"],
-  [data-app="stpreset"],
-  [data-app="notes"],
-  [data-app="contacts"],
-  [data-app="memory"],
-  [data-app="itinerary"],
-  [data-app="couple"],
-  [data-app="fun"],
-  [data-app="set"]
-) .ic__box.glass {
-  background: transparent !important;
-  box-shadow: none !important;
+/* ④ 兜底：无论 html/body 的 class 是什么，主屏图标一律有白底。
+      用 :where() 把权重压到 0，靠 source order 生效，避免与上面规则互相打架。 */
+:where(html) :where(body) :where(.desk-custom__grid, .desk-custom__cell, #desk-custom-viewport)
+  .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border: none !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* ═══════════════════════════════════════════════════════════

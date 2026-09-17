@@ -2636,17 +2636,20 @@ html.miya-custom-desk-icon-frameless
 
 /* ═══════════════════════════════════════════════════════════
    主屏图标白底 · 兜底规则（放在文件最末，优先级最高）
+
    真实 DOM（经手机端源码核实）：
-     #desk-custom-viewport > .desk-custom__cell > .ic.desk-custom__ic > .ic__box.glass[data-i]
-   注意：本项目主屏并不使用 .desk-custom__grid（那是另一套布局分支），
-   早期以 .desk-custom__grid 为前缀的规则全部无法命中，故此处改用
-   [data-i] 属性 + .desk-custom__cell 双重锚点，覆盖所有实际结构。
+     网格：#desk-custom-viewport > .desk-custom__cell > .ic.desk-custom__ic
+            > .ic__box.glass[data-i][带有 data-app]
+     程序坞：.foot__dock-btn > span[data-i]（子节点没有 ic__box/glass 类）
+
+   注意：图标上的「去白底」开关是 data-app 属性触发的，与 data-i 无关。
+   早期规则只判断 .ic__box[data-i]，无法命中带 data-app 的图标，
+   而 miya-desk-custom.css 里那条 :is([data-app="..."]) 规则权重更高，
+   会把白底压成 transparent —— 这就是「图标没白底」的真正原因。
    ═══════════════════════════════════════════════════════════ */
-.ic__box[data-i],
-.desk-custom__ic > .ic__box.glass,
-.desk-custom__cell .ic__box.glass,
-.desk-custom__grid .desk-custom__ic .ic__box.glass,
-body.miya-mode-phone .ic__box[data-i] {
+:where(html) :where(body) .desk-custom__ic:not(.has-custom-icon) > .ic__box.glass,
+:where(html) :where(body) .desk-custom__ic:not(.has-custom-icon) > .ic__box[data-i],
+:where(html) :where(body) .desk-custom__cell .ic__box.glass:not([data-custom-image]) {
   background: rgba(255, 255, 255, 0.94) !important;
   box-shadow:
     0 2px 10px rgba(100, 110, 125, 0.16),
@@ -2656,10 +2659,26 @@ body.miya-mode-phone .ic__box[data-i] {
   -webkit-backdrop-filter: none !important;
 }
 
-/* 上传了自定义图标的项：保持图片铺满、不要白底
-   （本项目真实结构下 has-custom-icon 加在 .desk-custom__ic 上） */
-.desk-custom__ic.has-custom-icon > .ic__box[data-i],
-.has-custom-icon > .ic__box.glass {
+/* 上传了自定义图片的图标：透明铺满，不盖白底 */
+:where(html) :where(body) .desk-custom__ic.has-custom-icon > .ic__box.glass,
+:where(html) :where(body) .desk-custom__ic.has-custom-icon > .ic__box[data-i] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 程序坞图标白底（子节点是裸 span[data-i]，不带 .ic__box/.glass） */
+:where(html) :where(body) .foot__dock--custom .desk-custom__dock-ic:not(.has-custom-icon) .foot__dock-btn {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border: none !important;
+  box-shadow:
+    0 2px 10px rgba(100, 110, 125, 0.16),
+    0 0 0 1px rgba(120, 130, 145, 0.14) inset !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:where(html) :where(body) .foot__dock--custom .desk-custom__dock-ic.has-custom-icon .foot__dock-btn,
+:where(html) :where(body) .foot__dock--custom .desk-custom__dock-ic .foot__dock-btn.has-custom-icon {
   background: transparent !important;
   box-shadow: none !important;
 }
