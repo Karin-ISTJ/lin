@@ -4622,12 +4622,32 @@ function renderWriter() {
                         return eng2.regenerateAppointment(ui.chatId, ui.sessionId, streamHandlers(), {
                             replaceTargetId: msg.id,
                             /*
-                             * 同样带上重答次数：楼层内的「重发」和楼层自身的
-                             * 「刷新」在语义上是同一件事（让角色把这一轮重答），
-                             * 所以也需要让模型知道「这不是第一次」。
-                             * 候选表长度就是权威计数，见 floorSwipeCount 的说明。
+                             * 重答次数。
+                             *
+                             * ⚠️ 这里原来取 `msg.swipes.length`，是**坏的**：
+                             *   本函数下面显式传 keepRegenCandidate: false（重发是纯重写、
+                             *   不产候选），所以候选表永远是空的 → swipes.length 恒为 0
+                             *   → attempt 恒为 1 → 引擎里 buildRegenerateHintBlock 的
+                             *   `if (n > 1)` 分支永远进不去。
+                             *
+                             *   后果：用户连点「重发」，每一轮发给模型的输入**逐字节相同**，
+                             *   模型没有任何「这是第 N 次、请换一种写法」的信号，
+                             *   输出自然高度雷同 —— 这就是「点重发/刷新还是生成一模一样
+                             *   的内容」的直接原因。
+                             *
+                             * 改用与候选表解耦的持久化计数器 regenCount：
+                             * 它只在重答成功后自增，清空 swipes 不影响它。
+                             * 注意 attempt 语义是「本轮是第几次」，所以取「已累计次数 + 1」。
                              */
-                            attempt: Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0),
+                            attempt: (function () {
+                                try {
+                                    var apsR = apStore();
+                                    if (apsR && typeof apsR.getRegenCount === 'function') {
+                                        return Math.max(1, Math.floor(Number(apsR.getRegenCount(ui.chatId, ui.sessionId, msg.id)) || 0) + 1);
+                                    }
+                                } catch (eAtt) {}
+                                return Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0);
+                            })(),
                             /*
                              * ⚠️ 必须显式传 false —— 「重发」是纯重写，不产候选。
                              *
@@ -4653,6 +4673,18 @@ function renderWriter() {
                         });
                     })
                     .then(function (r) {
+                        /*
+                         * 重发成功后才自增 —— 失败/中止走 .catch，不经过这里，
+                         * 所以「连续失败几次再成功」不会虚增序号。
+                         * 这条计数是下一轮 buildRegenerateHintBlock 里
+                         * 「这是第 N 次重答，请差异更明显」的唯一来源。
+                         */
+                        try {
+                            var apsB = apStore();
+                            if (apsB && typeof apsB.bumpRegenCount === 'function') {
+                                apsB.bumpRegenCount(ui.chatId, ui.sessionId, msg.id);
+                            }
+                        } catch (eBump2) {}
                         playOfflineDoneSound();
                         return r;
                     })
