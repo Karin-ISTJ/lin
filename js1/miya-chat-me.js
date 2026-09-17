@@ -988,10 +988,7 @@
         '</button>' +
         '<div class="mi-edit-top__tools">' +
           '<button type="button" class="mi-pill mi-pill--ghost" data-mq-prof-ava-reset="' + esc(p.id) + '">恢复默认</button>' +
-          '<div class="mi-url-row">' +
-            '<input type="url" class="mi-input" data-mq-prof-ava-url="' + esc(p.id) + '" placeholder="图片链接" autocomplete="off">' +
-            '<button type="button" class="mi-pill" data-mq-prof-ava-url-apply="' + esc(p.id) + '">应用</button>' +
-          '</div>' +
+          /* 链接导入已移除：头像只通过点按上方头像区本地上传。 */
         '</div>' +
       '</div>' +
       fieldBlock('名字', '', '<input type="text" class="mi-input" data-mq-f-name value="' + esc(p.name) + '" maxlength="32">') +
@@ -1395,8 +1392,6 @@
           store.idbDeleteRecord(prof.avatarId);
         }
         store.updateProfile(rid, { avatarId: null }).then(function () {
-          var urlIn = stackEl.querySelector('[data-mq-prof-ava-url="' + rid + '"]');
-          if (urlIn) urlIn.value = '';
           toast('已恢复默认头像');
           hydrateProfileAvatars(stackEl);
           if (global.miyaChatApp && global.miyaChatApp.refreshLists) global.miyaChatApp.refreshLists();
@@ -1404,25 +1399,7 @@
         return;
       }
 
-      var avaUrlApply = e.target.closest('[data-mq-prof-ava-url-apply]');
-      if (avaUrlApply) {
-        var aid = avaUrlApply.getAttribute('data-mq-prof-ava-url-apply');
-        var urlEl = stackEl.querySelector('[data-mq-prof-ava-url="' + aid + '"]');
-        var avUrl = urlEl ? String(urlEl.value || '').trim() : '';
-        if (!avUrl) { toast('请填写图片链接'); return; }
-        fetch(avUrl).then(function (r) {
-          if (!r.ok) throw new Error('fetch');
-          return r.blob();
-        }).then(function (blob) {
-          var file = new File([blob], 'avatar.jpg', { type: blob.type || 'image/jpeg' });
-          return store.setProfileAvatar(aid, file);
-        }).then(function () {
-          toast('头像已更新');
-          hydrateProfileAvatars(stackEl);
-          if (global.miyaChatApp && global.miyaChatApp.refreshLists) global.miyaChatApp.refreshLists();
-        }).catch(function () { toast('链接无效'); });
-        return;
-      }
+      /* 链接导入已移除：头像只通过点按头像区选择本地图片。 */
 
       var useBtn = e.target.closest('[data-mq-prof-use]');
       if (useBtn) {

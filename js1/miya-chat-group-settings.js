@@ -257,17 +257,14 @@
     return esc(s).replace(/[\r\n\u2028\u2029]/g, '');
   }
 
-  function mediaPickBlock(label, previewData, pickData, resetData, urlInputData, urlApplyData, sub) {
+  /* 链接导入已移除：图片只通过点按预览区本地上传，此处不再渲染链接输入行。 */
+  function mediaPickBlock(label, previewData, pickData, resetData, sub) {
     return fieldBlock(label, sub || '',
       '<button type="button" class="mi-bg-pick" ' + pickData + '>' +
         '<div class="mi-bg-stage mi-bg-stage--sm" ' + previewData + '><span class="mi-bg-stage__placeholder">+</span></div>' +
       '</button>' +
       '<div class="mi-img-pick-tools">' +
         '<button type="button" class="st-foot-btn" ' + resetData + '>恢复默认</button>' +
-        '<div class="ins-inline-field">' +
-          '<input type="url" class="ins-text-input" ' + urlInputData + ' placeholder="图片链接" autocomplete="off">' +
-          '<button type="button" class="ins-icon-btn" ' + urlApplyData + ' title="应用">✓</button>' +
-        '</div>' +
       '</div>'
     );
   }
@@ -288,9 +285,7 @@
       mediaPickBlock('聊天背景',
         'data-mq-grp-bg-preview',
         'data-mq-grp-bg-pick',
-        'data-mq-grp-bg-reset',
-        'data-mq-grp-bg-url-input',
-        'data-mq-grp-bg-url-apply') +
+        'data-mq-grp-bg-reset') +
       renderChatWallpaperLibrary(s.chatBeautify || {})
     );
   }
@@ -1710,23 +1705,7 @@
         return;
       }
 
-      if (e.target.closest('[data-mq-grp-bg-url-apply]')) {
-        var bgUrlIn = pageEl.querySelector('[data-mq-grp-bg-url-input]');
-        var bgUrl = bgUrlIn ? String(bgUrlIn.value || '').trim() : '';
-        if (!bgUrl || !state.chatId) return;
-        store.saveChatSettings(state.chatId, {
-          chatBeautify: Object.assign({}, store.getChatSettings(state.chatId).chatBeautify, {
-            wallpaperMode: 'url', wallpaperUrl: bgUrl, wallpaperId: null
-          })
-        }).then(function () {
-          toast('背景已更新');
-          if (global.MiyaChatBeautify) global.MiyaChatBeautify.applyForChat(state.chatId);
-          markWallpaperLibActive(null);
-          if (typeof scheduleRender === 'function') scheduleRender({ fromStore: true });
-          else render();
-        });
-        return;
-      }
+      /* 链接导入已移除：群聊天背景只通过点按预览区本地上传。 */
     });
 
     pageEl.addEventListener('change', function (e) {

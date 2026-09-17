@@ -721,26 +721,9 @@
       var name = ($('miya-ct-field-name') || {}).value || '';
       if (img) { img.hidden = true; img.removeAttribute('src'); }
       if (mono) { mono.textContent = monogram(name); mono.hidden = false; }
-      var urlIn = $('miya-ct-avatar-url');
-      if (urlIn) urlIn.value = '';
     });
 
-    $('miya-ct-avatar-url-apply').addEventListener('click', function () {
-      var url = ($('miya-ct-avatar-url') || {}).value ? $('miya-ct-avatar-url').value.trim() : '';
-      if (!url) { toast('请填写图片链接'); return; }
-      draftAvatar = url;
-      var img = $('miya-ct-portrait-img');
-      var mono = $('miya-ct-portrait-mono');
-      if (img) {
-        img.onerror = function () {
-          toast('图片链接无效');
-          img.onerror = null;
-        };
-        img.src = url;
-        img.hidden = false;
-      }
-      if (mono) mono.hidden = true;
-    });
+    /* 链接导入已移除：头像只通过点按头像区选择本地图片。 */
 
     $('miya-ct-doc-file').addEventListener('change', function () {
       var f = this.files && this.files[0];

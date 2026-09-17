@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="css/miya-desk-wg-2x2.css?v=10">
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=5">
   <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=4">
-  <link rel="stylesheet" href="css/miya-apps.css?v=44">
+  <link rel="stylesheet" href="css/miya-apps.css?v=47">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=28">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
   <link rel="stylesheet" href="css/miya-settings.css?v=32">
@@ -49,7 +49,7 @@
   <link rel="stylesheet" href="css/miya-chat-notify.css?v=6">
   <link rel="stylesheet" href="css/miya-thermal.css?v=15">
   <link rel="stylesheet" href="css/miya-ios-no-blue.css?v=2">
-  <link rel="stylesheet" href="css/miya-lockscreen.css?v=12">
+  <link rel="stylesheet" href="css/miya-lockscreen.css?v=13">
   <!-- 登录包：仅部署版上传 miya-auth/ 时生效；开源版无此文件夹则跳过登录 -->
   <script src="miya-auth/config.js?v=3"></script>
   <script src="miya-auth/boot.js?v=3"></script>
@@ -380,7 +380,7 @@
       <span class="ins-atelier-grain"></span>
       <span class="ins-atelier-line ins-atelier-line--1"></span>
       <span class="ins-atelier-line ins-atelier-line--2"></span>
-      <span class="ins-atelier-stamp">KARIN · SKIN</span>
+      <!-- 右上角竖排「KARIN · SKIN」装饰戳已移除：纯装饰无功能，且导航改到顶部后会与顶部栏/退出按钮叠字。 -->
     </div>
 
     <nav class="ins-atelier-rail" aria-label="美化分区">
@@ -423,10 +423,7 @@
             <div class="ins-atelier-showcase-side">
               <button type="button" class="ins-chip ins-chip--gold" data-bf-wall-pick>上传壁纸</button>
               <button type="button" class="ins-chip ins-chip--dim" data-bf-wall-clear>恢复默认</button>
-              <div class="ins-url-replace">
-                <input type="url" class="ins-text-input" id="miya-bf-wall-url" placeholder="图片链接" autocomplete="off" spellcheck="false">
-                <button type="button" class="ins-chip" data-bf-wall-url-apply>应用链接</button>
-              </div>
+              <!-- 链接导入已移除：只保留本地上传。原先此处是"图片链接 + 应用链接"。 -->
             </div>
           </div>
 
@@ -450,10 +447,7 @@
                 <button type="button" class="ins-chip ins-chip--gold" data-bf-lock-wall-pick>上传壁纸</button>
                 <button type="button" class="ins-chip ins-chip--dim" data-bf-lock-wall-clear>清除壁纸</button>
               </div>
-              <div class="ins-url-replace">
-                <input type="url" class="ins-text-input" id="miya-bf-lock-wall-url" placeholder="图片链接" autocomplete="off" spellcheck="false">
-                <button type="button" class="ins-chip" data-bf-lock-wall-url-apply>应用链接</button>
-              </div>
+              <!-- 链接导入已移除：只保留本地上传。 -->
             </div>
 
             <div class="ins-atelier-splash-pill ins-atelier-splash-pill--card ins-atelier-splash-pill--lock">
@@ -486,11 +480,7 @@
           </div>
           <p class="ins-atelier-panel-desc is-custom-layout-only">自定义布局 · 全部应用图标</p>
           <div class="ins-tile-mosaic ins-tile-mosaic--pick is-custom-layout-only" id="miya-bf-custom-icon-grid"></div>
-          <div class="ins-url-replace ins-url-replace--panel">
-            <span class="ins-field-label" id="miya-bf-icon-url-label">链接替换</span>
-            <input type="url" class="ins-text-input" id="miya-bf-icon-url-input" placeholder="https://" autocomplete="off" spellcheck="false">
-            <button type="button" class="ins-chip" id="miya-bf-icon-url-apply">应用链接</button>
-          </div>
+          <!-- 图标「链接替换」已移除：图标只通过本地上传更换。 -->
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="object" hidden>
@@ -528,10 +518,7 @@
                 <button type="button" class="ins-chip ins-chip--gold" data-bf-font-apply disabled>应用字体</button>
                 <button type="button" class="ins-chip ins-chip--dim" data-bf-font-reset>恢复默认</button>
               </div>
-              <div class="ins-url-replace">
-                <input type="url" class="ins-text-input" id="miya-bf-font-url" placeholder="字体文件链接（.woff / .woff2 / .ttf / .otf）" autocomplete="off" spellcheck="false">
-                <button type="button" class="ins-chip" data-bf-font-url-apply>应用链接</button>
-              </div>
+              <!-- 字体「链接导入」已移除：只保留本地上传。 -->
               <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-font-name">支持 .woff / .woff2 / .ttf / .otf</p>
               <div class="ins-font-presets">
                 <span class="ins-field-label">已存预设</span>
@@ -1383,10 +1370,7 @@
             </button>
             <div class="mn-portrait-tools">
               <button type="button" class="mn-btn mn-btn--ghost" id="miya-ct-avatar-reset">恢复默认</button>
-              <div class="mn-url-row">
-                <input type="url" class="mn-input" id="miya-ct-avatar-url" placeholder="图片链接" autocomplete="off" spellcheck="false">
-                <button type="button" class="mn-btn" id="miya-ct-avatar-url-apply">应用</button>
-              </div>
+              <!-- 链接导入已移除：头像只通过点按上方头像区本地上传。 -->
             </div>
           </div>
           <div class="mn-fields">
@@ -3862,10 +3846,10 @@
   <script defer src="js1/jszip.min.js"></script>
   <script defer src="js2/miya-dialog.js?v=4"></script>
   <script defer src="js2/miya-theme.js?v=36"></script>
-  <script defer src="js2/miya-desk-custom-widget-templates.js?v=5"></script>
-  <script defer src="js2/miya-desk-custom.js?v=59"></script>
-  <script defer src="js2/miya-lockscreen.js?v=10"></script>
-  <script defer src="js1/miya-beautify-app.js?v=45"></script>
+  <script defer src="js2/miya-desk-custom-widget-templates.js?v=6"></script>
+  <script defer src="js2/miya-desk-custom.js?v=60"></script>
+  <script defer src="js2/miya-lockscreen.js?v=11"></script>
+  <script defer src="js1/miya-beautify-app.js?v=47"></script>
   <script defer src="js2/miya-msg-sound.js?v=3"></script>
   <script defer src="js2/miya-image-gen-dict.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=12"></script>
@@ -3876,7 +3860,7 @@
   <script defer src="js2/miya-worldbook-doc-import.js?v=5"></script>
   <script defer src="js1/miya-beautify-doc-import.js?v=3"></script>
   <script defer src="js2/miya-tavern-card-import.js?v=5"></script>
-  <script defer src="js1/miya-contacts-app.js?v=10"></script>
+  <script defer src="js1/miya-contacts-app.js?v=11"></script>
   <script defer src="js2/miya-worldbook-st.js?v=10"></script>
   <script defer src="js2/miya-worldbook-store.js?v=17"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=7"></script>
@@ -3911,7 +3895,7 @@
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
   <script defer src="js1/miya-chat-album-picker.js?v=1"></script>
   <script defer src="js1/miya-chat-group-ledger.js?v=2"></script>
-  <script defer src="js1/miya-chat-group-settings.js?v=21"></script>
+  <script defer src="js1/miya-chat-group-settings.js?v=22"></script>
   <script defer src="js1/miya-appointment-store.js?v=52"></script>
   <script defer src="js2/miya-offline-source-ref.js?v=9"></script>
   <script defer src="js2/miya-offline-beautify.js?v=17"></script>
@@ -3927,11 +3911,11 @@
   <script defer src="js1/miya-chat-lifelike.js?v=10"></script>
   <script defer src="js1/miya-chat-background.js?v=19"></script>
   <script defer src="js1/miya-beautify-source-ref.js?v=3"></script>
-  <script defer src="js1/miya-chat-beautify.js?v=22"></script>
+  <script defer src="js1/miya-chat-beautify.js?v=23"></script>
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=6"></script>
-  <script defer src="js1/miya-chat-me.js?v=27"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=65"></script>
+  <script defer src="js1/miya-chat-me.js?v=28"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=66"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=4"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=4"></script>

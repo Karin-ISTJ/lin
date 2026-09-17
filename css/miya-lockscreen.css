@@ -147,15 +147,20 @@ body.miya-lock-active {
 
 .miya-lockscreen__swipe {
   margin-top: auto;
-  /* 保持一块足够大的触控区，方便拇指按压；内部无内容，视觉上完全空 */
-  min-height: 132px;
+  /* 热区高度 = 上滑判定阈值（72px）+ 一点余量。
+     这块区域现在是"看不见的"（提示文字与横条已移除），
+     高度越大，就越容易在时钟页挡住拇指的自然落点、吃掉第一下点击。
+     收到 88px 后仍能舒服地完成上滑，同时把误吞点击的面积压到最小。 */
+  min-height: 88px;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
   cursor: pointer;
-  touch-action: none;                 /* 避免与页面滚动/下拉刷新抢手势 */
+  /* 保留 none：这块区域要独占上滑手势，不能把触摸交给页面滚动。
+     轻点不受影响 —— 点击的合成走的是 click 链路，与 touch-action 无关。 */
+  touch-action: none;
   -webkit-tap-highlight-color: transparent;
   transition: opacity 0.28s ease;
 }

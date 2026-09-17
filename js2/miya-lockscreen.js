@@ -269,7 +269,11 @@
         hint.style.transform = '';
         hint.style.opacity = '';
       }
-      if (startY - y > 72) requestUnlockFromClock();
+      /*
+       * 只有真的上滑了才解锁。阈值 72px 与热区高度（88px）配套：
+       * 热区略高于阈值，保证在热区内起手就能划够行程。
+       */
+      if ((startY - y) > 72) requestUnlockFromClock();
     }
 
     zone.addEventListener('touchstart', function (e) {
@@ -285,9 +289,18 @@
       onEnd(y);
     });
 
+    /*
+     * mousedown 不再无条件 preventDefault。
+     *
+     * 原先这里直接 preventDefault()，目的是压掉桌面端的文字选中/拖拽。
+     * 但在触摸屏上，浏览器会在 touchend 之后合成一套 mousedown/mouseup/click，
+     * 对合成事件调用 preventDefault() 会连带取消后续的 click，
+     * 让这一次轻点既不解锁、也不落到下面的元素上 —— 也就是"白按一下"。
+     * 现在不再阻断点击链路，只在多击时避免选中文字。
+     */
     zone.addEventListener('mousedown', function (e) {
       onStart(e.clientY);
-      e.preventDefault();
+      if (e.detail > 1) e.preventDefault();
     });
 
     window.addEventListener('mousemove', function (e) {
@@ -298,9 +311,18 @@
       if (dragging) onEnd(e.clientY);
     });
 
-    zone.addEventListener('click', function () {
-      if (phase === 'clock') requestUnlockFromClock();
-    });
+    /*
+     * 这里**故意不再**监听 click 解锁。
+     *
+     * 历史问题：本区域原先同时接受"轻点"和"上滑"两种解锁方式。
+     * 提示文字与横条移除后，这块区域变成 88px 高的隐形热区 —— 它就在
+     * 屏幕底部，正是拇指的自然落点。于是用户在时钟页想直接按数字键时，
+     * 第一下落在热区上被我吃掉（用于解锁），必须再按一下才输得进第一位，
+     * 表现为「按第一下没反应」。实测在时钟页点击空白处也会莫名跳进密码页。
+     *
+     * 现在只认上滑（见 onEnd 里的 72px 判定）：手势语义单一，且与
+     * 键盘区完全不重叠，时钟页底部不会再吞掉任何一次点击。
+     */
   }
 
   function bindKeypad() {

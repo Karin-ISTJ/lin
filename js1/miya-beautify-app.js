@@ -109,17 +109,6 @@
     setTimeout(function () { div.remove(); }, 2400);
   }
 
-  function promptUrl(label) {
-    if (!global.miyaDialog || !global.miyaDialog.prompt) {
-      return Promise.resolve(prompt(label || '输入图片 URL') || null);
-    }
-    return global.miyaDialog.prompt({
-      title: '图片链接',
-      message: label || '粘贴可访问的图片地址',
-      placeholder: 'https://'
-    });
-  }
-
   function buildCustomIconGrid() {
     var grid = $('miya-bf-custom-icon-grid');
     if (!grid) return;
@@ -216,18 +205,6 @@
     else if (gridKind === 'p4-widget') selectedP4WidgetKey = key;
     else selectedIconKey = key;
 
-    var label = ICON_LABELS[key] || key;
-    var labelMap = {
-      icon: 'miya-bf-icon-url-label',
-      'custom-icon': 'miya-bf-icon-url-label',
-      extra: 'miya-bf-extra-url-label',
-      'p2-icon': 'miya-bf-p2-icon-url-label',
-      'p2-widget': 'miya-bf-p2-widget-url-label',
-      'p3-icon': 'miya-bf-p3-icon-url-label',
-      'p3-widget': 'miya-bf-p3-widget-url-label',
-      'p4-icon': 'miya-bf-p4-icon-url-label',
-      'p4-widget': 'miya-bf-p4-widget-url-label'
-    };
     var gridMap = {
       icon: 'miya-bf-icon-grid',
       'custom-icon': 'miya-bf-custom-icon-grid',
@@ -239,8 +216,7 @@
       'p4-icon': 'miya-bf-p4-icon-grid',
       'p4-widget': 'miya-bf-p4-widget-grid'
     };
-    var labelEl = $(labelMap[gridKind] || labelMap.icon);
-    if (labelEl) labelEl.textContent = '链接替换 · ' + label;
+    /* 链接导入已移除：这里只保留网格选中态，不再写「链接替换 · xxx」提示。 */
     var grid = $(gridMap[gridKind] || gridMap.icon);
     if (!grid) return;
     grid.querySelectorAll('.ins-icon-pick').forEach(function (tile) {
@@ -265,26 +241,6 @@
     if (!file) return false;
     var name = String(file.name || '').toLowerCase();
     return /\.(woff2?|ttf|otf)$/.test(name);
-  }
-
-  function isFontUrl(url) {
-    try {
-      var path = decodeURIComponent(String(url || '').split('?')[0].split('#')[0]).toLowerCase();
-      return /\.(woff2?|ttf|otf)$/.test(path);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function fontNameFromInputUrl(url) {
-    if (global.miyaFontNameFromUrl) return global.miyaFontNameFromUrl(url);
-    try {
-      var path = decodeURIComponent(String(url || '').split('?')[0].split('#')[0]);
-      var seg = path.split('/').pop() || '';
-      return seg.replace(/\.[^.]+$/, '') || 'Custom';
-    } catch (e) {
-      return 'Custom';
-    }
   }
 
   function handleFontStored(res, options) {
@@ -632,7 +588,7 @@
           ? '当前字体 · ' + activeFont.name
           : '待应用 · ' + activeFont.name + '（点击「应用字体」生效）';
       } else {
-        fontHint.textContent = '支持本地上传或粘贴链接 · .woff / .woff2 / .ttf / .otf · 全局生效';
+        fontHint.textContent = '支持本地上传 · .woff / .woff2 / .ttf / .otf · 全局生效';
       }
     }
     var previewIn = $('miya-bf-font-preview-input');
@@ -806,32 +762,8 @@
         else if (lockWallInp) lockWallInp.click();
         return;
       }
-      if (e.target.closest('[data-bf-lock-wall-url-apply]')) {
-        var lockUrl = ($('miya-bf-lock-wall-url') || {}).value ? $('miya-bf-lock-wall-url').value.trim() : '';
-        if (!lockUrl) { toast('请填写图片链接'); return; }
-        global.miyaStoreImageUrl(lockUrl).then(function (id) {
-          return global.miyaSetLockWallpaper(id);
-        }).then(function () {
-          global.miyaSetLockSettings({ wallpaperEnabled: true });
-          refreshLockWallPreview();
-          syncLockUi();
-          if (global.miyaLockscreen && global.miyaLockscreen.refreshWallpaper) {
-            global.miyaLockscreen.refreshWallpaper();
-          }
-          toast('锁屏壁纸已更新');
-        }).catch(function () {
-          global.miyaSetLockWallpaper(lockUrl).then(function () {
-            global.miyaSetLockSettings({ wallpaperEnabled: true });
-            refreshLockWallPreview();
-            syncLockUi();
-            toast('锁屏壁纸已更新');
-          });
-        });
-        return;
-      }
       if (e.target.closest('[data-bf-lock-wall-clear]')) {
         global.miyaSetLockWallpaper(null).then(function () {
-          if ($('miya-bf-lock-wall-url')) $('miya-bf-lock-wall-url').value = '';
           refreshLockWallPreview();
           syncLockUi();
           if (global.miyaLockscreen && global.miyaLockscreen.refreshWallpaper) {
@@ -849,26 +781,10 @@
         disablePasscode();
         return;
       }
-      if (e.target.closest('[data-bf-wall-url-apply]')) {
-        var wallUrl = ($('miya-bf-wall-url') || {}).value ? $('miya-bf-wall-url').value.trim() : '';
-        if (!wallUrl) { toast('请填写图片链接'); return; }
-        var setWall = global.miyaCustomSetWallpaper;
-        global.miyaStoreImageUrl(wallUrl).then(function (id) {
-          return setWall(id);
-        }).then(function () { refreshWallPreview(); toast('壁纸已更新'); })
-          .catch(function () {
-            setWall(wallUrl).then(function () {
-              refreshWallPreview();
-              toast('壁纸已更新');
-            });
-          });
-        return;
-      }
       if (e.target.closest('[data-bf-wall-clear]')) {
         var clearWall = global.miyaCustomClearWallpaper;
         clearWall().then(function () {
           refreshWallPreview();
-          if ($('miya-bf-wall-url')) $('miya-bf-wall-url').value = '';
           toast('已恢复默认壁纸');
         });
         return;
@@ -896,30 +812,6 @@
       if (e.target.closest('[data-bf-font-upload]')) {
         if (global.miyaTriggerFileInput) global.miyaTriggerFileInput($('miya-bf-file-font'));
         else $('miya-bf-file-font').click();
-        return;
-      }
-      if (e.target.closest('[data-bf-font-url-apply]')) {
-        var fontUrl = ($('miya-bf-font-url') || {}).value ? $('miya-bf-font-url').value.trim() : '';
-        if (!fontUrl) { toast('请填写字体链接'); return; }
-        if (!isFontUrl(fontUrl)) {
-          toast('链接须为 .woff / .woff2 / .ttf / .otf 字体文件');
-          return;
-        }
-        if (!global.miyaStoreFontUrl) {
-          toast('字体链接功能不可用');
-          return;
-        }
-        global.miyaStoreFontUrl(fontUrl).then(function (res) {
-          if ($('miya-bf-font-url')) $('miya-bf-font-url').value = '';
-          return handleFontStored(res, { suppressToast: true });
-        }).catch(function () {
-          return handleFontStored({
-            id: fontUrl,
-            name: fontNameFromInputUrl(fontUrl)
-          }, { suppressToast: true });
-        }).catch(function () {
-          toast('字体加载失败，请检查链接或跨域设置');
-        });
         return;
       }
       if (e.target.closest('[data-bf-font-save-preset]')) {
@@ -973,7 +865,6 @@
       }
       if (e.target.closest('[data-bf-font-reset]')) {
         pendingFont = null;
-        if ($('miya-bf-font-url')) $('miya-bf-font-url').value = '';
         global.miyaSetTheme({ fontId: null, fontName: null });
         var resetChain = global.miyaApplyFont ? global.miyaApplyFont() : global.miyaApplyTheme();
         resetChain.then(function () {
@@ -1244,41 +1135,6 @@
       })
         .catch(function () { toast('上传失败'); });
     });
-
-    function bindUrlApply(btnId, inputId, getKey) {
-      var btn = $(btnId);
-      if (!btn) return;
-      btn.addEventListener('click', function () {
-        var key = getKey();
-        if (!key) { toast('请先点击要替换的图标'); return; }
-        var inputEl = $(inputId);
-        var url = inputEl ? String(inputEl.value || '').trim() : '';
-        if (!url) { toast('请填写图片链接'); return; }
-        global.miyaStoreImageUrl(url).then(function (id) {
-          return applyMediaKey(key, id);
-        }).then(function () {
-          /* B14：布局恒为 custom（原 if/else 已折叠）。 */
-          global.miyaApplyCustomDesk && global.miyaApplyCustomDesk();
-          refreshIconPreviews();
-          toast('已更新');
-        }).catch(function () {
-          applyMediaKey(key, url).then(function () {
-            global.miyaApplyTheme && global.miyaApplyTheme();
-            refreshIconPreviews();
-            toast('已更新');
-          });
-        });
-      });
-    }
-
-    bindUrlApply('miya-bf-icon-url-apply', 'miya-bf-icon-url-input', function () { return selectedIconKey; });
-    bindUrlApply('miya-bf-extra-url-apply', 'miya-bf-extra-url-input', function () { return selectedExtraKey; });
-    bindUrlApply('miya-bf-p2-icon-url-apply', 'miya-bf-p2-icon-url-input', function () { return selectedP2IconKey; });
-    bindUrlApply('miya-bf-p2-widget-url-apply', 'miya-bf-p2-widget-url-input', function () { return selectedP2WidgetKey; });
-    bindUrlApply('miya-bf-p3-icon-url-apply', 'miya-bf-p3-icon-url-input', function () { return selectedP3IconKey; });
-    bindUrlApply('miya-bf-p3-widget-url-apply', 'miya-bf-p3-widget-url-input', function () { return selectedP3WidgetKey; });
-    bindUrlApply('miya-bf-p4-icon-url-apply', 'miya-bf-p4-icon-url-input', function () { return selectedP4IconKey; });
-    bindUrlApply('miya-bf-p4-widget-url-apply', 'miya-bf-p4-widget-url-input', function () { return selectedP4WidgetKey; });
 
     var fontFileInp = $('miya-bf-file-font');
     if (fontFileInp) {

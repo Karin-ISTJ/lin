@@ -55,7 +55,7 @@
 }
 
 .miya-beautify-app .ins-atelier-rail {
-  border-right-color: rgba(0, 0, 0, 0.08);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(245, 245, 245, 0.95) 100%);
 }
 
@@ -177,10 +177,12 @@ body.miya-app-open .phone {
 }
 
 /* ═══════════════ 美化 · 表层 ═══════════════ */
+/* 顶部导航 + 内容两行。原先左侧竖排导航占掉 72px 横向空间，
+   导致内容区仅 300px、标签文字被迫竖排；改为顶部横排后内容区满宽。 */
 .ins-atelier {
   display: grid;
-  grid-template-columns: 58px 1fr;
-  grid-template-rows: 1fr;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
   overflow: hidden;
 }
 
@@ -233,55 +235,56 @@ body.miya-app-open .phone {
 .ins-atelier-line--1 { width: 140%; top: 22%; left: -20%; }
 .ins-atelier-line--2 { width: 120%; bottom: 30%; right: -15%; opacity: 0.5; }
 
-.ins-atelier-stamp {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 14px);
-  right: 18px;
-  font-size: 9px;
-  letter-spacing: 0.35em;
-  color: var(--ins-ink-dim);
-  writing-mode: vertical-rl;
-}
-
+/* 顶部横排导航栏。5 个标签平分宽度，图标与文字同行。
+   侧边栏时代这里靠右竖边框与左侧对齐，现改为底部横边框与内容分隔。 */
 .ins-atelier-rail {
   position: relative;
   z-index: 2;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: calc(env(safe-area-inset-top, 0px) + 16px) 0 calc(20px + env(safe-area-inset-bottom, 0px));
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 2px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 8px;
+  border-right: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(245, 245, 245, 0.95) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
 
+/* 横排后每个标签吃掉等分宽度；min-width:0 允许长字压下不撑破容器。 */
 .ins-atelier-tab {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  width: 44px;
-  padding: 10px 4px;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  padding: 8px 2px;
   border: none;
   background: transparent;
   color: var(--ins-ink-dim);
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: 10px;
   transition: background 0.25s ease, color 0.25s ease;
 }
 
 .ins-atelier-tab-glyph {
   font-size: 11px;
+  line-height: 1;
   color: var(--ins-rose);
   opacity: 0.7;
 }
 
+/* 文字回归横排，不再一字一行。 */
 .ins-atelier-tab-txt {
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  writing-mode: vertical-rl;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  writing-mode: horizontal-tb;
+  white-space: nowrap;
 }
 
 .ins-atelier-tab.is-active {
@@ -295,13 +298,14 @@ body.miya-app-open .phone {
   color: var(--ins-gold);
 }
 
+/* 顶部导航后左右内边距对称；顶部留白给「退出」按钮让位（按钮 position:absolute 仍浮在右上）。 */
 .ins-atelier-stage {
   position: relative;
   z-index: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: calc(env(safe-area-inset-top, 0px) + 12px) 18px calc(24px + env(safe-area-inset-bottom, 0px)) 14px;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 /* 锁屏壁纸预览框（模拟手机锁屏：大时间 + 小日期）。
@@ -501,22 +505,7 @@ body.miya-app-open .phone {
   text-align: center;
 }
 
-/* 侧栏内的链接替换：窄栏下改为上下两行，避免输入框被压扁 */
-.ins-atelier-showcase-side .ins-url-replace {
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.ins-atelier-showcase-side .ins-url-replace .ins-chip {
-  width: 100%;
-}
-
-@media (min-width: 360px) {
-  .ins-atelier-showcase-side .ins-url-replace {
-    grid-template-columns: 1fr;
-  }
-}
+/* 侧栏内已无链接替换入口（改为纯本地上传），相关栅格样式随之移除。 */
 
 @media (min-width: 360px) {
   .ins-atelier-showcase {
@@ -1576,29 +1565,6 @@ body.miya-app-open .phone {
 
 .ins-atelier-frame-screen--pick {
   cursor: pointer;
-}
-
-.ins-url-replace {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  margin-top: 12px;
-  align-items: center;
-}
-
-.ins-url-replace--panel {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.ins-url-replace .ins-field-label {
-  grid-column: 1 / -1;
-  margin: 0 0 4px;
-}
-
-.ins-url-replace .ins-text-input {
-  min-width: 0;
 }
 
 .ins-meter-row {

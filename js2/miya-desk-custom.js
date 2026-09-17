@@ -1605,7 +1605,7 @@
           '</button>' +
           '<div class="desk-custom-wg-editor__img-actions">' +
             '<button type="button" class="ins-chip ins-chip--gold" data-wg-ed-upload="' + field.key + '">上传</button>' +
-            '<button type="button" class="ins-chip" data-wg-ed-url="' + field.key + '">链接</button>' +
+            /* 链接填图已移除：图片只通过本地上传或点按图区更换。 */
             '<button type="button" class="ins-chip ins-chip--dim" data-wg-ed-clear-img="' + field.key + '">清除</button>' +
           '</div>';
         row.appendChild(imgWrap);
@@ -1824,32 +1824,6 @@
           if (global.miyaTriggerFileInput) global.miyaTriggerFileInput(fileInp);
           else fileInp.click();
         }
-        return;
-      }
-      var urlBtn = e.target.closest('[data-wg-ed-url]');
-      if (urlBtn) {
-        var urlKey = urlBtn.getAttribute('data-wg-ed-url');
-        var promptFn = global.miyaDialog && global.miyaDialog.prompt
-          ? global.miyaDialog.prompt({ title: '图片链接', message: '粘贴可访问的图片地址', placeholder: 'https://' })
-          : Promise.resolve(prompt('图片链接') || '');
-        promptFn.then(function (val) {
-          if (!val || val === false) return;
-          var url = String(val).trim();
-          if (!url || !wgEditorState.draft) return;
-          var storeUrl = global.miyaStoreImageUrl;
-          if (storeUrl) {
-            storeUrl(url).then(function (id) {
-              wgEditorState.draft[urlKey] = id;
-              refreshWgEditorImagePreviews();
-            }).catch(function () {
-              wgEditorState.draft[urlKey] = url;
-              refreshWgEditorImagePreviews();
-            });
-          } else {
-            wgEditorState.draft[urlKey] = url;
-            refreshWgEditorImagePreviews();
-          }
-        });
         return;
       }
       var choiceBtn = e.target.closest('[data-wg-ed-choice]');

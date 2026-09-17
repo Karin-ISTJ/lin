@@ -349,7 +349,7 @@
     return formCard(
       toggleRow('mq-set-ig-en', '为此联系人开启生图', '聊天与朋友圈中的文字图将生成真实图片', !!ig.enabled) +
       fieldBlock('专属生图提示词', '可留空', '<textarea class="ins-text-input ins-text-input--area" data-mq-set-ig-prompt rows="3" placeholder="例如：日系插画、柔和色调、角色外貌特征…">' + esc(ig.customPrompt || '') + '</textarea>') +
-      mediaPickBlock('外观参考图', 'data-mq-set-ig-ref-preview', 'data-mq-set-ig-ref-pick', 'data-mq-set-ig-ref-reset', 'data-mq-set-ig-ref-url-input', 'data-mq-set-ig-ref-url-apply', refNote)
+      mediaPickBlock('外观参考图', 'data-mq-set-ig-ref-preview', 'data-mq-set-ig-ref-pick', 'data-mq-set-ig-ref-reset', refNote)
     );
   }
 
@@ -376,17 +376,14 @@
     '</label>';
   }
 
-  function mediaPickBlock(label, previewData, pickData, resetData, urlInputData, urlApplyData, sub) {
+  /* 链接导入已移除：图片只通过点按预览区本地上传，此处不再渲染链接输入行。 */
+  function mediaPickBlock(label, previewData, pickData, resetData, sub) {
     return fieldBlock(label, sub || '',
       '<button type="button" class="mi-bg-pick" ' + pickData + '>' +
         '<div class="mi-bg-stage mi-bg-stage--sm" ' + previewData + '><span class="mi-bg-stage__placeholder">+</span></div>' +
       '</button>' +
       '<div class="mi-img-pick-tools">' +
         '<button type="button" class="st-foot-btn" ' + resetData + '>恢复默认</button>' +
-        '<div class="ins-inline-field">' +
-          '<input type="url" class="ins-text-input" ' + urlInputData + ' placeholder="图片链接" autocomplete="off">' +
-          '<button type="button" class="ins-icon-btn" ' + urlApplyData + ' title="应用">✓</button>' +
-        '</div>' +
       '</div>'
     );
   }
@@ -404,7 +401,8 @@
     return esc(s).replace(/[\r\n\u2028\u2029]/g, '');
   }
 
-  function compactAvatarPickCol(label, previewData, pickData, resetData, urlInputData, urlApplyData) {
+  /* 链接导入已移除：头像只通过点按预览区本地上传。 */
+  function compactAvatarPickCol(label, previewData, pickData, resetData) {
     return '<div class="mi-ava-row-compact__col">' +
       '<span class="mi-ava-row-compact__label">' + esc(label) + '</span>' +
       '<button type="button" class="mi-bg-pick mi-bg-pick--compact" ' + pickData + '>' +
@@ -412,10 +410,6 @@
       '</button>' +
       '<div class="mi-ava-row-compact__tools">' +
         '<button type="button" class="st-foot-btn st-foot-btn--xs" ' + resetData + '>默认</button>' +
-        '<div class="ins-inline-field ins-inline-field--compact">' +
-          '<input type="url" class="ins-text-input" ' + urlInputData + ' placeholder="链接" autocomplete="off">' +
-          '<button type="button" class="ins-icon-btn" ' + urlApplyData + ' title="应用">✓</button>' +
-        '</div>' +
       '</div>' +
     '</div>';
   }
@@ -1246,15 +1240,11 @@
             compactAvatarPickCol('Ta',
               'data-mq-set-dava-contact-preview',
               'data-mq-set-dava-contact-pick',
-              'data-mq-set-dava-contact-reset',
-              'data-mq-set-dava-contact-url-input',
-              'data-mq-set-dava-contact-url-apply') +
+              'data-mq-set-dava-contact-reset') +
             compactAvatarPickCol('我',
               'data-mq-set-dava-profile-preview',
               'data-mq-set-dava-profile-pick',
-              'data-mq-set-dava-profile-reset',
-              'data-mq-set-dava-profile-url-input',
-              'data-mq-set-dava-profile-url-apply') +
+              'data-mq-set-dava-profile-reset') +
           '</div>' +
           toggleRow('mq-set-dava-char', 'Ta 可自主换头像', '喜欢你的照片时可换成聊天头像；Ta 知道自己当前头像内容', !!dynAv.charEnabled) +
           toggleRow('mq-set-dava-user', 'Ta 可给你换头像', '可换成你相册里已同步的照片，仅聊天窗口', !!dynAv.userEnabled)
@@ -1284,9 +1274,7 @@
           mediaPickBlock('聊天背景',
             'data-mq-set-bg-preview',
             'data-mq-set-bg-pick',
-            'data-mq-set-bg-reset',
-            'data-mq-set-bg-url-input',
-            'data-mq-set-bg-url-apply') +
+            'data-mq-set-bg-reset') +
           renderChatWallpaperLibrary(c.settings.chatBeautify || {})
         )) +
         subBlock('聊天样式', 'CSS 主题与预设', formCard(
@@ -2275,22 +2263,7 @@
         return;
       }
 
-      if (e.target.closest('[data-mq-set-bg-url-apply]')) {
-        var bgUrlIn = pageEl.querySelector('[data-mq-set-bg-url-input]');
-        var bgUrl = bgUrlIn ? String(bgUrlIn.value || '').trim() : '';
-        if (!bgUrl) { toast('请填写图片链接'); return; }
-        store.saveChatSettings(state.chatId, {
-          chatBeautify: Object.assign({}, store.getChatSettings(state.chatId).chatBeautify, {
-            wallpaperMode: 'url', wallpaperUrl: bgUrl, wallpaperId: null
-          })
-        }).then(function () {
-          toast('背景已更新');
-          if (global.MiyaChatBeautify) global.MiyaChatBeautify.applyForChat(state.chatId);
-          markWallpaperLibActive(null);
-          scheduleRender({ fromStore: true, skipContextUsage: true });
-        });
-        return;
-      }
+      /* 链接导入已移除：聊天背景只通过点按预览区本地上传。 */
 
       function ensureDisplayAvatarFileInput(kind) {
         var sel = '[data-mq-set-dava-' + kind + '-file]';
@@ -2329,23 +2302,12 @@
         });
       }
 
-      function handleDisplayAvatarUrlApply(kind) {
-        var urlIn = pageEl.querySelector('[data-mq-set-dava-' + kind + '-url-input]');
-        var url = urlIn ? String(urlIn.value || '').trim() : '';
-        if (!url) { toast('请填写图片链接'); return; }
-        mergeDisplayAvatars(state.chatId, kind, { url: url, blobId: null }).then(function () {
-          toast(kind === 'contact' ? 'Ta 的头像已更新' : '我的头像已更新');
-          render();
-          refreshOpenChatRoom();
-        });
-      }
+      /* 链接导入已移除：聊天头像只通过点按预览区本地上传。 */
 
       if (e.target.closest('[data-mq-set-dava-contact-pick]')) { handleDisplayAvatarPick('contact'); return; }
       if (e.target.closest('[data-mq-set-dava-profile-pick]')) { handleDisplayAvatarPick('profile'); return; }
       if (e.target.closest('[data-mq-set-dava-contact-reset]')) { handleDisplayAvatarReset('contact'); return; }
       if (e.target.closest('[data-mq-set-dava-profile-reset]')) { handleDisplayAvatarReset('profile'); return; }
-      if (e.target.closest('[data-mq-set-dava-contact-url-apply]')) { handleDisplayAvatarUrlApply('contact'); return; }
-      if (e.target.closest('[data-mq-set-dava-profile-url-apply]')) { handleDisplayAvatarUrlApply('profile'); return; }
 
       function patchImageGenRef(patch) {
         var cur = store.getChatSettings(state.chatId) || {};
@@ -2387,16 +2349,7 @@
         });
         return;
       }
-      if (e.target.closest('[data-mq-set-ig-ref-url-apply]')) {
-        var igUrlIn = pageEl.querySelector('[data-mq-set-ig-ref-url-input]');
-        var igUrl = igUrlIn ? String(igUrlIn.value || '').trim() : '';
-        if (!igUrl) { toast('请填写图片链接'); return; }
-        patchImageGenRef({ refUrl: igUrl, refBlobId: null }).then(function () {
-          toast('参考图已更新');
-          render();
-        });
-        return;
-      }
+      /* 链接导入已移除：外观参考图只通过点按预览区本地上传。 */
 
       if (e.target.closest('[data-mq-set-ctx-toggle]')) {
         toggleContextUsageDetail(false);

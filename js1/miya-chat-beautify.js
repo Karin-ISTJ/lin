@@ -761,20 +761,6 @@
     };
   }
 
-  function hydrateWallPreview(root, bf) {
-    var frame = root && root.querySelector('[data-mq-bf-wall-preview]');
-    if (!frame) return;
-    resolveWallpaperUrl(bf).then(function (url) {
-      if (url) {
-        frame.style.backgroundImage = 'url("' + String(url).replace(/"/g, '%22') + '")';
-        frame.classList.add('has-image');
-      } else {
-        frame.style.backgroundImage = '';
-        frame.classList.remove('has-image');
-      }
-    });
-  }
-
   function bindAtelierRoot(root, chatId, onSaved) {
     root = resolveBeautifyRoot(root);
     if (!root) return;
@@ -910,71 +896,9 @@
         });
         return;
       }
-      if (e.target.closest('[data-mq-bf-wall-local]')) {
-        var inp = root.querySelector('[data-mq-bf-wall-file]');
-        if (inp && global.miyaTriggerFileInput) global.miyaTriggerFileInput(inp);
-        else if (inp) inp.click();
-        return;
-      }
-      if (e.target.closest('[data-mq-bf-wall-clear]')) {
-        var patch = readAtelierFromRoot(root);
-        patch.wallpaperMode = 'none';
-        patch.wallpaperId = null;
-        patch.wallpaperUrl = '';
-        var chain = chatId
-          ? saveChatBeautify(chatId, patch)
-          : Promise.resolve(normalizeBeautify(patch));
-        chain.then(function (bf) {
-          hydrateWallPreview(root, bf);
-          toast('壁纸已清除');
-          if (onSaved) onSaved(bf);
-        });
-        return;
-      }
-      if (e.target.closest('[data-mq-bf-wall-url]')) {
-        var promptFn = global.miyaDialog && global.miyaDialog.prompt
-          ? global.miyaDialog.prompt.bind(global.miyaDialog)
-          : function (o) { return Promise.resolve(prompt(o.message || 'URL')); };
-        promptFn({ title: '壁纸链接', message: '粘贴可访问的图片地址', placeholder: 'https://' }).then(function (url) {
-          if (!url) return;
-          var p = readAtelierFromRoot(root);
-          p.wallpaperMode = 'url';
-          p.wallpaperUrl = String(url).trim();
-          p.wallpaperId = null;
-          var chain2 = chatId ? saveChatBeautify(chatId, p) : Promise.resolve(normalizeBeautify(p));
-          chain2.then(function (bf) {
-            hydrateWallPreview(root, bf);
-            toast('壁纸已更新');
-            if (onSaved) onSaved(bf);
-          });
-        });
-      }
-    });
-
-    var fileInp = root.querySelector('[data-mq-bf-wall-file]');
-    if (!fileInp) {
-      fileInp = document.createElement('input');
-      fileInp.type = 'file';
-      fileInp.accept = 'image/*';
-      fileInp.hidden = true;
-      fileInp.setAttribute('data-mq-bf-wall-file', '');
-      root.appendChild(fileInp);
-    }
-    fileInp.addEventListener('change', function (ev) {
-      var file = ev.target.files && ev.target.files[0];
-      ev.target.value = '';
-      if (!file || !global.miyaChatStore) return;
-      global.miyaChatStore.storeChatMedia(file, 'wall').then(function (blobId) {
-        var p = readAtelierFromRoot(root);
-        p.wallpaperMode = 'idb';
-        p.wallpaperId = blobId;
-        p.wallpaperUrl = '';
-        return chatId ? saveChatBeautify(chatId, p) : Promise.resolve(normalizeBeautify(p));
-      }).then(function (bf) {
-        hydrateWallPreview(root, bf);
-        toast('壁纸已保存');
-        if (onSaved) onSaved(bf);
-      }).catch(function () { toast('上传失败'); });
+      /* 此面板现已只保留 CSS 编辑与预设库。
+         原先的壁纸工具（本地上传 / 链接 / 清除）在这个版本已无对应 UI，
+         壁纸统一走「我的 → 壁纸管理」本地上传，再在「聊天背景」里选用。 */
     });
 
     var previewTimer = null;
@@ -1005,7 +929,6 @@
     readAtelierFromRoot: readAtelierFromRoot,
     buildAtelierPanelHtml: buildAtelierPanelHtml,
     bindAtelierRoot: bindAtelierRoot,
-    hydrateWallPreview: hydrateWallPreview,
     copySource: copySource,
     downloadSource: downloadSource,
     buildSourceReferenceHtml: buildSourceReferenceHtml,
