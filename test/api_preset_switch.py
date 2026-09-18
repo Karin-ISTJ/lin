@@ -326,22 +326,60 @@ async def main():
         await pg2.close()
 
         # ══════════════════════════════════════════════════════════
-        print("\n【6】点「保存」不得清空预设列表（用户反馈的新症状）")
+        print("\n【6】点顶部导航栏「保存」不得清空预设列表（用户实测症状）")
         await enter(pg)
+        # 先把选中项确定成线路B，再观察顶部保存的影响
+        await pg.select_option("#mq-api-preset-pick", "线路B")
+        await pg.wait_for_timeout(1200)
         opts_before = await pg.evaluate(
             "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
-        await save(pg)
-        await pg.wait_for_timeout(1200)
+        check("保存前预设列表完整", opts_before == ["", "线路A", "线路B"], str(opts_before))
+        pick_before = await pg.evaluate(
+            "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
+        check("保存前下拉有选中项", pick_before == "线路B", str(pick_before))
+
+        # ★ 关键：点的是**顶部导航栏**那个「保存」（data-mq-set-save），
+        #   不是子视图表单底部那个（data-mq-set-sub-save）。
+        #   它会走 saveForm() → scheduleRender({fromStore:true}) → render()，
+        #   而 render() 的子视图分支只换 innerHTML、不做 hydrate。
+        await pg.evaluate(
+            "() => { var b=document.querySelector('#mq-set-page [data-mq-set-save]'); if (b) b.click(); }")
+        await pg.wait_for_timeout(1600)
         opts_after = await pg.evaluate(
             "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
-        check("保存前预设列表完整", opts_before == ["", "线路A", "线路B"], str(opts_before))
-        check("★ 点保存后预设列表仍在（不再被清空）",
+        check("★ 点顶部「保存」后预设列表仍在（不再被清空）",
               opts_after == ["", "线路A", "线路B"], str(opts_after))
+        pick_after = await pg.evaluate(
+            "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
+        check("★ 选中项不被重置", pick_after == "线路B", str(pick_after))
+
         cached = await pg.evaluate(
             "() => (window.miyaApiPresets.getCached()||[]).map(x=>x.name)")
         check("★ 内存里的预设也没丢", cached == ["线路A", "线路B"], str(cached))
 
-        print("\n【7】全程无 JS 报错")
+        # 返回再进来一遍，确认没有累积损坏
+        await back(pg)
+        await enter(pg)
+        opts_re = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        check("★ 返回重进后列表依然完整", opts_re == ["", "线路A", "线路B"], str(opts_re))
+
+        # ══════════════════════════════════════════════════════════
+        print("\n【7】子视图表单底部「保存」同样不得清空预设列表")
+        pick7 = await pg.evaluate(
+            "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
+        if pick7 != "线路B":
+            await pg.select_option("#mq-api-preset-pick", "线路B")
+            await pg.wait_for_timeout(1000)
+        await save(pg)
+        opts7 = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        check("★ 点子视图「保存」后列表仍在", opts7 == ["", "线路A", "线路B"], str(opts7))
+        pick7b = await pg.evaluate(
+            "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
+        check("★ 选中项仍是线路B", pick7b == "线路B", str(pick7b))
+
+        print("\n【8】全程无 JS 报错")
         check("无 pageerror", not errs, str(errs[:3]))
 
         await b.close()

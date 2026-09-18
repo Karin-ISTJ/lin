@@ -6,7 +6,7 @@
 
   var store = null;
   var pageEl = null;
-  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null };
+  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null, apiPresetPick: '' };
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
@@ -2420,7 +2420,16 @@
     var names = (list || []).map(function (p) {
       return p && p.name ? String(p.name) : '';
     }).filter(Boolean);
-    var current = pick.value;
+    /*
+     * 「当前选中哪一条」有两个来源，按可信度排序：
+     *   1. 下拉此刻的 value —— 用户刚手动选的，最新；
+     *   2. state.apiPresetPick —— 上一次的选中值，跨重绘留存。
+     *
+     * 为什么需要第 2 个：重绘会换出一个全新的 <select>，它的 value
+     * 天然是空的。只认第 1 个的话，任何一次重绘都会把选中项抹成
+     * 「选择已存预设」—— 用户就会觉得「我刚选的预设没了，还得重进」。
+     */
+    var current = pick.value || state.apiPresetPick || '';
     pick.innerHTML = '<option value="">选择已存预设</option>' +
       names.map(function (n) {
         return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
@@ -2607,6 +2616,8 @@
       applyApiPresetToForm(p);
       syncTempLabel('#mq-api-temp', '#mq-api-temp-lbl');
       syncTempLabel('#mq-api2-temp', '#mq-api2-temp-lbl');
+      /* 选中项也记进 state：重绘后 <select> 是新的，靠它回填 */
+      state.apiPresetPick = name;
       var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
       if (nameEl) nameEl.value = name;
       toast('已载入：' + name);
@@ -2645,6 +2656,7 @@
     }
     mod.upsert(name, snap).then(function (list) {
       refreshApiPresetOptions(list);
+      state.apiPresetPick = name;
       var pick = presetPickEl();
       if (pick) pick.value = name;
       toast('预设已保存');
@@ -2662,6 +2674,7 @@
     }
     if (!name) { toast('请先选择要删除的预设'); return; }
     mod.remove(name).then(function (list) {
+      state.apiPresetPick = '';       /* 删掉的这条不该再被回填 */
       refreshApiPresetOptions(list);
       var p = presetPickEl();
       if (p) p.value = '';
@@ -3103,6 +3116,25 @@
       if (titleEl) titleEl.textContent = SUB_VIEW_TITLES[state.subView] || '聊天设置';
       body.innerHTML = renderSubView(state.subView);
       body.scrollTop = 0;
+      /*
+       * ★ 重绘之后必须补一次 hydrate。
+       *
+       * renderSubView() 只吐出**静态骨架**：预设下拉此刻只有一条占位项
+       * （<option value="">选择已存预设</option>），真正的选项要靠
+       * hydrateApiPresets() 异步从缓存/磁盘读出来再填。
+       *
+       * 之前这里 `return` 得太干脆，没有补 hydrate —— 于是任何一次
+       * 「子视图还开着时触发的重绘」都会把下拉打回空骨架，而且**不会
+       * 再长回来**。最容易踩中的入口是**顶部导航栏那个「保存」**：
+       *   saveForm() → scheduleRender({fromStore:true}) → render() → 到这里
+       * 用户看到的就是「点保存，已存预设全没了」，可磁盘里数据完好，
+       * 所以「重进（走 openSubView → scheduleSubViewHydrate）又正常」。
+       *
+       * 直接同步调 applySubViewHydrate 即可：它是幂等的，内部各自
+       * 校验节点是否存在。此处不排 rAF —— 重绘刚在本帧同步完成，
+       * 节点就是新的那一批，晚一帧反而多一次闪空。
+       */
+      applySubViewHydrate(state.subView);
       return;
     }
     var navTitle = pageEl.querySelector('.st-navtitle');
@@ -3167,6 +3199,8 @@
     /* 每次从聊天页进来都回到列表首页，不残留上次停在的 API 子页 ——
        否则用户点「聊天设置」会莫名其妙直接看到某个 API 表单。 */
     state.subView = null;
+    /* 同理丢弃预设下拉记忆，重新从当前生效的线路出发 */
+    state.apiPresetPick = '';
     ensurePage();
     pageEl.hidden = false;
     pageEl.classList.add('is-open');
@@ -3219,6 +3253,9 @@
     state.chatId = null;
     state.formDraft = null;
     state.subView = null;
+    /* 关掉设置页就丢弃预设下拉的记忆 —— 下次进来从当前线路重新认，
+       避免把上一个会话选中的预设名带到另一个会话上。 */
+    state.apiPresetPick = '';
     if (pageEl) {
       pageEl.classList.remove('is-open');
       pageEl.hidden = true;
@@ -3671,6 +3708,8 @@
 
       /* 对话 API 预设：选中即载入，与生图预设的「选中即读」一致 */
       if (e.target.matches('#mq-api-preset-pick')) {
+        /* 记下选中项，供重绘后回填（重绘会换出全新的 <select>，value 是空的） */
+        state.apiPresetPick = String(e.target.value || '');
         loadApiPresetFromPick();
         return;
       }
