@@ -1,5 +1,5 @@
 # Karin
-
+1
 浏览器端纯静态前端项目。无构建步骤，无后端，打开即用。
 
 数据保存在浏览器本地（`localStorage` / IndexedDB / OPFS 等）。
