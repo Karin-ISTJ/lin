@@ -2334,6 +2334,18 @@
           '<button type="button" class="ins-icon-btn" id="mq-api-preset-save" title="保存预设">✓</button>' +
         '</div>' +
         '<p class="st-form-hint">保存主线路与副线路的全部字段；同名预设自动覆盖。选中下拉里的预设即填入表单，点「保存」后生效。</p>' +
+        /*
+         * 导出 / 导入。预设是用户一行行手打出来的线路配置，但此前只活在
+         * 这台设备的浏览器存储里 —— 清一次站点数据就全没了。
+         * 「导出全部预设」把整套线路（含密钥）落成一个 JSON 文件，
+         * 「导入预设」在换设备 / 换浏览器时读回来，同名覆盖、新名追加。
+         */
+        '<div class="mi-btn-row mi-set-preset-actions">' +
+          '<button type="button" class="st-action-btn" id="mq-api-preset-export">导出全部预设</button>' +
+          '<button type="button" class="st-action-btn" id="mq-api-preset-import">导入预设</button>' +
+        '</div>' +
+        '<input type="file" class="ins-file" id="mq-api-preset-file" accept=".json,application/json" hidden>' +
+        '<p class="st-form-hint">导出的文件包含密钥明文，请自行妥善保管，不要转发到公开场合。</p>' +
       '</div>' +
 
       /* ── 主线路（原版第二段）── */
@@ -2415,6 +2427,25 @@
       if (!presetPickEl()) return;
       refreshApiPresetOptions(list);
     }).catch(function () {});
+  }
+
+  /*
+   * 把水合排到下一次重绘之后再跑。
+   *
+   * 为什么需要单独一个函数：render() 对子视图是整块换 innerHTML，
+   * 而设置页存在多处「先 scheduleRender() 再补数据」的异步流程。
+   * 同步补的话，数据写得比下一次重绘早，会被整块换掉 —— 表现就是
+   * 「预设明明存着，进来却是空下拉」。多等一帧即可稳定落在重绘之后。
+   *
+   * 回调里重新校验两级：子视图还是不是 api-chat（用户可能已经返回列表）、
+   * 下拉节点还在不在（可能已被下一轮 render 重建）。任一不满足就安静退出。
+   */
+  function scheduleApiPresetsHydrate() {
+    requestAnimationFrame(function () {
+      if (state.subView !== 'api-chat') return;
+      if (!presetPickEl()) return;
+      hydrateApiPresets();
+    });
   }
 
   /* 从表单读一份完整快照（主 + 副线路） */
@@ -2528,6 +2559,53 @@
       if (n) n.value = '';
       toast('已删除：' + name);
     }).catch(function () { toast('删除失败'); });
+  }
+
+  /* ── 对话 API · 预设的导出 / 导入 ─────────────────────────────
+   *
+   * 数据层是 js2/miya-api-config.js 的 global.miyaApiPresetsExport
+   * （exportAll / importFromFile），本模块只负责按钮、文件选择与提示。
+   * 这样分工的理由与 upsert/remove 一致：数据层不该知道 DOM 长什么样。
+   */
+
+  function exportApiPresets() {
+    var mod = global.miyaApiPresetsExport;
+    if (!mod || typeof mod.exportAll !== 'function') { toast('预设模块未加载'); return; }
+    mod.exportAll().then(function (r) {
+      if (!r || !r.ok) {
+        if (r && r.reason === 'empty') toast('还没有可导出的预设');
+        else toast('导出失败');
+        return;
+      }
+      toast('已导出 ' + r.count + ' 条预设');
+    }).catch(function () { toast('导出失败'); });
+  }
+
+  function importApiPresets(file) {
+    var mod = global.miyaApiPresetsExport;
+    if (!mod || typeof mod.importFromFile !== 'function') { toast('预设模块未加载'); return; }
+    mod.importFromFile(file).then(function (r) {
+      if (!r || !r.ok) {
+        var msg = {
+          invalid_json: '文件不是有效的 JSON',
+          invalid_format: '文件格式不对，应为预设导出文件',
+          empty: '文件里没有可导入的预设',
+          read_failed: '读取文件失败',
+          save_failed: '写入失败，请检查存储空间'
+        }[r && r.reason] || '导入失败';
+        toast(msg);
+        return;
+      }
+      /* 下拉要立刻反映导入结果，否则用户会以为没进来 */
+      var list = global.miyaApiPresets && global.miyaApiPresets.getCached
+        ? global.miyaApiPresets.getCached()
+        : null;
+      if (list) refreshApiPresetOptions(list);
+      var parts = [];
+      if (r.added) parts.push('新增 ' + r.added + ' 条');
+      if (r.updated) parts.push('覆盖 ' + r.updated + ' 条');
+      toast('已导入：' + (parts.length ? parts.join('，') : '无变化'));
+    }).catch(function () { toast('导入失败'); });
   }
 
   /* ── 对话 API · 拉取模型 ──────────────────────────────────────
@@ -2995,7 +3073,22 @@
       if (String(state.chatId) !== String(chatId)) return;
       var loaded = store.findChat(chatId);
       if (!loaded || loaded.type === 'group') return;
+      /*
+       * 这次 render 是异步的（要等 store.init 的链）。而 render() 对子视图是
+       * 「整块换 innerHTML」，会把下拉框里已经填好的选项一起冲掉。
+       *
+       * 时序坑：openSubView() 里 hydrateApiPresets() 是同步往里写选项的，
+       * 紧接着 store.init() 落地又触发一次 render —— 选项就没了，
+       * 表现为「明明存着预设，进去却是空下拉」。
+       *
+       * 注意这里**不能**直接调 hydrateApiPresets()：上面那行 scheduleRender
+       * 只是排进了 requestAnimationFrame，要下一帧才真正换 DOM。这时候同步
+       * 水合，写完的选项马上会被下一帧的重绘擦掉，等于白写。
+       * 所以水合也要排到那一帧之后（再 rAF 一次），并且在回调里重新确认
+       * 子视图没被用户返回掉，避免往一个已经不存在的下拉里写东西。
+       */
       scheduleRender({ fromStore: true });
+      if (state.subView === 'api-chat') scheduleApiPresetsHydrate();
     });
   }
 
@@ -3046,6 +3139,13 @@
          渲染出来了，但没有任何事件接住它们，点了毫无反应。 */
       if (e.target.closest('#mq-api-preset-save')) { saveApiPreset(); return; }
       if (e.target.closest('#mq-api-preset-delete')) { deleteApiPreset(); return; }
+      if (e.target.closest('#mq-api-preset-export')) { exportApiPresets(); return; }
+      if (e.target.closest('#mq-api-preset-import')) {
+        /* triggerFileInput 会处理 .ins-file 的可见性与还原，
+           并且在部分 WebView 里比裸 click() 更可靠 */
+        triggerFileInput(pageEl.querySelector('#mq-api-preset-file'));
+        return;
+      }
       if (e.target.closest('#mq-api-fetch')) { fetchChatModels('main'); return; }
       if (e.target.closest('#mq-api2-fetch')) { fetchChatModels('fallback'); return; }
 
@@ -3444,6 +3544,15 @@
       /* 对话 API 预设：选中即载入，与生图预设的「选中即读」一致 */
       if (e.target.matches('#mq-api-preset-pick')) {
         loadApiPresetFromPick();
+        return;
+      }
+
+      /* 预设导入：选完文件就立刻读，不留着等用户再点一次 */
+      if (e.target.matches('#mq-api-preset-file')) {
+        var pf = e.target.files && e.target.files[0];
+        e.target.value = '';   /* 允许连续导入同一个文件 */
+        if (!pf) return;
+        importApiPresets(pf);
         return;
       }
 

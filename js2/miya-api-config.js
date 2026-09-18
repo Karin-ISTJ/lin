@@ -53,6 +53,27 @@
   var apiPresetsCache = null;
   var apiPresetsReady = null;
 
+  /*
+   * 预设写操作的串行队列。
+   *
+   * 为什么必须有它 —— 这是一个真实报过的 bug：
+   * 「对话 API 的预设没法保存和删除」。
+   *
+   * 原先 upsert / remove 都写 `ensureApiPresetsReady().then(function (list) {...})`，
+   * 而 ensureApiPresetsReady() 只会在**第一次**真正加载，之后永远返回当初那个
+   * 已 resolve 的 promise —— 它闭包里捕获的是**首次加载的列表**。
+   * 于是每次保存都变成「首次快照 + 这一条」，上一次保存的必然被冲掉：
+   *   连存 4 条 → 磁盘上只剩最后 1 条；背靠背两次 upsert → 只剩第 2 条。
+   * 用户感知就是「存不上、删不掉」。
+   *
+   * （find() 当初就避开了这个坑 —— 它 ensureReady().then 里重新读 apiPresetsCache，
+   *   注释里也写明了原因。但 upsert / remove 漏了。）
+   *
+   * 修法：所有读-改-写都排进这条链，轮到它时才取**当前**的 apiPresetsCache。
+   * 这样不但修掉陈旧快照，也顺带把「用户连点两下保存」的并发覆盖一并挡掉。
+   */
+  var apiPresetsChain = Promise.resolve();
+
   var systemPrefs = {
     notify: false
   };
@@ -384,16 +405,240 @@
     apiPresetsReady = null;
   }
 
+  /* ── 预设的导出 / 导入 ────────────────────────────────────────
+   *
+   * 为什么需要：预设是用户手打出来的线路配置（网关、密钥、模型、副线路…），
+   * 攒起来要花不少时间，但在此之前它们只活在这台设备的浏览器存储里 ——
+   * 换设备、清缓存、换浏览器，全部归零。用户明确提了「方便我保存」。
+   *
+   * 数据层只负责两件事：**产出文件** 和 **解析文件**。
+   * 「导出了几条」「要不要提示成功」这类属于 UI，留给调用方 ——
+   * 与这个文件既有的分工一致（见上面 upsert 的注释）。
+   *
+   * ⚠️ 导出内容含密钥明文。这是有意的：用户要的是「能 1:1 还原配置的备份」，
+   *    脱敏后的文件还原回来线路就不通了。文件落到下载目录后，
+   *    请用户自行注意别转发到公开场合。
+   */
+
+  var PRESET_EXPORT_KIND = 'api-presets';
+  var PRESET_EXPORT_VERSION = 1;
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  function presetExportStamp(d) {
+    d = d || new Date();
+    return String(d.getFullYear()) + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+      '-' + pad2(d.getHours()) + pad2(d.getMinutes());
+  }
+
+  /* 文件名清洗：与项目里其它导出（如 ST 预设）同一套规则 */
+  function safeFileLabel(s) {
+    return String(s || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+  }
+
+  /*
+   * 把「读进来的一坨 JSON」归一成预设数组。
+   *
+   * 两种都认：
+   *   1. 本模块导出的包装格式 { app, kind, version, presets: [...] }
+   *   2. 裸数组 [...]  —— 用户手改过文件、或从别处复制来的，不该直接报错
+   * 反向地，导入自己导出的文件必须逐字段还原（含 fallbackApiKey），
+   * 否则这个功能就是一次性的。
+   */
+  function normalizeImportedPresets(raw) {
+    var rows = null;
+    if (Array.isArray(raw)) {
+      rows = raw;
+    } else if (raw && typeof raw === 'object' && Array.isArray(raw.presets)) {
+      rows = raw.presets;
+    }
+    if (!rows) return null;
+    var out = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r || typeof r !== 'object') continue;
+      var nm = String(r.name == null ? '' : r.name).trim();
+      if (!nm) continue;   /* 没名字的条目没法在下拉里选中，跳过 */
+      /* 原样保留所有字段，只把 name 规范化 */
+      var item = Object.assign({}, r);
+      item.name = nm;
+      out.push(item);
+    }
+    return out;
+  }
+
+  /* 按 name 合并：同名覆盖（新值赢），新名追加。与 upsert 语义一致。 */
+  function mergeApiPresets(current, incoming) {
+    var next = Array.isArray(current) ? current.slice() : [];
+    var byName = Object.create(null);
+    for (var i = 0; i < next.length; i++) {
+      if (next[i] && next[i].name) byName[String(next[i].name)] = i;
+    }
+    var added = 0, updated = 0;
+    for (var j = 0; j < incoming.length; j++) {
+      var row = incoming[j];
+      var key = String(row.name);
+      if (Object.prototype.hasOwnProperty.call(byName, key)) {
+        next[byName[key]] = row;
+        updated += 1;
+      } else {
+        next.push(row);
+        byName[key] = next.length - 1;
+        added += 1;
+      }
+    }
+    return { list: next, added: added, updated: updated };
+  }
+
+  /* 导出全部预设。返回 { ok, count, filename } 或 { ok:false, reason } */
+  function exportApiPresetsFile() {
+    return ensureApiPresetsReady().then(function () {
+      var list = Array.isArray(apiPresetsCache) ? apiPresetsCache.slice() : [];
+      if (!list.length) return { ok: false, reason: 'empty', count: 0 };
+
+      var payload = {
+        app: 'miya-mini-phone',
+        kind: PRESET_EXPORT_KIND,
+        version: PRESET_EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        count: list.length,
+        presets: list
+      };
+
+      var json;
+      try {
+        json = JSON.stringify(payload, null, 2);
+      } catch (e) {
+        return { ok: false, reason: 'stringify_failed', count: list.length };
+      }
+
+      var filename = '接口预设-' + presetExportStamp() + '.json';
+      try {
+        if (typeof global.miyaDownloadBlob === 'function') {
+          global.miyaDownloadBlob(
+            new Blob([json], { type: 'application/json;charset=utf-8' }),
+            filename
+          );
+        } else {
+          /* 极老环境：连 storage 层都没起来，退到裸 a[download] */
+          var blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e2) {} }, 60000);
+        }
+      } catch (e3) {
+        return { ok: false, reason: 'download_failed', count: list.length };
+      }
+      return { ok: true, count: list.length, filename: filename };
+    });
+  }
+
+  /*
+   * 从 File 对象导入预设。
+   * 走队列写盘，所以「导入的同时手动保存」不会互相覆盖。
+   * resolve: { ok, added, updated, total } / { ok:false, reason }
+   */
+  function importApiPresetsFile(file) {
+    return new Promise(function (resolve) {
+      if (!file) { resolve({ ok: false, reason: 'no_file' }); return; }
+      var reader = new FileReader();
+      reader.onerror = function () { resolve({ ok: false, reason: 'read_failed' }); };
+      reader.onload = function () {
+        var parsed;
+        try {
+          parsed = JSON.parse(reader.result);
+        } catch (e) {
+          resolve({ ok: false, reason: 'invalid_json' });
+          return;
+        }
+        var incoming = normalizeImportedPresets(parsed);
+        if (!incoming) { resolve({ ok: false, reason: 'invalid_format' }); return; }
+        if (!incoming.length) { resolve({ ok: false, reason: 'empty' }); return; }
+
+        enqueueApiPresets(function (list) {
+          return mergeApiPresets(list, incoming).list;
+        }).then(function (merged) {
+          var stat = mergeApiPresets([], incoming);
+          resolve({
+            ok: true,
+            added: stat.added,
+            updated: stat.updated,
+            total: Array.isArray(merged) ? merged.length : 0
+          });
+        }).catch(function () {
+          resolve({ ok: false, reason: 'save_failed' });
+        });
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  global.miyaApiPresetsExport = {
+    exportAll: exportApiPresetsFile,
+    importFromFile: importApiPresetsFile,
+    /* 测试后门：纯函数，供 e2e 直接验格式归一与合并语义 */
+    __normalize: normalizeImportedPresets,
+    __merge: mergeApiPresets
+  };
+
   function ensureApiPresetsReady() {
     if (apiPresetsReady) return apiPresetsReady;
     apiPresetsReady = loadApiPresetsArr().then(function (list) {
-      apiPresetsCache = Array.isArray(list) ? list.slice() : [];
+      /*
+       * 注意这里不能无脑赋值。
+       *
+       * 冷启动时数据正本在 IndexedDB，异步水合要几十毫秒。若用户手快，
+       * 在水合「读回来」之前就点了保存，写操作会先把新列表写进 apiPresetsCache；
+       * 随后水合落地，拿到的却是磁盘上的旧值 —— 一旦无脑覆盖，
+       * 刚保存的预设连同此前所有预设一起消失。所以只在缓存还没被写操作
+       * 更新过时才采用磁盘值。
+       */
+      if (!Array.isArray(apiPresetsCache)) {
+        apiPresetsCache = Array.isArray(list) ? list.slice() : [];
+      }
       return apiPresetsCache;
     }).catch(function () {
-      apiPresetsCache = [];
+      if (!Array.isArray(apiPresetsCache)) apiPresetsCache = [];
       return apiPresetsCache;
     });
     return apiPresetsReady;
+  }
+
+  /*
+   * 把一个读-改-写动作排进串行队列。
+   *
+   * mutator(currentList) 返回**新的完整列表**；本函数负责落盘并在成功后
+   * 把最新列表写回缓存。调用方拿到的 resolve 值永远是「写完之后」的列表，
+   * 可以直接拿去重绘下拉框。
+   *
+   * 队列自身用 .catch(function () {}) 兜住失败：一次写失败（配额满等）
+   * 只该让那一次操作 reject，不能毒化后续所有操作 —— 否则用户重试也永远失败。
+   */
+  function enqueueApiPresets(mutator) {
+    var run = apiPresetsChain.then(function () {
+      return ensureApiPresetsReady().then(function () {
+        var base = Array.isArray(apiPresetsCache) ? apiPresetsCache.slice() : [];
+        return Promise.resolve(mutator(base)).then(function (next) {
+          var list = Array.isArray(next) ? next : base;
+          return saveApiPresetsArr(list).then(function (ok) {
+            /*
+             * miyaWriteLsJsonKey 的契约是「失败 resolve(false)」而非 reject。
+             * 早期这里不看返回值，存储全挂时照样提示「已保存」，刷新后预设消失。
+             */
+            if (ok === false) throw new Error('api_presets_save_failed');
+            apiPresetsCache = list.slice();
+            return apiPresetsCache.slice();
+          });
+        });
+      });
+    });
+    apiPresetsChain = run.catch(function () {});
+    return run;
   }
 
   /*
@@ -412,33 +657,29 @@
     /*
      * 同名覆盖，其余保持顺序 —— 与旧实现一致。
      * 返回写入后的完整列表，供调用方直接拿去重绘下拉框。
+     *
+     * ⚠️ 必须走 enqueueApiPresets，不能自己 ensureReady().then 拿 list。
+     * 后者拿到的是「首次加载的列表」这个不再更新的快照，会把上一次保存冲掉。
      */
     upsert: function (name, payload) {
       var nm = String(name || '').trim();
       if (!nm) return Promise.resolve(null);
-      return ensureApiPresetsReady().then(function (list) {
-        var next = (list || []).slice();
+      return enqueueApiPresets(function (list) {
+        var next = list.slice();
         var hit = -1;
         for (var i = 0; i < next.length; i++) {
           if (next[i] && String(next[i].name) === nm) { hit = i; break; }
         }
         var item = Object.assign({}, payload || {}, { name: nm });
         if (hit >= 0) next[hit] = item; else next.push(item);
-        return saveApiPresetsArr(next).then(function () {
-          apiPresetsCache = next;
-          return next;
-        });
+        return next;
       });
     },
     remove: function (name) {
       var nm = String(name || '').trim();
       if (!nm) return Promise.resolve(null);
-      return ensureApiPresetsReady().then(function (list) {
-        var next = (list || []).filter(function (p) { return !(p && String(p.name) === nm); });
-        return saveApiPresetsArr(next).then(function () {
-          apiPresetsCache = next;
-          return next;
-        });
+      return enqueueApiPresets(function (list) {
+        return list.filter(function (p) { return !(p && String(p.name) === nm); });
       });
     },
     find: function (name) {

@@ -3332,3 +3332,11 @@
   padding: 6px 0 calc(20px + env(safe-area-inset-bottom));
 }
 .mi-set-subview__actions .st-action-btn { flex: 1; }
+
+/* 卡片**内部**的操作行（如「接口预设」里的导出 / 导入）。
+   与上面的 __actions 区分开：那是整页页脚的保存按钮，带底部安全区内边距；
+   这里跟在卡片说明文字后面，不该再撑出一截空白，也不能占满整行。 */
+.mi-set-preset-actions {
+  margin-top: 12px;
+}
+.mi-set-preset-actions .st-action-btn { flex: 1; min-width: 0; }
