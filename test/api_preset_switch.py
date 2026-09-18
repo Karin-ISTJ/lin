@@ -379,7 +379,47 @@ async def main():
             "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
         check("★ 选中项仍是线路B", pick7b == "线路B", str(pick7b))
 
-        print("\n【8】全程无 JS 报错")
+        # ══════════════════════════════════════════════════════════
+        print("\n【8】冷启动：内存缓存清空后，子视图首帧就应带出选项")
+        # 整页重载 → 内存缓存必然清空，预设只能从 IndexedDB 读。
+        # 修复后 renderApiChatSub 渲染时同步带上缓存里已有的选项；
+        # 即便 hydrate 异步段还没回来，下拉也不该是空的。
+        await pg.reload(wait_until="load")
+        await pg.wait_for_timeout(4500)
+        await pg.evaluate("""
+        (async function(){
+          var st = window.miyaChatStore; await st.init();
+          window.miyaChatApp.open();
+          await new Promise(function(r){ setTimeout(r, 800); });
+          window.miyaChatContactSettings.open('chat1');
+        })()""")
+        await wait_ready(pg)
+        await pg.click('[data-mq-set-sub="api-chat"]')
+        await pg.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
+                                   state="attached", timeout=15000)
+        # ★ 0ms 同步采样：不等任何异步 hydrate。
+        # 若渲染时没带上缓存选项，此刻下拉必然只有占位项
+        # （ensureReady 走 IndexedDB 是宏任务，不可能已完成）。
+        opts_first = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        check("★ 进入子视图的第一眼就有预设（同步渲染，不闪空）",
+              opts_first == ["", "线路A", "线路B"], str(opts_first))
+        # 再等异步 hydrate 落定，双重确认
+        await pg.wait_for_timeout(900)
+        opts_cold = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        check("★ 冷启动首帧下拉就带出全部预设（不再闪空）",
+              opts_cold == ["", "线路A", "线路B"], str(opts_cold))
+
+        # 冷启动下再点右上角保存 —— 双重确认
+        await pg.evaluate(
+            "() => { var b=document.querySelector('#mq-set-page [data-mq-set-save]'); if (b) b.click(); }")
+        await pg.wait_for_timeout(1600)
+        opts_cold2 = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        check("★ 冷启动后点顶部「保存」列表仍在", opts_cold2 == ["", "线路A", "线路B"], str(opts_cold2))
+
+        print("\n【9】全程无 JS 报错")
         check("无 pageerror", not errs, str(errs[:3]))
 
         await b.close()

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>版本核对 · 预设修复是否生效</title>
+<style>
+  :root{ --bg:#12131a; --fg:#e8eaf2; --dim:#98a0b8; --line:#2a2e3d;
+         --card:#1b1d27; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --acc:#7c9cff; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); color:var(--fg);
+        font:14px/1.65 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+        padding:16px 14px 60px; }
+  h1{ font-size:17px; margin:0 0 6px; }
+  p.sub{ color:var(--dim); font-size:12.5px; margin:0 0 16px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+         padding:14px; margin-bottom:12px; }
+  .card h2{ font-size:14px; margin:0 0 10px; color:var(--acc); }
+  button{ appearance:none; border:0; border-radius:9px; padding:13px 14px;
+          font-size:15px; font-weight:700; background:var(--acc); color:#0b0d14; width:100%; }
+  button:disabled{ opacity:.45; }
+  button.ghost{ background:#2b3040; color:var(--fg); margin-top:8px; font-weight:600; }
+  #log{ background:#0d0e14; border:1px solid var(--line); border-radius:10px;
+        padding:10px; font:11.5px/1.6 ui-monospace,Menlo,Consolas,monospace;
+        white-space:pre-wrap; word-break:break-all; max-height:60vh; overflow:auto; }
+  .r-ok{ color:var(--ok); } .r-bad{ color:var(--bad); } .r-warn{ color:var(--warn); }
+  .r-hd{ color:var(--acc); font-weight:700; }
+  #v{ font-size:22px; font-weight:800; text-align:center; padding:16px 10px;
+      border-radius:11px; margin-bottom:14px; }
+  #v.ok{ background:#14311f; color:var(--ok); border:1px solid #2c6b41; }
+  #v.bad{ background:#3a1a1c; color:var(--bad); border:1px solid #7a3236; }
+  #v.wait{ background:#2a2b1a; color:var(--warn); border:1px solid #6b6330; }
+</style>
+</head>
+<body>
+
+<h1>版本核对</h1>
+<p class="sub">
+  点一下按钮，它会去抓你**浏览器实际在跑的那份 JS**，只看有没有新版修复。
+  跑完把日志发我 —— 这能一锤定音。
+</p>
+
+<div id="v" class="wait">等待检测…</div>
+
+<div class="card">
+  <h2>检测</h2>
+  <button id="go">▶ 检测我实际运行的是哪份 JS</button>
+  <button id="purge" class="ghost">清理 Service Worker 缓存（强制换新）</button>
+</div>
+
+<div class="card">
+  <h2>日志</h2>
+  <div id="log">等待检测…</div>
+</div>
+
+<script>
+(function () {
+  var logEl = document.getElementById('log');
+  var vEl   = document.getElementById('v');
+  var buf = [];
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function w(t,c){ buf.push({t:String(t),c:c||''});
+    logEl.innerHTML = buf.map(function(l){ return '<span class="'+l.c+'">'+esc(l.t)+'</span>'; }).join('\n');
+    logEl.scrollTop = logEl.scrollHeight; }
+  function hd(t){ w(''); w('── '+t+' ──','r-hd'); }
+  function ok(t){ w('  ✓ '+t,'r-ok'); }
+  function bad(t){ w('  ✗ '+t,'r-bad'); }
+  function info(t){ w('  · '+t); }
+  function warn(t){ w('  ! '+t,'r-warn'); }
+  function setV(t,cls){ vEl.textContent=t; vEl.className=cls; }
+
+  var FILE = 'js1/miya-chat-contact-settings.js';
+  /* 新版修复的特征串（两批修复各一个） */
+  var MARK_A = 'miyaSetApiConfig(presetToConfigPatch(p))';      /* 第三批：选中即生效 */
+  var MARK_B = 'applySubViewHydrate(state.subView);';           /* 第四批：重绘后补 hydrate */
+
+  function grab(url){
+    /* 加时间戳绕过所有缓存，拿到服务器上的真身 */
+    var u = url + (url.indexOf('?')>=0?'&':'?') + '_probe=' + Date.now();
+    return fetch(u, { cache:'reload', credentials:'same-origin' })
+      .then(function(r){ return r.ok ? r.text() : Promise.reject(new Error('HTTP '+r.status)); });
+  }
+
+  function check(label, text){
+    if (!text) { bad(label + '：拿不到内容'); return null; }
+    var hasA = text.indexOf(MARK_A) >= 0;
+    var hasB = text.indexOf(MARK_B) >= 0;
+    ok(label + '：长度 ' + text.length + ' 字节');
+    w('      · 第三批标记(选中即生效)：' + (hasA?'有':'无'), hasA?'r-ok':'r-bad');
+    w('      · 第四批标记(重绘补hydrate)：' + (hasB?'有':'无'), hasB?'r-ok':'r-bad');
+    return { a: hasA, b: hasB, len: text.length };
+  }
+
+  async function go(){
+    buf = []; logEl.innerHTML='';
+    document.getElementById('go').disabled = true;
+    setV('检测中…','wait');
+
+    var result = null;
+    try {
+      hd('1. SW 状态');
+      if (navigator.serviceWorker) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        info('已注册 SW：' + regs.length + ' 个');
+        regs.forEach(function(r){ info('  scope: ' + r.scope); });
+        info('当前受控 SW：' + (navigator.serviceWorker.controller
+              ? navigator.serviceWorker.controller.scriptURL : '无（页面未被 SW 接管）'));
+        if (regs.length) warn('存在 SW 缓存 —— 它可能仍在喂旧 JS');
+      } else warn('此环境不支持 SW');
+
+      hd('2. 抓服务器上的真身（绕过缓存）');
+      var disk = await grab(FILE);
+      var rDisk = check('服务器文件', disk);
+
+      hd('3. 抓浏览器实际执行的版本');
+      /* 通过 performance 资源表看到实际加载的 URL，再按那个 URL 取 */
+      var entries = performance.getEntriesByType('resource')
+        .filter(function(e){ return e.name.indexOf(FILE.split('/').pop()) >= 0; });
+      entries.forEach(function(e){ info('已加载：' + e.name + '  (' + Math.round(e.transferSize) + 'B)'); });
+      if (!entries.length) warn('资源表里没有该脚本（页面刷新过？直接看第 2 步结论）');
+
+      hd('4. 运行时自证：直接问正在跑的代码');
+      try {
+        var hasFn = typeof window.miyaChatContactSettings === 'object' && window.miyaChatContactSettings;
+        info('miyaChatContactSettings 已加载：' + (hasFn ? '是' : '否'));
+        if (hasFn) {
+          info('暴露的方法：' + Object.keys(hasFn).join(', '));
+        }
+      } catch(e){ warn('运行时探测异常：' + e.message); }
+
+      hd('5. 结论');
+      result = rDisk;
+      if (rDisk && rDisk.a && rDisk.b) {
+        ok('服务器上的文件是**含全部修复**的新版');
+        w('');
+        setV('服务器文件：新版 ✓','ok');
+        warn('如果小手机里问题依旧，那就是 SW / 浏览器缓存还在用旧副本 —— 点下面的按钮清理。');
+      } else if (rDisk) {
+        bad('服务器上的文件**不含最新修复** —— 说明你的 index.html 旁边那份 js 还是旧的');
+        w('');
+        setV('服务器文件：旧版 ✗','bad');
+        warn('请确认新包已解压并覆盖到位（尤其是 js1/ 目录）。');
+      } else {
+        setV('无法判定','wait');
+      }
+
+    } catch(e){
+      bad('检测异常：' + (e && e.message ? e.message : e));
+    }
+    document.getElementById('go').disabled = false;
+  }
+
+  async function purge(){
+    buf = []; logEl.innerHTML='';
+    hd('清理缓存');
+    try {
+      if ('caches' in window) {
+        var ks = await caches.keys();
+        info('发现缓存：' + JSON.stringify(ks));
+        for (var i=0;i<ks.length;i++){ await caches.delete(ks[i]); ok('已删 ' + ks[i]); }
+      }
+      if (navigator.serviceWorker) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        for (var j=0;j<regs.length;j++){ await regs[j].unregister(); ok('已注销 SW ' + regs[j].scope); }
+      }
+      ok('清理完成');
+      w('');
+      warn('现在请**完全关掉小手机页面**（不是刷新，是关掉重开），再打开试一次。');
+      setV('缓存已清理，请重开','ok');
+    } catch(e){ bad('清理异常：' + e.message); }
+  }
+
+  document.getElementById('go').onclick = go;
+  document.getElementById('purge').onclick = purge;
+})();
+</script>
+
+</body>
+</html>
