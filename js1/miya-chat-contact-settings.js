@@ -2422,10 +2422,20 @@
     var cached = mod.getCached && mod.getCached();
     if (cached) refreshApiPresetOptions(cached);
     var ready = mod.ensureReady ? mod.ensureReady() : Promise.resolve([]);
-    Promise.resolve(ready).then(function (list) {
+    Promise.resolve(ready).then(function () {
       /* 期间用户可能已经返回列表，节点没了就安静退出 */
       if (!presetPickEl()) return;
-      refreshApiPresetOptions(list);
+      /*
+       * ★ 必须重新读 getCached()，不能用 ensureReady() 的返回值。
+       *
+       * ensureReady() 历史上只保证「首轮加载完成」，它 resolve 的可能是
+       * 首次加载时的空快照。直接拿它去画，会把刚保存出来的预设覆盖成空 ——
+       * 表现就是「保存提示成功了，返回再进来预设没了」。
+       * 数据层已改为 resolve 时重定向到当前缓存，但这里仍显式再取一次，
+       * 双保险，也让意图清楚：要数据就读缓存。
+       */
+      var list = mod.getCached ? mod.getCached() : null;
+      refreshApiPresetOptions(list || []);
     }).catch(function () {});
   }
 

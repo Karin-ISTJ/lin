@@ -586,8 +586,33 @@
     __merge: mergeApiPresets
   };
 
+  /*
+   * ⚠️ 返回的 promise **只保证「首轮加载已完成」**，不再代表「当前数据」。
+   *
+   * 历史坑（很隐蔽，两处踩过）：
+   *   apiPresetsReady 是个只 resolve 一次的 promise，它闭包里捕获的是
+   *   **首次加载时的那个数组对象**。upsert / remove 只做
+   *   `apiPresetsCache = list.slice()` —— 换成了新对象，但老 promise
+   *   仍然指向旧的空数组。
+   *
+   *   于是「先进面板（那时还没预设）→ 保存一条 → 返回 → 再进面板」时：
+   *     getCached()   → ['新预设']   （内存缓存是对的）
+   *     ensureReady() → []           （仍是首轮快照）
+   *   调用方若拿 ensureReady() 的返回值去重绘，就把正确的下拉**覆盖成空** ——
+   *   用户看到「保存成功了，返回再进来就没了」，而数据其实一直好好躺在盘里。
+   *
+   *   find() 早就因为同一个原因被修过（见下方 find 的注释），
+   *   但 hydrateApiPresets / ensureReady 的调用方没跟上，所以同一个 bug 复发。
+   *
+   * 现在统一约定：**要数据请读 apiPresetsCache（或 getCached()），
+   * ensureReady() 只用来等首轮水合完成。** 为兼容既有调用方，
+   * 这里额外在 resolve 时把值重定向为「当前缓存」，让老写法也能拿到新数据。
+   */
   function ensureApiPresetsReady() {
-    if (apiPresetsReady) return apiPresetsReady;
+    if (apiPresetsReady) {
+      /* 已就绪：直接返回「此刻」的缓存，而不是当初那个快照 */
+      return Promise.resolve(apiPresetsCache || []);
+    }
     apiPresetsReady = loadApiPresetsArr().then(function (list) {
       /*
        * 注意这里不能无脑赋值。
