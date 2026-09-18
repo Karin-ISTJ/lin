@@ -2339,7 +2339,7 @@
         '<h4 class="st-form-section__title">接口预设</h4>' +
         '<label class="ins-field-label" for="mq-api-preset-pick">载入预设</label>' +
         '<div class="ins-inline-field">' +
-          '<select class="ins-select" id="mq-api-preset-pick">' + apiPresetOptionsHtml() + '</select>' +
+          '<select class="ins-select" id="mq-api-preset-pick"><option value="">选择已存预设</option></select>' +
           '<button type="button" class="ins-icon-btn" id="mq-api-preset-delete" title="删除预设">×</button>' +
         '</div>' +
         '<label class="ins-field-label" for="mq-api-preset-name">预设名称</label>' +
@@ -2413,34 +2413,6 @@
    */
 
   function presetPickEl() { return pageEl && pageEl.querySelector('#mq-api-preset-pick'); }
-
-  /*
-   * 生成预设下拉的 <option> 串。
-   *
-   * 抽出来给两处共用：
-   *   1. renderApiChatSub() —— 渲染时**同步**就带上已缓存的选项
-   *   2. refreshApiPresetOptions() —— 异步拿到最新数据后重画
-   *
-   * 为什么渲染时也要带：子视图每次重绘都是整块换 innerHTML，
-   * 若只给一条空占位项、指望事后 hydrate 补上，那么任何一条
-   * 「重绘了但没补 hydrate」的路径都会让下拉肉眼可见地空掉。
-   * 数据本来就在内存缓存里，渲染时顺手带上，最坏也只是短暂旧一点，
-   * 而不是空 —— 少一层对调用时序的依赖。
-   */
-  function apiPresetOptionsHtml() {
-    var mod = global.miyaApiPresets;
-    var list = (mod && mod.getCached && mod.getCached()) || [];
-    var names = (Array.isArray(list) ? list : []).map(function (p) {
-      return p && p.name ? String(p.name) : '';
-    }).filter(Boolean);
-    /* 选中项：优先沿用 state 里记住的（重绘后 select 是新的，value 必为空） */
-    var current = state.apiPresetPick || '';
-    return '<option value="">选择已存预设</option>' +
-      names.map(function (n) {
-        return '<option value="' + esc(n) + '"' +
-          (n === current ? ' selected' : '') + '>' + esc(n) + '</option>';
-      }).join('');
-  }
 
   function refreshApiPresetOptions(list) {
     var pick = presetPickEl();

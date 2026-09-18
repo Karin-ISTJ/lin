@@ -609,9 +609,24 @@
    * 这里额外在 resolve 时把值重定向为「当前缓存」，让老写法也能拿到新数据。
    */
   function ensureApiPresetsReady() {
+    /*
+     * 「就绪」的判据必须是**缓存已被填充**，而不是「首次加载已发起」。
+     *
+     * apiPresetsReady 在 loadApiPresetsArr() 发起的一瞬间就非空了，
+     * 但 apiPresetsCache 要等 IndexedDB 回调（冷启动几十毫秒）才填充。
+     * 若拿「apiPresetsReady 非空」当就绪判据，「加载进行中」的调用会
+     * 拿到 Promise.resolve(null || []) —— 一个立即 resolve 的**空数组**，
+     * 没等加载完成。调用方随后把空列表画进下拉，表现为
+     * 「冷启动后手快点保存，已存预设消失」。
+     */
+    if (Array.isArray(apiPresetsCache)) {
+      /* 真就绪：返回「此刻」的缓存，而不是首轮加载那个旧快照 */
+      return Promise.resolve(apiPresetsCache);
+    }
     if (apiPresetsReady) {
-      /* 已就绪：直接返回「此刻」的缓存，而不是当初那个快照 */
-      return Promise.resolve(apiPresetsCache || []);
+      /* 首次加载进行中：返回同一个 promise —— 它 resolve 的就是
+         填充完成的缓存，而不是此刻的 null。 */
+      return apiPresetsReady;
     }
     apiPresetsReady = loadApiPresetsArr().then(function (list) {
       /*
