@@ -237,7 +237,7 @@
         '</p>' +
       '</header>' +
       '<section class="mm-console mm-console--auto" aria-label="角色记忆自动提炼">' +
-        '<span class="mm-console__label">记忆提炼</span>' +
+        '<span class="mm-console__label">角色记忆提炼</span>' +
         '<div class="mm-console__row">' +
           '<label class="mm-console__field mm-console__field--wide">每<input type="number" id="miya-mem-auto-trigger" min="0" max="500" value="' + memTrigger + '">轮对话</label>' +
           '<div class="mm-console__actions">' +
@@ -246,8 +246,9 @@
         '</div>' +
         '<p class="mm-console__hint">' +
           (memTrigger > 0
-            ? '已开启：每完成 ' + memTrigger + ' 轮角色回复后，自动提炼该段对话中对角色重要的记忆（进度 ' + pendingRounds + '/' + memTrigger + ' 轮）。与上方「分镜/合卷」总结互不影响。'
-            : '设为 0 关闭。与聊天设置里的「自动总结触发」无关；此处仅控制角色记忆提炼。') +
+            ? '已开启：每完成 ' + memTrigger + ' 轮角色回复后，自动提炼该段对话中对角色重要的记忆（进度 ' + pendingRounds + '/' + memTrigger + ' 轮）。'
+            : '设为 0 关闭。') +
+          '这里是<strong>角色记忆提炼</strong>（产出「记忆」列表）；聊天设置里的「自动总结触发」是<strong>分镜/合卷总结</strong>，两套机制各自独立。' +
         '</p>' +
       '</section>' +
       '<section class="mm-console" aria-label="提炼分镜与合卷">' +

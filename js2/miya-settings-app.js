@@ -1554,13 +1554,14 @@
   }
 
   /* 顶栏右侧保存按钮：只在下面这些面板里出现。
-     面板本身是滚动容器，原来保存按钮在表单最末尾，得一路滚到底才能点。
-     联系人聊天设置面板同样改为统一走右上角保存。 */
+     面板本身是滚动容器，原来保存按钮在表单最末尾，得一路滚到底才能点，
+     所以统一改到右上角。
+     注意：miya-st-panel-contact-chat 已改为纯指路页、无任何可保存字段，
+     故不在此列——否则会出现一个点了没反应的保存按钮。 */
   var TOPBAR_SAVE_PANELS = {
     'miya-st-panel-chat': 1,
     'miya-st-panel-imagegen': 1,
-    'miya-st-panel-voice': 1,
-    'miya-st-panel-contact-chat': 1
+    'miya-st-panel-voice': 1
   };
 
   function syncTopbarSaveButton(panelId) {
@@ -2314,16 +2315,9 @@
     var app = $('miya-settings-app');
     if (!app || app.dataset.bound) return;
     app.dataset.bound = '1';
-    var memBtn = $('miya-st-open-memory-table');
-    if (memBtn) {
-      memBtn.addEventListener('click', function () {
-        if (global.MiyaMemoryTableApp && global.MiyaMemoryTableApp.open) {
-          global.MiyaMemoryTableApp.open();
-        } else {
-          toast('记忆表模块未加载');
-        }
-      });
-    }
+    /* 原此处绑定的 #miya-st-open-memory-table 按钮已从 index.html 移除
+       （记忆表入口统一走聊天页底部「+」→ 记忆表），DOM 不存在，
+       if (memBtn) 让它静默失效。为免日后误认为遗漏，直接删掉这段绑定。 */
 
     onClick('miya-st-back', function () {
       if (app.classList.contains('has-panel')) showMainList();
@@ -2369,6 +2363,9 @@
         }
         if (target === 'miya-st-panel-contact-chat' && global.miyaChatSettingsPanel) {
           global.miyaChatSettingsPanel.onPanelOpen();
+        }
+        if (target === 'miya-st-panel-chat-defaults' && global.miyaChatSettingsPanel) {
+          global.miyaChatSettingsPanel.onDefaultsPanelOpen();
         }
         if (target === 'miya-st-panel-msg-sound' && global.MiyaMsgSound) {
           global.MiyaMsgSound.onPanelOpen();
@@ -2677,6 +2674,9 @@
       showPanel(panelId);
       if (panelId === 'miya-st-panel-contact-chat' && global.miyaChatSettingsPanel) {
         global.miyaChatSettingsPanel.onPanelOpen();
+      }
+      if (panelId === 'miya-st-panel-chat-defaults' && global.miyaChatSettingsPanel) {
+        global.miyaChatSettingsPanel.onDefaultsPanelOpen();
       }
       if (panelId === 'miya-st-panel-imagegen' && global.MiyaImageGen) {
         global.MiyaImageGen.onSettingsPanelOpen();

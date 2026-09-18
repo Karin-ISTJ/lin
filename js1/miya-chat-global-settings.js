@@ -165,6 +165,45 @@
     return true;
   }
 
+  /**
+   * 在聊天设置里改「记忆 / 后台」时的统一落库入口。
+   *
+   * 为什么不能直接 store.saveChatSettings：
+   * getChatSettings() 的顺序是「联系人级 ⊕ 会话级」→ normalize → applyToChatSettings。
+   * 最后一步会用全局配置里的 memoryCount / summaryTrigger / summaryLength /
+   * backgroundMessage 把前面算出来的值**整个盖掉**（实测确认），
+   * 所以只写 contact.chatSettings 是「存得进去、读不出来」。
+   *
+   * 这里的做法：把用户的改动登记为该联系人的 perContact 覆盖，
+   * 该联系人随即脱离全局默认。这样既尊重「全局默认」这一概念，
+   * 又让用户在聊天页改完立刻生效，不必再理解「全局 / 单独」的切换。
+   */
+  function applyContactOverride(contactId, settings) {
+    var cid = String(contactId || '').trim();
+    if (!cid) return Promise.resolve(false);
+    var slice = {};
+    MANAGED_KEYS.forEach(function (k) {
+      if (!settings || settings[k] == null) return;
+      if (k === 'backgroundMessage') {
+        /* backgroundMessage 里混着会话级运行时字段（下次推送时间、基线时间戳等）。
+           它们由每个会话自己维护，不属于「这个联系人的配置」，
+           存进全局配置只会变成脏数据，这里先剔干净。 */
+        var clean = Object.assign({}, settings[k]);
+        CHAT_LEVEL_BM_KEYS.forEach(function (bk) { delete clean[bk]; });
+        slice[k] = clean;
+        return;
+      }
+      slice[k] = settings[k];
+    });
+    if (!Object.keys(slice).length) return Promise.resolve(false);
+    return savePerContact(cid, { useGlobal: false, settings: slice });
+  }
+
+  /** 取消该联系人的单独配置，回到全局默认 */
+  function resetContactOverride(contactId) {
+    return removePerContact(contactId);
+  }
+
   /** 合并全局/单独配置到 chat settings 对象（浅拷贝后 patch） */
   /**
    * backgroundMessage 里「按会话独立」的字段。
@@ -181,6 +220,28 @@
   var SESSION_SCOPED_BM_KEYS = [
     'farm',
     'timeEvents'
+  ];
+
+  /**
+   * backgroundMessage 里由「会话」自己维护的运行时字段。
+   *
+   * 与 miya-chat-store.js 的 getChatSettings() 里 chatLevelBgKeys 是同一份清单：
+   * 那些字段永远是「会话级 ⊕ 全局配置」里的会话级优先，
+   * 所以它们混进全局配置既无意义、又会造成难以排查的脏数据。
+   * 两处若增删字段，需要同步。
+   */
+  var CHAT_LEVEL_BM_KEYS = [
+    'lifeLikeEnabled',
+    'lifeLikeNextPushAt',
+    'lifeLikeNextPushAnchorTs',
+    'lifeLikeEnabledAt',
+    'lastAutoPushAt',
+    'lastProactiveAttemptAt',
+    'lastPushFailAt',
+    'proactiveBaselineAt',
+    'lastOfflineAt',
+    'offlineRollAnchor',
+    'offlineRollGapMs'
   ];
 
   function applyToChatSettings(base, contactId) {
@@ -245,6 +306,8 @@
     savePerContact: savePerContact,
     removePerContact: removePerContact,
     contactUsesGlobal: contactUsesGlobal,
+    applyContactOverride: applyContactOverride,
+    resetContactOverride: resetContactOverride,
     applyToChatSettings: applyToChatSettings,
     defaultGlobalSlice: defaultGlobalSlice,
     invalidateCache: function () { cache = null; ready = null; }

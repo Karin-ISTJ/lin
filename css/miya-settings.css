@@ -1310,6 +1310,15 @@
   border: none;
 }
 
+/* 列表行内的小按钮（如「聊天默认值」里的「恢复」）：
+   收窄内边距，避免在行内把行高撑得过高。 */
+.miya-settings-app .miya-ct-btn--sm {
+  padding: 7px 14px;
+  font-size: 12px;
+  border-radius: 11px;
+  flex: 0 0 auto;
+}
+
 .miya-settings-app .miya-ct-row__text strong {
   font-family: 'Noto Serif SC', serif;
   font-size: 14px;

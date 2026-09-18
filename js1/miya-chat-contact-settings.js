@@ -171,6 +171,27 @@
     if (wrap) wrap.hidden = !on;
   }
 
+  /**
+   * 「让TA自己决定何时找你」（基础区）与「定时主动消息」（记忆与后台区）互斥。
+   * 前者开启时，normalizeChatSettings 会把 activeEnabled 置回 false，
+   * 因此在界面上同步给出可见反馈：禁用定时开关并显示原因，避免用户以为保存失败。
+   */
+  function syncLifeLikeAgainstTimedBackground(root) {
+    if (!root) return;
+    var lifeLikeOn = isToggleOn(root, '#mq-set-lifelike');
+    var activeSw = root.querySelector('#mq-set-bg-active');
+    var warn = root.querySelector('[data-mq-set-bg-lifelike-warn]');
+    if (activeSw) {
+      activeSw.classList.toggle('is-disabled', lifeLikeOn);
+      activeSw.setAttribute('aria-disabled', lifeLikeOn ? 'true' : 'false');
+      if (lifeLikeOn) {
+        activeSw.classList.remove('is-on');
+        activeSw.setAttribute('aria-checked', 'false');
+      }
+    }
+    if (warn) warn.hidden = !lifeLikeOn;
+  }
+
   function syncEmoBindGroupToggles(root) {
     if (!root) return;
     var useAll = isToggleOn(root, '#mq-set-emo-all');
@@ -335,6 +356,91 @@
       toggleRow('mq-set-lifelike', '让TA自己决定何时找你', '替代定时主动消息，由角色自行判断何时联系你', !!bg.lifeLikeEnabled) +
       toggleRow('mq-set-anonymous', '允许TA伪装身份发匿名消息', 'TA可自行决定某次主动联系时隐藏真实身份；消息内容仍由TA现场生成', !!bg.anonymousDisguiseEnabled)
     );
+  }
+
+  function pad2(n) {
+    n = Number(n) || 0;
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  function minToTimeStr(min) {
+    var m = parseInt(min, 10);
+    if (!Number.isFinite(m)) m = 0;
+    m = Math.min(1439, Math.max(0, m));
+    return pad2(Math.floor(m / 60)) + ':' + pad2(m % 60);
+  }
+
+  function timeStrToMin(str) {
+    var m = String(str || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return NaN;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+
+  /**
+   * 「记忆与后台」分区：原「我的」页齿轮（miya-st-panel-contact-chat）里的 7 项，
+   * 现并入角色聊天设置，命名与群设置的 memory 分区对齐。
+   * 说明：定时主动消息（activeEnabled）与「让TA自己决定何时找你」（lifeLikeEnabled）
+   * 互斥——lifeLike 开启时 normalizeChatSettings 会把 activeEnabled 置回 false，
+   * 因此这里同步展示状态提示，避免用户以为设置没生效。
+   */
+  function renderMemoryZoneSection(s) {
+    var bg = (s && s.backgroundMessage) || {};
+    var lifeLikeOn = !!bg.lifeLikeEnabled;
+    return subBlock('记忆', '每次调用 API 读取本会话最近多少条', formCard(
+      fieldBlock('上下文条数', '数值越大越慢，也越贵', '<input type="number" class="ins-text-input" data-mq-set-memory-count min="1" max="500" value="' + esc(s.memoryCount != null ? s.memoryCount : 80) + '">')
+    )) +
+    subBlock('自动总结', '达到条数后自动生成分镜，与「记忆」桌面 App 的每 N 轮提炼互不影响', formCard(
+      fieldBlock('自动总结触发', '设为 0 关闭；只影响分镜/合卷，不影响角色记忆提炼', '<input type="number" class="ins-text-input" data-mq-set-summary-trigger min="0" max="500" value="' + esc(s.summaryTrigger != null ? s.summaryTrigger : 0) + '">') +
+      fieldBlock('总结长度', '生成摘要时的目标字数区间', '<input type="text" class="ins-text-input" data-mq-set-summary-length value="' + esc(s.summaryLength || '100-300字') + '" placeholder="100-300字">')
+    )) +
+    subBlock('后台消息', '由定时规则触发的主动消息', formCard(
+      (lifeLikeOn
+        ? '<p class="st-form-hint mi-set-inline-warn" data-mq-set-bg-lifelike-warn>已开启「让TA自己决定何时找你」，下方的定时主动消息不会生效。要改回定时，请先在上方「基础 → 主动消息」里关掉它。</p>'
+        : '<p class="st-form-hint mi-set-inline-warn" data-mq-set-bg-lifelike-warn hidden>已开启「让TA自己决定何时找你」，下方的定时主动消息不会生效。要改回定时，请先在上方「基础 → 主动消息」里关掉它。</p>') +
+      toggleRow('mq-set-bg-active', '主动发消息', '距最后一条消息达到间隔即触发，不论谁发的', !!bg.activeEnabled) +
+      fieldBlock('主动间隔（分钟）', '从会话最后一条消息起算', '<input type="number" class="ins-text-input" data-mq-set-bg-active-min min="5" max="1440" value="' + esc(bg.activeIntervalMin != null ? bg.activeIntervalMin : 30) + '">') +
+      '<p class="st-form-hint">静默时间段内即使到达间隔也不会主动发消息（以本地时间为准）。</p>' +
+      fieldBlock('静默时段', '', '<div class="mi-inline-nums">' +
+        '<input type="time" class="ins-text-input" data-mq-set-bg-quiet-start step="60" value="' + esc(minToTimeStr(bg.quietStartMin != null ? bg.quietStartMin : 1380)) + '">' +
+        '<span class="mi-inline-nums__sep">至</span>' +
+        '<input type="time" class="ins-text-input" data-mq-set-bg-quiet-end step="60" value="' + esc(minToTimeStr(bg.quietEndMin != null ? bg.quietEndMin : 420)) + '">' +
+      '</div>') +
+      toggleRow('mq-set-bg-quiet-en', '启用静默', '该时段内不主动发消息', !!bg.quietEnabled)
+    ));
+  }
+
+  /**
+   * 读取「记忆与后台」分区里属于**配置**的字段。
+   *
+   * 这些值在 getChatSettings() 的最后一步由全局配置覆盖，
+   * 所以它们不能只写 contact.chatSettings，而要走 applyContactOverride。
+   * 这里刻意不从 live 的 backgroundMessage 取 base，只产出这几个字段本身，
+   * 避免把会话级运行时字段（下次推送时间等）带进全局配置。
+   */
+  function readConfigScopedMemory(root, s) {
+    var qStart = timeStrToMin((root.querySelector('[data-mq-set-bg-quiet-start]') || {}).value);
+    var qEnd = timeStrToMin((root.querySelector('[data-mq-set-bg-quiet-end]') || {}).value);
+    var prevBg = (s && s.backgroundMessage) || {};
+    var lifeLikeOn = isToggleOn(root, '#mq-set-lifelike');
+    var bgPatch = {
+      activeEnabled: lifeLikeOn ? false : isToggleOn(root, '#mq-set-bg-active'),
+      activeIntervalMin: parseInt((root.querySelector('[data-mq-set-bg-active-min]') || {}).value, 10) || 30,
+      quietEnabled: isToggleOn(root, '#mq-set-bg-quiet-en'),
+      quietStartMin: Number.isFinite(qStart) ? qStart : (prevBg.quietStartMin != null ? prevBg.quietStartMin : 1380),
+      quietEndMin: Number.isFinite(qEnd) ? qEnd : (prevBg.quietEndMin != null ? prevBg.quietEndMin : 420)
+    };
+    /* 让全局配置里保留一份完整的记忆字段，避免同一联系人只改了一个字段时，
+       其它字段回落到 miyaChatGlobalSettings 的默认值（而不是使用者上次设定的值）。 */
+    var out = {
+      memoryCount: parseInt((root.querySelector('[data-mq-set-memory-count]') || {}).value, 10),
+      summaryTrigger: parseInt((root.querySelector('[data-mq-set-summary-trigger]') || {}).value, 10),
+      summaryLength: String((root.querySelector('[data-mq-set-summary-length]') || {}).value || '').trim(),
+      backgroundMessage: bgPatch
+    };
+    if (!Number.isFinite(out.memoryCount)) out.memoryCount = s && s.memoryCount != null ? s.memoryCount : 80;
+    if (!Number.isFinite(out.summaryTrigger)) out.summaryTrigger = s && s.summaryTrigger != null ? s.summaryTrigger : 0;
+    if (!out.summaryLength) out.summaryLength = (s && s.summaryLength) || '100-300字';
+    return out;
   }
 
   function renderImageGenBlock(settings) {
@@ -1203,6 +1309,7 @@
     var s = c.settings;
     var contact = c.contact;
     var wa = s.weatherAwareness || {};
+    var ta = s.timeAwareness || {};
     var name = contact.remarkName || contact.name || '未命名';
     var msgCount = countVisibleMessages(state.chatId);
 
@@ -1260,11 +1367,20 @@
         subBlock('主动消息', '由角色自行判断何时联系你', renderLifeLikeSection(s))
       ) +
 
-      /* Token 来源分布：排在「基础」之后，方便生成完随手查看。
-         优先展示「刚生成那次」真实发往 API 的上下文构成（引擎写的 chat.lastPromptBreakdown 快照），
-         没有生成记录时才回落到「下一条预估」。按来源字符数从多到少排列，条形长度即占比。 */
-      renderZone('ctxsource', 'Token 来源分布', '这次正文的上下文来自哪 · 谁占最多',
-        subBlock('来源占比', '按字符数从多到少排列，条形长度为占比', formCard(
+      /* 「记忆与后台」：原先散落在「我的」页齿轮面板（miya-st-panel-contact-chat）里的
+         上下文条数 / 自动总结触发 / 定时主动消息 / 静默时段，现并入聊天设置，
+         让「聊天设置」名副其实。命名与群设置的 memory 分区保持一致。 */
+      renderZone('memory', '记忆与后台', '上下文、自动总结与定时主动消息',
+        renderMemoryZoneSection(s)
+      ) +
+
+      /* 「模型高级」：时间感知 + Token 用量，与群设置的 model 分区命名对齐。
+         原先这里只有一个只读的「Token 来源分布」，时间感知在单聊里根本改不了。 */
+      renderZone('model', '模型高级', '时间感知与 Token 用量',
+        subBlock('运转', '', formCard(
+          toggleRow('mq-set-time-en', '时间感知', '让角色知道当前日期与时段，与「天气感知」相互独立', !!ta.enabled)
+        )) +
+        subBlock('Token 来源分布', '这次正文的上下文来自哪 · 谁占最多，按字符数从多到少排列', formCard(
           '<div class="mi-ctx-usage" data-mq-set-ctx-usage><p class="mi-empty-hint">正在计算…</p></div>'
         ))
       ) +
@@ -1619,10 +1735,20 @@
     }
     var prevMa = s.momentsAuto || {};
     var momentsAuto = readMomentsAutoFromRoot(root, prevMa);
+    /* 「模型高级」区的时间感知：只切 enabled，其余（mode / 双时区 / 强度）沿用既有归一化结果，
+       避免把角色时区等由其它流程维护的字段覆盖掉。 */
+    var awMod = global.MiyaChatAwareness;
+    var taNext = awMod && typeof awMod.normalizeTimeAwareness === 'function'
+      ? awMod.normalizeTimeAwareness(s.timeAwareness)
+      : Object.assign({}, s.timeAwareness || {});
+    taNext.enabled = isToggleOn(root, '#mq-set-time-en');
+    /* 「记忆与后台」分区里的配置字段（走 perContact 覆盖，见 saveForm） */
+    var memConfig = readConfigScopedMemory(root, s);
     var patch = {
       remarkName: (root.querySelector('[data-mq-set-remark]') || {}).value || '',
       relationship: (root.querySelector('[data-mq-set-rel]') || {}).value || '',
       weatherAwareness: wa,
+      timeAwareness: taNext,
       replyBannerEnabled: s.replyBannerEnabled !== false,
       muteNotifications: isToggleOn(root, '#mq-set-mute-notify'),
       onlineNarrationEnabled: isToggleOn(root, '#mq-set-online-narration'),
@@ -1667,6 +1793,7 @@
     }
     return {
       settingsPatch: patch,
+      memoryConfig: memConfig,
       profileId: (root.querySelector('[data-mq-set-mask]') || {}).value || '',
       emojiGroupIds: emoGroupIds,
       useAllEmo: useAllEmo,
@@ -1715,9 +1842,25 @@
     setVal('[data-mq-set-vplace-role]', wa.placeRole);
     setVal('[data-mq-set-rloc-role]', wa.realLocRole);
 
+    var pTa = p.timeAwareness || {};
+    setToggle('#mq-set-time-en', pTa.enabled);
+
     setToggle('#mq-set-mute-notify', p.muteNotifications);
     setToggle('#mq-set-lifelike', p.backgroundMessage && p.backgroundMessage.lifeLikeEnabled);
     setToggle('#mq-set-anonymous', p.backgroundMessage && p.backgroundMessage.anonymousDisguiseEnabled);
+    /* 「记忆与后台」分区回填（草稿值优先，否则用生效值） */
+    var mc = draft.memoryConfig || {};
+    setVal('[data-mq-set-memory-count]', mc.memoryCount != null ? mc.memoryCount : 80);
+    setVal('[data-mq-set-summary-trigger]', mc.summaryTrigger != null ? mc.summaryTrigger : 0);
+    setVal('[data-mq-set-summary-length]', mc.summaryLength || '100-300字');
+    var mcBg = mc.backgroundMessage || {};
+    var pBg = p.backgroundMessage || {};
+    var pLifeLike = !!pBg.lifeLikeEnabled;
+    setToggle('#mq-set-bg-active', (pLifeLike || mcBg.activeEnabled === false) ? false : (mcBg.activeEnabled != null ? !!mcBg.activeEnabled : !!pBg.activeEnabled));
+    setVal('[data-mq-set-bg-active-min]', mcBg.activeIntervalMin != null ? mcBg.activeIntervalMin : (pBg.activeIntervalMin != null ? pBg.activeIntervalMin : 30));
+    setToggle('#mq-set-bg-quiet-en', mcBg.quietEnabled != null ? !!mcBg.quietEnabled : !!pBg.quietEnabled);
+    setVal('[data-mq-set-bg-quiet-start]', minToTimeStr(mcBg.quietStartMin != null ? mcBg.quietStartMin : (pBg.quietStartMin != null ? pBg.quietStartMin : 1380)));
+    setVal('[data-mq-set-bg-quiet-end]', minToTimeStr(mcBg.quietEndMin != null ? mcBg.quietEndMin : (pBg.quietEndMin != null ? pBg.quietEndMin : 420)));
     setVal('[data-mq-set-render-limit]', p.messageRenderLimit);
     setVal('[data-mq-set-bubble-min]', p.roleReplyBubbleMin);
     setVal('[data-mq-set-bubble-max]', p.roleReplyBubbleMax);
@@ -1830,6 +1973,21 @@
     var emojiValid = useAllEmo || data.emojiGroupIds.length > 0;
     var prevWa = c.settings.weatherAwareness;
     var nextWa = data.settingsPatch.weatherAwareness;
+
+    /*
+     * 「记忆与后台」分区走的是另一条落库链路。
+     * getChatSettings() 最后一步会用全局配置把 memoryCount / summaryTrigger /
+     * summaryLength / backgroundMessage 整个覆盖掉，所以这几个字段不能只写
+     * contact.chatSettings（实测：写得进去，读不出来）。
+     * 这里把它们登记为该联系人的 perContact 覆盖，改完即生效，
+     * 也不影响其它联系人仍在使用的全局默认值。
+     * 注意：backgroundMessage 里的 lifeLike / anonymousDisguiseEnabled 属于会话级，
+     * 仍由上面的 saveChatSettings 负责，不在这里重复写。
+     */
+    var gsMod = global.miyaChatGlobalSettings;
+    var memConfig = data.memoryConfig;
+    var hasMemChange = !!(memConfig && c.contact);
+
     var chain = Promise.resolve();
     if (data.profileId && data.profileId !== c.chat.profileId) {
       chain = chain.then(function () { return store.updateChat(state.chatId, { profileId: data.profileId }); });
@@ -1842,6 +2000,11 @@
     chain = chain.then(function () {
       return store.saveChatSettings(state.chatId, data.settingsPatch);
     });
+    if (hasMemChange && gsMod && typeof gsMod.applyContactOverride === 'function') {
+      chain = chain.then(function () {
+        return gsMod.applyContactOverride(c.contact.id, memConfig);
+      });
+    }
 
     return chain.then(function () {
       var emojiChain = Promise.resolve();
@@ -1957,6 +2120,7 @@
     if (!opts.fromStore) applyFormDraft(body);
     syncEmoBindGroupToggles(body);
     syncMomentsAutoModeUI(body);
+    syncLifeLikeAgainstTimedBackground(body);
     syncTranslateExtrasVisibility(body);
     body.scrollTop = prevScroll;
     if (!opts.skipContextUsage) scheduleContextUsageRefresh();
@@ -2140,6 +2304,10 @@
         if (sw.id === 'mq-set-trans') {
           var transBody = pageEl.querySelector('[data-mq-set-body]');
           syncTranslateExtrasVisibility(transBody);
+        }
+        if (sw.id === 'mq-set-lifelike') {
+          var memBody = pageEl.querySelector('[data-mq-set-body]');
+          syncLifeLikeAgainstTimedBackground(memBody);
         }
         return;
       }

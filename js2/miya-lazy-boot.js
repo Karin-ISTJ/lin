@@ -47,7 +47,7 @@
     },
     memoryUi: {
       css: ['css/miya-memory.css?v=9'],
-      js: ['js2/miya-memory-app.js?v=9']
+      js: ['js2/miya-memory-app.js?v=10']
     },
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],

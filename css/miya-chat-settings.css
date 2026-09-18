@@ -371,6 +371,22 @@
   line-height: 1.5;
 }
 
+/* 互斥项提示（如「让TA自己决定何时找你」会盖掉定时主动消息）：
+   用暖琥珀底区分于普通灰字提示，避免用户漏读后以为设置没生效。 */
+.mi-set-page .st-form-hint.mi-set-inline-warn {
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(196, 148, 74, 0.26);
+  background: rgba(196, 148, 74, 0.08);
+  color: #96642a;
+}
+
+/* 被互斥项禁用的开关：降不透明度并去掉指针反馈 */
+.mi-set-page .ins-toggle.is-disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
 .mi-set-page .ins-field-label {
   display: block;
   font-family: 'Inter', sans-serif;
