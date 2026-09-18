@@ -2696,41 +2696,127 @@
     );
   }
 
+  /*
+   * 通知与提示音子视图。
+   *
+   * ── 结构与来源 ────────────────────────────────────────────────
+   *
+   * 它对应桌面设置 App 里的两块内容，合并时被压扁成「两个裸卡片」，
+   * 丢掉了原版的骨架：
+   *
+   *   1. 系统通知那一行原版是 .st-card-row + 图标 + label/desc，
+   *      带 st-section-label 小标题分组，而不是一个光秃秃的 toggle；
+   *   2. 原版有一整张「通知预览」feature card（st-deco-number 角标
+   *      04 + st-notify-demo 两条模拟通知 + 带图标的测试按钮），
+   *      这次合并没有搬过来，等于整块内容消失；
+   *   3. 提示音面板原版用 st-form-section 包住「内置预设」「自定义预设」
+   *      两段，列表本身是 st-form-card —— 压扁后 section 包装没了，
+   *      标题与列表的层级关系就散了。
+   *
+   * 现按原版骨架重建。注意两条硬约束：
+   *
+   *   · id 一个都不能改。#miya-st-sw-msgsound / #miya-st-msgsound-presets
+   *     / #miya-st-msgsound-custom-list / #miya-st-msgsound-upload 等是
+   *     miya-msg-sound.js 用 getElementById 全局查找的，不是事件委托，
+   *     改了会静默失效（点了没反应但不报错）。
+   *   · #mq-notify-sw 与 [data-mq-notify-test] 是本文件事件委托的钩子，
+   *     runNotifyTest() 里也会回写 #mq-notify-sw 的 is-on 状态。
+   */
   function renderNotifySub() {
     var prefs = (global.miyaGetSystemPrefs && global.miyaGetSystemPrefs()) || {};
     var perm = global.miyaGetNotificationPermission ? global.miyaGetNotificationPermission() : 'unsupported';
-    return subShell('通知与提示音', '系统通知开关、测试与提示音选择。',
+    var permText = {
+      granted: '已授权，通知可正常送达',
+      denied: '已被拒绝，请在浏览器设置中允许',
+      'default': '尚未询问，点「测试通知」时会请求权限',
+      unsupported: '当前环境不支持系统通知'
+    }[perm] || perm;
+
+    return subShell('通知与提示音', '系统通知开关、测试与来消息提示音。',
+
+      /* ── 系统通知（原版「系统」分组）── */
+      '<div class="st-section-label">系统</div>' +
       '<div class="st-form-card ins-form-block mi-set-subview__card">' +
-        '<div class="st-toggle-in-form">' +
-          '<strong>系统通知</strong>' +
+        '<div class="st-card-row st-card-row--static">' +
+          '<div class="st-card-row-left">' +
+            '<div class="st-card-icon st-card-icon--warm">' +
+              '<img class="mi-ico-img" src="img/icons/message-chat-square.svg" alt="" width="18" height="18">' +
+            '</div>' +
+            '<div>' +
+              '<div class="st-card-label">系统通知</div>' +
+              '<div class="st-card-desc">推送提醒与角标更新</div>' +
+            '</div>' +
+          '</div>' +
           '<button type="button" class="ins-toggle' + (prefs.notify ? ' is-on' : '') + '" id="mq-notify-sw" role="switch" aria-checked="' + (prefs.notify ? 'true' : 'false') + '"></button>' +
         '</div>' +
-        '<p class="st-form-hint">推送提醒与角标更新。当前权限：' + esc(perm) + '</p>' +
-        '<div class="mi-btn-row">' +
-          '<button type="button" class="st-action-btn" data-mq-notify-test>测试通知</button>' +
+        '<p class="st-form-hint">当前权限：' + esc(permText) + '</p>' +
+      '</div>' +
+
+      /* ── 通知预览（原版 04 号 feature card）── */
+      '<div class="st-feature-card">' +
+        '<div class="st-deco-number">04</div>' +
+        '<div class="st-feature-header">' +
+          '<div>' +
+            '<div class="st-feature-title">通知 <em>预览</em></div>' +
+            '<div class="st-feature-subtitle">测试你的提醒配置</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="st-notify-demo">' +
+          '<div class="st-notify-item">' +
+            '<div class="st-notify-avatar">' +
+              '<img class="mi-ico-img" src="img/icons/user-02.svg" alt="" width="18" height="18">' +
+            '</div>' +
+            '<div class="st-notify-content">' +
+              '<div class="st-notify-title">新消息</div>' +
+              '<div class="st-notify-text">今晚有空吗？</div>' +
+            '</div>' +
+            '<div class="st-notify-time">刚刚</div>' +
+          '</div>' +
+          '<div class="st-notify-item">' +
+            '<div class="st-notify-avatar">' +
+              '<img class="mi-ico-img" src="img/icons/message-chat-square.svg" alt="" width="18" height="18">' +
+            '</div>' +
+            '<div class="st-notify-content">' +
+              '<div class="st-notify-title">系统提醒</div>' +
+              '<div class="st-notify-text">通知权限已就绪</div>' +
+            '</div>' +
+            '<div class="st-notify-time">2 分钟</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="st-btn-row">' +
+          '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-notify-test>' +
+            '<img class="mi-ico-img" src="img/icons/message-chat-square.svg" alt="" width="16" height="16">' +
+            '测试通知' +
+          '</button>' +
         '</div>' +
       '</div>' +
-      /*
-       * 提示音面板：id 与结构原样保留。
-       * miya-msg-sound.js 是按固定 id 全局查找（getElementById），
-       * 不是事件委托 —— 改了 id 会静默失效（点了没反应但不报错）。
-       */
-      '<div class="st-form-card ins-form-block mi-set-subview__card" id="miya-st-panel-msg-sound">' +
-        '<div class="st-toggle-in-form">' +
-          '<strong>启用提示音</strong>' +
-          '<button type="button" class="ins-toggle" id="miya-st-sw-msgsound" role="switch" aria-checked="true"></button>' +
+
+      /* ── 提示音（原版独立面板 miya-st-panel-msg-sound）── */
+      '<div class="ins-form-block mi-set-subview__card" id="miya-st-panel-msg-sound">' +
+        '<div class="st-form-card">' +
+          '<div class="st-toggle-in-form">' +
+            '<strong>启用提示音</strong>' +
+            '<button type="button" class="ins-toggle" id="miya-st-sw-msgsound" role="switch" aria-checked="true"></button>' +
+          '</div>' +
+          '<p class="st-form-hint">收到新消息时播放（当前聊天界面内不响）。生图完成、线下场景写完后也会用同一个提示音提醒你。</p>' +
         '</div>' +
-        '<p class="st-form-hint">收到新消息时播放（当前聊天界面内不响）。生图完成、线下场景写完后也会用同一个提示音提醒你。</p>' +
-        '<h4 class="st-form-section__title">内置预设</h4>' +
-        '<div class="st-msgsound-list" id="miya-st-msgsound-presets"></div>' +
-        '<h4 class="st-form-section__title">自定义预设</h4>' +
-        '<p class="st-form-hint">上传本地音频（最大 1MB），保存后可作为提示音</p>' +
-        '<button type="button" class="st-action-btn st-action-btn--primary st-msgsound-upload-btn" id="miya-st-msgsound-upload">上传音频</button>' +
-        '<input type="file" class="ins-file" id="miya-st-msgsound-file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.webm" hidden>' +
-        '<div class="st-msgsound-list" id="miya-st-msgsound-custom-list"></div>' +
+        '<section class="st-form-section">' +
+          '<h4 class="st-form-section__title">内置预设</h4>' +
+          '<div class="st-form-card st-msgsound-list" id="miya-st-msgsound-presets"></div>' +
+        '</section>' +
+        '<section class="st-form-section">' +
+          '<h4 class="st-form-section__title">自定义预设</h4>' +
+          '<div class="st-form-card ins-form-block">' +
+            '<p class="st-form-hint">上传本地音频（最大 1MB），保存后可作为提示音</p>' +
+            '<button type="button" class="st-action-btn st-action-btn--primary st-msgsound-upload-btn" id="miya-st-msgsound-upload">上传音频</button>' +
+            '<input type="file" class="ins-file" id="miya-st-msgsound-file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.webm" hidden>' +
+            '<div class="st-msgsound-list" id="miya-st-msgsound-custom-list"></div>' +
+          '</div>' +
+        '</section>' +
       '</div>'
     );
   }
+
 
   /* 打开子视图 */
   function openSubView(key) {
@@ -3046,6 +3132,15 @@
       if (e.target.closest('.mi-toggle, .ins-toggle')) {
         var sw = e.target.closest('.mi-toggle, .ins-toggle');
         if (sw.classList.contains('is-disabled')) return;
+        /*
+         * 提示音开关（#miya-st-sw-msgsound）由 miya-msg-sound.js 自己绑了
+         * 直接监听 + setEnabled/saveSettings。这里是页级委托，冒泡上来同样
+         * 命中 .ins-toggle —— 于是同一次点击被处理两遍：
+         * 前一次把状态写成 off，后一次又按「取反」翻回 on。
+         * 表现为开关点不动、且状态与 localStorage 不一致（UI 显示开、实际存的关）。
+         * 该 id 归 miya-msg-sound 所有，这里必须放行。
+         */
+        if (sw.id === 'miya-st-sw-msgsound') return;
         var on = !sw.classList.contains('is-on');
         sw.classList.toggle('is-on', on);
         sw.setAttribute('aria-checked', on ? 'true' : 'false');
