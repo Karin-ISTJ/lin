@@ -6,49 +6,10 @@
 
   var store = null;
   var pageEl = null;
-  var state = {
-    chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null,
-    /*
-     * 子视图表单草稿：{ api-chat: {...}, 'api-voice': {...} }
-     *
-     * 为什么必须有它 —— 这是一个用户报过的 bug：
-     *   「我切换了对话 API 的预设，结果一点保存却没切换成功，
-     *     变回来切换之前的 URL 和 key」。
-     *
-     * 机制（三个环节缺一不可，所以现象很绕）：
-     *   1. 「载入预设」按设计只改 DOM、**不动正式配置**（见 applyApiPresetToForm
-     *      的注释：载入是可反悔的预览，点保存才生效）；
-     *   2. render() 对子视图是**整块换 innerHTML**。而 openSubView / closeSubView
-     *      都会无条件调 render()，open() 里还有一次异步 scheduleRender ——
-     *      于是「返回再进来」「切到别的子视图再回来」「后台任何一次重进」
-     *      任一条路径，都会把只活在 DOM 里的切换值销毁；
-     *   3. renderApiChatSub() 重绘时的初值取自 miyaGetApiConfigCached()
-     *      （**正式配置**，仍是切换前的旧线路）。
-     *
-     *     进面板切到线路B → 返回（B 被销毁）→ 再进来（表单从正式配置重绘成
-     *     线路A）→ 点保存 → 写回的当然是 A。用户看到的就是「切了、保存了、
-     *     却又变回切换之前」；而且毫无提示，因为每一步都「成功」了。
-     *
-     * 修法：凡子视图里「用户改了但还没点保存」的值，一律先记进草稿，
-     * 重绘后由 applySubViewDraft 回填。思路与页面级 formDraft 完全一致
-     * （captureFormDraft / applyFormDraft），只是作用域收在单个子视图内。
-     *
-     * 草稿的生命周期：
-     *   · 载入预设 / 用户手改字段 → 更新草稿
-     *   · 重绘（render 进子视图）→ 回填
-     *   · 点「保存」成功 → 清掉（此时正式配置已经等于表单，可不再兜）
-     *   · 关掉整个设置页 / 切换到别的会话 → 清掉
-     *
-     * ⚠️ 但**「点子视图里的返回」不清**。这一点反直觉，且我第一版就写错了 ——
-     * 详见 closeSubView 里的长注释：清掉会让核心路径依然是坏的。
-     */
-    subViewDraft: Object.create(null)
-  };
+  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null };
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
-  /* 子视图草稿归属的 chatId：换会话才清草稿，重复 open 同一会话不清 */
-  var draftChatId = null;
   /* 「Token 来源分布」里已展开具体条目的来源 key，重绘后按此恢复展开态 */
   var ctxOpenSrcRows = Object.create(null);
 
@@ -2022,100 +1983,18 @@
     if (bfMod && bfWrap) bfMod.hydrateCssPreview(bfWrap);
   }
 
-  /* ── 子视图表单草稿 ────────────────────────────────────────────
+  /*
+   * 温度滑块的数值标签同步。
    *
-   * 背景与完整机理见 state.subViewDraft 上的注释。这里只放两条
-   * 对称的读写动作，与页面级 captureFormDraft / applyFormDraft 同构。
-   *
-   * 为什么不能只靠「重绘时读 DOM」：render() 是把 innerHTML 整块换掉的，
-   * 换掉那一刻 DOM 里的值就已经没了 —— 必须在**重绘之前**先抓一版。
-   * render() 里的抓取点见子视图分支里的 captureSubViewDraft 调用。
+   * 这个联动原本随桌面设置 App 一起丢了 —— 拖滑块只有条动、数字不动。
+   * 「载入预设」之后也要用一次：预设里的温度直接写进 input.value，
+   * 不经过 input 事件，标签不会自己更新。
    */
-
-  /* 各子视图的字段清单。集中在一处，避免以后加字段时漏掉草稿。
-     sel 用 id 选择器，与渲染函数里的 id 一一对应。 */
-  var SUB_VIEW_DRAFT_FIELDS = {
-    'api-chat': [
-      { k: 'baseUrl', sel: '#mq-api-base' },
-      { k: 'apiKey', sel: '#mq-api-key' },
-      { k: 'model', sel: '#mq-api-model' },
-      { k: 'temperature', sel: '#mq-api-temp' },
-      { k: 'fallbackBaseUrl', sel: '#mq-api2-base' },
-      { k: 'fallbackApiKey', sel: '#mq-api2-key' },
-      { k: 'fallbackModel', sel: '#mq-api2-model' },
-      { k: 'fallbackTemperature', sel: '#mq-api2-temp' },
-      { k: 'fallbackEnabled', sel: '#mq-api-fallback', toggle: true },
-      /* 预设名与下拉选中值也一并留：否则重绘后名称框空了，
-         用户以为预设丢了，还得重新输一遍名字才能覆盖保存。 */
-      { k: '__presetName', sel: '#mq-api-preset-name' },
-      { k: '__presetPick', sel: '#mq-api-preset-pick' }
-    ],
-    'api-voice': [
-      { k: 'apiKey', sel: '#mq-voice-key' },
-      { k: 'groupId', sel: '#mq-voice-group' },
-      { k: 'model', sel: '#mq-voice-model' },
-      { k: 'prompt', sel: '#mq-voice-prompt' },
-      { k: 'speed', sel: '#mq-voice-speed' },
-      { k: 'vol', sel: '#mq-voice-vol' },
-      { k: 'pitch', sel: '#mq-voice-pitch' }
-    ]
-  };
-
-  /* 从当前 DOM 抓一版草稿存起来。key 省略时按 state.subView 抓。
-     节点不存在就整个跳过 —— 不能把「节点没了」误记成「用户清空了」。 */
-  function captureSubViewDraft(key) {
-    var k = key || state.subView;
-    var fields = SUB_VIEW_DRAFT_FIELDS[k];
-    if (!pageEl || !fields) return;
-    var next = Object.create(null);
-    var any = false;
-    fields.forEach(function (f) {
-      var el = pageEl.querySelector(f.sel);
-      if (!el) return;
-      any = true;
-      if (f.toggle) next[f.k] = el.classList.contains('is-on');
-      else next[f.k] = String(el.value == null ? '' : el.value);
-    });
-    if (any) state.subViewDraft[k] = next;
-  }
-
-  /* 重绘后把草稿回填进新节点。没有草稿就什么都不做，
-     让渲染函数自带的「从正式配置取初值」生效（首次进入走这条）。 */
-  function applySubViewDraft(key) {
-    var k = key || state.subView;
-    var draft = state.subViewDraft[k];
-    var fields = SUB_VIEW_DRAFT_FIELDS[k];
-    if (!pageEl || !draft || !fields) return;
-    fields.forEach(function (f) {
-      if (!Object.prototype.hasOwnProperty.call(draft, f.k)) return;
-      var el = pageEl.querySelector(f.sel);
-      if (!el) return;
-      if (f.toggle) {
-        var on = !!draft[f.k];
-        el.classList.toggle('is-on', on);
-        el.setAttribute('aria-checked', on ? 'true' : 'false');
-      } else {
-        el.value = draft[f.k];
-      }
-    });
-    /* 温度滑块的数字标签不在字段表里（它是 <span> 不是表单控件），
-       单独同步一下，否则回填后滑块动了、数字还停在上一个值。 */
-    if (k === 'api-chat') {
-      syncTempLabel('#mq-api-temp', '#mq-api-temp-lbl');
-      syncTempLabel('#mq-api2-temp', '#mq-api2-temp-lbl');
-    }
-  }
-
   function syncTempLabel(rangeSel, labelSel) {
     if (!pageEl) return;
     var r = pageEl.querySelector(rangeSel);
     var l = pageEl.querySelector(labelSel);
     if (r && l) l.textContent = String(r.value);
-  }
-
-  function clearSubViewDraft(key) {
-    var k = key || state.subView;
-    if (k) delete state.subViewDraft[k];
   }
 
   function refreshWeatherAfterSaveInBackground(prevWa, nextWa) {
@@ -2339,12 +2218,6 @@
       /* 副线路温度：原版面板有这个字段，压缩重写时丢了 —— 补回 */
       if (Number.isFinite(temp2)) patch.fallbackTemperature = temp2;
       if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig(patch);
-      /*
-       * 保存成功 ⇔ 正式配置已等于表单内容，草稿的使命到此结束。
-       * 不清掉的话，下次重绘会拿草稿「回填」，把用户之后重新载入的
-       * 另一份预设又盖回去 —— 那就成了同一个 bug 的镜像版本。
-       */
-      clearSubViewDraft('api-chat');
       toast('对话 API 已保存');
       return;
     }
@@ -2363,7 +2236,6 @@
       if (Number.isFinite(vo)) tts.volume = vo;
       if (Number.isFinite(pi)) tts.pitch = pi;
       if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig({ minimaxTts: tts });
-      clearSubViewDraft('api-voice');
       toast('语音合成已保存');
       return;
     }
@@ -2699,36 +2571,65 @@
     }
   }
 
-  /* 下拉选中后自动载入 —— 与生图预设的「选中即读」一致，少一步点击 */
+  /* 下拉选中即载入并**立即生效**（对齐桌面设置 App 的旧行为）
+   *
+   * ── 为什么改回「选中即生效」───────────────────────────────────
+   *
+   * 迁移到页内设置时，这里被改成「载入 = 预览，点保存才生效」。
+   * 这个改动本意是给用户一次反悔机会，实际却造出了一个**只活在 DOM 里的
+   * 中间态** —— 而 render() 对子视图是整块换 innerHTML，中间态必然被抹掉。
+   * 用户看到的正是：「切换预设 → 点保存 → 变回切换之前的 URL 和 key」。
+   *
+   * 对照旧实现（js2/miya-settings-app.js 的 miya-st-preset-pick change）：
+   *     setApiConfig(pr.config);      // ← 直接写正式配置，一步到位
+   *     syncFormsFromConfig();
+   * 旧版「好用的」根本原因不是它处理了什么边界，而是**它没有中间态**：
+   * 选中就落地，之后重绘多少次都不影响结果。
+   *
+   * 所以这里回到同一套语义：载入 = 写配置 + 落盘 + 同步表单。
+   * 既然正式配置当场就变了，之后无论怎么重绘，表单读到的都是新值，
+   * 上一版为「保住未保存的中间态」而加的整套草稿机制也随之失去必要。
+   *
+   * 顺带解决另一个隐患：旧语义下用户切完预设忘记点保存，会静默不生效；
+   * 现在切了就是切了，没有「以为生效其实没生效」的状态。
+   */
   function loadApiPresetFromPick() {
     var mod = global.miyaApiPresets;
     var pick = presetPickEl();
     var name = pick ? String(pick.value || '').trim() : '';
-    if (!mod || !name) {
-      /*
-       * 用户把下拉拨回「选择已存预设」（空值）时，只清草稿里的预设选中态，
-       * 表单里刚载入的值原样留着 —— 这样「选错了想撤销」不会连内容一起丢。
-       */
-      if (state.subViewDraft['api-chat']) {
-        state.subViewDraft['api-chat'].__presetPick = '';
-      }
-      return;
-    }
+    if (!mod || !name) return;
     mod.find(name).then(function (p) {
       if (!p) { toast('预设不存在'); return; }
+      /* 写进正式配置并落盘 —— 这一步是「立即生效」的全部含义 */
+      if (typeof global.miyaSetApiConfig === 'function') {
+        global.miyaSetApiConfig(presetToConfigPatch(p));
+      }
       applyApiPresetToForm(p);
+      syncTempLabel('#mq-api-temp', '#mq-api-temp-lbl');
+      syncTempLabel('#mq-api2-temp', '#mq-api2-temp-lbl');
       var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
       if (nameEl) nameEl.value = name;
-      /*
-       * ★ 载入只改 DOM，必须立刻存进草稿。
-       *
-       * 不然「载入线路B → 返回 → 再进来 → 点保存」这条路径会写回线路A：
-       * 重绘时 DOM 里的 B 被销毁，renderApiChatSub 又从正式配置（A）重绘，
-       * 用户点保存就是把 A 存了一遍 —— 他看到的正是「切了却没切成功」。
-       */
-      captureSubViewDraft('api-chat');
-      toast('已载入：' + name + '（记得点保存生效）');
+      toast('已载入：' + name);
     }).catch(function () { toast('载入失败'); });
+  }
+
+  /*
+   * 预设条目 → miyaSetApiConfig 的 patch。字段名与表单快照保持一致，
+   * 这样「保存预设」写进去的形状和「载入预设」读出来的形状永远对称。
+   */
+  function presetToConfigPatch(p) {
+    if (!p) return {};
+    var out = {};
+    if (p.baseUrl != null) out.baseUrl = String(p.baseUrl);
+    if (p.apiKey != null) out.apiKey = String(p.apiKey);
+    if (p.model != null) out.model = String(p.model);
+    if (p.temperature != null) out.temperature = p.temperature;
+    if (p.fallbackBaseUrl != null) out.fallbackBaseUrl = String(p.fallbackBaseUrl);
+    if (p.fallbackApiKey != null) out.fallbackApiKey = String(p.fallbackApiKey);
+    if (p.fallbackModel != null) out.fallbackModel = String(p.fallbackModel);
+    if (p.fallbackTemperature != null) out.fallbackTemperature = p.fallbackTemperature;
+    out.fallbackEnabled = !!p.fallbackEnabled;
+    return out;
   }
 
   function saveApiPreset() {
@@ -2746,12 +2647,6 @@
       refreshApiPresetOptions(list);
       var pick = presetPickEl();
       if (pick) pick.value = name;
-      /*
-       * 存完把草稿里的预设名 / 选中态同步成刚存下的这一条，
-       * 免得重绘后下拉回落到空、名称框也空掉。
-       */
-      var d = state.subViewDraft['api-chat'];
-      if (d) { d.__presetName = name; d.__presetPick = name; }
       toast('预设已保存');
     }).catch(function () { toast('保存失败'); });
   }
@@ -2772,9 +2667,6 @@
       if (p) p.value = '';
       var n = pageEl && pageEl.querySelector('#mq-api-preset-name');
       if (n) n.value = '';
-      /* 被删除的预设名不能再留在草稿里，否则重绘后名称框又长回来 */
-      var d = state.subViewDraft['api-chat'];
-      if (d) { d.__presetName = ''; d.__presetPick = ''; }
       toast('已删除：' + name);
     }).catch(function () { toast('删除失败'); });
   }
@@ -3207,22 +3099,10 @@
 
     /* 子视图：整页换内容，不参与 zone 状态与草稿的采集 */
     if (state.subView) {
-      /*
-       * ★ 换 innerHTML 之前先把表单里「已改但未保存」的值抓下来。
-       *
-       * 这一步是「切换预设后点保存却没切成功」那个 bug 的关键。
-       * 少了它，重绘 = 用户的编辑凭空消失，而且接下来 renderApiChatSub()
-       * 会从**正式配置**（切换前的旧线路）重绘，用户再点保存就是把旧值写回去。
-       *
-       * 抓取必须在赋值 innerHTML 之前 —— 之后 DOM 里已经是新节点了。
-       */
-      captureSubViewDraft(state.subView);
       var titleEl = pageEl.querySelector('.st-navtitle');
       if (titleEl) titleEl.textContent = SUB_VIEW_TITLES[state.subView] || '聊天设置';
       body.innerHTML = renderSubView(state.subView);
       body.scrollTop = 0;
-      /* 新节点就位后回填；没有草稿时保持渲染函数给的初值 */
-      applySubViewDraft(state.subView);
       return;
     }
     var navTitle = pageEl.querySelector('.st-navtitle');
@@ -3284,22 +3164,6 @@
     state.chatId = chatId;
     state.wbSortOpen = false;
     state.zoneOpen = {};
-    /*
-     * 换会话就丢弃子视图草稿。
-     *
-     * 对话 API 的预设是**全局**的，草稿里却可能存着用户刚改了一半的网关。
-     * 若把 A 会话里未保存的改动带到 B 会话的同一个面板上，用户会以为
-     * 「这个会话有自己的线路」—— 而其实并不存在按会话分线路的概念。
-     * 所以草稿只在同一个 chatId 内有效。
-     *
-     * 注意不能无条件清：open() 会被重复调用（外部跳转、通知点击、
-     * openSubViewForChat 都会再 open 一次同一个 chatId），那种情况下
-     * 清掉就等于把用户正在编辑的内容抹了 —— 那正是本 bug 的另一副面孔。
-     */
-    if (draftChatId !== null && String(draftChatId) !== String(chatId)) {
-      state.subViewDraft = Object.create(null);
-    }
-    draftChatId = chatId;
     /* 每次从聊天页进来都回到列表首页，不残留上次停在的 API 子页 ——
        否则用户点「聊天设置」会莫名其妙直接看到某个 API 表单。 */
     state.subView = null;
@@ -3355,9 +3219,6 @@
     state.chatId = null;
     state.formDraft = null;
     state.subView = null;
-    /* 关掉整个设置页 = 放弃所有未保存编辑，子视图草稿一并清掉 */
-    state.subViewDraft = Object.create(null);
-    draftChatId = null;
     if (pageEl) {
       pageEl.classList.remove('is-open');
       pageEl.hidden = true;
@@ -3861,37 +3722,7 @@
         if (pl) pl.textContent = String(e.target.value);
         return;
       }
-      /*
-       * 手改字段也要记进子视图草稿。
-       *
-       * 只覆盖「载入预设」是不够的：用户在 API 面板里直接改网关 / 密钥
-       * 属于同等程度的未保存编辑，同样会被下一次整块重绘销毁 —— 最典型的是
-       * 「改完还没点保存，后台某个流程调了一次 open() 重新进来」，
-       * 表单当场弹回旧值，接着点保存就把旧值写死了。
-       *
-       * 用 setSubViewDraftField 按字段名精确落盘（而非整表重抓），
-       * 这样即使此刻某些节点不在（比如副线路被折叠），也不会误清别的字段。
-       */
-      setSubViewDraftField('api-chat', e.target);
-      setSubViewDraftField('api-voice', e.target);
     });
-  }
-
-  /*
-   * 单个字段级的草稿写入：按 id 反查它属于哪个字段，只更新那一个键。
-   * 找不到对应字段（事件来自别的控件）就安静返回 —— 这里在 input 事件上，
-   * 绝不能因为一个无关控件就抛错，那会打断用户正在进行的输入。
-   */
-  function setSubViewDraftField(key, el) {
-    if (!el || !el.id) return;
-    var fields = SUB_VIEW_DRAFT_FIELDS[key];
-    if (!fields) return;
-    for (var i = 0; i < fields.length; i++) {
-      if (fields[i].sel !== '#' + el.id) continue;
-      var d = state.subViewDraft[key] || (state.subViewDraft[key] = Object.create(null));
-      d[fields[i].k] = String(el.value == null ? '' : el.value);
-      return;
-    }
   }
 
   function patchTokenUsageInSettings(chatId) {

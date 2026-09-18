@@ -1,7 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Karin · 「切换对话 API 预设后点保存，却变回切换之前的 URL / key」回归测试
+Karin · 「切换对话 API 预设」语义回归测试
+
+⚠️ 本文件在第二轮修复后**已改写为「选中即生效」语义**。
+
+历史
+----
+第一轮：把症状当成「载入=预览，点保存才生效」下的中间态丢失，加了子视图草稿。
+        能修好症状，但那是给一个多余设计打补丁。
+
+第二轮：拿到旧包（karinn-imagegen-v5）做基线对比，发现**旧实现压根没有中间态**：
+            // js2/miya-settings-app.js  miya-st-preset-pick change
+            setApiConfig(pr.config);   // ← 选中即刻写正式配置
+            syncFormsFromConfig();
+        旧版「好用」的根本原因是设计上就没有可丢的中间态。
+        于是对齐旧包：载入 = 写配置 + 落盘 + 同步表单，撤掉整套草稿机制。
+
+另外修掉草稿机制引入的副作用（用户反馈）：
+    「一点保存，保存的预设都没了，但重进又会显示出来」
+    —— applySubViewDraft 会拿草稿回填下拉框，与重绘后重建 option 时序错位，
+       把列表刷成空。数据在盘里没问题，所以重进又正常。撤掉草稿即消失。
 
 缺陷现象（用户原话）
 --------------------
@@ -95,15 +114,40 @@ async def boot(pg):
       window.miyaChatContactSettings.open('chat1');
     })()""")
     await pg.wait_for_timeout(900)
+    await wait_ready(pg)
     await pg.evaluate(
         "(c) => window.miyaSetApiConfig({ baseUrl: c.b, apiKey: c.k })",
         {"b": A_BASE, "k": A_KEY})
     await pg.wait_for_timeout(500)
 
 
+async def wait_ready(pg, sel='[data-mq-set-sub="api-chat"]', tmo=15000):
+    """等设置页的**异步首屏渲染**落定。
+
+    render(opts) 是异步的（scheduleRender + 可能 await 配置水合），
+    打开设置页的一瞬间 body 里只有「加载中…」。直接对尚未挂载的
+    导航项点击会命中 30s 超时 —— 这是测试自身的等待缺口，不是产品缺陷。
+    """
+    await pg.wait_for_selector(sel, state="attached", timeout=tmo)
+
+
 async def enter(pg):
+    """进入对话 API 子视图。"""
+    # 若还停在别的子视图，先退回根层级（点返回键而不是猜 DOM）
+    await pg.evaluate("""
+    () => {
+      var page = document.getElementById('mq-set-page');
+      if (!page) return;
+      if (page.querySelector('[data-mq-set-sub]')) return;   // 已根层级
+      var bk = page.querySelector('[data-mq-set-back]');
+      if (bk) bk.click();
+    }""")
+    await pg.wait_for_timeout(600)
+    await wait_ready(pg)
     await pg.click('[data-mq-set-sub="api-chat"]')
-    await pg.wait_for_timeout(1500)
+    await pg.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
+                               state="attached", timeout=15000)
+    await pg.wait_for_timeout(1200)
 
 
 async def back(pg):
@@ -114,7 +158,7 @@ async def back(pg):
 
 async def save(pg):
     await pg.click('[data-mq-set-sub-save="api-chat"]')
-    await pg.wait_for_timeout(1200)
+    await pg.wait_for_timeout(1400)
 
 
 async def form(pg):
@@ -176,38 +220,38 @@ async def main():
         await make_presets(pg)
 
         # ══════════════════════════════════════════════════════════
-        print("\n【1】核心路径：切换预设 → 返回 → 再进来 → 点保存")
+        print("\n【1】核心：选中预设即刻生效（对齐旧包语义，无需再点保存）")
         c0 = await cfg(pg)
         check("起始正式配置为线路A", c0.get("baseUrl") == A_BASE, str(c0.get("baseUrl")))
 
         await pg.select_option("#mq-api-preset-pick", "线路B")
-        await pg.wait_for_timeout(1000)
+        await pg.wait_for_timeout(1200)
         f1 = await form(pg)
         check("载入后表单显示线路B", f1["base"] == B_BASE, str(f1["base"]))
 
-        await back(pg)
-        await enter(pg)
-        f2 = await form(pg)
-        check("★ 返回后重进，表单仍是线路B（曾经的失败点）",
-              f2["base"] == B_BASE, str(f2["base"]))
-        check("★ 密钥也一并保持", f2["key"] == B_KEY, str(f2["key"]))
-
-        await save(pg)
+        # ★ 关键差异：还没有点任何保存，正式配置就应该已经变了
         c1 = await cfg(pg)
-        check("★ 点保存后生效的是线路B（URL）",
+        check("★ 仅选中预设，正式配置立刻变成线路B（URL）",
               c1.get("baseUrl") == B_BASE, f"实际 {c1.get('baseUrl')}")
-        check("★ 点保存后生效的是线路B（key）",
+        check("★ 仅选中预设，正式配置立刻变成线路B（key）",
               c1.get("apiKey") == B_KEY, f"实际 {c1.get('apiKey')}")
 
         disk1 = await pg.evaluate(
             "async () => await window.miyaReadLsJsonKey('miya-api-config', null)")
-        check("落盘也是线路B（确认真的切成功了）",
+        check("★ 已落盘（刷新也不会丢）",
               disk1.get("baseUrl") == B_BASE, str(disk1.get("baseUrl")))
 
+        await back(pg)
+        await enter(pg)
+        f2 = await form(pg)
+        check("★ 返回后重进，表单仍是线路B（重绘不影响已生效的配置）",
+              f2["base"] == B_BASE, str(f2["base"]))
+        check("★ 密钥也一并保持", f2["key"] == B_KEY, str(f2["key"]))
+
         # ══════════════════════════════════════════════════════════
-        print("\n【2】跨子视图：切到语音合成再回来，切换不丢")
+        print("\n【2】跨子视图：切到语音合成再回来，配置仍是切换后的")
         await pg.select_option("#mq-api-preset-pick", "线路A")
-        await pg.wait_for_timeout(1000)
+        await pg.wait_for_timeout(1200)
         await back(pg)
         await pg.click('[data-mq-set-sub="api-voice"]')
         await pg.wait_for_timeout(1200)
@@ -216,30 +260,25 @@ async def main():
         f3 = await form(pg)
         check("★ 绕道别的子视图回来，表单仍是线路A",
               f3["base"] == A_BASE, str(f3["base"]))
-        await save(pg)
         c2 = await cfg(pg)
-        check("★ 点保存后生效的是线路A",
+        check("★ 正式配置也是线路A（无需点保存）",
               c2.get("baseUrl") == A_BASE, f"实际 {c2.get('baseUrl')}")
 
         # ══════════════════════════════════════════════════════════
-        print("\n【3】手改字段：不经预设直接改，也不该被重绘抹掉")
+        print("\n【3】手改字段：点保存后才生效（这条路径保留「保存」语义）")
         await pg.fill("#mq-api-base", B_BASE)
         await pg.fill("#mq-api-key", B_KEY)
         await pg.wait_for_timeout(400)
-        # 模拟「后台某个流程调了一次 open() 重新进来」——用户没动界面也会发生
-        await pg.evaluate(
-            "() => window.miyaChatContactSettings.openSubViewForChat('chat1', 'api-chat')")
-        await pg.wait_for_timeout(2500)
-        f4 = await form(pg)
-        check("★ 后台重进后，手改的值还在",
-              f4["base"] == B_BASE, str(f4["base"]))
+        c3a = await cfg(pg)
+        check("未点保存时正式配置不变（仍是线路A）",
+              c3a.get("baseUrl") == A_BASE, f"实际 {c3a.get('baseUrl')}")
         await save(pg)
         c3 = await cfg(pg)
         check("★ 点保存后生效的是手改的线路B",
               c3.get("baseUrl") == B_BASE, f"实际 {c3.get('baseUrl')}")
 
         # ══════════════════════════════════════════════════════════
-        print("\n【4】反向护栏：保存后草稿必须清干净，不能把表单锁死")
+        print("\n【4】反向护栏：外部改了正式配置，面板必须跟随（不能锁死）")
         await pg.evaluate(
             "(c) => window.miyaSetApiConfig({ baseUrl: c.b, apiKey: c.k })",
             {"b": A_BASE, "k": A_KEY})
@@ -247,40 +286,60 @@ async def main():
         await back(pg)
         await enter(pg)
         f5 = await form(pg)
-        check("★ 外部改了正式配置后重进，表单跟随新值（没有被草稿锁住）",
+        check("★ 外部改了正式配置后重进，表单跟随新值（没有被任何缓存锁住）",
               f5["base"] == A_BASE, str(f5["base"]))
         await save(pg)
         c4 = await cfg(pg)
-        check("★ 未编辑直接保存，写回的仍是线路A（没被旧草稿污染）",
+        check("★ 未编辑直接保存，写回的仍是线路A",
               c4.get("baseUrl") == A_BASE, f"实际 {c4.get('baseUrl')}")
 
         # ══════════════════════════════════════════════════════════
-        print("\n【5】关掉设置页再进来，未保存的改动应被放弃")
-        await pg.fill("#mq-api-base", B_BASE)
-        await pg.wait_for_timeout(400)
-        await pg.evaluate("() => window.miyaChatContactSettings.close()")
-        await pg.wait_for_timeout(900)
-        await pg.evaluate("""
+        print("\n【5】整页刷新后仍是切换的线路（真持久化）")
+        pg2 = await ctx.new_page()
+        await pg2.add_init_script(SEED)
+        await pg2.goto(BASE, wait_until="load")
+        await pg2.wait_for_timeout(4500)
+        await pg2.evaluate("""
         (async function(){
+          var st = window.miyaChatStore; await st.init();
           window.miyaChatApp.open();
           await new Promise(function(r){ setTimeout(r, 800); });
           window.miyaChatContactSettings.open('chat1');
         })()""")
-        await pg.wait_for_timeout(900)
-        await enter(pg)
-        f6 = await form(pg)
-        check("★ 关闭设置页后重进，回到正式配置线路A（未保存的B被放弃）",
+        await pg2.wait_for_timeout(900)
+        await wait_ready(pg2)
+        await pg2.click('[data-mq-set-sub="api-chat"]')
+        await pg2.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
+                                    state="attached", timeout=15000)
+        await pg2.wait_for_timeout(1600)
+        f6 = await pg2.evaluate("""
+        (function(){
+          var p = document.getElementById('mq-set-page');
+          function v(id){ var e = p.querySelector('#'+id); return e ? e.value : null; }
+          return { base: v('mq-api-base'), key: v('mq-api-key'),
+                   opts: Array.from(p.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value) };
+        })()""")
+        check("★ 刷新后仍是线路A（切换已落盘）",
               f6["base"] == A_BASE, str(f6["base"]))
+        check("★ 刷新后预设列表完整（两条都在）",
+              f6["opts"] == ["", "线路A", "线路B"], str(f6["opts"]))
+        await pg2.close()
 
         # ══════════════════════════════════════════════════════════
-        print("\n【6】预设名与下拉选中值也不该在重绘后丢")
-        await pg.select_option("#mq-api-preset-pick", "线路B")
-        await pg.wait_for_timeout(1000)
-        await back(pg)
+        print("\n【6】点「保存」不得清空预设列表（用户反馈的新症状）")
         await enter(pg)
-        f7 = await form(pg)
-        check("重进后名称框仍带「线路B」（可直接覆盖保存）",
-              f7["name"] == "线路B", str(f7["name"]))
+        opts_before = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        await save(pg)
+        await pg.wait_for_timeout(1200)
+        opts_after = await pg.evaluate(
+            "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
+        check("保存前预设列表完整", opts_before == ["", "线路A", "线路B"], str(opts_before))
+        check("★ 点保存后预设列表仍在（不再被清空）",
+              opts_after == ["", "线路A", "线路B"], str(opts_after))
+        cached = await pg.evaluate(
+            "() => (window.miyaApiPresets.getCached()||[]).map(x=>x.name)")
+        check("★ 内存里的预设也没丢", cached == ["线路A", "线路B"], str(cached))
 
         print("\n【7】全程无 JS 报错")
         check("无 pageerror", not errs, str(errs[:3]))
