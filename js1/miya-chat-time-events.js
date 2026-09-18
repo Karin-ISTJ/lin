@@ -94,12 +94,64 @@
     });
   }
 
+  /*
+   * 把各种写法的 dueAt 归一成毫秒时间戳。
+   *
+   * ⚠️ 秒/毫秒的判断必须用「合理区间」，不能用单点阈值。
+   *
+   * 旧写法是 `direct < 1e11 ? direct*1000 : direct`，这条线两侧都会出错：
+   *   · 小于 1e11 的**毫秒**值（1970-03 ~ 1973-03 区间）被 ×1000，
+   *     例如 5000000000 → 2128 年；
+   *   · 大于 1e11 的**秒**值被当毫秒（实际很少出现）。
+   * 后果是一个静默的「时间黑洞」：dueAt 变成几百年后，
+   * 事件永远停在 pending，既不显示也不报错，用户完全无从察觉。
+   *
+   * 新写法把两种单位的合理跨度分别列出来，**两边都不像就不猜**，
+   * 交给下面的 ISO 字符串 / afterDays 兜底 —— 猜错比不猜危险得多。
+   */
+  var MS_MIN = 1e12;              /* 2001-09-09 */
+  var MS_MAX = 4e12;              /* 2096-10-02 */
+
+  function toMillis(v) {
+    var n = num(v);
+    if (n <= 0) return 0;
+    if (n >= MS_MIN && n <= MS_MAX) return n;                    /* 本身就是毫秒 */
+    var secMs = n * 1000;
+    if (secMs >= MS_MIN && secMs <= MS_MAX) return secMs;        /* 是秒 */
+    return 0;                                                    /* 不像时间戳，不猜 */
+  }
+
+  /**
+   * 字符串是不是「像日期的样子」。
+   *
+   * ⚠️ 这一步不能省。Date.parse 对**纯数字字符串**并不返回 NaN，而是走
+   * V8 的遗留启发式，把数字当成「年份 2001 的第 N 月」：
+   *   Date.parse('-5') → 2001-04-30
+   *   Date.parse('3')  → 2001-02-28
+   *   Date.parse('05') → 2001-04-30
+   *   Date.parse('12') → 2001-11-30
+   * 也就是说，只要 dueAt 是个非空字符串，旧写法几乎都能算出个「时间」来，
+   * 结果全都落在 2001 年 —— 又一个静默时间黑洞，比数值那条更隐蔽，
+   * 因为 afterDays 等兜底路径全部被这步抢先截胡了。
+   *
+   * 只放行明确带日期分隔符（- / . ，或 ISO 的 T）或月份名的写法；
+   * 裸数字一律不认，交给上面的 toMillis 或下面的 afterDays 处理。
+   */
+  var DATEISH = /^[0-9]{4}[-/.][0-9]{1,2}([-/.][0-9]{1,2})?([T ][0-9]{1,2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:?[0-9]{2})?)?$/;
+
+  function looksLikeDate(s) {
+    if (!s) return false;
+    if (DATEISH.test(s)) return true;
+    /* "Mar 5 2027" / "5 March 2027" 之类：必须带字母月份才有意义 */
+    return /[A-Za-z]{3,}/.test(s) && Number.isFinite(Date.parse(s));
+  }
+
   function resolveDueAt(raw, createdAt) {
-    var direct = num(raw.dueAt);
-    if (direct > 0) return direct < 1e11 ? direct * 1000 : direct;
+    var direct = toMillis(raw.dueAt);
+    if (direct > 0) return direct;
 
     var iso = String(raw.dueAt || raw.dueDate || raw.at || '').trim();
-    if (iso) {
+    if (looksLikeDate(iso)) {
       var p = Date.parse(iso.replace(/-/g, '/'));
       if (Number.isFinite(p)) return p;
     }
@@ -130,9 +182,25 @@
     if (!TYPES[type]) type = 'general';
     var meta = typeMeta(type);
 
-    var needsClaim = raw.needsClaim === true || raw.needsConfirmation === true;
-    if (raw.needsClaim == null && raw.needsConfirmation == null && meta.needsClaimDefault) {
-      needsClaim = true;
+    /*
+     * needsClaim：是否需要用户点「领取 / 确认」才算完成。
+     *
+     * 显式传参优先；都没传时才看类型默认值。默认值有两个来源：
+     *   · needsClaimDefault —— 只有 delivery 标了（快递要签收）
+     *   · claimable         —— TYPES 里 19 个类型都标了
+     *
+     * ⚠️ 旧实现只读 needsClaimDefault，claimable 声明了却从未被读取。
+     * 后果不是报错，而是「同为 claimable:true 的类型行为不一致」：
+     * bank_interest 之所以要确认，是因为 createBankInterest() 里硬编码传了
+     * needsClaim:true；而 salary / refund / settlement 同样标了 claimable:true，
+     * 走 create() 时 needsClaim 却是 false —— 到账直接算完成，不提示用户。
+     * 现在把 claimable 一并接进来，让 TYPES 表成为唯一事实来源。
+     */
+    var needsClaim;
+    if (raw.needsClaim != null || raw.needsConfirmation != null) {
+      needsClaim = raw.needsClaim === true || raw.needsConfirmation === true;
+    } else {
+      needsClaim = !!(meta.needsClaimDefault || meta.claimable);
     }
 
     return {
@@ -426,6 +494,8 @@
       result: result,
       payload: amount != null ? { amount: amount } : null,
       afterDays: days,
+      /* needsClaim 不再硬编码：bank_interest 在 TYPES 里已标 claimable:true，
+         normalize 会据此补上默认值。此处保留显式值只为语义清晰。 */
       needsClaim: true,
       natural: true
     });

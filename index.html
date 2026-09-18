@@ -708,19 +708,19 @@
                 <option value="constant">常驻</option>
                 <option value="normal">关键词触发</option>
                 <option value="disabled">禁用</option>
-              </select>
-            </div>
+              </select>            </div>
             <div class="miya-wb-field">
               <label class="ins-field-label" for="miya-wb-field-position">位置</label>
               <select class="ins-select" id="miya-wb-field-position">
                 <option value="0">前 · 角色定义前</option>
                 <option value="1">中 · 角色定义后</option>
-                <option value="4">后 · @深度（聊天内）</option>
+                <option value="4">@深度 · 插入聊天记录</option>
               </select>
             </div>
             <div class="miya-wb-field" id="miya-wb-depth-field">
               <label class="ins-field-label" for="miya-wb-field-inj-depth">深度</label>
-              <input type="number" class="ins-text-input" id="miya-wb-field-inj-depth" min="0" max="100" value="4" title="@depth 时有效">
+              <input type="number" class="ins-text-input" id="miya-wb-field-inj-depth" min="0" max="100" value="4" title="从聊天记录末尾往回数，第几条之前插入该条目。0 = 追加到最末；1 = 最后一条之前">
+              <p class="st-form-hint" style="margin-top:4px">深度：从聊天记录末尾往回数，插在第几条之前。0 = 追加到最末，1 = 最后一条之前，越大越靠前。超出实际条数时插到最前。</p>
             </div>
             <div class="miya-wb-field">
               <label class="ins-field-label" for="miya-wb-field-order">顺序</label>

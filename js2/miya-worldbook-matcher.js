@@ -141,11 +141,24 @@
         if (entry.constant) return true;
         return includesKeyword(contextText, entry.key || entry.keywords || [], opts);
       }
+      /*
+       * ⚠️ skipProbability 必须传 true。
+       *
+       * 这里只回答「关键词命中没有」——是**准入判定**，不是最终裁决。
+       * 命中的词条随后会进 applyStDecoration，那里才掷概率骰。
+       * 若此处也让 activateEntries 掷一次，同一条词条一轮内被裁决两次，
+       * 实际生效概率变成 p²（设 50% → 真实 25%；设 10% → 真实 1%），
+       * 表现为「概率开关时灵时不灵」，且静默无报错。
+       *
+       * disableRecursion 同理：单条判定不该触发递归扫描，
+       * 递归由最终的 applyStDecoration 之后的流程统一处理。
+       */
       var res = st.activateEntries([entry], {
         contextText: contextText,
         messages: cfg.messages,
         scanDepth: cfg.scanDepth,
-        disableRecursion: true
+        disableRecursion: true,
+        skipProbability: true
       });
       return (res.activated || []).length > 0;
     }
@@ -156,16 +169,23 @@
       if (reach === 'all') return true;
       if (promptContext && reach && !globalReachApplies(reach, promptContext)) return false;
       var bound = Array.isArray(entry.boundRoleIds) ? entry.boundRoleIds : [];
-      var localKeywords = Array.isArray(entry.key) && entry.key.length
-        ? entry.key
-        : (Array.isArray(entry.keywords) ? entry.keywords.filter(Boolean) : []);
       if (entry.constant) return true;
-      if (bound.length && !localKeywords.length) return true;
+      /* ⚠️ 必须用 entryKeywords()，不能手写等价判断。
+         key=[''] / [' '] 这类「有数组长度但没有有效关键词」的条目，
+         若只判 Array.length 就会被当成「带关键词」而走去掷关键词，
+         实际永远不可能命中 —— 表现为「明明没填关键词，词条却不注入」。
+         entryKeywords() 会先 filter(Boolean)，是本文件的唯一权威判据。 */
+      if (bound.length && !entryKeywords(entry).length) return true;
       return stKeywordMatch();
     }
     /* 全局·全软件：等同 ST constant / 无关键词限制的全局层 */
     if (reach === 'all') {
-      return entry.constant || !(entry.key && entry.key.length) && !(entry.keywords && entry.keywords.length)
+      /* ⚠️ 括号不可省。`||` 优先级低于 `&&`，写成
+             entry.constant || !hasKey && !hasKeywords ? true : stKeywordMatch()
+         会被解析成 (constant || 无关键词) ? true : stKeywordMatch()，
+         「有 key 但 key 全是空串」的条目会掉进 stKeywordMatch() 并被判负，
+         整条静默丢失。 */
+      return entry.constant || !hasAnyKeywords(entry)
         ? true
         : stKeywordMatch();
     }
@@ -238,6 +258,22 @@
     if (Array.isArray(entry.key) && entry.key.length) return entry.key.filter(Boolean);
     if (Array.isArray(entry.keywords)) return entry.keywords.filter(Boolean);
     return [];
+  }
+
+  /**
+   * 词条是否「真的配了关键词」。
+   *
+   * 判据是**剔除空串后还有没有内容**，而不是数组长度 —— key=[''] 属于
+   * UI 里留了空输入框 / 逗号切分残留 / ST 导入的空 key，语义上等于「没配关键词」，
+   * 应当按常驻处理。历史上这里有三套写法各自为政：
+   *   - matchEntry 局部分支：只看 entry.key.length（空串也当真）
+   *   - matchEntry 全软件分支：同上看长度，且漏了括号
+   *   - prompt.js entryHasKeys：filter(Boolean) 后判长度，与 matcher 不一致
+   * 三条路给出三种结果，同一条词条「有没有关键词」取决于走的哪条分支。
+   * 现在统一收敛到本函数。
+   */
+  function hasAnyKeywords(entry) {
+    return entryKeywords(entry).length > 0;
   }
 
   /**
@@ -479,6 +515,7 @@
     explainEntry: explainEntry,
     diagnoseEntries: diagnoseEntries,
     entryKeywords: entryKeywords,
+    hasAnyKeywords: hasAnyKeywords,
     REASON_LABELS: REASON_LABELS
   };
 })(window);

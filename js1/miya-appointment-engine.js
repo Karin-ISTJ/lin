@@ -158,6 +158,7 @@
         var front = [];
         var layers = [];
         var back = [];
+        var inChat = [];
         var matched = [];
         var seenText = Object.create(null);
         function pushUnique(arr, text) {
@@ -177,9 +178,14 @@
             (b.backLayers || []).forEach(function (t) {
                 pushUnique(back, t);
             });
+            /* 深度注入条目也要合并 —— 多角色约会时每个 cast 的词条都得进来。
+               漏了这行会导致「多人约会场景下深度注入静默失效」，而单人约会正常。 */
+            (b.inChatItems || []).forEach(function (item) {
+                if (item) inChat.push(item);
+            });
             if (Array.isArray(b.matched)) matched = matched.concat(b.matched);
         });
-        return { frontLayers: front, layers: layers, backLayers: back, matched: matched };
+        return { frontLayers: front, layers: layers, backLayers: back, inChatItems: inChat, matched: matched };
     }
 
     function appendLayerListLocal(parts, layers) {
@@ -941,7 +947,7 @@
                 : null;
         var worldbookContextText = buildWorldbookContextText(canonId, slice, userText, settings, cross);
 
-        var wbBundle = { layers: [], matched: [], frontLayers: [], backLayers: [] };
+        var wbBundle = { layers: [], matched: [], frontLayers: [], backLayers: [], inChatItems: [] };
         var engRef = eng();
         if (engRef && typeof engRef.buildWorldbookBundle === 'function') {
             if (castContacts.length > 1) {
@@ -1074,6 +1080,11 @@
          * ST/世界书的后置层不再是真正的生成末端。
          */
         if (engRef && typeof engRef.appendWorldbookBackMessages === 'function') {
+            /* 深度注入先于 back 追加：理由同 miya-chat-engine.js ——
+               back 会让 apiMessages 变长，先追加会让 depth 的定位基数偏移。 */
+            if (typeof engRef.insertWorldbookInChatMessages === 'function') {
+                engRef.insertWorldbookInChatMessages(apiMessages, wbBundle.inChatItems);
+            }
             engRef.appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
         } else {
             (wbBundle.backLayers || []).forEach(function (layer) {

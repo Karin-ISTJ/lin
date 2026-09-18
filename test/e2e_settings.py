@@ -10,7 +10,7 @@
 import asyncio, json
 from playwright.async_api import async_playwright
 
-BASE = "http://localhost:8099/index.html"
+BASE = "http://localhost:8098/index.html"
 UA = ("Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 VIEWPORT = {"width": 412, "height": 915}
@@ -280,7 +280,13 @@ async def main():
           var cases = [
             ['miya-st-panel-chat', '对话 API'],
             ['miya-st-panel-voice', '语音合成'],
-            ['miya-st-panel-imagegen', '生图 API'],
+            /* imagegen 是**有意不映射**的：生图已迁到独立全屏 App，
+               由桌面「生图」图标进入，不再属于聊天设置子视图。
+               老 id 调用会落到 miyaSettingsApp 的废弃告警分支，
+               既不跳转也不报错 —— 所以期望值是 null（未跳转），
+               而不是「生图 API」。改产品去硬映射反而会把生图错误地
+               拉回聊天设置，与现行的 App 化改造相悖。 */
+            ['miya-st-panel-imagegen', null],
             ['miya-st-panel-msg-sound', '通知与提示音'],
             ['miya-st-panel-storage', '存储用量']
           ];
@@ -288,8 +294,17 @@ async def main():
             window.miyaSettingsApp.open(cases[i][0]);
             await new Promise(function(r){ setTimeout(r, 700); });
             var page = document.getElementById('mq-set-page');
-            out[cases[i][0]] = page ? ((page.querySelector('.st-navtitle')||{}).textContent || '(none)') : '(no page)';
-            var back = page && page.querySelector('[data-mq-set-sub-back]');
+            var title = (page && page.querySelector('.st-navtitle')) ?
+                        page.querySelector('.st-navtitle').textContent : null;
+            /* cases[i][1] === null 表示「本就不应跳转」：
+               此时必须是「没打开任何聊天设置页」，而不是「打开了但标题不对」。 */
+            var opened = !!(page && page.classList.contains('is-open') && !page.hidden);
+            out[cases[i][0]] = (cases[i][1] === null)
+              ? (opened ? ('(unexpectedly opened: ' + title + ')') : null)
+              : (title || '(none)');
+            /* 返回键用顶栏那个（页内 [data-mq-set-sub-back] 已删除）。
+               在子视图里点它 → 回列表；再用 mod.close() 收尾。 */
+            var back = page && page.querySelector('[data-mq-set-back]');
             if (back) { back.click(); await new Promise(function(r){ setTimeout(r, 350); }); }
             mod.close();
             await new Promise(function(r){ setTimeout(r, 300); });
@@ -302,8 +317,8 @@ async def main():
               r6.get("miya-st-panel-chat") == "对话 API", str(r6.get("miya-st-panel-chat")))
         check("老面板名 'miya-st-panel-voice' → 语音合成",
               r6.get("miya-st-panel-voice") == "语音合成", str(r6.get("miya-st-panel-voice")))
-        check("老面板名 'miya-st-panel-imagegen' → 生图 API",
-              r6.get("miya-st-panel-imagegen") == "生图 API", str(r6.get("miya-st-panel-imagegen")))
+        check("老面板名 'miya-st-panel-imagegen' → 不跳转（生图已 App 化，有意不映射）",
+              r6.get("miya-st-panel-imagegen") is None, str(r6.get("miya-st-panel-imagegen")))
         check("老面板名 'miya-st-panel-msg-sound' → 通知与提示音",
               r6.get("miya-st-panel-msg-sound") == "通知与提示音", str(r6.get("miya-st-panel-msg-sound")))
         check("老面板名 'miya-st-panel-storage' → 存储用量",

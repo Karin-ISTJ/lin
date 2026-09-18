@@ -106,11 +106,27 @@
     if (!Number.isFinite(position)) {
       position = depthToPosition(base.depth || raw.depth);
     }
+    /*
+     * injection_depth = 「@深度」条目插进聊天历史的第几条。取值优先级：
+     *
+     *   1) raw.injection_depth —— 用户在 UI「深度」输入框里**显式填写**的值
+     *   2) raw.depth（仅 position=4） —— 纯 ST JSON 导入的入口
+     *   3) raw.extensions.depth —— 部分 ST 卡片的嵌套写法
+     *
+     * ⚠️ 1 必须排在 2 前面。旧实现把 2 放在最前，导致 position=4 时
+     * 永远优先取 raw.depth；而 UI 提交的 raw.depth 是 app.js 用 position
+     * 推导出来的**字符串**（"back"），clampInt("back") 得到非数字，
+     * 于是兜底成默认值 4 —— 用户填的深度被静默覆盖，
+     * 表现是「深度输入框填什么都是 4」，且不报错、无提示。
+     *
+     * 保留分支 2 是因为 ST 格式里 depth 本身就是数值、且没有
+     * injection_depth 字段，那条路径必须继续可用。
+     */
     var injectionDepth = clampInt(
-      raw.depth != null && Number(raw.position) === 4
-        ? raw.depth
-        : raw.injection_depth != null
-          ? raw.injection_depth
+      raw.injection_depth != null
+        ? raw.injection_depth
+        : raw.depth != null && Number(raw.position) === 4
+          ? raw.depth
           : raw.extensions && raw.extensions.depth,
       0,
       1000,
@@ -317,9 +333,24 @@
   /**
    * ST 风格激活
    * @returns {{ activated: object[], deferred: object[], debug: object }}
+   *
+   * ⚠️ input.skipProbability —— 概率由谁负责，必须二选一，否则会掷骰两次。
+   *
+   * 真实调用链（见 miya-worldbook-prompt.js）是两段式的：
+   *   ① matcher.matchEntry  → 本函数（只验证「关键词是否命中」）
+   *   ② applyStDecoration   → 概率掷骰 + 分组互斥 + token 预算
+   * 两处都带 probability 判定时，同一条词条会被裁决两次，
+   * 实际生效概率从 p 变成 **p²**（设 50% → 真实 25%；设 10% → 真实 1%）。
+   * 用户感知是「这个概率开关时灵时不灵」，且不会报错，极难排查。
+   *
+   * 所以约定：**准入阶段不掷骰**。matcher 那一路必须传 skipProbability:true，
+   * 概率统一交给 applyStDecoration 掷一次。
+   * 保留本函数自身的概率能力，是因为 runPipeline（应用内的调试/预览路径）
+   * 直接调它、后面没有 applyStDecoration，那条路需要概率照常生效。
    */
   function activateEntries(entries, input) {
     input = input || {};
+    var skipProbability = input.skipProbability === true;
     var list = Array.isArray(entries) ? entries : [];
     var globalScanDepth = input.scanDepth != null ? clampInt(input.scanDepth, 0, 1000, 50) : 50;
     var scanText = buildScanText({
@@ -351,7 +382,7 @@
       });
 
       if (entry.constant) {
-        if (entry.useProbability && entry.probability < 100) {
+        if (!skipProbability && entry.useProbability && entry.probability < 100) {
           if (Math.random() * 100 >= entry.probability) {
             debug.rejected++;
             return;
@@ -375,7 +406,11 @@
         debug.rejected++;
         return;
       }
-      if (entry.useProbability && entry.probability < 100) {
+      /*
+       * 概率判定：准入阶段（skipProbability）不做，留给 applyStDecoration。
+       * 详见函数头注释 —— 两边都判会把实际概率压成 p²。
+       */
+      if (!skipProbability && entry.useProbability && entry.probability < 100) {
         if (Math.random() * 100 >= entry.probability) {
           debug.rejected++;
           return;
@@ -510,13 +545,31 @@
     };
   }
 
+  /**
+   * 按 ST position 分桶。
+   *
+   * position=4（@depth / 聊天内）的处置：**只进 inChat，不进 back**。
+   *
+   *   ST 原语义是「按 injection_depth 插到聊天记录倒数第 N 条之前」。
+   *   深度注入已实现（v7）：inChat 由 miya-worldbook-prompt.js 以结构化
+   *   数组 inChatItems 透出，再由 miya-chat-engine.js 的
+   *   insertWorldbookInChatMessages() 按 depth 插进 apiMessages。
+   *
+   *   历史上这里推两个桶（back + inChat），是深度注入实现前的「明确降级」：
+   *   归 back 保证内容不丢，记 inChat 留作将来取用。**该降级已作废** ——
+   *   保留它会让面板预览显示「按后注入」，而实际按深度插，直接说反。
+   *
+   *   ⚠️ 本函数必须与 miya-worldbook-prompt.js 的同名函数保持语义一致。
+   *      两条路（面板预览 / 主流程）分桶不同过一次，教训见
+   *      test/injection_unit.py 的【10】两路一致性断言。
+   */
   function partitionByDepth(entries) {
     var buckets = { front: [], middle: [], back: [], inChat: [] };
     (entries || []).forEach(function (e) {
       if (!e) return;
       if (Number(e.position) === 4) {
+        /* 深度注入：位置由 injection_depth 决定，不落 back */
         buckets.inChat.push(e);
-        buckets.back.push(e);
         return;
       }
       var d = e.depth || positionToDepth(e.position);

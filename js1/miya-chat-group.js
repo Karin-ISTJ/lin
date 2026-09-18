@@ -903,7 +903,7 @@
         }
         var builder = global.miyaWorldbookPrompt || global.miyaBuildWorldbookPrompt;
         if (!builder || typeof builder.buildWorldbookPrompt !== 'function') {
-            return { universalLayer: '', frontLayers: [], layers: [], backLayers: [] };
+            return { universalLayer: '', frontLayers: [], layers: [], backLayers: [], inChatItems: [] };
         }
         var result = builder.buildWorldbookPrompt({
             roleIds: roleIds,
@@ -916,7 +916,11 @@
             universalLayer: '',
             frontLayers: [sec.front].map(trim).filter(Boolean),
             layers: [sec.middle || sec.global, sec.local].map(trim).filter(Boolean),
-            backLayers: [sec.back].map(trim).filter(Boolean)
+            backLayers: [sec.back].map(trim).filter(Boolean),
+            /* 深度注入条目：群聊与单聊必须行为一致。
+               少了这行会让「群里选 @深度 的词条」静默不生效 —— 单聊却正常，
+               是最容易漏测的一种不一致。 */
+            inChatItems: Array.isArray(result && result.inChatItems) ? result.inChatItems : []
         };
     }
 
@@ -1257,6 +1261,11 @@
 
         var engWb = global.miyaChatEngine;
         if (engWb && typeof engWb.appendWorldbookBackMessages === 'function') {
+            /* 深度注入先于 back 追加：理由同 miya-chat-engine.js ——
+               back 会让 apiMessages 变长，先追加会让 depth 的定位基数偏移。 */
+            if (typeof engWb.insertWorldbookInChatMessages === 'function') {
+                engWb.insertWorldbookInChatMessages(apiMessages, wbBundle.inChatItems);
+            }
             engWb.appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
         } else {
             (wbBundle.backLayers || []).forEach(function (layer) {

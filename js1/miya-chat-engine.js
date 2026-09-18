@@ -292,6 +292,54 @@
         });
     }
 
+    /**
+     * 深度注入：把 @深度 词条插进对话历史的指定位置。
+     *
+     * ST 语义：depth = 「从末尾往回数第几条」
+     *   depth=0 → 最后一条之后（= 追加到末尾）
+     *   depth=1 → 最后一条之前
+     *   depth=2 → 倒数第二条之前，依此类推
+     *
+     * ⚠️ 必须**从深到浅**插入（depth 大的先插）。反过来会让先插的条目
+     * 把后续索引整体推后，所有位置算错。
+     * 这个 bug 的阴险之处在于：当所有条目 depth 相同、或 history 很短时，
+     * 结果看起来是对的 —— 属于「测了但没测到」的典型坑。
+     * 所以排序必须显式写死，且要有专门的单元测试盯着。
+     *
+     * 同 depth 时按 order 升序（低 order 在前），与 worldbook-st.js 里
+     * applyTokenBudget 的既有约定保持一致。
+     *
+     * depth 越界（大于历史条数）时钳到开头，**不丢弃内容** ——
+     * 位置不准是可接受的，内容静默消失不可接受。
+     */
+    function insertWorldbookInChatMessages(apiMessages, inChatItems) {
+        if (!Array.isArray(apiMessages)) return;
+        var items = Array.isArray(inChatItems) ? inChatItems.filter(Boolean) : [];
+        if (!items.length) return;
+
+        var sorted = items.slice().sort(function (a, b) {
+            var da = Number(a.depth);
+            var db = Number(b.depth);
+            if (!Number.isFinite(da)) da = 0;
+            if (!Number.isFinite(db)) db = 0;
+            if (db !== da) return db - da;                       /* 深的先插 */
+            var oa = Number(a.order); if (!Number.isFinite(oa)) oa = 100;
+            var ob = Number(b.order); if (!Number.isFinite(ob)) ob = 100;
+            return oa - ob;                                      /* 同深度：低 order 在前 */
+        });
+
+        sorted.forEach(function (item) {
+            var text = String(item && item.content != null ? item.content : '');
+            if (!text) return;
+            var depth = Number(item.depth);
+            if (!Number.isFinite(depth) || depth < 0) depth = 0;
+            var idx = apiMessages.length - depth;
+            if (idx < 0) idx = 0;                                 /* 越界钳到开头，不丢内容 */
+            if (idx > apiMessages.length) idx = apiMessages.length;
+            apiMessages.splice(idx, 0, { role: 'system', content: text });
+        });
+    }
+
     /** 深潜/单块上下文：按 前→中→后 拼成一段 */
     function joinWorldbookBundleText(bundle) {
         if (!bundle || typeof bundle !== 'object') return '';
@@ -510,6 +558,17 @@
             frontLayers: frontLayers,
             layers: layers,
             backLayers: backLayers,
+            /*
+             * 深度注入条目必须以**结构化数组**继续往下传，不能并进 backLayers。
+             * 每项带各自的 injection_depth / order，engine 才知道插到第几条之前；
+             * 一旦被拼成文本块，位置信息就没了。
+             *
+             * ⚠️ 曾经漏了这一行 —— buildWorldbookPrompt 已经产出 inChatItems，
+             *    但本函数没把它挑出来，于是调用方拿到的 wbBundle.inChatItems
+             *    恒为 undefined，insertWorldbookInChatMessages 空转。
+             *    单元测试直接调插入函数，测不到这个断裂；集成测试才抓得到。
+             */
+            inChatItems: Array.isArray(result && result.inChatItems) ? result.inChatItems : [],
             matched: matched,
             meta: {
                 matched: matched.length,
@@ -523,6 +582,7 @@
                 frontCount: result && result.frontCount ? result.frontCount : frontLayers.length,
                 middleCount: result && result.middleCount ? result.middleCount : layers.length,
                 backCount: result && result.backCount ? result.backCount : backLayers.length,
+                inChatCount: result && result.inChatCount ? result.inChatCount : 0,
                 matchedSummary: result && result.matchedSummary ? result.matchedSummary : []
             }
         };
@@ -3405,6 +3465,14 @@
         }
 
         if (!opts.callMode && !opts.appointmentMode) {
+            /*
+             * 先插深度注入，再追加 back。
+             * 顺序有讲究：深度注入按 depth 从末尾往回定位，它算的是
+             * 「此刻 apiMessages 的长度」。若先 append back，那些 back 块
+             * 会参与计数，导致深度位置整体偏移。back 追加到末尾不影响
+             * 已插好的中间位置，所以先深度、后 back 是安全的。
+             */
+            insertWorldbookInChatMessages(apiMessages, wbBundle.inChatItems);
             appendWorldbookBackMessages(apiMessages, wbBundle.backLayers);
         }
         /*
@@ -5219,6 +5287,7 @@
         buildUniversalWorldbookTopLayer: buildUniversalWorldbookTopLayer,
         prependUniversalWorldbookMessage: prependUniversalWorldbookMessage,
         appendWorldbookBackMessages: appendWorldbookBackMessages,
+        insertWorldbookInChatMessages: insertWorldbookInChatMessages,
         joinWorldbookBundleText: joinWorldbookBundleText,
         ensureWorldbookDepsReady: ensureWorldbookDepsReady,
         buildWorldbookBundle: buildWorldbookBundle,

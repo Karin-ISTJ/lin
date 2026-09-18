@@ -16,7 +16,7 @@
 import asyncio, json
 from playwright.async_api import async_playwright
 
-BASE = "http://localhost:8099/index.html"
+BASE = "http://localhost:8098/index.html"
 UA = ("Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 VIEWPORT = {"width": 412, "height": 915}
@@ -125,15 +125,24 @@ async def main():
           if (!btn) return {error: 'no sub entry'};
           btn.click();
           await new Promise(function(r){ setTimeout(r, 700); });
+          /* 返回键断言的对象必须是**真实存在**的那个。
+             [data-mq-set-sub-back] 是子视图内的页内返回键，已被有意删除
+             （顶栏 [data-mq-set-back] 接管，点击时按 state.subView 决定
+             是「回列表」还是「关整页」）。原先断言它存在 → 恒为 false，
+             后面 5 条断言又依赖这一步的返回结果，于是连锁误报。
+             这里改断言顶栏返回键存在，并顺带验证它的真实语义。 */
+          var topBack = p.querySelector('[data-mq-set-back]');
           return {
             title: (p.querySelector('.st-navtitle') || {}).textContent || '',
-            hasBack: !!p.querySelector('[data-mq-set-sub-back]')
+            hasBack: !!topBack,
+            staleSubBackAbsent: !p.querySelector('[data-mq-set-sub-back]')
           };
         })()
         """)
         print("   子视图:", json.dumps(r1, ensure_ascii=False))
         check("「聊天默认值」子视图可进入", r1.get("title") == "聊天默认值", str(r1.get("title")))
-        check("子视图有返回键", r1.get("hasBack") is True)
+        check("子视图有返回键（顶栏）", r1.get("hasBack") is True)
+        check("已废弃的页内返回键不再渲染", r1.get("staleSubBackAbsent") is True)
 
         print("\n【2】检查「聊天默认值」表单渲染")
         r2 = await pg.evaluate("""
@@ -218,12 +227,15 @@ async def main():
           var a1 = st.getChatSettings('chat_a').memoryCount;
 
           /* 重进子视图看覆盖列表。
-             返回键语义：在子视图里 [data-mq-set-sub-back] → 回列表；
-             在列表页 [data-mq-set-back] → 关掉整个聊天设置。
-             这里用前者（我们确实在子视图里），然后必须确认整页还开着 ——
+             返回键语义（现行实现）：只渲染顶栏 [data-mq-set-back] 一个，
+             点击时按 state.subView 决定走向 —— 在子视图里 → 回列表；
+             在列表页 → 关掉整个聊天设置。
+             原先这里找 [data-mq-set-sub-back]（已被有意删除的页内返回键），
+             恒为 null 直接 return，导致本节 5 条断言全部拿到 None 误报。
+             现在改用顶栏返回键，并确认整页还开着 ——
              整页是 innerHTML 重绘，每一步都要重新 getElementById。 */
-          var _b = document.getElementById('mq-set-page').querySelector('[data-mq-set-sub-back]');
-          if (!_b) return { error: 'no sub-back button in subview' };
+          var _b = document.getElementById('mq-set-page').querySelector('[data-mq-set-back]');
+          if (!_b) return { error: 'no top back button in subview' };
           _b.click();
           await new Promise(function(r){ setTimeout(r, 500); });
 

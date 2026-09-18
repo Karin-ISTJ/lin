@@ -215,10 +215,31 @@
     ].filter(Boolean).join('\n\n');
   }
 
+  /**
+   * 按注入位置分桶。
+   *
+   * ⚠️ position 是权威字段，depth 只是它的派生显示值。二者不可混用：
+   *
+   *   position=0/2 → front（角色定义前 / AN 前）
+   *   position=1/3 → middle（角色定义后 / AN 后）
+   *   position=4   → inChat（@深度，插进对话历史中间）
+   *
+   * 旧实现只看 entry.depth，而 position=4 归一化后 depth 会变成 "middle"
+   * 或 "back"（取决于录入路线：UI 表单给 "back"，ST JSON 导入给 "middle"），
+   * 于是同一条 @深度 词条从哪进来就往不同位置注入 —— 属于隐性的行为不一致。
+   * 现在统一以 position 判定，两条录入路线结果一致。
+   *
+   * 注意 inChat 里的条目**不再进 back**（替换而非共存）：深度注入的语义
+   * 就是「插进历史中间」，同时也塞进末尾会让同一内容在 prompt 里出现两次。
+   */
   function partitionByDepth(entries) {
-    var buckets = { front: [], middle: [], back: [] };
+    var buckets = { front: [], middle: [], back: [], inChat: [] };
     (entries || []).forEach(function (entry) {
       if (!entry) return;
+      if (Number(entry.position) === 4) {
+        buckets.inChat.push(entry);
+        return;
+      }
       var d = normalizeDepth(entry.depth);
       buckets[d].push(entry);
     });
@@ -233,7 +254,13 @@
       return { text: '', sections: {}, matched: [], matchedSummary: [] };
     }
 
-    var entries = store.listEntries();
+    /* 允许调用方显式传入词条集合（预览/调试/单测用）。
+       不传时仍以 store 为准 —— 保持线上行为完全不变。
+       旧实现无条件读 store，导致外部传入的 entries 被静默忽略，
+       「预览」与「实际注入」可能走的不是同一批词条。 */
+    var entries = Array.isArray(cfg.entries)
+      ? cfg.entries.slice()
+      : store.listEntries();
     var scopeMode = String(cfg.scopeMode || '').trim();
     var promptContext = String(cfg.promptContext || '').trim();
     var universalOnly = cfg.universalOnly === true;
@@ -267,9 +294,20 @@
     var allReachRows = matcher && typeof matcher.collectUniversalGlobalEntries === 'function'
       ? matcher.collectUniversalGlobalEntries(entries).filter(notExcluded)
       : [];
+    /* ⚠️ 判据必须与 matcher 完全一致，禁止各写一份。
+       历史教训：这里曾手写
+           var k = Array.isArray(entry.key) && entry.key.length ? entry.key : (entry.keywords || []);
+           return Array.isArray(k) && k.length > 0;      // 只看长度，不剔空串
+       而 matcher.entryKeywords() 是 filter(Boolean) 后判长度。
+       key=[''] 时两边结论相反：prompt 认为「有关键词」→ 丢进 keywordPool；
+       matcher 认为「无关键词」→ 按常驻直接放行。
+       最终该词条既不进常驻组，又不在关键词命中结果里，整条静默丢失，
+       还会连带把同深度桶的其它词条一起吞掉。 */
     function entryHasKeys(entry) {
-      var k = Array.isArray(entry.key) && entry.key.length ? entry.key : (entry.keywords || []);
-      return Array.isArray(k) && k.length > 0;
+      if (matcher && typeof matcher.hasAnyKeywords === 'function') {
+        return matcher.hasAnyKeywords(entry);
+      }
+      return false;
     }
     /* 无条件常驻：无关键词且非关键词触发态（或 constant） */
     var universalRows = allReachRows.filter(function (entry) {
@@ -380,6 +418,28 @@
     var middleBlock = renderDepthSection('middle', buckets.middle, entryOrder, universalIdSet);
     var backBlock = renderDepthSection('back', buckets.back, entryOrder, universalIdSet);
 
+    /*
+     * @深度 条目以**结构化数组**透出，不参与上面的文本块拼接。
+     *
+     * 原因：深度注入要逐条插进对话历史的不同位置，必须保留每条自己的
+     * depth / order；一旦提前拼成一个大字符串，这些信息就丢了。
+     *
+     * 每条渲染成独立文本块（复用 renderBlock，保持与其它桶同样的
+     * 「【标题】+ 正文」格式），由 engine 层的插入函数决定落点。
+     */
+    var inChatItems = (buckets.inChat || []).map(function (entry) {
+      var depth = Number(entry.injection_depth);
+      if (!Number.isFinite(depth) || depth < 0) depth = 0;
+      var order = Number(entry.order);
+      if (!Number.isFinite(order)) order = 100;
+      return {
+        id: String(entry.id || ''),
+        content: renderBlock('世界书·深度注入', [entry]),
+        depth: depth,
+        order: order
+      };
+    }).filter(function (item) { return !!item.content; });
+
     // 兼容旧字段：未按深度拆分时的合集视图
     var legacySplit = applyEntryOrder(merged, entryOrder);
     var orderedBlock = legacySplit.ordered.length
@@ -417,6 +477,10 @@
       },
       matched: merged,
       matchedSummary: summarizeMatched(merged),
+      /* @深度 条目：结构化透出，供 engine 层插进对话历史。
+         不进 text / sections —— 那些是「拼成一段」的消费方式，
+         深度注入必须逐条定位。 */
+      inChatItems: inChatItems,
       globalCount: globalRows.length,
       localCount: localRows.length,
       orderedCount: legacySplit.ordered.length,
@@ -424,6 +488,7 @@
       frontCount: buckets.front.length,
       middleCount: buckets.middle.length,
       backCount: buckets.back.length,
+      inChatCount: buckets.inChat.length,
       budget: budgetMeta
     };
   }

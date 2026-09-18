@@ -357,6 +357,13 @@
       keywords: [],
       boundRoleIds: [],
       enabled: true,
+      /* ⚠️ 新建片段默认「常驻」。
+         这里必须显式写 constant:true —— 缺省会让下面 statusEl 的判定
+         落进 else 分支显示「关键词触发」，而用户新建时通常不会填关键词，
+         于是 matchEntry 一路走到 stKeywordMatch()，被以 no_keywords 拒绝，
+         词条**永远不注入且毫无提示**。
+         与 index.html 中状态下拉的第一项（常驻）保持一致。 */
+      constant: true,
       content: '',
       name: ''
     };
@@ -473,9 +480,23 @@
     var scanDepth = scanEl && scanEl.value !== '' ? Number(scanEl.value) : null;
     var status = ($('miya-wb-field-status') && $('miya-wb-field-status').value) || 'normal';
     var position = numVal('miya-wb-field-position', 1);
-    var depth = position === 0 ? 'front' : position === 4 ? 'back' : 'middle';
+    /*
+     * depth 只作为**非 @深度**条目的分桶依据（front / middle）。
+     *
+     * position=4（@深度）不在这里换算成 'back' —— 那样会把「插进聊天记录」
+     * 降级成「追加到末尾」，与用户选的位置不符。分桶由 partitionByDepth
+     * 直接看 position 判定，这条路径不参与。
+     *
+     * ⚠️ 这里曾写成 position===4 ? 'back'，配合当时 normalizeStFields 里
+     * 「position=4 时优先取 raw.depth」的优先级，产生两个后果：
+     *   1) @深度 条目被静默降级为追加末尾；
+     *   2) raw.depth 是字符串 'back'，clampInt 后兜底成 4，
+     *      把用户在「深度」框里填的数字整个覆盖掉（填什么都是 4）。
+     * 现在两边都已修正：分桶看 position，injection_depth 以用户输入优先。
+     */
+    var depth = position === 0 ? 'front' : 'middle';
     var stApi = global.miyaWorldbookST;
-    if (stApi && typeof stApi.positionToDepth === 'function') {
+    if (stApi && typeof stApi.positionToDepth === 'function' && position !== 4) {
       depth = stApi.positionToDepth(position);
     }
     return {
@@ -973,15 +994,51 @@
         var lines = [];
         lines.push('scanLen=' + (pipe.scanText || '').length + ' usedTokens=' + pipe.usedTokens + ' budget=' + pipe.budgetTokens);
         lines.push('selected=' + (pipe.selected || []).length + ' dropped=' + (pipe.dropped || []).length);
+
+        /* 分桶概览：把 position=4 的落点挑明。
+           以前这里不显示 inChat，用户看不出「深度注入」词条到底插到哪，
+           容易被误当成按「后」注入。 */
+        var bk = (pipe.buckets || {});
+        var inChatRows = bk.inChat || [];
+        lines.push('buckets: front=' + ((bk.front || []).length) +
+                   ' middle=' + ((bk.middle || []).length) +
+                   ' back=' + ((bk.back || []).length) +
+                   ' inChat=' + inChatRows.length);
+
         lines.push('--- selected ---');
         (pipe.selected || []).forEach(function (e) {
+          var pos = Number(e.position);
+          /* position=4 的条目额外标出「插到倒数第 N 条之前」 */
+          var tail = '';
+          if (pos === 4) {
+            var dep = Number(e.injection_depth);
+            if (!Number.isFinite(dep) || dep < 0) dep = 0;
+            tail = '  ⇢ 深度注入：插到倒数第 ' + dep + ' 条之前';
+          }
           lines.push(
             '• [' + (e.constant ? 'C' : 'K') + '] order=' + e.order +
             ' pos=' + e.position +
             (e.group ? ' group=' + e.group + '(' + e.groupWeight + ')' : '') +
-            ' ' + (e.name || e.id)
+            ' ' + (e.name || e.id) + tail
           );
         });
+
+        if (inChatRows.length) {
+          lines.push('--- inChat（深度注入，按 depth 降序插入）---');
+          inChatRows.slice().sort(function (a, b) {
+            var da = Number(a.injection_depth);
+            var db = Number(b.injection_depth);
+            if (!Number.isFinite(da)) da = 0;
+            if (!Number.isFinite(db)) db = 0;
+            if (db !== da) return db - da;
+            return (Number(a.order) || 100) - (Number(b.order) || 100);
+          }).forEach(function (e) {
+            var dep = Number(e.injection_depth);
+            if (!Number.isFinite(dep) || dep < 0) dep = 0;
+            lines.push('• depth=' + dep + ' order=' + e.order + ' ' + (e.name || e.id));
+          });
+        }
+
         if (pipe.dropped && pipe.dropped.length) {
           lines.push('--- dropped (budget) ---');
           pipe.dropped.forEach(function (d) {
