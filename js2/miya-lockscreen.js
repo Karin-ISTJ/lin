@@ -356,24 +356,112 @@
      */
   }
 
+  /* ── 数字键盘 ──
+   *
+   * ★ 为什么必须用 pointerup，而不是 click ★
+   *
+   * 这是「每次第一个密码数字都要点两下」的真正病根。
+   *
+   * Android Chromium（WebView / 各家套壳浏览器同样）有一条点击抑制规则：
+   * 元素在**它自己这一次触摸进行期间**被移出过命中测试树（祖先被 display:none
+   * 摘掉、又或祖先刚由隐藏切到显示），Chrome 就认为「手指下方的东西变了」，
+   * 于是**不派发这一次的 mousedown / click**，只把 pointer/touch 序列走完，
+   * 直到下一次用户手势才恢复正常。
+   *
+   * 我们用 CDP 真实触摸序列抓到的证据（进入密码页后第一次点「1」）：
+   *
+   *   pointerdown  → SPAN.miya-lockscreen__key-num
+   *   touchstart   → SPAN.miya-lockscreen__key-num
+   *   pointerup    → SPAN.miya-lockscreen__key-num
+   *   touchend     → SPAN.miya-lockscreen__key-num
+   *   （到此为止 —— 没有 mousedown，更没有 click）
+   *
+   * 第二次点同一个键，事件流里才补上 mousedown + click。
+   * 而旧实现只监听 click，所以第一次点击被整条吞掉：手指看见了按键按下、
+   * 按键自己也有 :active 反馈，界面却毫无变化 —— 观感就是「第一下没反应」。
+   *
+   * 触发这条规则的正是 setPhase('passcode')：
+   *   .is-clock 下 .miya-lockscreen__pass 是 display:none（不在命中测试树里），
+   *   setPhase 把它切成 display:flex —— 被点中的元素是在这次触摸期间
+   *   才进入命中测试树的，Chrome 因此拒绝派发 click。
+   * 桌面层/缓存/Service Worker 都与本现象无关（已逐一排除）。
+   *
+   * 修法：响应绑在 pointerup（每次点击都一定派发），click 仅作兜底，
+   * 并用「最近一次已由 pointerup 处理过的指针 id + 时间窗」去重，
+   * 避免同一次触摸被 pointerup 和 click 各记一次。
+   *
+   * 为什么不用 mousedown：安卓上 mousedown 同属被抑制的那条链路，
+   * 第一次点击同样收不到；且 mousedown 属「按下即响应」，
+   * 用户一旦想滑走会误输入。pointerup 既可靠又仍是「抬起才响应」。
+   */
+  var lastKeyPointer = { id: null, at: 0 };
+
+  /* 同一次触摸的 pointerup 与 click 间隔通常 < 50ms；取 600ms 更稳：
+     真人两次按键的间隔几乎不会短于这个值，不会误吞连续输入。 */
+  var KEY_DEDUPE_MS = 600;
+
+  function consumeKeyPress(e) {
+    var keyBtn = e.target.closest ? e.target.closest('[data-lock-key]') : null;
+    if (keyBtn) {
+      onDigit(keyBtn.getAttribute('data-lock-key'));
+      return true;
+    }
+    if (e.target.closest && e.target.closest('[data-lock-delete]')) {
+      onDelete();
+      return true;
+    }
+    return false;
+  }
+
   function bindKeypad() {
     var pad = $('miya-lock-keypad');
     if (!pad) return;
 
+    /* 主通道：pointerup —— 第一次点击也一定到达 */
+    pad.addEventListener('pointerup', function (e) {
+      if (!consumeKeyPress(e)) return;
+      lastKeyPointer.id = e.pointerId;
+      lastKeyPointer.at = Date.now();
+      /* 顺带压掉这次触摸可能合成的后续 click，双保险 */
+      if (e.cancelable) e.preventDefault();
+    });
+
+    /* 兜底通道：没有 Pointer Events 的环境（极老内核）仍走 click */
     pad.addEventListener('click', function (e) {
-      var keyBtn = e.target.closest('[data-lock-key]');
-      if (keyBtn) {
-        onDigit(keyBtn.getAttribute('data-lock-key'));
+      if (e.pointerId != null &&
+          lastKeyPointer.id === e.pointerId &&
+          (Date.now() - lastKeyPointer.at) < KEY_DEDUPE_MS) {
         return;
       }
-      if (e.target.closest('[data-lock-delete]')) onDelete();
+      consumeKeyPress(e);
     });
   }
 
+  /* 取消按钮与数字键同病同治：
+     密码页是 setPhase('passcode') 当场把 .miya-lockscreen__pass 由 display:none
+     切成 display:flex 放出来的，Chromium 因此吞掉进入密码页后的第一次 click。
+     只绑 click 的话，「取消」也要按两下 —— 已用真实触摸序列复现确认。
+     同样改成 pointerup 主通道 + click 兜底去重。 */
   function bindPassCancel() {
     var btn = $('miya-lock-pass-cancel');
     if (!btn) return;
-    btn.addEventListener('click', function () {
+
+    var lastCancelPointer = { id: null, at: 0 };
+
+    btn.addEventListener('pointerup', function (e) {
+      if (phase !== 'passcode') return;
+      lastCancelPointer.id = e.pointerId;
+      lastCancelPointer.at = Date.now();
+      setPhase('clock');
+      if (e.cancelable) e.preventDefault();
+    });
+
+    btn.addEventListener('click', function (e) {
+      if (e.pointerId != null &&
+          lastCancelPointer.id === e.pointerId &&
+          (Date.now() - lastCancelPointer.at) < KEY_DEDUPE_MS) {
+        return;
+      }
       if (phase !== 'passcode') return;
       setPhase('clock');
     });
