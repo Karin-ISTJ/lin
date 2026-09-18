@@ -352,7 +352,11 @@
       var row = document.createElement('article');
       row.className = 'ins-archive-item ins-archive-item--clickable';
       row.setAttribute('data-preset-id', p.id);
-      row.setAttribute('data-preset-kind', isCustom ? 'custom' : 'fixed');
+      /* B14 补漏：此处原有 `data-preset-kind = isCustom ? 'custom' : 'fixed'`，
+         但 isCustom 已随 B14 折叠删除（本文件 'use strict'，引用它必抛
+         ReferenceError，整个方案列表在 forEach 首轮即中断）。
+         且该属性全项目无任何读取方，属死属性，故直接删除。
+         同类漏改见 js2/miya-theme.js 的 v32-T1 修复记录。 */
       row.setAttribute('role', 'button');
       row.setAttribute('tabindex', '0');
       var date = p.savedAt ? new Date(p.savedAt).toLocaleDateString('zh-CN') : '';

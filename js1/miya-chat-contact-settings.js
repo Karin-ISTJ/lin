@@ -2430,22 +2430,62 @@
   }
 
   /*
-   * 把水合排到下一次重绘之后再跑。
+   * ── 子视图的「延后填充」───────────────────────────────────────
    *
-   * 为什么需要单独一个函数：render() 对子视图是整块换 innerHTML，
-   * 而设置页存在多处「先 scheduleRender() 再补数据」的异步流程。
-   * 同步补的话，数据写得比下一次重绘早，会被整块换掉 —— 表现就是
-   * 「预设明明存着，进来却是空下拉」。多等一帧即可稳定落在重绘之后。
+   * 为什么需要：render() 对子视图是整块换 innerHTML。而设置页有多处
+   * 「先 scheduleRender() 排一次重绘，再往里补数据」的异步流程 ——
+   * 典型是 open() 里 store.init() 落地后的那次重绘。
    *
-   * 回调里重新校验两级：子视图还是不是 api-chat（用户可能已经返回列表）、
-   * 下拉节点还在不在（可能已被下一轮 render 重建）。任一不满足就安静退出。
+   * 如果补数据是同步做的，它写得比下一次重绘早，会被整块换掉：
+   * 节点还在（新渲染出来的那个），但里面是空的，而且**不会自己再长回来**。
+   *
+   * 踩过这个坑的地方（都是同一个病）：
+   *   · api-chat        → 下拉框看似存着预设，进去却是空的
+   *   · chat-defaults   → 面板整块空白，一个控件都没有
+   *
+   * 解法统一成：把填充排到下一帧，确保落在重绘之后。回调里重新校验
+   * 子视图没被用户返回掉、目标节点确实还在，再做实际的填充。
+   *
+   * 注意必须是「下一帧」而不是「本帧末尾」：上面那次重绘本身也是
+   * requestAnimationFrame 排的，同帧内同步执行会排在它前面，等于没修。
    */
-  function scheduleApiPresetsHydrate() {
+  function scheduleSubViewHydrate() {
+    var gen = state.subView;
     requestAnimationFrame(function () {
-      if (state.subView !== 'api-chat') return;
-      if (!presetPickEl()) return;
-      hydrateApiPresets();
+      /* 用户可能已经返回列表或切到别的子视图 */
+      if (state.subView !== gen || !pageEl) return;
+      applySubViewHydrate(gen);
     });
+  }
+
+  /*
+   * 各子视图的实际填充动作。集中在一处，免得以后再有人漏掉某一个。
+   * 每个分支都自带「节点还在不在」的检查 —— 重绘可能把节点换成新的，
+   * 也可能因为状态变化根本没渲染出来。
+   */
+  function applySubViewHydrate(key) {
+    if (key === 'api-chat') {
+      if (presetPickEl()) hydrateApiPresets();
+      return;
+    }
+    if (key === 'chat-defaults') {
+      var host = pageEl.querySelector('[data-mq-set-defaults-host]');
+      if (host && global.miyaChatSettingsPanel &&
+          typeof global.miyaChatSettingsPanel.mountDefaultsInto === 'function') {
+        global.miyaChatSettingsPanel.mountDefaultsInto(host);
+      }
+      return;
+    }
+    if (key === 'storage') {
+      refreshStorageSub();
+      return;
+    }
+    if (key === 'notify') {
+      if (global.MiyaMsgSound && typeof global.MiyaMsgSound.onPanelOpen === 'function') {
+        try { global.MiyaMsgSound.onPanelOpen(); } catch (e) {}
+      }
+      return;
+    }
   }
 
   /* 从表单读一份完整快照（主 + 副线路） */
@@ -2901,22 +2941,19 @@
     if (!SUB_VIEW_TITLES[key]) return;
     state.subView = key;
     render({ skipContextUsage: true });
-    if (key === 'storage') scheduleStorageSubRefresh();
-    /* 对话 API：把已存预设填进下拉。必须放在 render 之后 —— 它要往 DOM 里写。 */
-    if (key === 'api-chat') hydrateApiPresets();
-    /* 聊天默认值：内容由 miyaChatSettingsPanel 渲染进我们给的容器。
-       必须放在 render 之后 —— 它要往里写 DOM。 */
-    if (key === 'chat-defaults') {
-      var host = pageEl.querySelector('[data-mq-set-defaults-host]');
-      if (host && global.miyaChatSettingsPanel && global.miyaChatSettingsPanel.mountDefaultsInto) {
-        global.miyaChatSettingsPanel.mountDefaultsInto(host);
-      }
-    }
-    if (key === 'notify' && global.MiyaMsgSound && typeof global.MiyaMsgSound.onPanelOpen === 'function') {
-      /* settings.app 被删后，MiyaMsgSound.onPanelOpen 会自己按 id 找上面那块面板，
-         所以这里不需要先建好 DOM 再调 —— render 已经同步写完了。 */
-      try { global.MiyaMsgSound.onPanelOpen(); } catch (e) {}
-    }
+    /*
+     * 这里必须同步先填一次。
+     *
+     * 为什么不等延后那次就够了：正常点击进入时，上面这行 render 之后
+     * **不会再有任何重绘**（open() 的异步重绘只在冷启动那一次发生）。
+     * 只安排延后填充、不做同步填充的话，用户会看到「点了没反应」，
+     * 要等下一帧才出内容，白白闪一下。
+     *
+     * 同步这次负责把常规路径点亮，延后那次负责兜住「随后到来的重绘」。
+     * 两次都是幂等的（整块重写 / 重读），重复执行没有副作用。
+     */
+    applySubViewHydrate(key);
+    scheduleSubViewHydrate();
   }
 
   function closeSubView() {
@@ -2924,13 +2961,10 @@
     render({ skipContextUsage: true });
   }
 
-  function scheduleStorageSubRefresh() {
-    var gen = state.subView;
-    requestAnimationFrame(function () {
-      if (state.subView !== 'storage' || state.subView !== gen) return;
-      refreshStorageSub();
-    });
-  }
+  /* 原先这里有一个只服务 storage 的 scheduleStorageSubRefresh。
+     现在三种「延后填充」（api-chat / chat-defaults / storage）统一走
+     scheduleSubViewHydrate + applySubViewHydrate，单独这一个已无调用点，
+     留着只会让人以为 storage 走的是另一套逻辑。 */
 
   function refreshStorageSub() {
     if (!pageEl || state.subView !== 'storage') return;
@@ -3075,20 +3109,19 @@
       if (!loaded || loaded.type === 'group') return;
       /*
        * 这次 render 是异步的（要等 store.init 的链）。而 render() 对子视图是
-       * 「整块换 innerHTML」，会把下拉框里已经填好的选项一起冲掉。
+       * 「整块换 innerHTML」，会把已经填好的子视图内容一起冲掉 ——
+       * 下拉框的选项、聊天默认值面板，都一样会没。
        *
-       * 时序坑：openSubView() 里 hydrateApiPresets() 是同步往里写选项的，
-       * 紧接着 store.init() 落地又触发一次 render —— 选项就没了，
-       * 表现为「明明存着预设，进去却是空下拉」。
+       * 冷启动直跳某个子视图（`openSubViewForChat`，老兼容层与外部跳转走这条）
+       * 时必然踩中：openSubView 同步填充 → store.init 落地再重绘 → 内容被擦掉，
+       * 而且不会再长回来，用户看到的是一个空白面板。
        *
-       * 注意这里**不能**直接调 hydrateApiPresets()：上面那行 scheduleRender
-       * 只是排进了 requestAnimationFrame，要下一帧才真正换 DOM。这时候同步
-       * 水合，写完的选项马上会被下一帧的重绘擦掉，等于白写。
-       * 所以水合也要排到那一帧之后（再 rAF 一次），并且在回调里重新确认
-       * 子视图没被用户返回掉，避免往一个已经不存在的下拉里写东西。
+       * 修法见 scheduleSubViewHydrate：排在这次重绘之后再填一遍。
+       * 不能在这里同步填 —— 上面那行 scheduleRender 只是排进了 rAF，
+       * 同步填的会被它下一帧擦掉，等于白填。
        */
       scheduleRender({ fromStore: true });
-      if (state.subView === 'api-chat') scheduleApiPresetsHydrate();
+      if (state.subView) scheduleSubViewHydrate();
     });
   }
 
@@ -3515,13 +3548,18 @@
         ensureMomentsAutoIntervalDefaults(root, e.target.value, c && c.settings && c.settings.momentsAuto);
         return;
       }
-      if (
-        e.target.matches('[data-mq-set-oprules-preset]') ||
-        e.target.matches('[data-mq-set-thrules-preset]')
-      ) {
-        scheduleContextUsageRefresh();
-        return;
-      }
+      /*
+       * 这里原来还有一支：
+       *     if (e.target.matches('[data-mq-set-oprules-preset]') ||
+       *         e.target.matches('[data-mq-set-thrules-preset]')) {
+       *       scheduleContextUsageRefresh(); return;
+       *     }
+       * 那两个控件（操作规则预设 / 思维链规则预设）已经不存在了 ——
+       * 全项目搜不到任何地方渲染它们，取而代之的是心声模版
+       * （data-mq-set-hv-tpl-preset），由 js1/miya-chat-heartvoice-templates.js
+       * 自己接管。监听器留着不会报错，但会让人以为还有这么一块 UI，
+       * 排查时白绕一圈，所以删掉。
+       */
       if (e.target.matches('[data-mq-set-import-file]')) {
         var file = e.target.files && e.target.files[0];
         e.target.value = '';

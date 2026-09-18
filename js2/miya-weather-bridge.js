@@ -1187,9 +1187,12 @@
   var lastDailyWeatherDate = '';
 
   /**
-   * 每日上线：只用已保存的「我的位置」强刷今日天气，绝不调用 GPS / 弹定位授权。
+   * 每日上线：只用已保存的「我的位置」刷新天气，绝不调用 GPS / 弹定位授权。
    * 地址变更仍由用户在天气 App 里手动定位或搜城市完成。
-   */
+   *
+   * 「强刷」（force: true，绕过缓存与每日配额）**仅限当天第一次调用**：
+   * 由 lastDailyWeatherDate 判据守门，当天再次进入走无 force 分支，
+   * 是否真正发起请求交由 fetchForecast 自身的缓存策略决定。 */
   function refreshTodayWeatherForCare() {
     var st = store();
     if (!st) return Promise.resolve(null);

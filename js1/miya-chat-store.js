@@ -704,7 +704,10 @@
             summaryList: [],
             megaSummaryList: [],
             charMemoryList: [],
-            /* 默认 10 轮：新会话开箱即用；设为 0 可关闭。与「自动总结触发」无关。 */
+            /* 默认 10 轮：新会话开箱即用；设为 0 可关闭。
+               注意与上方的 summaryTrigger（同样是 10）**数值巧合、语义无关**：
+               本项控制「每 N 轮自动把近期原文沉淀进角色记忆」，
+               summaryTrigger 控制「每 M 条触发一次分镜总结」。改其中一个不影响另一个。 */
             memoryAutoRoundTrigger: 10,
             memoryAutoPrompt: '',
             megaSummaryPrompt: '',
