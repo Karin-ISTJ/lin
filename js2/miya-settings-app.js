@@ -170,7 +170,9 @@
       var map = {
         'miya-st-panel-chat': 'api-chat',
         'miya-st-panel-voice': 'api-voice',
-        'miya-st-panel-imagegen': 'api-imagegen',
+        /* 生图已从聊天设置移除：它有独立全屏页（桌面「生图」图标进入），
+           这里不再映射到任何子视图。旧代码若仍以该 id 调用，会落到下面的
+           废弃告警分支，不会静默什么都没发生。 */
         'miya-st-panel-chat-defaults': 'chat-defaults',
         'miya-st-panel-msg-sound': 'notify',
         'miya-st-panel-storage': 'storage'

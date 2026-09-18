@@ -3224,21 +3224,64 @@
   background: radial-gradient(circle, rgba(232, 93, 76, 0.03) 0%, transparent 70%);
 }
 
+/*
+ * 生图页顶栏。
+ *
+ * 原先这里自创了一套：justify-content:space-between + 半透明底
+ * rgba(245,243,239,.82) + 14px 对称内边距。后果是——返回键被压到最左、
+ * 标题挤在中间偏右、右侧那个 52px 占位块又把标题推得不居中，
+ * 加上底色半透明，滚动时正文会从顶栏底下透上来。
+ * 观感与聊天设置其它页明显不是一套。
+ *
+ * 现在直接对齐 .mi-set-page .st-navbar 那套（不透明 --st-bg 底、
+ * 底部 1px 分隔线、gap 10px、左返回 + 中标题 + 右操作）：
+ * 返回键用与别处一致的 .st-navback 样式，标题 flex:1 真正居中。
+ */
 .miya-igapp__navbar {
   position: relative;
   z-index: 5;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  background: rgba(245, 243, 239, 0.82);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 8px;
+  background: var(--st-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--st-border);
 }
-.miya-igapp__spacer { width: 52px; }
+.miya-igapp__navbar .st-navback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--st-border-strong);
+  border-radius: 14px;
+  background: var(--st-card-bg);
+  color: var(--st-text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  -webkit-tap-highlight-color: transparent;
+}
+.miya-igapp__navbar .st-navback:active { transform: scale(0.97); }
+.miya-igapp__navbar .st-navback svg { flex-shrink: 0; }
+.miya-igapp__navbar .st-navtitle {
+  flex: 1;
+  margin: 0;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  letter-spacing: 0.3px;
+  color: var(--st-text-primary);
+}
+/* 右侧占位：宽度对齐返回键，让标题真正落在屏幕中线 */
+.miya-igapp__spacer { width: 52px; flex-shrink: 0; }
 
 .miya-igapp__scroll {
   position: relative;
@@ -3257,40 +3300,23 @@
 /* ── 聊天设置 · 页内子视图 ─────────────────────────────────────
  *
  * API 表单、备份、存储用量这些「独立一页」的内容，
- * 用同一个返回头条 + 卡片堆叠的骨架，保证翻进去的观感一致。
+ * 用「一段说明 + 卡片堆叠」的骨架，保证翻进去的观感一致。
+ *
+ * 这里**不再定义** .mi-set-subview__head / __back / __title ——
+ * 子视图的返回键与标题已由顶栏（.st-navbar）统一承担，
+ * 页内再放一份就是重复（曾经出现过两个返回键）。
+ * 只保留 __hint：顶栏放不下这段用途说明。
  */
-.mi-set-subview__head {
-  padding: 4px 0 18px;
-}
-.mi-set-subview__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px 6px 8px;
-  margin-bottom: 14px;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  color: var(--st-text-secondary, #6B6B6B);
-  background: transparent;
-  border: 1px solid var(--st-border-strong, rgba(0, 0, 0, 0.08));
-  border-radius: 999px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.mi-set-subview__back:active { background: rgba(0, 0, 0, 0.03); }
-
-.mi-set-subview__title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--st-text-primary, #1A1A1A);
-}
 .mi-set-subview__hint {
   margin: 8px 0 0;
   font-size: 12px;
   line-height: 1.6;
   color: var(--st-text-tertiary, #999999);
+}
+/* 子视图开头的说明：上方留一点呼吸，与顶栏分隔线拉开距离 */
+.mi-set-subview__hint--lead {
+  margin: 0 0 16px;
+  padding: 0 2px;
 }
 
 .mi-set-subview__card {

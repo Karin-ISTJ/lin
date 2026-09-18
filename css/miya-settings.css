@@ -786,6 +786,20 @@
   -webkit-appearance: none;
   appearance: none;
 }
+.miya-igapp .ins-toggle {
+  position: relative;
+  width: 52px;
+  height: 30px;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  flex-shrink: 0;
+  border: none;
+  outline: none;
+  background: var(--st-border-strong);
+  -webkit-appearance: none;
+  appearance: none;
+}
 
 .miya-settings-app .ins-toggle::after {
   content: '';
@@ -801,6 +815,10 @@
 }
 
 .miya-settings-app .ins-toggle.is-on {
+  background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
+  border-color: transparent;
+}
+.miya-igapp .ins-toggle.is-on {
   background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
   border-color: transparent;
 }
@@ -836,6 +854,24 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
+.miya-igapp .st-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  border: 1px solid var(--st-border, rgba(0, 0, 0, 0.04));
+  background: var(--st-card-bg, rgba(255, 255, 255, 0.72));
+  color: var(--st-text-primary, #1A1A1A);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
 
 .miya-settings-app .st-action-btn:hover {
   transform: translateY(-2px);
@@ -848,6 +884,19 @@
 }
 
 .miya-settings-app .st-action-btn--primary {
+  /* 纯色兜底在前、渐变在后：两条都是独立声明，后一条若整体无效（变量缺失/
+     解析失败）会被丢弃，前一条仍然生效。反之若只写一条 background 简写，
+     只要其中有 var() 解析失败，整条声明作废 —— 按钮就会变成
+     白底(继承)＋白字，看起来是个「空按钮」，只剩外面那圈蓝色光晕。
+     注意声明顺序不能颠倒。 */
+  background-color: #007AFF;
+  background-image: linear-gradient(135deg, var(--st-accent, #007AFF), #5AC8FA);
+  color: #FFFFFF;
+  -webkit-text-fill-color: #FFFFFF;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.25);
+}
+.miya-igapp .st-action-btn--primary {
   /* 纯色兜底在前、渐变在后：两条都是独立声明，后一条若整体无效（变量缺失/
      解析失败）会被丢弃，前一条仍然生效。反之若只写一条 background 简写，
      只要其中有 var() 解析失败，整条声明作废 —— 按钮就会变成
@@ -1049,8 +1098,27 @@
   color: var(--st-text-tertiary);
   margin: 20px 0 10px 4px;
 }
+.miya-igapp .st-form-section__title {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--st-text-tertiary);
+  margin: 20px 0 10px 4px;
+}
 
 .miya-settings-app .st-form-card {
+  background: var(--st-card-bg);
+  border-radius: 20px;
+  padding: 18px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--st-border);
+  box-shadow: var(--st-shadow-md);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+}
+.miya-igapp .st-form-card {
   background: var(--st-card-bg);
   border-radius: 20px;
   padding: 18px 16px;
@@ -1075,8 +1143,24 @@
   margin-bottom: 14px;
   line-height: 1.5;
 }
+.miya-igapp .st-form-hint {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: var(--st-text-tertiary);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
 
 .miya-settings-app .ins-field-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--st-text-tertiary);
+  margin-bottom: 8px;
+}
+.miya-igapp .ins-field-label {
   font-family: 'Inter', sans-serif;
   font-size: 10px;
   font-weight: 600;
@@ -1089,6 +1173,21 @@
 .miya-settings-app .ins-text-input,
 .miya-settings-app .ins-select,
 .miya-settings-app .ins-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--st-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: var(--st-text-primary);
+  box-shadow: none;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+}
+.miya-igapp .ins-text-input,
+.miya-igapp .ins-select,
+.miya-igapp .ins-textarea {
   width: 100%;
   background: rgba(0, 0, 0, 0.02);
   border: 1px solid var(--st-border);
@@ -1116,14 +1215,27 @@
   border: 1px solid var(--st-border);
   background: rgba(255, 255, 255, 0.8);
 }
+.miya-igapp .ins-icon-btn {
+  border-radius: 14px;
+  border: 1px solid var(--st-border);
+  background: rgba(255, 255, 255, 0.8);
+}
 
 .miya-settings-app .ins-inline-field .ins-select {
   flex: 1;
   margin-bottom: 0;
   min-width: 0;
 }
+.miya-igapp .ins-inline-field .ins-select {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 0;
+}
 
 .miya-settings-app .ins-range {
+  accent-color: var(--st-accent);
+}
+.miya-igapp .ins-range {
   accent-color: var(--st-accent);
 }
 
@@ -1136,8 +1248,22 @@
   padding-top: 12px;
   border-top: 1px solid var(--st-border);
 }
+.miya-igapp .st-toggle-in-form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--st-border);
+}
 
 .miya-settings-app .st-toggle-in-form strong {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 14px;
+  font-weight: 500;
+}
+.miya-igapp .st-toggle-in-form strong {
   font-family: 'Noto Serif SC', serif;
   font-size: 14px;
   font-weight: 500;

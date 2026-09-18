@@ -443,8 +443,24 @@
     },
     find: function (name) {
       var nm = String(name || '').trim();
-      return ensureApiPresetsReady().then(function (list) {
-        for (var i = 0; i < (list || []).length; i++) {
+      if (!nm) return Promise.resolve(null);
+      /*
+       * ★ 必须读 apiPresetsCache，不能读 ensureApiPresetsReady() 的返回值。
+       *
+       * ensureApiPresetsReady() 只在第一次真正加载，之后永远返回当初
+       * 那个已 resolve 的 promise —— 它闭包里捕获的是**首次加载的列表**。
+       * upsert / remove 只更新 apiPresetsCache，不会把这个 promise 换掉，
+       * 于是走 ready 这条路拿到的永远是陈旧快照：
+       * 刚保存的预设 find() 不到，刚删除的还能 find() 到。
+       *
+       * （旧版设置 App 自己直接读 apiPresetsCache，所以这个坑一直没暴露；
+       *   迁移到聊天设置后改用 find()，问题才浮出来。）
+       *
+       * ensureReady() 仍要等 —— 首次进入时缓存可能还没就绪。
+       */
+      return ensureApiPresetsReady().then(function () {
+        var list = apiPresetsCache || [];
+        for (var i = 0; i < list.length; i++) {
           if (list[i] && String(list[i].name) === nm) return list[i];
         }
         return null;

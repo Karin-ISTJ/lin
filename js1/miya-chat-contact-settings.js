@@ -1346,11 +1346,16 @@
       '<div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>' +
       '<div class="st-deco-ornament" style="bottom: 280px; left: -40px; font-size: 100px;">¶</div>' +
 
-      /* API 三项各自独立成栏（与其它折叠栏同外观），仍排在最上方。
-         点击进入页内子视图 —— 不再是跳去桌面设置 App（那个入口已删除）。 */
+      /*
+       * API 两项各自独立成栏（与其它折叠栏同外观），仍排在最上方。
+       * 点击进入页内子视图 —— 不再是跳去桌面设置 App（那个入口已删除）。
+       *
+       * 生图已从本页移除：它有自己的独立全屏页，桌面上的「生图」图标即入口，
+       * 两边读写本来就是同一份配置，在这里再放一个二级入口只是重复。
+       * 联系人级的生图开关仍在「朋友圈与生图」分区里，不受影响。
+       */
       renderApiNavBar('api-chat', '对话 API', '对话模型服务端点与密钥', 'api-chat') +
       renderApiNavBar('api-voice', '语音合成', '语音合成服务端点与密钥', 'api-voice') +
-      renderApiNavBar('api-imagegen', '生图 API', '生图服务端点与密钥', 'api-imagegen') +
 
       renderZone('basic', '基础', '身份、头像、通知与主动消息',
         subBlock('身份与显示', '', formCard(
@@ -2159,7 +2164,6 @@
   var SUB_VIEW_TITLES = {
     'api-chat': '对话 API',
     'api-voice': '语音合成',
-    'api-imagegen': '生图 API',
     'backup': '备份与恢复',
     'storage': '存储用量',
     'notify': '通知与提示音',
@@ -2186,6 +2190,7 @@
     }
     if (key === 'api-chat') {
       var temp = parseFloat(val('#mq-api-temp'));
+      var temp2 = parseFloat(val('#mq-api2-temp'));
       var patch = {
         baseUrl: val('#mq-api-base'),
         apiKey: val('#mq-api-key'),
@@ -2196,6 +2201,8 @@
         fallbackEnabled: on('#mq-api-fallback')
       };
       if (Number.isFinite(temp)) patch.temperature = temp;
+      /* 副线路温度：原版面板有这个字段，压缩重写时丢了 —— 补回 */
+      if (Number.isFinite(temp2)) patch.fallbackTemperature = temp2;
       if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig(patch);
       toast('对话 API 已保存');
       return;
@@ -2266,7 +2273,6 @@
   function renderSubView(key) {
     if (key === 'api-chat') return renderApiChatSub();
     if (key === 'api-voice') return renderApiVoiceSub();
-    if (key === 'api-imagegen') return renderApiImagegenSub();
     if (key === 'backup') return renderBackupSub();
     if (key === 'storage') return renderStorageSub();
     if (key === 'notify') return renderNotifySub();
@@ -2274,19 +2280,26 @@
     return '<div class="mi-empty-hint">该设置页不存在</div>';
   }
 
-  /* 子视图统一外壳：顶部一行返回 + 标题，然后是内容 */
+  /*
+   * 子视图统一外壳。正文直接就是内容卡片，**不再自带返回键与标题**。
+   *
+   * ── 为什么去掉这一行 ──────────────────────────────────────────
+   *
+   * 顶栏（.st-navbar）本来就有「‹ 返回」和当前页标题，render() 在进子视图时
+   * 会把标题改成子视图名（见 SUB_VIEW_TITLES）。原先这里又渲染了一遍
+   * 「‹ 聊天设置」胶囊 + 20px 大字标题 —— 于是同一屏里出现两个返回键、
+   * 两个标题，正文还被这行重复信息往下挤掉一截。
+   *
+   * 这行是「桌面设置 App 面板」搬进页内时留下的：那时面板是独立一页、
+   * 没有外层顶栏，所以自己带了返回与标题；改成子视图后顶栏接管了这两件事，
+   * 它就成了纯粹的重复。去掉后子视图与顶栏是同一套导航，也顺手消掉
+   * 那个「点哪个返回」的歧义。
+   *
+   * hint 保留 —— 它是这一段设置的用途说明，顶栏放不下，仍有价值。
+   */
   function subShell(title, hint, inner) {
     return '<div class="st-container mi-set-flow">' +
-      '<div class="mi-set-subview__head">' +
-        '<button type="button" class="mi-set-subview__back" data-mq-set-sub-back aria-label="返回聊天设置">' +
-          '<svg width="9" height="16" viewBox="0 0 10 18" fill="none" aria-hidden="true">' +
-            '<path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-          '</svg>' +
-          '<span>聊天设置</span>' +
-        '</button>' +
-        '<h2 class="mi-set-subview__title">' + esc(title) + '</h2>' +
-        (hint ? '<p class="mi-set-subview__hint">' + esc(hint) + '</p>' : '') +
-      '</div>' +
+      (hint ? '<p class="mi-set-subview__hint mi-set-subview__hint--lead">' + esc(hint) + '</p>' : '') +
       inner +
     '</div>';
   }
@@ -2294,8 +2307,38 @@
   function renderApiChatSub() {
     var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
     function num(v, d) { return v == null || v === '' ? d : v; }
+    /*
+     * 结构与字段严格对齐「桌面设置 App → 对话」面板（迁移前的原版），
+     * 分三段：接口预设 → 主线路 → 副线路。
+     *
+     * 合并进聊天设置时这三段被压缩重写，丢了四处东西：
+     *   1. 整个「接口预设」区（下拉 + 命名 + 保存/删除）；
+     *   2. 主线路、副线路的「拉取模型」⟳ 按钮的事件绑定；
+     *   3. 副线路的温度滑块（原版主副线路各有一条）；
+     *   4. 温度滑块与数字标签的实时联动。
+     * 现按原版逐一补回，字段名沿用 mq-* 前缀以免与生图面板撞 id。
+     */
     return subShell('对话 API', '对话模型服务端点与密钥。主线路失败时可自动切到副线路。',
+
+      /* ── 接口预设（原版第一段）── */
       '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<h4 class="st-form-section__title">接口预设</h4>' +
+        '<label class="ins-field-label" for="mq-api-preset-pick">载入预设</label>' +
+        '<div class="ins-inline-field">' +
+          '<select class="ins-select" id="mq-api-preset-pick"><option value="">选择已存预设</option></select>' +
+          '<button type="button" class="ins-icon-btn" id="mq-api-preset-delete" title="删除预设">×</button>' +
+        '</div>' +
+        '<label class="ins-field-label" for="mq-api-preset-name">预设名称</label>' +
+        '<div class="ins-inline-field">' +
+          '<input type="text" class="ins-text-input" id="mq-api-preset-name" placeholder="例如：备用线路" maxlength="64">' +
+          '<button type="button" class="ins-icon-btn" id="mq-api-preset-save" title="保存预设">✓</button>' +
+        '</div>' +
+        '<p class="st-form-hint">保存主线路与副线路的全部字段；同名预设自动覆盖。选中下拉里的预设即填入表单，点「保存」后生效。</p>' +
+      '</div>' +
+
+      /* ── 主线路（原版第二段）── */
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<h4 class="st-form-section__title">主线路</h4>' +
         '<label class="ins-field-label" for="mq-api-base">网关地址</label>' +
         '<input type="text" class="ins-text-input" id="mq-api-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false" value="' + esc(cfg.baseUrl || '') + '">' +
         '<label class="ins-field-label" for="mq-api-key">密钥</label>' +
@@ -2308,23 +2351,257 @@
         '<label class="ins-field-label">温度 <span id="mq-api-temp-lbl">' + esc(num(cfg.temperature, 1)) + '</span></label>' +
         '<input type="range" class="ins-range" id="mq-api-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.temperature, 1)) + '">' +
       '</div>' +
+
+      /* ── 副线路（原版第三段）── */
       '<div class="st-form-card ins-form-block mi-set-subview__card">' +
-        '<h4 class="st-form-section__title">副线路（可选）</h4>' +
+        '<h4 class="st-form-section__title">副线路</h4>' +
         '<label class="ins-field-label" for="mq-api2-base">网关地址</label>' +
         '<input type="text" class="ins-text-input" id="mq-api2-base" placeholder="备用网关" autocomplete="off" spellcheck="false" value="' + esc(cfg.fallbackBaseUrl || '') + '">' +
         '<label class="ins-field-label" for="mq-api2-key">密钥</label>' +
-        '<input type="password" class="ins-text-input" id="mq-api2-key" placeholder="sk-…" autocomplete="off" value="' + esc(cfg.fallbackApiKey || '') + '">' +
+        '<div class="ins-inline-field">' +
+          '<input type="password" class="ins-text-input" id="mq-api2-key" placeholder="sk-…" autocomplete="off" value="' + esc(cfg.fallbackApiKey || '') + '">' +
+          '<button type="button" class="ins-icon-btn" id="mq-api2-fetch" title="拉取模型">⟳</button>' +
+        '</div>' +
         '<label class="ins-field-label" for="mq-api2-model">模型</label>' +
         '<select class="ins-select" id="mq-api2-model"><option value="' + esc(cfg.fallbackModel || '') + '">' + esc(cfg.fallbackModel || '选择模型') + '</option></select>' +
+        '<label class="ins-field-label">温度 <span id="mq-api2-temp-lbl">' + esc(num(cfg.fallbackTemperature, 1)) + '</span></label>' +
+        '<input type="range" class="ins-range" id="mq-api2-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.fallbackTemperature, 1)) + '">' +
         '<div class="st-toggle-in-form">' +
           '<strong>主线路失败时自动切换副线路</strong>' +
           '<button type="button" class="ins-toggle' + (cfg.fallbackEnabled ? ' is-on' : '') + '" id="mq-api-fallback" role="switch" aria-checked="' + (cfg.fallbackEnabled ? 'true' : 'false') + '"></button>' +
         '</div>' +
       '</div>' +
+
       '<div class="mi-btn-row mi-set-subview__actions">' +
         '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-sub-save="api-chat">保存</button>' +
       '</div>'
     );
+  }
+
+  /* ── 对话 API · 接口预设 ──────────────────────────────────────
+   *
+   * 下拉渲染 + 载入 / 保存 / 删除三个动作。
+   * 数据层是 js2/miya-api-config.js 的 global.miyaApiPresets
+   * （load / upsert / remove / find / ensureReady），
+   * 本模块只负责把它读出来画成下拉、把表单值写回去。
+   */
+
+  function presetPickEl() { return pageEl && pageEl.querySelector('#mq-api-preset-pick'); }
+
+  function refreshApiPresetOptions(list) {
+    var pick = presetPickEl();
+    if (!pick) return;
+    var names = (list || []).map(function (p) {
+      return p && p.name ? String(p.name) : '';
+    }).filter(Boolean);
+    var current = pick.value;
+    pick.innerHTML = '<option value="">选择已存预设</option>' +
+      names.map(function (n) {
+        return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
+      }).join('');
+    if (current && names.indexOf(current) >= 0) pick.value = current;
+  }
+
+  function hydrateApiPresets() {
+    var mod = global.miyaApiPresets;
+    var pick = presetPickEl();
+    if (!mod || !pick) return;
+    /* 先画缓存（如果有），避免每次进来都空一下再跳出来 */
+    var cached = mod.getCached && mod.getCached();
+    if (cached) refreshApiPresetOptions(cached);
+    var ready = mod.ensureReady ? mod.ensureReady() : Promise.resolve([]);
+    Promise.resolve(ready).then(function (list) {
+      /* 期间用户可能已经返回列表，节点没了就安静退出 */
+      if (!presetPickEl()) return;
+      refreshApiPresetOptions(list);
+    }).catch(function () {});
+  }
+
+  /* 从表单读一份完整快照（主 + 副线路） */
+  function readApiFormSnapshot() {
+    if (!pageEl) return null;
+    function val(sel) {
+      var el = pageEl.querySelector(sel);
+      return el ? String(el.value || '').trim() : '';
+    }
+    function on(sel) {
+      var el = pageEl.querySelector(sel);
+      return !!(el && el.classList.contains('is-on'));
+    }
+    var temp = parseFloat(val('#mq-api-temp'));
+    var temp2 = parseFloat(val('#mq-api2-temp'));
+    return {
+      baseUrl: val('#mq-api-base'),
+      apiKey: val('#mq-api-key'),
+      model: val('#mq-api-model'),
+      temperature: Number.isFinite(temp) ? temp : 1,
+      fallbackBaseUrl: val('#mq-api2-base'),
+      fallbackApiKey: val('#mq-api2-key'),
+      fallbackModel: val('#mq-api2-model'),
+      fallbackTemperature: Number.isFinite(temp2) ? temp2 : 1,
+      fallbackEnabled: on('#mq-api-fallback')
+    };
+  }
+
+  /* 把一份预设写回表单。不改 state、不落盘 —— 用户随后点「保存」才生效，
+     这样「载入」是一次可反悔的预览，符合预设的用法。 */
+  function applyApiPresetToForm(p) {
+    if (!pageEl || !p) return;
+    function set(sel, v) {
+      var el = pageEl.querySelector(sel);
+      if (el) el.value = v == null ? '' : String(v);
+    }
+    set('#mq-api-base', p.baseUrl);
+    set('#mq-api-key', p.apiKey);
+    set('#mq-api-model', p.model);
+    set('#mq-api2-base', p.fallbackBaseUrl);
+    set('#mq-api2-key', p.fallbackApiKey);
+    set('#mq-api2-model', p.fallbackModel);
+    var fb = pageEl.querySelector('#mq-api-fallback');
+    if (fb) {
+      fb.classList.toggle('is-on', !!p.fallbackEnabled);
+      fb.setAttribute('aria-checked', p.fallbackEnabled ? 'true' : 'false');
+    }
+    if (p.temperature != null) {
+      var t = pageEl.querySelector('#mq-api-temp');
+      if (t) t.value = String(p.temperature);
+      var lbl = pageEl.querySelector('#mq-api-temp-lbl');
+      if (lbl) lbl.textContent = String(p.temperature);
+    }
+    if (p.fallbackTemperature != null) {
+      var t2 = pageEl.querySelector('#mq-api2-temp');
+      if (t2) t2.value = String(p.fallbackTemperature);
+      var lbl2 = pageEl.querySelector('#mq-api2-temp-lbl');
+      if (lbl2) lbl2.textContent = String(p.fallbackTemperature);
+    }
+  }
+
+  /* 下拉选中后自动载入 —— 与生图预设的「选中即读」一致，少一步点击 */
+  function loadApiPresetFromPick() {
+    var mod = global.miyaApiPresets;
+    var pick = presetPickEl();
+    var name = pick ? String(pick.value || '').trim() : '';
+    if (!mod || !name) return;
+    mod.find(name).then(function (p) {
+      if (!p) { toast('预设不存在'); return; }
+      applyApiPresetToForm(p);
+      var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
+      if (nameEl) nameEl.value = name;
+      toast('已载入：' + name + '（记得点保存生效）');
+    }).catch(function () { toast('载入失败'); });
+  }
+
+  function saveApiPreset() {
+    var mod = global.miyaApiPresets;
+    if (!mod) { toast('预设模块未加载'); return; }
+    var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
+    var name = nameEl ? String(nameEl.value || '').trim() : '';
+    if (!name) { toast('请输入预设名称'); return; }
+    var snap = readApiFormSnapshot();
+    if (!snap || (!snap.baseUrl && !snap.apiKey && !snap.model)) {
+      toast('请先填写接口信息');
+      return;
+    }
+    mod.upsert(name, snap).then(function (list) {
+      refreshApiPresetOptions(list);
+      var pick = presetPickEl();
+      if (pick) pick.value = name;
+      toast('预设已保存');
+    }).catch(function () { toast('保存失败'); });
+  }
+
+  function deleteApiPreset() {
+    var mod = global.miyaApiPresets;
+    if (!mod) { toast('预设模块未加载'); return; }
+    var pick = presetPickEl();
+    var name = pick ? String(pick.value || '').trim() : '';
+    if (!name) {
+      var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
+      name = nameEl ? String(nameEl.value || '').trim() : '';
+    }
+    if (!name) { toast('请先选择要删除的预设'); return; }
+    mod.remove(name).then(function (list) {
+      refreshApiPresetOptions(list);
+      var p = presetPickEl();
+      if (p) p.value = '';
+      var n = pageEl && pageEl.querySelector('#mq-api-preset-name');
+      if (n) n.value = '';
+      toast('已删除：' + name);
+    }).catch(function () { toast('删除失败'); });
+  }
+
+  /* ── 对话 API · 拉取模型 ──────────────────────────────────────
+   *
+   * 与生图面板同款：GET {root}/models，Bearer 用密钥。
+   * 取回来的 id 列表填进对应下拉，并把当前值保住。
+   *
+   * 结果同时写进 miyaApiModelCache（按 `baseUrl|密钥尾4位` 分桶），
+   * 下次进来能先出缓存，不必再点一次 ⟳ —— 这正是那个缓存模块
+   * 当初存在的理由，只是设置 App 删除后没人再调用它。
+   *
+   * which: 'main' | 'fallback'，分别对应主线路与副线路。
+   */
+  function fetchChatModels(which) {
+    if (!pageEl) return;
+    var isMain = which !== 'fallback';
+    function val(sel) {
+      var el = pageEl.querySelector(sel);
+      return el ? String(el.value || '').trim() : '';
+    }
+    var base = val(isMain ? '#mq-api-base' : '#mq-api2-base');
+    var key = val(isMain ? '#mq-api-key' : '#mq-api2-key');
+    var selEl = pageEl.querySelector(isMain ? '#mq-api-model' : '#mq-api2-model');
+    if (!selEl) return;
+
+    if (typeof global.miyaOpenAiApiRoot !== 'function') {
+      toast('API 模块未就绪');
+      return;
+    }
+    var root = global.miyaOpenAiApiRoot(base);
+    if (!root) { toast('请先填写网关地址'); return; }
+
+    var btn = pageEl.querySelector(isMain ? '#mq-api-fetch' : '#mq-api2-fetch');
+    if (btn) btn.disabled = true;
+
+    function applyOptions(ids) {
+      if (!ids || !ids.length) { toast('没有取到模型'); return; }
+      var current = String(selEl.value || '').trim();
+      selEl.innerHTML = '<option value="">选择模型</option>' + ids.map(function (id) {
+        return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
+      }).join('');
+      /* 当前值还在列表里就保住，否则退回占位项 */
+      selEl.value = ids.indexOf(current) >= 0 ? current : '';
+      toast('已获取 ' + ids.length + ' 个模型');
+    }
+
+    /* 先出缓存 —— 点一下立刻有东西，网络结果回来再覆盖 */
+    var cache = global.miyaApiModelCache;
+    var cachedIds = null;
+    if (cache && cache.read) {
+      cachedIds = (cache.read(cache.bucket(base, key)) || null);
+      if (cachedIds && cachedIds.length) applyOptions(cachedIds);
+    }
+
+    fetch(root + '/models', {
+      method: 'GET',
+      headers: { Authorization: 'Bearer ' + key }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      var ids = Array.isArray(j && j.data) ? j.data.map(function (x) {
+        return x && x.id ? String(x.id) : '';
+      }).filter(Boolean).sort() : [];
+      if (!ids.length) throw new Error('empty');
+      if (cache && cache.write) cache.write(cache.bucket(base, key), ids);
+      applyOptions(ids);
+    }).catch(function (err) {
+      /* 有缓存就先别打扰用户 —— 屏幕上已经有可选模型了 */
+      if (cachedIds && cachedIds.length) return;
+      toast('获取失败：' + (err && err.message ? err.message : '网络错误'));
+    }).then(function () {
+      if (btn) btn.disabled = false;
+    });
   }
 
   function renderApiVoiceSub() {
@@ -2351,23 +2628,6 @@
       '</div>' +
       '<div class="mi-btn-row mi-set-subview__actions">' +
         '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-sub-save="api-voice">保存</button>' +
-      '</div>'
-    );
-  }
-
-  function renderApiImagegenSub() {
-    /*
-     * 生图 API 的配置表单很大（含自由生图、垫图、联系人生图等），
-     * 而且它的按钮绑定由 miya-image-gen.js 按固定 id 负责。
-     * 与其在这里重写一份、造成两处维护，不如直接跳进生图独立页 ——
-     * 那边已经是同一套表单，读写同一份配置。
-     */
-    return subShell('生图 API', '生图的接口、提示词与自由生图都在独立的生图设置页里。',
-      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
-        '<p class="st-form-hint">生图设置包含接口、提示词、尺寸预设、垫图与自由生图，字段较多，已独立成一页。</p>' +
-        '<div class="mi-btn-row">' +
-          '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-open-imagegen>打开生图设置</button>' +
-        '</div>' +
       '</div>'
     );
   }
@@ -2478,6 +2738,8 @@
     state.subView = key;
     render({ skipContextUsage: true });
     if (key === 'storage') scheduleStorageSubRefresh();
+    /* 对话 API：把已存预设填进下拉。必须放在 render 之后 —— 它要往 DOM 里写。 */
+    if (key === 'api-chat') hydrateApiPresets();
     /* 聊天默认值：内容由 miyaChatSettingsPanel 渲染进我们给的容器。
        必须放在 render 之后 —— 它要往里写 DOM。 */
     if (key === 'chat-defaults') {
@@ -2681,6 +2943,8 @@
         if (state.subView) closeSubView(); else close();
         return;
       }
+      /* 子视图内的页内返回键已删除（顶栏的返回键接管），
+         这里保留一行兼容处理：若旧缓存页面里还残留该节点，点了也能回去。 */
       if (e.target.closest('[data-mq-set-sub-back]')) { closeSubView(); return; }
 
       /* 子视图入口 */
@@ -2691,10 +2955,14 @@
       var subSave = e.target.closest('[data-mq-set-sub-save]');
       if (subSave) { saveSubViewForm(subSave.getAttribute('data-mq-set-sub-save')); return; }
 
-      if (e.target.closest('[data-mq-set-open-imagegen]')) {
-        if (global.MiyaImageGenApp && global.MiyaImageGenApp.open) global.MiyaImageGenApp.open();
-        return;
-      }
+      /* ── 对话 API · 接口预设与模型拉取 ──
+         这两组控件是随设置 App 删除时一并丢失的：
+         渲染出来了，但没有任何事件接住它们，点了毫无反应。 */
+      if (e.target.closest('#mq-api-preset-save')) { saveApiPreset(); return; }
+      if (e.target.closest('#mq-api-preset-delete')) { deleteApiPreset(); return; }
+      if (e.target.closest('#mq-api-fetch')) { fetchChatModels('main'); return; }
+      if (e.target.closest('#mq-api2-fetch')) { fetchChatModels('fallback'); return; }
+
       if (e.target.closest('[data-mq-set-storage-refresh]')) { refreshStorageSub(); return; }
 
       var bkExport = e.target.closest('[data-mq-set-backup-export]');
@@ -3078,12 +3346,48 @@
         reader.readAsText(file, 'utf-8');
       }
 
+      /* 对话 API 预设：选中即载入，与生图预设的「选中即读」一致 */
+      if (e.target.matches('#mq-api-preset-pick')) {
+        loadApiPresetFromPick();
+        return;
+      }
+
       /* 备份导入：文件选择后交给 miyaBackup 引擎（原设置 App 的那套） */
       if (e.target.matches('[data-mq-set-backup-file]')) {
         var bfs = e.target.files ? Array.prototype.slice.call(e.target.files) : [];
         e.target.value = '';
         if (!bfs.length) return;
         if (global.miyaBackup) global.miyaBackup.importFiles(bfs);
+        return;
+      }
+    });
+
+    /* 温度滑块的数值标签要实时跟手。
+       原先这个联动也随设置 App 一起丢了 —— 拖滑块只有条动、数字不动。 */
+    pageEl.addEventListener('input', function (e) {
+      if (e.target && e.target.id === 'mq-api-temp') {
+        var lbl = pageEl.querySelector('#mq-api-temp-lbl');
+        if (lbl) lbl.textContent = String(e.target.value);
+        return;
+      }
+      if (e.target && e.target.id === 'mq-api2-temp') {
+        var lb2 = pageEl.querySelector('#mq-api2-temp-lbl');
+        if (lb2) lb2.textContent = String(e.target.value);
+        return;
+      }
+      if (e.target && e.target.id === 'mq-voice-speed') {
+        var sl = pageEl.querySelector('#mq-voice-speed-lbl');
+        if (sl) sl.textContent = String(e.target.value);
+        return;
+      }
+      if (e.target && e.target.id === 'mq-voice-vol') {
+        var vl = pageEl.querySelector('#mq-voice-vol-lbl');
+        if (vl) vl.textContent = String(e.target.value);
+        return;
+      }
+      if (e.target && e.target.id === 'mq-voice-pitch') {
+        var pl = pageEl.querySelector('#mq-voice-pitch-lbl');
+        if (pl) pl.textContent = String(e.target.value);
         return;
       }
     });
