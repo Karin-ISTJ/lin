@@ -224,33 +224,114 @@ async def main():
             check("开启 lifeLike 后定时开关被禁用", r4.get("activeDisabled") is True)
             check("开启 lifeLike 后定时开关被置灰", r4.get("activeOn") is False)
 
-        print("\n【5】「我的」页齿轮 → 指路页")
+        print("\n【5】回归边界：桌面设置 App 与「我的」齿轮 已彻底删除，功能已并入聊天设置")
         r5 = await pg.evaluate("""
         (async function(){
-          var app = window.miyaSettingsApp;
-          if (!app) return {error: 'no settings app'};
-          app.open('miya-st-panel-contact-chat');
-          await new Promise(function(r){ setTimeout(r, 700); });
-          var panel = document.getElementById('miya-st-panel-contact-chat');
-          if (!panel) return {error: 'no panel'};
-          var saveBtn = document.getElementById('miya-st-panel-save');
+          /* 「我的」菜单是点开才渲染的，先直接生成 HTML 再查，
+             否则查到的 0 只是「菜单还没画」，证明不了入口被删。 */
+          var chatApp = window.miyaChatApp;
+          var menuHtml = '';
+          if (chatApp && typeof chatApp.__buildMineMenuForTest === 'function') {
+            menuHtml = chatApp.__buildMineMenuForTest();
+          }
+          /* 桌面图标：miya-desk-custom 的布局里不该再有 'set' */
+          var deskIcons = Array.prototype.map.call(
+            document.querySelectorAll('.miya-desk-icon[data-app], [data-desk-app]'),
+            function(el){ return el.getAttribute('data-app') || el.getAttribute('data-desk-app'); });
           return {
-            hasIntro: !!panel.querySelector('.miya-ct-intro'),
-            hasPicker: !!panel.querySelector('#miya-ct-chat-pick-contact'),
-            hasGotoBtn: !!panel.querySelector('#miya-ct-chat-goto'),
-            introText: (panel.querySelector('.miya-ct-intro')||{}).textContent || '',
-            stillHasOldForm: !!panel.querySelector('#miya-ct-chat-global-memory-count'),
-            saveBtnHidden: saveBtn ? saveBtn.hidden : null,
-            hasWarnText: panel.textContent.indexOf('记忆与后台') >= 0
+            appDom: !!document.getElementById('miya-settings-app'),
+            panels: document.querySelectorAll('[id^="miya-st-panel-"]').length,
+            menuLen: menuHtml.length,
+            menuHasSettings: menuHtml.indexOf('data-mine-action=\\"settings\\"') >= 0,
+            menuHasFavorites: menuHtml.indexOf('我的收藏') >= 0,
+            deskSetIcons: deskIcons.filter(function(k){ return k === 'set'; }).length,
+            /* 老 API 兼容层仍在，且能落到正确子视图 */
+            legacyOpenType: typeof (window.miyaSettingsApp || {}).open,
+            /* 数据层引擎必须全部存活（拆文件时最容易误删的就是它们） */
+            apiCfg: typeof window.miyaGetApiConfigCached,
+            setCfg: typeof window.miyaSetApiConfig,
+            sysPrefs: typeof window.miyaGetSystemPrefs,
+            backup: typeof (window.miyaBackup || {}).exportFull,
+            toast: typeof window.miyaToast
           };
         })()
         """)
-        print("   mine-settings:", json.dumps(r5, ensure_ascii=False))
-        check("指路页有引导文案", r5.get("hasIntro"))
-        check("指路页有联系人选择器", r5.get("hasPicker"))
-        check("指路页有跳转按钮", r5.get("hasGotoBtn"))
-        check("旧的重复表单已移除", r5.get("stillHasOldForm") is False)
-        check("顶栏保存按钮已隐藏（无可保存内容）", r5.get("saveBtnHidden") is True)
+        print("   boundary:", json.dumps(r5, ensure_ascii=False))
+        check("桌面设置 App DOM 已删除", r5.get("appDom") is False)
+        check("设置 App 的面板 DOM 已清空", r5.get("panels") == 0, str(r5.get("panels")))
+        check("「我的」菜单已生成（断言前提成立）", r5.get("menuLen", 0) > 0, f"len={r5.get('menuLen')}")
+        check("「我的」菜单仍有其它项（未误删）", r5.get("menuHasFavorites") is True)
+        check("「我的」页齿轮入口已删除", r5.get("menuHasSettings") is False)
+        check("桌面无 set 图标", r5.get("deskSetIcons") == 0, str(r5.get("deskSetIcons")))
+        check("老 API 兼容层仍在", r5.get("legacyOpenType") == "function")
+        check("数据层引擎存活（API 配置）",
+              r5.get("apiCfg") == "function" and r5.get("setCfg") == "function")
+        check("数据层引擎存活（系统偏好）", r5.get("sysPrefs") == "function")
+        check("数据层引擎存活（备份）", r5.get("backup") == "function")
+        check("miyaToast 已定义（原先全项目缺失）", r5.get("toast") == "function")
+
+        print("\n【6】老 API 转发：miyaSettingsApp.open(panelId) 应落到对应子视图")
+        r6 = await pg.evaluate("""
+        (async function(){
+          var mod = window.miyaChatContactSettings;
+          mod.close();
+          await new Promise(function(r){ setTimeout(r, 400); });
+          var out = {};
+          var cases = [
+            ['miya-st-panel-chat', '对话 API'],
+            ['miya-st-panel-voice', '语音合成'],
+            ['miya-st-panel-imagegen', '生图 API'],
+            ['miya-st-panel-msg-sound', '通知与提示音'],
+            ['miya-st-panel-storage', '存储用量']
+          ];
+          for (var i = 0; i < cases.length; i++) {
+            window.miyaSettingsApp.open(cases[i][0]);
+            await new Promise(function(r){ setTimeout(r, 700); });
+            var page = document.getElementById('mq-set-page');
+            out[cases[i][0]] = page ? ((page.querySelector('.st-navtitle')||{}).textContent || '(none)') : '(no page)';
+            var back = page && page.querySelector('[data-mq-set-sub-back]');
+            if (back) { back.click(); await new Promise(function(r){ setTimeout(r, 350); }); }
+            mod.close();
+            await new Promise(function(r){ setTimeout(r, 300); });
+          }
+          return out;
+        })()
+        """)
+        print("   legacy routing:", json.dumps(r6, ensure_ascii=False))
+        check("老面板名 'miya-st-panel-chat' → 对话 API",
+              r6.get("miya-st-panel-chat") == "对话 API", str(r6.get("miya-st-panel-chat")))
+        check("老面板名 'miya-st-panel-voice' → 语音合成",
+              r6.get("miya-st-panel-voice") == "语音合成", str(r6.get("miya-st-panel-voice")))
+        check("老面板名 'miya-st-panel-imagegen' → 生图 API",
+              r6.get("miya-st-panel-imagegen") == "生图 API", str(r6.get("miya-st-panel-imagegen")))
+        check("老面板名 'miya-st-panel-msg-sound' → 通知与提示音",
+              r6.get("miya-st-panel-msg-sound") == "通知与提示音", str(r6.get("miya-st-panel-msg-sound")))
+        check("老面板名 'miya-st-panel-storage' → 存储用量",
+              r6.get("miya-st-panel-storage") == "存储用量", str(r6.get("miya-st-panel-storage")))
+
+        print("\n【7】桌面「生图」图标保留，且能独立打开生图 App")
+        r7 = await pg.evaluate("""
+        (async function(){
+          var handler = window.__miyaDeskAppHandlers && window.__miyaDeskAppHandlers.imagegen;
+          var opened = false;
+          if (window.MiyaImageGenApp && typeof window.MiyaImageGenApp.open === 'function') {
+            try { window.MiyaImageGenApp.open(); opened = true; } catch(e) { opened = 'throw:' + e; }
+          }
+          await new Promise(function(r){ setTimeout(r, 600); });
+          var root = document.getElementById('miya-igapp');
+          return {
+            hasApi: !!(window.MiyaImageGenApp && window.MiyaImageGenApp.open),
+            opened: opened,
+            rootVisible: root ? !root.hidden : false,
+            /* 生图 API 设置面板必须挂在这个 App 内部，
+               否则 miya-image-gen.js 里的 getElementById 会找不到 */
+            panelInApp: root ? !!root.querySelector('#miya-st-panel-imagegen') : false
+          };
+        })()
+        """)
+        print("   imagegen:", json.dumps(r7, ensure_ascii=False))
+        check("生图 App 可独立打开", r7.get("hasApi") is True and r7.get("rootVisible") is True)
+        check("生图 API 设置面板挂在生图 App 内部（id 未变）", r7.get("panelInApp") is True)
 
         await browser.close()
 

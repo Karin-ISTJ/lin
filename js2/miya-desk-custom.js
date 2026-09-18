@@ -11,7 +11,10 @@
   var DOCK_SLOT_COUNT = 4;
 
   var CUSTOM_GRID_APPS = [
-    'set', 'book', 'memory', 'chat', 'beauty', 'stpreset',
+    /* 'set'（设置）已移除：桌面设置 App 与「我的」齿轮都并进了
+       「联系人聊天设置」页，桌面上不再需要独立设置图标。
+       老用户桌面布局里的 'set' 由 normalizeLayout 的未知图标过滤兜掉。 */
+    'book', 'memory', 'chat', 'beauty', 'stpreset',
     'couple', 'itinerary',
     'notes', 'fun', 'imagegen'
   ];
@@ -45,7 +48,7 @@
      apps（查无引用）、store（线下）与 weather（天气）——后两者桌面无图标，
      APP_HANDLERS 虽有分支但无图标可点，属悬空入口，故一并清理。 */
   var APP_LABELS = {
-    set: '设置', book: '世界书',
+    book: '世界书',
     memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设',
     couple: '情侣空间', itinerary: '行程轨迹',
     notes: '日记', fun: '娱乐', imagegen: '生图',

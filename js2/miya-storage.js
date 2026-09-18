@@ -46,10 +46,17 @@
     if (now - fullNoticeShownAt < FULL_NOTICE_GAP) return;
     fullNoticeShownAt = now;
     var msg = '存储空间已满，刚才的改动没能保存。请到「设置 → 存储」清理或导出备份后再试。';
+    /*
+     * toast 模块（js2/miya-toast.js）在最早加载，这里必然可用。
+     * 存储写满属于不能错过的消息，用 priority 压到最上层并多留 1.6 秒；
+     * 仍保留自绘兜底，防止调用发生在脚本就绪之前。
+     */
     try {
-      if (typeof global.miyaToast === 'function') { global.miyaToast(msg); return; }
+      if (typeof global.miyaToast === 'function') {
+        global.miyaToast(msg, { duration: 4000, priority: true });
+        return;
+      }
     } catch (e) { /* 落到下面的兜底 */ }
-    /* 兜底：自己弹一个轻提示，不依赖任何上层的 UI 组件是否已就绪 */
     try {
       var div = document.createElement('div');
       div.className = 'ins-toast';

@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=5">
   <link rel="stylesheet" href="css/miya-chat-ins.css?v=52">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=1">
-  <link rel="stylesheet" href="css/miya-chat-settings.css?v=44">
+  <link rel="stylesheet" href="css/miya-chat-settings.css?v=47">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=10">
   <link rel="stylesheet" href="css/miya-offline-card.css?v=5">
@@ -580,486 +580,16 @@
     <input type="file" class="ins-file" id="miya-bf-file-custom-wg-import" accept=".json,application/json" multiple>
   </div>
 
-  <!-- 设置 -->
-  <div class="miya-settings-app ins-vault" id="miya-settings-app" aria-hidden="true">
-    <div class="st-ambient-bg" aria-hidden="true"></div>
+  <!--
+    桌面「设置」App 已整体删除。
 
-    <div class="ins-vault-home st-scroll" id="miya-st-main">
-      <div class="st-container">
-        <div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>
-        <div class="st-deco-ornament" style="bottom: 280px; left: -40px; font-size: 100px;">¶</div>
+    它原先承载的 6 个面板（对话/语音 API、聊天默认值、提示音、占用统计、
+    通知预览、备份与恢复）全部并入「联系人聊天设置」页的子视图，
+    数据层则拆成了 js2/miya-api-config.js / miya-backup.js / miya-storage-usage.js，
+    生图面板独立成 js2/miya-imagegen-app.js 的全屏页。
 
-        <header class="st-header st-header--topnav">
-          <button type="button" class="st-header-badge" id="miya-st-header-back" aria-label="返回">Preferences</button>
-          <h2>Settings <em>&amp;</em><br><span class="st-header-script">Configuration</span></h2>
-          <p class="st-header-sub">精细打理接口、数据与日常偏好</p>
-        </header>
-
-        <div class="st-section-label">数据管理</div>
-        <button type="button" class="st-io-card" data-st-nav="export">
-          <div class="st-io-icon st-io-icon--export">
-            <img class="mi-ico-img " src="img/icons/download-01.svg" alt="" width="18" height="18">
-          </div>
-          <div>
-            <div class="st-io-title">导出数据</div>
-            <div class="st-io-desc">轻量 ZIP：对话、设置与主题</div>
-          </div>
-          <img class="mi-ico-img st-io-arrow" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
-        </button>
-        <button type="button" class="st-io-card" data-st-nav="export-full">
-          <div class="st-io-icon st-io-icon--export">
-            <img class="mi-ico-img " src="img/icons/download-01.svg" alt="" width="18" height="18">
-          </div>
-          <div>
-            <div class="st-io-title">完整导出</div>
-          </div>
-          <img class="mi-ico-img st-io-arrow" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
-        </button>
-        <button type="button" class="st-io-card" data-st-nav="import">
-          <div class="st-io-icon st-io-icon--import">
-            <img class="mi-ico-img " src="img/icons/share-01.svg" alt="" width="18" height="18">
-          </div>
-          <div>
-            <div class="st-io-title">导入数据</div>
-            <div class="st-io-desc">从 ZIP 或 JSON 备份恢复</div>
-          </div>
-          <img class="mi-ico-img st-io-arrow" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
-        </button>
-
-        <div class="st-section-label">存储</div>
-        <button type="button" class="st-feature-card st-feature-card--clickable" data-st-nav="miya-st-panel-storage">
-          <div class="st-deco-number">02</div>
-          <div class="st-feature-header">
-            <div>
-              <div class="st-feature-title">用量 <em>统计</em></div>
-              <div class="st-feature-subtitle">本地存储分配与占用概览</div>
-            </div>
-            <div class="st-card-icon st-card-icon--gray st-feature-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-            </div>
-          </div>
-          <div class="st-stats-grid">
-            <div class="st-stat-item">
-              <div class="st-stat-value" id="miya-st-storage-summary">—</div>
-              <div class="st-stat-label">已用空间</div>
-              <div class="st-stat-bar"><div class="st-stat-bar-fill" id="miya-st-storage-used-bar"></div></div>
-            </div>
-            <div class="st-stat-item">
-              <div class="st-stat-value" id="miya-st-storage-pct">—</div>
-              <div class="st-stat-label">占用比例</div>
-              <div class="st-stat-bar"><div class="st-stat-bar-fill st-stat-bar-fill--warm" id="miya-st-storage-pct-bar"></div></div>
-            </div>
-            <div class="st-stat-item">
-              <div class="st-stat-value" id="miya-st-storage-quota-val">—</div>
-              <div class="st-stat-label">可用配额</div>
-              <div class="st-stat-bar"><div class="st-stat-bar-fill st-stat-bar-fill--green" id="miya-st-storage-quota-bar"></div></div>
-            </div>
-            <div class="st-stat-item">
-              <div class="st-stat-value">详情</div>
-              <div class="st-stat-label">点击查看分类</div>
-              <div class="st-stat-bar"><div class="st-stat-bar-fill" style="width:100%;opacity:0.3;"></div></div>
-            </div>
-          </div>
-        </button>
-
-        <div class="st-section-label">聊天</div>
-        <button type="button" class="st-card-row" data-st-nav="miya-st-panel-contact-chat">
-          <div class="st-card-row-left">
-            <div class="st-card-icon st-card-icon--warm"><img class="mi-ico-img " src="img/icons/message-chat-square.svg" alt="" width="18" height="18"></div>
-            <div><div class="st-card-label">聊天设置</div><div class="st-card-desc">聊天设置入口说明与各联系人快捷进入</div></div>
-          </div>
-          <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
-        </button>
-        <button type="button" class="st-card-row" data-st-nav="miya-st-panel-chat-defaults">
-          <div class="st-card-row-left">
-            <div class="st-card-icon st-card-icon--gray"><img class="mi-ico-img " src="img/icons/lightbulb-02.svg" alt="" width="18" height="18"></div>
-            <div><div class="st-card-label">聊天默认值</div><div class="st-card-desc">未单独设置过的联系人，统一使用这里的记忆与后台配置</div></div>
-          </div>
-          <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
-        </button>
-
-        <div class="st-section-label">系统</div>
-        <div class="st-card">
-          <div class="st-card-row st-card-row--static">
-            <div class="st-card-row-left">
-              <div class="st-card-icon st-card-icon--warm"><img class="mi-ico-img " src="img/icons/message-chat-square.svg" alt="" width="18" height="18"></div>
-              <div><div class="st-card-label">系统通知</div><div class="st-card-desc">推送提醒与角标更新</div></div>
-            </div>
-            <button type="button" class="ins-toggle" id="miya-st-sw-notify" role="switch" aria-checked="false"></button>
-          </div>
-          <button type="button" class="st-card-row" data-st-nav="miya-st-panel-msg-sound">
-            <div class="st-card-row-left">
-              <div class="st-card-icon st-card-icon--green"><img class="mi-ico-img " src="img/icons/volume-max.svg" alt="" width="18" height="18"></div>
-              <div><div class="st-card-label">提示音</div><div class="st-card-desc">来消息、生图完成、线下写完时的提示音</div></div>
-            </div>
-            <img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">
-          </button>
-        </div>
-
-        <div class="st-feature-card">
-          <div class="st-deco-number">04</div>
-          <div class="st-feature-header">
-            <div>
-              <div class="st-feature-title">通知 <em>预览</em></div>
-              <div class="st-feature-subtitle">测试你的提醒配置</div>
-            </div>
-          </div>
-          <div class="st-notify-demo" id="miya-st-notify-demo">
-            <div class="st-notify-item">
-              <div class="st-notify-avatar"><img class="mi-ico-img " src="img/icons/user-02.svg" alt="" width="18" height="18"></div>
-              <div class="st-notify-content"><div class="st-notify-title">新消息</div><div class="st-notify-text">今晚有空吗？</div></div>
-              <div class="st-notify-time">刚刚</div>
-            </div>
-            <div class="st-notify-item">
-              <div class="st-notify-avatar"><img class="mi-ico-img " src="img/icons/message-chat-square.svg" alt="" width="18" height="18"></div>
-              <div class="st-notify-content"><div class="st-notify-title">系统提醒</div><div class="st-notify-text">通知权限已就绪</div></div>
-              <div class="st-notify-time">2 分钟</div>
-            </div>
-          </div>
-          <div class="st-btn-row">
-            <button type="button" class="st-action-btn st-action-btn--primary" id="miya-st-notify-test">
-              <img class="mi-ico-img " src="img/icons/message-chat-square.svg" alt="" width="16" height="16">
-              测试通知
-            </button>
-          </div>
-        </div>
-
-        <!--
-          设置页页脚（Settings & Preferences / Karin · 2026）已删除。
-          与世界书列表页的页脚是同一套装饰：Playfair Display 意大利体英文小字，
-          没有按钮、没有交互，只在内容末尾多占一行高度。
-        -->
-      </div>
-    </div>
-
-    <div class="ins-vault-drawer">
-      <div class="st-panel-topbar">
-        <button type="button" class="st-navback" id="miya-st-panel-header-back" aria-label="返回设置列表">
-          <img class="mi-ico-img" src="img/icons/chevron-left.svg" alt="" width="10" height="10">
-          <span>返回</span>
-        </button>
-        <h1 class="st-navtitle" id="miya-st-panel-title"></h1>
-        <button type="button" class="st-topbar-save" id="miya-st-panel-save" hidden>保存</button>
-      </div>
-      <div class="ins-vault-panel" id="miya-st-panel-chat" data-panel-title="对话">
-        <div class="st-form">
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">接口预设</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-preset-pick">载入预设</label>
-              <div class="ins-inline-field">
-                <select class="ins-select" id="miya-st-preset-pick"><option value="">选择已存预设</option></select>
-                <button type="button" class="ins-icon-btn" id="miya-st-preset-delete" title="删除预设">×</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-preset-name">预设名称</label>
-              <div class="ins-inline-field">
-                <input type="text" class="ins-text-input" id="miya-st-preset-name" placeholder="例如：备用线路" maxlength="64">
-                <button type="button" class="ins-icon-btn" id="miya-st-preset-save" title="保存预设">✓</button>
-              </div>
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">主线路</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-chat-base">网关地址</label>
-              <input type="text" class="ins-text-input" id="miya-st-chat-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false">
-              <label class="ins-field-label" for="miya-st-chat-key">密钥</label>
-              <div class="ins-inline-field">
-                <input type="password" class="ins-text-input" id="miya-st-chat-key" placeholder="sk-…" autocomplete="off">
-                <button type="button" class="ins-icon-btn" id="miya-st-chat-fetch" title="拉取模型">⟳</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-chat-model">模型</label>
-              <select class="ins-select" id="miya-st-chat-model"><option value="">选择模型</option></select>
-              <label class="ins-field-label">温度 <span id="miya-st-chat-temp-lbl">1</span></label>
-              <input type="range" class="ins-range" id="miya-st-chat-temp" min="0" max="2" step="0.1" value="1">
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">副线路</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-chat2-base">网关地址</label>
-              <input type="text" class="ins-text-input" id="miya-st-chat2-base" placeholder="备用网关" autocomplete="off" spellcheck="false">
-              <label class="ins-field-label" for="miya-st-chat2-key">密钥</label>
-              <div class="ins-inline-field">
-                <input type="password" class="ins-text-input" id="miya-st-chat2-key" placeholder="sk-…" autocomplete="off">
-                <button type="button" class="ins-icon-btn" id="miya-st-chat2-fetch" title="拉取模型">⟳</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-chat2-model">模型</label>
-              <select class="ins-select" id="miya-st-chat2-model"><option value="">选择模型</option></select>
-              <label class="ins-field-label">温度 <span id="miya-st-chat2-temp-lbl">1</span></label>
-              <input type="range" class="ins-range" id="miya-st-chat2-temp" min="0" max="2" step="0.1" value="1">
-              <div class="st-toggle-in-form">
-                <strong>主线路失败时自动切换副线路</strong>
-                <button type="button" class="ins-toggle" id="miya-st-chat-fallback" role="switch" aria-checked="false"></button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      
-
-      <div class="ins-vault-panel" id="miya-st-panel-imagegen" data-panel-title="生图">
-        <div class="st-form">
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">接口启用</h4>
-            <div class="st-form-card ins-form-block">
-              <div class="st-toggle-in-form">
-                <strong>启用生图接口</strong>
-                <button type="button" class="ins-toggle" id="miya-st-ig-enabled" role="switch" aria-checked="false"></button>
-              </div>
-              <p class="st-form-hint">启用后可为联系人单独开启；角色文字图将调用生图 API 生成真实图片</p>
-              <fieldset class="miya-ig-provider-pick">
-                <legend class="ins-field-label">选择接口</legend>
-                <label class="miya-ig-provider-opt"><input type="radio" name="miya-st-ig-provider" value="openai" checked> OpenAI 兼容（第三方生图 API）</label>
-                <label class="miya-ig-provider-opt"><input type="radio" name="miya-st-ig-provider" value="novelai"> NovelAI</label>
-              </fieldset>
-            </div>
-          </section>
-
-          <section class="st-form-section" id="miya-st-ig-novelai-block" hidden>
-            <h4 class="st-form-section__title">NovelAI</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-ig-na-base">API 地址</label>
-              <input type="text" class="ins-text-input" id="miya-st-ig-na-base" placeholder="https://image.novelai.net" autocomplete="off" spellcheck="false">
-              <label class="ins-field-label" for="miya-st-ig-na-key">Persistent Token</label>
-              <input type="password" class="ins-text-input" id="miya-st-ig-na-key" placeholder="pst-…" autocomplete="off">
-              <label class="ins-field-label" for="miya-st-ig-na-model">模型</label>
-              <select class="ins-select" id="miya-st-ig-na-model"><option value="">选择模型</option></select>
-              <label class="ins-field-label" for="miya-st-ig-na-sampler">采样器</label>
-              <select class="ins-select" id="miya-st-ig-na-sampler"></select>
-              <label class="ins-field-label" for="miya-st-ig-na-steps">步数</label>
-              <input type="number" class="ins-text-input" id="miya-st-ig-na-steps" min="1" max="50" value="28">
-              <label class="ins-field-label" for="miya-st-ig-na-scale">CFG Scale</label>
-              <input type="number" class="ins-text-input" id="miya-st-ig-na-scale" min="0" max="10" step="0.5" value="5">
-              <div class="st-toggle-in-form">
-                <strong>SMEA</strong>
-                <button type="button" class="ins-toggle" id="miya-st-ig-na-sm" role="switch" aria-checked="false"></button>
-              </div>
-              <div class="st-toggle-in-form">
-                <strong>SMEA Dyn</strong>
-                <button type="button" class="ins-toggle" id="miya-st-ig-na-smdyn" role="switch" aria-checked="false"></button>
-              </div>
-              <label class="ins-field-label" for="miya-st-ig-na-proxy">反向代理地址（可选）</label>
-              <input type="text" class="ins-text-input" id="miya-st-ig-na-proxy" placeholder="https://your-proxy.example.com" autocomplete="off" spellcheck="false">
-              <p class="ins-field-hint">直连出现 Failed to fetch / 网络错误时填这里绕过 CORS。留空则直连 image.novelai.net</p>
-              <div class="st-toggle-in-form">
-                <strong>中文提示词自动翻译</strong>
-                <button type="button" class="ins-toggle" id="miya-st-ig-na-cjk" role="switch" aria-checked="true"></button>
-              </div>
-              <p class="ins-field-hint">开启后，中文外貌描述会自动转成 Danbooru 英文标签（NovelAI 对该格式识别更好）。关闭则原样提交。</p>
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">提示词与尺寸</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-ig-pos">正向提示词</label>
-              <textarea class="ins-text-input ins-text-input--area" id="miya-st-ig-pos" rows="3" placeholder="全局风格、画质标签等…"></textarea>
-              <label class="ins-field-label" for="miya-st-ig-neg">反向提示词</label>
-              <textarea class="ins-text-input ins-text-input--area" id="miya-st-ig-neg" rows="2" placeholder="不希望出现的元素…"></textarea>
-              <label class="ins-field-label" for="miya-st-ig-size">图片尺寸</label>
-              <select class="ins-select" id="miya-st-ig-size"></select>
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">预设</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-ig-preset-pick">选择预设</label>
-              <select class="ins-select" id="miya-st-ig-preset-pick"><option value="">选择已存预设</option></select>
-              <label class="ins-field-label" for="miya-st-ig-preset-name">预设名称</label>
-              <input type="text" class="ins-text-input" id="miya-st-ig-preset-name" placeholder="例如：二次元·竖版" maxlength="64">
-              <div class="miya-ig-preset-actions">
-                <button type="button" class="st-action-btn st-action-btn--primary" id="miya-st-ig-preset-save">保存预设</button>
-                <button type="button" class="st-action-btn" id="miya-st-ig-preset-load">读取预设</button>
-                <button type="button" class="st-action-btn" id="miya-st-ig-preset-delete">删除预设</button>
-              </div>
-              <p class="st-form-hint">同名预设将自动覆盖；预设包含接口、提示词与尺寸等全部生图配置</p>
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">测试</h4>
-            <div class="st-form-card ins-form-block">
-              <div class="miya-ig-test-wrap" id="miya-st-ig-test-preview"></div>
-              <button type="button" class="st-action-btn st-action-btn--primary" id="miya-st-ig-test">测试生图</button>
-            </div>
-          </section>
-
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">自由生图</h4>
-            <div class="st-form-card ins-form-block">
-              <p class="st-form-hint">直接描述你想要的画面，无需绑定联系人即可出图</p>
-
-              <!-- ── 垫图（图生图）────────────────────────────────
-                   放在画面描述之前：先定「有没有底图」，再定「要画什么」，
-                   顺序上更符合实际操作的心智。
-                   没有垫图时不占视觉重量（只有一行标题和两个按钮）。 -->
-              <div class="miya-ig-ref" id="miya-st-ig-free-ref">
-                <div class="miya-ig-ref__head">
-                  <span class="miya-ig-ref__label">垫图（图生图）</span>
-                  <span class="miya-ig-ref__tip">可选择要参考的图片，也可直接纯文字生图</span>
-                </div>
-                <div class="miya-ig-ref__preview" id="miya-st-ig-free-ref-preview">
-                  <div class="miya-ig-ref__empty"><p>未选择垫图（当前为纯文字生图）</p></div>
-                </div>
-                <div class="miya-ig-ref__actions">
-                  <button type="button" class="st-action-btn st-action-btn--xs" id="miya-st-ig-free-ref-upload">本地上传</button>
-                  <button type="button" class="st-action-btn st-action-btn--xs" id="miya-st-ig-free-ref-album">我的相册</button>
-                  <button type="button" class="st-action-btn st-action-btn--xs" id="miya-st-ig-free-ref-clear" disabled>清空垫图</button>
-                </div>
-                <div class="miya-ig-ref__modes" id="miya-st-ig-free-ref-mode-wrap">
-                  <span class="miya-ig-ref__modes-label">垫图程度</span>
-                  <div class="miya-ig-seg" role="group" aria-label="垫图程度">
-                    <button type="button" class="miya-ig-seg__item is-on" data-ig-free-ref-mode="style" aria-pressed="true">参考风格</button>
-                    <button type="button" class="miya-ig-seg__item" data-ig-free-ref-mode="redraw" aria-pressed="false">照着重画</button>
-                  </div>
-                  <p class="miya-ig-ref__modes-hint">「参考风格」只借画风配色；「照着重画」更贴近原图构图。选中小图后这两档才生效。</p>
-                </div>
-                <p class="st-form-hint miya-ig-ref__legal">参考图仅针对支持图片输入的模型生效。严禁上传无版权、无授权的图片信息；严禁未经他人允许上传他人肖像信息。</p>
-              </div>
-
-              <label class="ins-field-label" for="miya-st-ig-free-prompt">画面描述</label>
-              <textarea class="ins-text-input ins-text-input--area" id="miya-st-ig-free-prompt" rows="3" placeholder="例如：黄昏的海边，一位少女提着裙摆奔跑，逆光，电影感"></textarea>
-              <label class="ins-field-label" for="miya-st-ig-free-size">图片尺寸</label>
-              <select class="ins-select" id="miya-st-ig-free-size"></select>
-              <div class="miya-ig-free-actions">
-                <button type="button" class="st-action-btn st-action-btn--primary" id="miya-st-ig-free-run">生成图片</button>
-                <button type="button" class="st-action-btn" id="miya-st-ig-free-save">保存到相册</button>
-              </div>
-              <div class="miya-ig-test-wrap miya-ig-free-wrap" id="miya-st-ig-free-preview">
-                <div class="miya-ig-test miya-ig-test--idle"><p>输入描述后点击「生成图片」</p></div>
-              </div>
-            </div>
-          </section>
-
-          <section class="st-form-section" id="miya-st-ig-openai-block">
-            <h4 class="st-form-section__title">OpenAI 兼容</h4>
-            <div class="st-form-card ins-form-block">
-              <label class="ins-field-label" for="miya-st-ig-oa-base">网关地址</label>
-              <input type="text" class="ins-text-input" id="miya-st-ig-oa-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false">
-              <label class="ins-field-label" for="miya-st-ig-oa-key">密钥</label>
-              <div class="ins-inline-field">
-                <input type="password" class="ins-text-input" id="miya-st-ig-oa-key" placeholder="sk-…" autocomplete="off">
-                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-fetch" title="拉取模型">⟳</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-ig-oa-model">模型</label>
-              <select class="ins-select" id="miya-st-ig-oa-model"><option value="">选择模型</option></select>
-              <!-- 尺寸方言：决定「这个端点接受哪些宽高」。
-                   中转站把 NovelAI 包成 OpenAI 形状时，model 里填的是
-                   nai-diffusion-* 之类的名字，靠模型名猜不出约束，
-                   所以让用户直接声明连的是什么端点。 -->
-              <label class="ins-field-label" for="miya-st-ig-oa-dialect">尺寸方言</label>
-              <select class="ins-select" id="miya-st-ig-oa-dialect">
-                <option value="generic">通用（64 倍数）· 推荐，适配中转站 / NovelAI / SD</option>
-                <option value="gptimage">GPT-Image（含 2:3 / 3:2）</option>
-                <option value="dalle3">DALL·E 3（仅 3 种尺寸）</option>
-                <option value="dalle2">DALL·E 2（仅正方形）</option>
-                <option value="custom">自定义（不校验，原样发送）</option>
-              </select>
-              <p class="st-form-hint">走中转站请保持「通用」—— 这样 3:4、4:3 等比例才可选</p>
-              <!-- 接口预设：与「对话 API」面板同款（下拉载入 + ✓ 保存 + × 删除） -->
-              <label class="ins-field-label" for="miya-st-ig-oa-preset-pick">载入预设</label>
-              <div class="ins-inline-field">
-                <select class="ins-select" id="miya-st-ig-oa-preset-pick"><option value="">选择已存预设</option></select>
-                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-preset-delete" title="删除预设">×</button>
-              </div>
-              <label class="ins-field-label" for="miya-st-ig-oa-preset-name">预设名称</label>
-              <div class="ins-inline-field">
-                <input type="text" class="ins-text-input" id="miya-st-ig-oa-preset-name" placeholder="例如：中转·gpt-image-1" maxlength="64">
-                <button type="button" class="ins-icon-btn" id="miya-st-ig-oa-preset-save" title="保存预设">✓</button>
-              </div>
-              <p class="st-form-hint">仅保存 OpenAI 兼容接口的网关、密钥与模型</p>
-            </div>
-          </section>
-
-          <section class="st-form-section" id="miya-st-ig-contacts-block" hidden>
-            <h4 class="st-form-section__title">联系人生图</h4>
-            <div class="st-form-card ins-form-block">
-              <p class="st-form-hint">为各联系人单独开启后，其聊天与朋友圈文字图将调用生图 API</p>
-              <div id="miya-st-ig-contacts-list"></div>
-            </div>
-          </section>
-          <!-- 生图的保存逻辑由 miya-image-gen.js 通过面板事件委托实现，
-               这里保留一个不可见触发器，供顶栏「保存」按钮转发点击使用。 -->
-          <button type="button" id="miya-st-ig-save" hidden aria-hidden="true" tabindex="-1"></button>
-        </div>
-      </div>
-
-      <div class="ins-vault-panel" id="miya-st-panel-voice" data-panel-title="语音">
-        <div class="st-form">
-          <div class="st-form-card ins-form-block ins-form-block--voice">
-            <label class="ins-field-label" for="miya-st-mm-key">MiniMax 密钥</label>
-            <input type="password" class="ins-text-input" id="miya-st-mm-key" placeholder="填入 API 密钥" autocomplete="off">
-            <label class="ins-field-label" for="miya-st-mm-group">群组 ID</label>
-            <input type="text" class="ins-text-input" id="miya-st-mm-group" placeholder="控制台群组 ID" autocomplete="off">
-            <label class="ins-field-label" for="miya-st-mm-model">语音模型</label>
-            <select class="ins-select" id="miya-st-mm-model"><option value="">选择模型</option></select>
-            <label class="ins-field-label">语速 <span id="miya-st-mm-speed-lbl">1.0</span></label>
-            <input type="range" class="ins-range" id="miya-st-mm-speed" min="0.5" max="2" step="0.1" value="1">
-            <label class="ins-field-label">音量 <span id="miya-st-mm-vol-lbl">1.0</span></label>
-            <input type="range" class="ins-range" id="miya-st-mm-vol" min="0.1" max="2" step="0.1" value="1">
-            <label class="ins-field-label">音调 <span id="miya-st-mm-pitch-lbl">0</span></label>
-            <input type="range" class="ins-range" id="miya-st-mm-pitch" min="-12" max="12" step="1" value="0">
-            <p class="st-form-hint">音调调低更沉稳自然，调高更年轻清亮；改动后已合成的语音会自动重新生成</p>
-            <label class="ins-field-label" for="miya-st-mm-prompt">语音专用提示词</label>
-            <textarea class="ins-text-input ins-text-input--area" id="miya-st-mm-prompt" rows="3" placeholder="合成前附加到台词前，留空则不附加"></textarea>
-          </div>
-        </div>
-      </div>
-
-      <div class="ins-vault-panel" id="miya-st-panel-contact-chat" data-panel-title="聊天设置入口">
-      </div>
-
-      <div class="ins-vault-panel" id="miya-st-panel-chat-defaults" data-panel-title="聊天默认值">
-      </div>
-
-      <div class="ins-vault-panel" id="miya-st-panel-msg-sound" data-panel-title="提示音">
-        <div class="st-form">
-          <div class="st-form-card ins-form-block">
-            <div class="st-toggle-in-form">
-              <strong>启用提示音</strong>
-              <button type="button" class="ins-toggle" id="miya-st-sw-msgsound" role="switch" aria-checked="true"></button>
-            </div>
-            <p class="st-form-hint">收到新消息时播放（当前聊天界面内不响）。生图完成、线下场景写完后也会用同一个提示音提醒你。</p>
-          </div>
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">内置预设</h4>
-            <div class="st-form-card st-msgsound-list" id="miya-st-msgsound-presets"></div>
-          </section>
-          <section class="st-form-section">
-            <h4 class="st-form-section__title">自定义预设</h4>
-            <div class="st-form-card ins-form-block">
-              <p class="st-form-hint">上传本地音频（最大 1MB），保存后可作为提示音</p>
-              <button type="button" class="st-action-btn st-action-btn--primary st-msgsound-upload-btn" id="miya-st-msgsound-upload">上传音频</button>
-              <input type="file" class="ins-file" id="miya-st-msgsound-file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.webm" hidden>
-              <div class="st-msgsound-list" id="miya-st-msgsound-custom-list"></div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-
-      <div class="ins-vault-panel" id="miya-st-panel-storage" data-panel-title="占用统计">
-        <div class="st-form">
-          <div class="st-storage-head">
-            <p class="ins-vault-note" id="miya-st-storage-quota">正在扫描…</p>
-            <button type="button" class="st-foot-btn" id="miya-st-storage-refresh">重新扫描</button>
-          </div>
-          <div class="st-form-card">
-            <div class="ins-meter-list" id="miya-st-storage-groups"></div>
-          </div>
-          <div class="ins-storage-images" id="miya-st-storage-images"></div>
-          <div class="ins-storage-actions" id="miya-st-storage-clear"></div>
-        </div>
-      </div>
-    </div>
-
-    <input type="file" class="ins-file" id="miya-st-backup-file" accept=".zip,.json,application/zip,application/json" multiple>
-  </div>
+    「我的」页齿轮入口同批删除（见 js1/miya-chat-app.js 的 buildMineMenuHtml）。
+  -->
 
   
   <!-- 记忆增强表格 -->
@@ -3856,35 +3386,40 @@
     </div>
   </div>
 
-  <script defer src="js2/miya-storage.js?v=16"></script>
+  <script defer src="js2/miya-storage.js?v=17"></script>
+  <script defer src="js2/miya-toast.js?v=1"></script>
+  <script defer src="js2/miya-api-config.js?v=1"></script>
+  <script defer src="js2/miya-storage-usage.js?v=1"></script>
+  <script defer src="js2/miya-backup.js?v=1"></script>
   <script defer src="js2/miya-perf.js?v=3"></script>
   <script defer src="js2/miya-token.js?v=1"></script>
-  <script defer src="js2/miya-lazy-boot.js?v=27"></script>
+  <script defer src="js2/miya-lazy-boot.js?v=28"></script>
   <script defer src="js1/miya-bg-timer.js?v=1"></script>
   <script defer src="js2/miya-zip-store.js?v=4"></script>
   <script defer src="js1/jszip.min.js"></script>
   <script defer src="js2/miya-dialog.js?v=4"></script>
-  <script defer src="js2/miya-theme.js?v=36"></script>
+  <script defer src="js2/miya-theme.js?v=37"></script>
   <script defer src="js2/miya-desk-custom-widget-templates.js?v=6"></script>
-  <script defer src="js2/miya-desk-custom.js?v=61"></script>
+  <script defer src="js2/miya-desk-custom.js?v=62"></script>
   <script defer src="js2/miya-lockscreen.js?v=13"></script>
-  <script defer src="js1/miya-beautify-app.js?v=47"></script>
-  <script defer src="js2/miya-msg-sound.js?v=3"></script>
+  <script defer src="js1/miya-beautify-app.js?v=48"></script>
+  <script defer src="js2/miya-msg-sound.js?v=4"></script>
   <script defer src="js2/miya-image-gen-dict.js?v=1"></script>
-  <script defer src="js2/miya-image-gen.js?v=12"></script>
-  <script defer src="js2/miya-settings-app.js?v=68"></script>
+  <script defer src="js2/miya-image-gen.js?v=13"></script>
+  <script defer src="js2/miya-imagegen-app.js?v=1"></script>
+  <script defer src="js2/miya-settings-app.js?v=69"></script>
   <script defer src="js1/miya-contacts-store.js?v=2"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
   <script defer src="js2/miya-worldbook-doc-import.js?v=5"></script>
   <script defer src="js1/miya-beautify-doc-import.js?v=3"></script>
   <script defer src="js2/miya-tavern-card-import.js?v=5"></script>
-  <script defer src="js1/miya-contacts-app.js?v=11"></script>
+  <script defer src="js1/miya-contacts-app.js?v=12"></script>
   <script defer src="js2/miya-worldbook-st.js?v=10"></script>
   <script defer src="js2/miya-worldbook-store.js?v=17"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=7"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=16"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=28"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=29"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=7"></script>
   <script defer src="js1/miya-chat-store.js?v=59"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>
@@ -3921,12 +3456,12 @@
   <script defer src="js2/miya-offline-text-decor.js?v=1"></script>
   <script defer src="js1/miya-appointment-memory.js?v=15"></script>
   <script defer src="js1/miya-appointment-engine.js?v=125"></script>
-  <script defer src="js1/miya-appointment-app.js?v=140"></script>
+  <script defer src="js1/miya-appointment-app.js?v=141"></script>
   <script defer src="js1/miya-chat-heartvoice-templates.js?v=16"></script>
   <script defer src="js1/miya-chat-heartvoice.js?v=11"></script>
   <script defer src="js2/miya-offline-card.js?v=9"></script>
   <script defer src="js2/miya-offline-status.js?v=10"></script>
-  <script defer src="js1/miya-chat-notify.js?v=13"></script>
+  <script defer src="js1/miya-chat-notify.js?v=14"></script>
   <script defer src="js1/miya-chat-lifelike.js?v=10"></script>
   <script defer src="js1/miya-chat-background.js?v=19"></script>
   <script defer src="js1/miya-beautify-source-ref.js?v=3"></script>
@@ -3934,16 +3469,16 @@
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=6"></script>
   <script defer src="js1/miya-chat-me.js?v=28"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=67"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=69"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=4"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=4"></script>
   <script defer src="js1/miya-chat-love-poem.js?v=1"></script>
   <script defer src="js1/miya-chat-backups.js?v=2"></script>
-  <script defer src="js1/miya-chat-room.js?v=60"></script>
-  <script defer src="js1/miya-chat-settings-panel.js?v=14"></script>
+  <script defer src="js1/miya-chat-room.js?v=61"></script>
+  <script defer src="js1/miya-chat-settings-panel.js?v=17"></script>
   <script defer src="js1/miya-chat-ui-theme.js?v=4"></script>
-  <script defer src="js1/miya-chat-app.js?v=50"></script>
+  <script defer src="js1/miya-chat-app.js?v=52"></script>
   <script defer src="js2/miya-weather-store.js?v=4"></script>
   <script defer src="js2/miya-weather-bridge.js?v=8"></script>
   <script defer src="js2/miya-itinerary-store.js?v=6"></script>
@@ -3962,6 +3497,6 @@
   <script defer src="miya-auth/auth.js?v=5"></script>
   <script defer src="js2/miya-st-prompt-presets-store.js?v=33"></script>
   <script defer src="js2/miya-st-prompt-presets-app.js?v=33"></script>
-  <script defer src="js1/app.js?v=92"></script>
+  <script defer src="js1/app.js?v=93"></script>
 </body>
 </html>

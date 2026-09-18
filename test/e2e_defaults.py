@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-验证「聊天默认值」面板（桌面设置 → 聊天 → 聊天默认值）
-- 面板能打开、能填值、能保存
+验证「聊天默认值」子视图（联系人聊天设置 → 聊天默认值）
+
+背景：原先这个面板住在桌面设置 App（#miya-st-panel-chat-defaults），
+现在随设置 App 一起并进了「联系人聊天设置」的子视图体系，
+渲染由 miyaChatSettingsPanel.mountDefaultsInto(container) 完成。
+
+断言：
+- 子视图能打开、面板能渲染进宿主容器、能填值、能保存
 - 保存后，未单独设置的联系人读到新默认值
 - 「恢复」能让已覆盖的联系人回到全局
+- 桌面设置 App 已不存在（回归边界）
 """
 import asyncio, json
 from playwright.async_api import async_playwright
@@ -65,43 +72,79 @@ async def main():
         await pg.goto(BASE, wait_until="load")
         await pg.wait_for_timeout(4000)
 
-        print("\n【1】桌面设置主页是否有「聊天」分区入口")
+        # 跳过锁屏 → 打开聊天 App → 进入「阿甲」的聊天设置
+        await pg.evaluate("""() => {
+          var ls = document.getElementById('miya-lockscreen');
+          if (ls) { ls.classList.remove('is-active','is-open'); ls.style.display = 'none'; }
+        }""")
+        await pg.wait_for_timeout(600)
+        await pg.evaluate("""async () => {
+          if (window.miyaLaunchApp) window.miyaLaunchApp('chat');
+          var st = window.miyaChatStore;
+          if (st && st.init) await st.init();
+          window.miyaChatContactSettings.open('chat_a');
+        }""")
+        await pg.wait_for_timeout(1500)
+
+        print("\n【0】回归边界：桌面设置 App + 「我的」齿轮 必须已彻底删除")
+        r0 = await pg.evaluate("""async () => {
+          /* 「我的」菜单是点开时才渲染的，先把菜单生成出来再查，
+             否则查到的 0 只是「菜单还没画」，证明不了入口被删。 */
+          var chatApp = window.miyaChatApp;
+          var menuHtml = '';
+          if (chatApp && typeof chatApp.__buildMineMenuForTest === 'function') {
+            menuHtml = chatApp.__buildMineMenuForTest();
+          }
+          return {
+            appDom: !!document.getElementById('miya-settings-app'),
+            panels: document.querySelectorAll('[id^="miya-st-panel-"]').length,
+            menuHtmlLen: menuHtml.length,
+            menuHasSettings: menuHtml.indexOf('data-mine-action=\"settings\"') >= 0,
+            menuHasFavorites: menuHtml.indexOf('我的收藏') >= 0
+          };
+        }""")
+        print("   边界:", json.dumps(r0, ensure_ascii=False))
+        check("桌面设置 App DOM 已删除", r0.get("appDom") is False)
+        check("设置 App 的面板 DOM 已清空", r0.get("panels") == 0, str(r0.get("panels")))
+        check("「我的」菜单已生成（断言前提成立）",
+              r0.get("menuHtmlLen", 0) > 0, f"len={r0.get('menuHtmlLen')}")
+        check("「我的」菜单仍有其它项（未误删）", r0.get("menuHasFavorites") is True)
+        check("「我的」页齿轮入口已删除", r0.get("menuHasSettings") is False,
+              f"hasSettings={r0.get('menuHasSettings')}")
+
+        print("\n【1】聊天设置 → 聊天默认值 子视图能否进入")
         r1 = await pg.evaluate("""
         (async function(){
-          var app = window.miyaSettingsApp;
-          if (!app) return {error: 'no settings app'};
-          app.open();
-          await new Promise(function(r){ setTimeout(r, 600); });
-          var main = document.getElementById('miya-st-main');
-          var navs = [];
-          main.querySelectorAll('[data-st-nav]').forEach(function(el){
-            navs.push(el.getAttribute('data-st-nav'));
-          });
-          var labels = [];
-          main.querySelectorAll('.st-card-label').forEach(function(el){ labels.push(el.textContent.trim()); });
+          var p = document.getElementById('mq-set-page');
+          if (!p) return {error: 'no mq-set-page'};
+          /* 进来时就应该停在列表首页（open() 里已把 state.subView 置 null），
+             所以这里不需要先点返回 —— 那个 [data-mq-set-back] 在列表页的语义是
+             「关掉整个聊天设置回聊天」，点了它整页会 hidden=true，
+             之后再点子视图入口只是对着一个已隐藏的页面空点。 */
+          var btn = p.querySelector('[data-mq-set-sub="chat-defaults"]');
+          if (!btn) return {error: 'no sub entry'};
+          btn.click();
+          await new Promise(function(r){ setTimeout(r, 700); });
           return {
-            navs: navs,
-            hasDefaultsNav: navs.indexOf('miya-st-panel-chat-defaults') >= 0,
-            hasChatEntry: navs.indexOf('miya-st-panel-contact-chat') >= 0,
-            labels: labels
+            title: (p.querySelector('.st-navtitle') || {}).textContent || '',
+            hasBack: !!p.querySelector('[data-mq-set-sub-back]')
           };
         })()
         """)
-        print("   navs:", json.dumps(r1.get("navs"), ensure_ascii=False))
-        check("主页有「聊天设置」入口", r1.get("hasChatEntry"))
-        check("主页有「聊天默认值」入口", r1.get("hasDefaultsNav"))
+        print("   子视图:", json.dumps(r1, ensure_ascii=False))
+        check("「聊天默认值」子视图可进入", r1.get("title") == "聊天默认值", str(r1.get("title")))
+        check("子视图有返回键", r1.get("hasBack") is True)
 
-        print("\n【2】打开「聊天默认值」，检查表单渲染")
+        print("\n【2】检查「聊天默认值」表单渲染")
         r2 = await pg.evaluate("""
         (async function(){
-          window.miyaSettingsApp.open('miya-st-panel-chat-defaults');
-          await new Promise(function(r){ setTimeout(r, 800); });
-          var p = document.getElementById('miya-st-panel-chat-defaults');
-          if (!p) return {error: 'no panel'};
-          function val(id){ var el = document.getElementById(id); return el ? el.value : null; }
-          function on(id){ var el = document.getElementById(id); return el ? el.classList.contains('is-on') : null; }
+          var host = document.querySelector('[data-mq-set-defaults-host]');
+          if (!host) return {error: 'no defaults host'};
+          var p = host;
+          function val(id){ var el = p.querySelector('#' + id); return el ? el.value : null; }
+          function on(id){ var el = p.querySelector('#' + id); return el ? el.classList.contains('is-on') : null; }
           return {
-            visible: !p.hidden && p.classList.contains('is-active'),
+            visible: p.innerHTML.length > 200,
             memoryCount: val('miya-ct-def-memory-count'),
             summaryTrigger: val('miya-ct-def-summary-trigger'),
             summaryLength: val('miya-ct-def-summary-length'),
@@ -174,10 +217,48 @@ async def main():
           var c1 = st.getChatSettings('chat_c').memoryCount;
           var a1 = st.getChatSettings('chat_a').memoryCount;
 
-          // 重开面板看覆盖列表
-          window.miyaSettingsApp.open('miya-st-panel-chat-defaults');
+          /* 重进子视图看覆盖列表。
+             返回键语义：在子视图里 [data-mq-set-sub-back] → 回列表；
+             在列表页 [data-mq-set-back] → 关掉整个聊天设置。
+             这里用前者（我们确实在子视图里），然后必须确认整页还开着 ——
+             整页是 innerHTML 重绘，每一步都要重新 getElementById。 */
+          var _b = document.getElementById('mq-set-page').querySelector('[data-mq-set-sub-back]');
+          if (!_b) return { error: 'no sub-back button in subview' };
+          _b.click();
+          await new Promise(function(r){ setTimeout(r, 500); });
+
+          var _p = document.getElementById('mq-set-page');
+          if (!_p.classList.contains('is-open') || _p.hidden) {
+            /* 页面被关掉了就自己重新开一次，不把「测试点错按钮」
+               伪装成「覆盖列表没渲染」这种产品缺陷。 */
+            window.miyaChatContactSettings.open('chat_a');
+            await new Promise(function(r){ setTimeout(r, 900); });
+            _p = document.getElementById('mq-set-page');
+            if (!_p.classList.contains('is-open') || _p.hidden) {
+              return { error: 'settings page closed and could not reopen',
+                       cls: _p.className, hidden: _p.hidden };
+            }
+          }
+
+          var _entry = null;
+          for (var _k = 0; _k < 40; _k++) {
+            _entry = document.getElementById('mq-set-page').querySelector('[data-mq-set-sub="chat-defaults"]');
+            if (_entry) break;
+            await new Promise(function(r){ setTimeout(r, 150); });
+          }
+          if (!_entry) return { error: 'no chat-defaults entry after back',
+                                title: (document.getElementById('mq-set-page').querySelector('.st-navtitle')||{}).textContent };
+          _entry.click();
           await new Promise(function(r){ setTimeout(r, 900); });
-          var box = document.getElementById('miya-ct-def-overrides');
+          /* renderOverrideList 是异步的（要等 whenReady + st.init），
+             火候不到就取节点会读到空列表 —— 轮询等它真的画出来。 */
+          var box = null;
+          for (var _w = 0; _w < 40; _w++) {
+            var host = document.querySelector('[data-mq-set-defaults-host]');
+            box = host ? host.querySelector('#miya-ct-def-overrides') : null;
+            if (box && box.querySelector('[data-def-reset="c_c"]')) break;
+            await new Promise(function(r){ setTimeout(r, 100); });
+          }
           var listed = box ? box.textContent : '';
           var resetBtn = box ? box.querySelector('[data-def-reset="c_c"]') : null;
 

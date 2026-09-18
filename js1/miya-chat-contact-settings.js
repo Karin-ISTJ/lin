@@ -6,7 +6,7 @@
 
   var store = null;
   var pageEl = null;
-  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {} };
+  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null };
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
@@ -119,10 +119,23 @@
     '</section>';
   }
 
-  /* API 入口：与其它折叠栏同款外观，点击直接进入对应设置页（不展开内容） */
-  function renderApiNavBar(id, title, hint, panelId) {
+  /*
+   * API 入口：与其它折叠栏同款外观，点击进入**页内子视图**。
+   *
+   * ── 为什么不能「就地展开成表单」──────────────────────────────
+   *
+   * 这个页面的 render() 是整页 innerHTML 重绘（见下方 render()）。
+   * 如果把 API 表单直接展开在 zone 里，任何一次重绘（改开关、改输入
+   * 触发的联动）都会把表单 DOM 整个换掉 —— 用户正在输入的内容会丢。
+   * 要就地展开就得重写整套渲染为增量更新，代价远大于收益。
+   *
+   * 所以改成子视图：点进去把 body 换成该 API 的表单，返回回到列表。
+   * 交互上「点进去改」这一点没变，只是从「切到另一个 App」
+   * 改成「在当前页内翻一页」，对用户来说少了一次跳转。
+   */
+  function renderApiNavBar(id, title, hint, subKey) {
     return '<section class="mi-set-zone" data-mq-set-zone="' + esc(id) + '">' +
-      '<button type="button" class="mi-set-zone__head" data-mq-set-api-nav="' + esc(panelId) + '">' +
+      '<button type="button" class="mi-set-zone__head" data-mq-set-sub="' + esc(subKey) + '">' +
         '<div class="mi-set-zone__text">' +
           '<strong class="mi-set-zone__title">' + esc(title) + '</strong>' +
           (hint ? '<span class="mi-set-zone__hint">' + esc(hint) + '</span>' : '') +
@@ -130,6 +143,11 @@
         '<img class="mi-ico-img" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
       '</button>' +
     '</section>';
+  }
+
+  /* 普通「点进去」栏：与 API 栏同款外观，但用于备份、存储这类子视图 */
+  function renderSubNavBar(id, title, hint, subKey) {
+    return renderApiNavBar(id, title, hint, subKey);
   }
 
   function subBlock(title, sub, inner) {
@@ -1328,13 +1346,11 @@
       '<div class="st-deco-ornament" style="top: 80px; right: -20px;">§</div>' +
       '<div class="st-deco-ornament" style="bottom: 280px; left: -40px; font-size: 100px;">¶</div>' +
 
-      /* 顶部不再重复渲染「角色名 + x 条消息」：
-         页面导航栏已写明「聊天设置」，角色名与消息数在聊天页顶栏和「基础」分区里都有，
-         这里再放一块会被导航栏的半透明渐变 + 毛玻璃透出来，看起来像顶栏串进了设置页。
-         API 四项各自独立成栏（与其它折叠栏同外观），仍排在最上方。 */
-      renderApiNavBar('api-chat', '对话 API', '对话模型服务端点与密钥', 'miya-st-panel-chat') +
-      renderApiNavBar('api-voice', '语音合成', '语音合成服务端点与密钥', 'miya-st-panel-voice') +
-      renderApiNavBar('api-imagegen', '生图 API', '生图服务端点与密钥', 'miya-st-panel-imagegen') +
+      /* API 三项各自独立成栏（与其它折叠栏同外观），仍排在最上方。
+         点击进入页内子视图 —— 不再是跳去桌面设置 App（那个入口已删除）。 */
+      renderApiNavBar('api-chat', '对话 API', '对话模型服务端点与密钥', 'api-chat') +
+      renderApiNavBar('api-voice', '语音合成', '语音合成服务端点与密钥', 'api-voice') +
+      renderApiNavBar('api-imagegen', '生图 API', '生图服务端点与密钥', 'api-imagegen') +
 
       renderZone('basic', '基础', '身份、头像、通知与主动消息',
         subBlock('身份与显示', '', formCard(
@@ -1561,6 +1577,24 @@
           '<button type="button" class="st-action-btn st-action-btn--danger" data-mq-set-delete-contact>删除这个联系人</button>'
         , 'mi-set-danger-card'))
       ) +
+
+      /*
+       * ── 以下三个分区原属于「桌面设置 App」───────────────────────
+       *
+       * 桌面设置已被删除，这些是它原本承载、必须有个新家的功能。
+       * 放在页面最下方而不是塞进上面任意一个 zone：
+       * 它们的性质是「全局维护」而非「这个角色的聊天偏好」，
+       * 混进对话表现或外观里会让人以为改的只影响当前角色。
+       */
+      renderSubNavBar('notify', '通知与提示音', '系统通知开关、测试与来消息提示音', 'notify') +
+      renderSubNavBar('backup', '备份与恢复', '导出数据、完整导出与导入', 'backup') +
+      renderSubNavBar('storage', '存储用量', '本机数据占用概览', 'storage') +
+
+      /* 聊天默认值：未单独设置过的联系人统一用这里的配置。
+         原先挂在桌面设置主页的 nav 上，主页一删它就没地方去了 ——
+         必须在聊天设置里承接，否则这个功能整体丢失。 */
+      renderSubNavBar('chat-defaults', '聊天默认值', '未单独设置过的联系人，统一使用这里的记忆与后台配置', 'chat-defaults') +
+
       /*
        * 页脚（Chat Preferences / Karin · 2026）已删除。
        * 与世界书列表页、设置页的页脚是同一套装饰语言：
@@ -2105,11 +2139,425 @@
     }
   }
 
+  /*
+   * ── 页内子视图 ──────────────────────────────────────────────
+   *
+   * 有些内容是「独立的一页」而不适合折在 zone 里展开：
+   *   · 三个 API 表单（对话 / 语音 / 生图）—— 字段多，且需要从别处
+   *     拉取模型列表，展开在长列表里会让人找不到北；
+   *   · 备份与恢复、存储用量 —— 各自是完整的功能页，有进度与刷新。
+   *
+   * 做法：点这类栏时不展开，而是把整个 body 换成子视图内容，
+   * 顶栏标题改成子视图名，返回键先回列表（state.subView 置空再 render）。
+   *
+   * 为什么不复用被删除的桌面设置 App 的面板 DOM：那些面板的 id
+   * （miya-st-panel-chat 等）被设置 App 的顶栏保存逻辑与生图模块
+   * 按固定 id 引用着，搬过来会连带搬一堆耦合。这里按同样字段
+   * 重新渲染一份，读写仍走同一套 miyaGetApiConfigCached /
+   * miyaSetApiConfig，数据只有一份。
+   */
+  var SUB_VIEW_TITLES = {
+    'api-chat': '对话 API',
+    'api-voice': '语音合成',
+    'api-imagegen': '生图 API',
+    'backup': '备份与恢复',
+    'storage': '存储用量',
+    'notify': '通知与提示音',
+    'chat-defaults': '聊天默认值'
+  };
+
+  /*
+   * 子视图表单保存。
+   *
+   * 写入统一走 miyaSetApiConfig —— 那是全项目 25 处调用共用的
+   * 配置写入口，内部负责「补磁盘底 + 落 KV + 更新缓存」。这里
+   * 只把 DOM 上的值读出来，绝不自己写 localStorage，
+   * 否则会绕过水合逻辑，出现「这次改了、下次打开又变回去」。
+   */
+  function saveSubViewForm(key) {
+    if (!pageEl) return;
+    function val(sel) {
+      var el = pageEl.querySelector(sel);
+      return el ? String(el.value || '').trim() : '';
+    }
+    function on(sel) {
+      var el = pageEl.querySelector(sel);
+      return !!(el && el.classList.contains('is-on'));
+    }
+    if (key === 'api-chat') {
+      var temp = parseFloat(val('#mq-api-temp'));
+      var patch = {
+        baseUrl: val('#mq-api-base'),
+        apiKey: val('#mq-api-key'),
+        model: val('#mq-api-model'),
+        fallbackBaseUrl: val('#mq-api2-base'),
+        fallbackApiKey: val('#mq-api2-key'),
+        fallbackModel: val('#mq-api2-model'),
+        fallbackEnabled: on('#mq-api-fallback')
+      };
+      if (Number.isFinite(temp)) patch.temperature = temp;
+      if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig(patch);
+      toast('对话 API 已保存');
+      return;
+    }
+    if (key === 'api-voice') {
+      var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
+      var tts = Object.assign({}, cfg.minimaxTts || {}, {
+        apiKey: val('#mq-voice-key'),
+        groupId: val('#mq-voice-group'),
+        model: val('#mq-voice-model'),
+        prompt: val('#mq-voice-prompt')
+      });
+      var sp = parseFloat(val('#mq-voice-speed'));
+      var vo = parseFloat(val('#mq-voice-vol'));
+      var pi = parseInt(val('#mq-voice-pitch'), 10);
+      if (Number.isFinite(sp)) tts.speed = sp;
+      if (Number.isFinite(vo)) tts.volume = vo;
+      if (Number.isFinite(pi)) tts.pitch = pi;
+      if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig({ minimaxTts: tts });
+      toast('语音合成已保存');
+      return;
+    }
+  }
+
+  /* 发一条测试通知。与旧设置 App 里那段行为一致：
+     先在预览样张里插一条，再真正走系统通知通道。 */
+  function runNotifyTest() {
+    if (!global.miyaGetNotificationApi || !global.miyaGetNotificationApi()) {
+      toast('当前环境不支持通知');
+      return;
+    }
+    function fire() {
+      var iconEl = document.querySelector('link[rel="icon"]');
+      global.miyaShowSystemNotification('miya小手机', {
+        body: '这是一条测试通知。',
+        tag: 'miya-notify-test-' + String(Date.now()),
+        icon: iconEl ? iconEl.href : undefined,
+        data: { kind: 'test' }
+      }).then(function (n) {
+        if (n) {
+          if (!n._viaSw && n.onclick !== undefined) {
+            n.onclick = function () {
+              try { window.focus(); } catch (e) {}
+              n.close();
+            };
+          }
+          toast('测试通知已发送');
+        } else {
+          toast('发送失败，请确认已开启通知权限');
+        }
+      });
+    }
+    var perm = global.miyaGetNotificationPermission ? global.miyaGetNotificationPermission() : 'unsupported';
+    if (perm === 'denied') { toast('通知权限被拒绝，请在浏览器设置中允许'); return; }
+    if (perm === 'granted') { fire(); return; }
+    global.miyaRequestNotificationPermission().then(function (next) {
+      if (next === 'granted') {
+        if (global.miyaSetSystemPrefs) global.miyaSetSystemPrefs({ notify: true });
+        var sw = pageEl && pageEl.querySelector('#mq-notify-sw');
+        if (sw) { sw.classList.add('is-on'); sw.setAttribute('aria-checked', 'true'); }
+        fire();
+      } else {
+        toast(next === 'denied' ? '通知权限被拒绝' : '需要允许通知权限');
+      }
+    });
+  }
+
+  function renderSubView(key) {
+    if (key === 'api-chat') return renderApiChatSub();
+    if (key === 'api-voice') return renderApiVoiceSub();
+    if (key === 'api-imagegen') return renderApiImagegenSub();
+    if (key === 'backup') return renderBackupSub();
+    if (key === 'storage') return renderStorageSub();
+    if (key === 'notify') return renderNotifySub();
+    if (key === 'chat-defaults') return renderChatDefaultsSub();
+    return '<div class="mi-empty-hint">该设置页不存在</div>';
+  }
+
+  /* 子视图统一外壳：顶部一行返回 + 标题，然后是内容 */
+  function subShell(title, hint, inner) {
+    return '<div class="st-container mi-set-flow">' +
+      '<div class="mi-set-subview__head">' +
+        '<button type="button" class="mi-set-subview__back" data-mq-set-sub-back aria-label="返回聊天设置">' +
+          '<svg width="9" height="16" viewBox="0 0 10 18" fill="none" aria-hidden="true">' +
+            '<path d="M9 1L1 9l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '</svg>' +
+          '<span>聊天设置</span>' +
+        '</button>' +
+        '<h2 class="mi-set-subview__title">' + esc(title) + '</h2>' +
+        (hint ? '<p class="mi-set-subview__hint">' + esc(hint) + '</p>' : '') +
+      '</div>' +
+      inner +
+    '</div>';
+  }
+
+  function renderApiChatSub() {
+    var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
+    function num(v, d) { return v == null || v === '' ? d : v; }
+    return subShell('对话 API', '对话模型服务端点与密钥。主线路失败时可自动切到副线路。',
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<label class="ins-field-label" for="mq-api-base">网关地址</label>' +
+        '<input type="text" class="ins-text-input" id="mq-api-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false" value="' + esc(cfg.baseUrl || '') + '">' +
+        '<label class="ins-field-label" for="mq-api-key">密钥</label>' +
+        '<div class="ins-inline-field">' +
+          '<input type="password" class="ins-text-input" id="mq-api-key" placeholder="sk-…" autocomplete="off" value="' + esc(cfg.apiKey || '') + '">' +
+          '<button type="button" class="ins-icon-btn" id="mq-api-fetch" title="拉取模型">⟳</button>' +
+        '</div>' +
+        '<label class="ins-field-label" for="mq-api-model">模型</label>' +
+        '<select class="ins-select" id="mq-api-model"><option value="' + esc(cfg.model || '') + '">' + esc(cfg.model || '选择模型') + '</option></select>' +
+        '<label class="ins-field-label">温度 <span id="mq-api-temp-lbl">' + esc(num(cfg.temperature, 1)) + '</span></label>' +
+        '<input type="range" class="ins-range" id="mq-api-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.temperature, 1)) + '">' +
+      '</div>' +
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<h4 class="st-form-section__title">副线路（可选）</h4>' +
+        '<label class="ins-field-label" for="mq-api2-base">网关地址</label>' +
+        '<input type="text" class="ins-text-input" id="mq-api2-base" placeholder="备用网关" autocomplete="off" spellcheck="false" value="' + esc(cfg.fallbackBaseUrl || '') + '">' +
+        '<label class="ins-field-label" for="mq-api2-key">密钥</label>' +
+        '<input type="password" class="ins-text-input" id="mq-api2-key" placeholder="sk-…" autocomplete="off" value="' + esc(cfg.fallbackApiKey || '') + '">' +
+        '<label class="ins-field-label" for="mq-api2-model">模型</label>' +
+        '<select class="ins-select" id="mq-api2-model"><option value="' + esc(cfg.fallbackModel || '') + '">' + esc(cfg.fallbackModel || '选择模型') + '</option></select>' +
+        '<div class="st-toggle-in-form">' +
+          '<strong>主线路失败时自动切换副线路</strong>' +
+          '<button type="button" class="ins-toggle' + (cfg.fallbackEnabled ? ' is-on' : '') + '" id="mq-api-fallback" role="switch" aria-checked="' + (cfg.fallbackEnabled ? 'true' : 'false') + '"></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mi-btn-row mi-set-subview__actions">' +
+        '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-sub-save="api-chat">保存</button>' +
+      '</div>'
+    );
+  }
+
+  function renderApiVoiceSub() {
+    var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
+    var tts = cfg.minimaxTts || {};
+    function num(v, d) { return v == null || v === '' ? d : v; }
+    return subShell('语音合成', 'MiniMax TTS。角色「语音朗读」开启后使用这里的配置。',
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<label class="ins-field-label" for="mq-voice-key">MiniMax 密钥</label>' +
+        '<input type="password" class="ins-text-input" id="mq-voice-key" placeholder="填入 API 密钥" autocomplete="off" value="' + esc(tts.apiKey || '') + '">' +
+        '<label class="ins-field-label" for="mq-voice-group">群组 ID</label>' +
+        '<input type="text" class="ins-text-input" id="mq-voice-group" placeholder="控制台群组 ID" autocomplete="off" value="' + esc(tts.groupId || '') + '">' +
+        '<label class="ins-field-label" for="mq-voice-model">语音模型</label>' +
+        '<select class="ins-select" id="mq-voice-model"><option value="' + esc(tts.model || '') + '">' + esc(tts.model || '选择模型') + '</option></select>' +
+        '<label class="ins-field-label">语速 <span id="mq-voice-speed-lbl">' + esc(num(tts.speed, 1)) + '</span></label>' +
+        '<input type="range" class="ins-range" id="mq-voice-speed" min="0.5" max="2" step="0.1" value="' + esc(num(tts.speed, 1)) + '">' +
+        '<label class="ins-field-label">音量 <span id="mq-voice-vol-lbl">' + esc(num(tts.volume, 1)) + '</span></label>' +
+        '<input type="range" class="ins-range" id="mq-voice-vol" min="0.1" max="2" step="0.1" value="' + esc(num(tts.volume, 1)) + '">' +
+        '<label class="ins-field-label">音调 <span id="mq-voice-pitch-lbl">' + esc(num(tts.pitch, 0)) + '</span></label>' +
+        '<input type="range" class="ins-range" id="mq-voice-pitch" min="-12" max="12" step="1" value="' + esc(num(tts.pitch, 0)) + '">' +
+        '<label class="ins-field-label" for="mq-voice-prompt">语音专用提示词</label>' +
+        '<textarea class="ins-text-input ins-text-input--area" id="mq-voice-prompt" rows="3" placeholder="合成前附加到台词前，留空则不附加">' + esc(tts.prompt || '') + '</textarea>' +
+        '<p class="st-form-hint">音调调低更沉稳自然，调高更年轻清亮；改动后已合成的语音会自动重新生成</p>' +
+      '</div>' +
+      '<div class="mi-btn-row mi-set-subview__actions">' +
+        '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-sub-save="api-voice">保存</button>' +
+      '</div>'
+    );
+  }
+
+  function renderApiImagegenSub() {
+    /*
+     * 生图 API 的配置表单很大（含自由生图、垫图、联系人生图等），
+     * 而且它的按钮绑定由 miya-image-gen.js 按固定 id 负责。
+     * 与其在这里重写一份、造成两处维护，不如直接跳进生图独立页 ——
+     * 那边已经是同一套表单，读写同一份配置。
+     */
+    return subShell('生图 API', '生图的接口、提示词与自由生图都在独立的生图设置页里。',
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<p class="st-form-hint">生图设置包含接口、提示词、尺寸预设、垫图与自由生图，字段较多，已独立成一页。</p>' +
+        '<div class="mi-btn-row">' +
+          '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-open-imagegen>打开生图设置</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  /*
+   * 聊天默认值：内容不在这里拼 HTML，而是给 miyaChatSettingsPanel
+   * 一个容器让它自己渲染。原因：这块表单读写的字段（memoryCount /
+   * summaryTrigger / backgroundMessage…）与 per-contact 覆盖层
+   * 的规则都封装在那个模块里，在这里重写一份必然会出现两边不一致。
+   */
+  function renderChatDefaultsSub() {
+    if (!global.miyaChatSettingsPanel || !global.miyaChatSettingsPanel.mountDefaultsInto) {
+      return subShell('聊天默认值', '', '<p class="mi-empty-hint">设置模块未加载，请刷新页面</p>');
+    }
+    return subShell('聊天默认值', '未单独设置过的联系人，统一使用这里的记忆与后台配置。',
+      '<div data-mq-set-defaults-host></div>'
+    );
+  }
+
+  function renderBackupSub() {
+    return subShell('备份与恢复', '导出会包含对话、设置与主题；完整导出额外带上聊天图片与提示音。',
+      '<div class="st-card mi-set-action-card">' +
+        '<button type="button" class="st-card-row" data-mq-set-backup-export>' +
+          '<div class="st-card-row-left"><div>' +
+            '<div class="st-card-label">导出数据</div>' +
+            '<div class="st-card-desc">轻量 ZIP：对话、设置与主题</div>' +
+          '</div></div>' +
+          '<img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
+        '</button>' +
+        '<button type="button" class="st-card-row" data-mq-set-backup-export-full>' +
+          '<div class="st-card-row-left"><div>' +
+            '<div class="st-card-label">完整导出</div>' +
+            '<div class="st-card-desc">额外含聊天图片与提示音，体积较大</div>' +
+          '</div></div>' +
+          '<img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
+        '</button>' +
+        '<button type="button" class="st-card-row" data-mq-set-backup-import>' +
+          '<div class="st-card-row-left"><div>' +
+            '<div class="st-card-label">导入数据</div>' +
+            '<div class="st-card-desc">从 ZIP 或 JSON 备份恢复</div>' +
+          '</div></div>' +
+          '<img class="mi-ico-img st-chevron" src="img/icons/chevron-right.svg" alt="" width="18" height="18">' +
+        '</button>' +
+      '</div>' +
+      '<input type="file" class="ins-file" data-mq-set-backup-file accept=".zip,.json,application/zip,application/json" multiple hidden>' +
+      '<p class="st-form-hint">导入会覆盖同名数据，建议先导出一次留底。</p>'
+    );
+  }
+
+  function renderStorageSub() {
+    /*
+     * 只做用量统计，**不提供清空全部数据**。
+     * 原先那个一键 clear() 就摆在面板底部，离谱的地方在于：
+     * 旁边写的是「用量统计」，用户的注意力在「看看占了多少」，
+     * 结果底下是个全清按钮。已按需求删除该功能。
+     */
+    return subShell('存储用量', '本机数据按模块的占用概览。',
+      '<div class="st-storage-head">' +
+        '<p class="ins-vault-note" data-mq-set-storage-quota>正在扫描…</p>' +
+        '<button type="button" class="st-foot-btn" data-mq-set-storage-refresh>重新扫描</button>' +
+      '</div>' +
+      '<div class="st-form-card">' +
+        '<div class="ins-meter-list" data-mq-set-storage-groups><p class="mi-empty-hint">正在计算…</p></div>' +
+      '</div>' +
+      '<div class="ins-storage-images" data-mq-set-storage-images></div>'
+    );
+  }
+
+  function renderNotifySub() {
+    var prefs = (global.miyaGetSystemPrefs && global.miyaGetSystemPrefs()) || {};
+    var perm = global.miyaGetNotificationPermission ? global.miyaGetNotificationPermission() : 'unsupported';
+    return subShell('通知与提示音', '系统通知开关、测试与提示音选择。',
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<div class="st-toggle-in-form">' +
+          '<strong>系统通知</strong>' +
+          '<button type="button" class="ins-toggle' + (prefs.notify ? ' is-on' : '') + '" id="mq-notify-sw" role="switch" aria-checked="' + (prefs.notify ? 'true' : 'false') + '"></button>' +
+        '</div>' +
+        '<p class="st-form-hint">推送提醒与角标更新。当前权限：' + esc(perm) + '</p>' +
+        '<div class="mi-btn-row">' +
+          '<button type="button" class="st-action-btn" data-mq-notify-test>测试通知</button>' +
+        '</div>' +
+      '</div>' +
+      /*
+       * 提示音面板：id 与结构原样保留。
+       * miya-msg-sound.js 是按固定 id 全局查找（getElementById），
+       * 不是事件委托 —— 改了 id 会静默失效（点了没反应但不报错）。
+       */
+      '<div class="st-form-card ins-form-block mi-set-subview__card" id="miya-st-panel-msg-sound">' +
+        '<div class="st-toggle-in-form">' +
+          '<strong>启用提示音</strong>' +
+          '<button type="button" class="ins-toggle" id="miya-st-sw-msgsound" role="switch" aria-checked="true"></button>' +
+        '</div>' +
+        '<p class="st-form-hint">收到新消息时播放（当前聊天界面内不响）。生图完成、线下场景写完后也会用同一个提示音提醒你。</p>' +
+        '<h4 class="st-form-section__title">内置预设</h4>' +
+        '<div class="st-msgsound-list" id="miya-st-msgsound-presets"></div>' +
+        '<h4 class="st-form-section__title">自定义预设</h4>' +
+        '<p class="st-form-hint">上传本地音频（最大 1MB），保存后可作为提示音</p>' +
+        '<button type="button" class="st-action-btn st-action-btn--primary st-msgsound-upload-btn" id="miya-st-msgsound-upload">上传音频</button>' +
+        '<input type="file" class="ins-file" id="miya-st-msgsound-file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.webm" hidden>' +
+        '<div class="st-msgsound-list" id="miya-st-msgsound-custom-list"></div>' +
+      '</div>'
+    );
+  }
+
+  /* 打开子视图 */
+  function openSubView(key) {
+    if (!SUB_VIEW_TITLES[key]) return;
+    state.subView = key;
+    render({ skipContextUsage: true });
+    if (key === 'storage') scheduleStorageSubRefresh();
+    /* 聊天默认值：内容由 miyaChatSettingsPanel 渲染进我们给的容器。
+       必须放在 render 之后 —— 它要往里写 DOM。 */
+    if (key === 'chat-defaults') {
+      var host = pageEl.querySelector('[data-mq-set-defaults-host]');
+      if (host && global.miyaChatSettingsPanel && global.miyaChatSettingsPanel.mountDefaultsInto) {
+        global.miyaChatSettingsPanel.mountDefaultsInto(host);
+      }
+    }
+    if (key === 'notify' && global.MiyaMsgSound && typeof global.MiyaMsgSound.onPanelOpen === 'function') {
+      /* settings.app 被删后，MiyaMsgSound.onPanelOpen 会自己按 id 找上面那块面板，
+         所以这里不需要先建好 DOM 再调 —— render 已经同步写完了。 */
+      try { global.MiyaMsgSound.onPanelOpen(); } catch (e) {}
+    }
+  }
+
+  function closeSubView() {
+    state.subView = null;
+    render({ skipContextUsage: true });
+  }
+
+  function scheduleStorageSubRefresh() {
+    var gen = state.subView;
+    requestAnimationFrame(function () {
+      if (state.subView !== 'storage' || state.subView !== gen) return;
+      refreshStorageSub();
+    });
+  }
+
+  function refreshStorageSub() {
+    if (!pageEl || state.subView !== 'storage') return;
+    var groupsEl = pageEl.querySelector('[data-mq-set-storage-groups]');
+    var quotaEl = pageEl.querySelector('[data-mq-set-storage-quota]');
+    var imagesEl = pageEl.querySelector('[data-mq-set-storage-images]');
+    var su = global.miyaStorageUsage;
+    if (!groupsEl || !su) return;
+    su.collect(true).then(function (ctx) {
+      if (state.subView !== 'storage') return;
+      var rows = (su.CATALOG || []).map(function (c) {
+        var b = (ctx.groupLs && ctx.groupLs[c.id]) || 0;
+        var pct = ctx.stableTotal > 0 ? Math.round(b / ctx.stableTotal * 100) : 0;
+        return '<div class="ins-meter-row">' +
+          '<div class="ins-meter-label"><span>' + esc(c.title) + '</span><span>' + esc(su.formatBytes(b)) + '</span></div>' +
+          '<div class="ins-meter-bar"><div class="ins-meter-fill" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+      }).join('');
+      groupsEl.innerHTML = rows || '<p class="mi-empty-hint">暂无数据</p>';
+      if (quotaEl) {
+        quotaEl.textContent = ctx.quota > 0
+          ? '小手机本地数据合计 ' + su.formatBytes(ctx.stableTotal) + ' / ' + su.formatBytes(ctx.quota)
+          : '小手机本地数据合计 ' + su.formatBytes(ctx.stableTotal);
+      }
+      if (imagesEl && typeof su.collectChatMediaImages === 'function') {
+        su.collectChatMediaImages().then(function (list) {
+          if (state.subView !== 'storage' || !imagesEl) return;
+          if (!list || !list.length) { imagesEl.innerHTML = ''; return; }
+          imagesEl.innerHTML = '<p class="ins-field-label ins-field-label--section">聊天图片（' + list.length + ' 张）</p>';
+        }).catch(function () {});
+      }
+    }).catch(function () {
+      if (groupsEl) groupsEl.innerHTML = '<p class="mi-empty-hint">统计失败</p>';
+    });
+  }
+
   function render(opts) {
     opts = opts || {};
     if (!pageEl) return;
     var body = pageEl.querySelector('[data-mq-set-body]');
     if (!body) return;
+
+    /* 子视图：整页换内容，不参与 zone 状态与草稿的采集 */
+    if (state.subView) {
+      var titleEl = pageEl.querySelector('.st-navtitle');
+      if (titleEl) titleEl.textContent = SUB_VIEW_TITLES[state.subView] || '聊天设置';
+      body.innerHTML = renderSubView(state.subView);
+      body.scrollTop = 0;
+      return;
+    }
+    var navTitle = pageEl.querySelector('.st-navtitle');
+    if (navTitle) navTitle.textContent = '聊天设置';
+
     var prevScroll = body.scrollTop;
     captureZoneOpenState(body);
     var wbPanel = body.querySelector('[data-mq-set-wb-sort-panel]');
@@ -2166,6 +2614,9 @@
     state.chatId = chatId;
     state.wbSortOpen = false;
     state.zoneOpen = {};
+    /* 每次从聊天页进来都回到列表首页，不残留上次停在的 API 子页 ——
+       否则用户点「聊天设置」会莫名其妙直接看到某个 API 表单。 */
+    state.subView = null;
     ensurePage();
     pageEl.hidden = false;
     pageEl.classList.add('is-open');
@@ -2203,6 +2654,7 @@
   function close() {
     state.chatId = null;
     state.formDraft = null;
+    state.subView = null;
     if (pageEl) {
       pageEl.classList.remove('is-open');
       pageEl.hidden = true;
@@ -2220,21 +2672,53 @@
     pageEl.dataset.bound = '1';
 
     pageEl.addEventListener('click', function (e) {
-      if (e.target.closest('[data-mq-set-back]')) { close(); return; }
+      /*
+       * 返回键分两种：在子视图里先回列表，在列表里才关掉整个聊天设置。
+       * 这个顺序不能反 —— 否则用户在「对话 API」里点返回会直接退出
+       * 聊天设置，得重新从聊天页点进来才能改别的。
+       */
+      if (e.target.closest('[data-mq-set-back]')) {
+        if (state.subView) closeSubView(); else close();
+        return;
+      }
+      if (e.target.closest('[data-mq-set-sub-back]')) { closeSubView(); return; }
+
+      /* 子视图入口 */
+      var subNav = e.target.closest('[data-mq-set-sub]');
+      if (subNav) { openSubView(subNav.getAttribute('data-mq-set-sub')); return; }
+
+      /* 子视图内的保存：把表单读出来写进统一配置层 */
+      var subSave = e.target.closest('[data-mq-set-sub-save]');
+      if (subSave) { saveSubViewForm(subSave.getAttribute('data-mq-set-sub-save')); return; }
+
+      if (e.target.closest('[data-mq-set-open-imagegen]')) {
+        if (global.MiyaImageGenApp && global.MiyaImageGenApp.open) global.MiyaImageGenApp.open();
+        return;
+      }
+      if (e.target.closest('[data-mq-set-storage-refresh]')) { refreshStorageSub(); return; }
+
+      var bkExport = e.target.closest('[data-mq-set-backup-export]');
+      if (bkExport) {
+        if (global.miyaBackup) global.miyaBackup.exportLight();
+        return;
+      }
+      var bkExportFull = e.target.closest('[data-mq-set-backup-export-full]');
+      if (bkExportFull) {
+        if (global.miyaBackup) global.miyaBackup.exportFull();
+        return;
+      }
+      var bkImport = e.target.closest('[data-mq-set-backup-import]');
+      if (bkImport) {
+        var bkFile = pageEl.querySelector('[data-mq-set-backup-file]');
+        if (bkFile) bkFile.click();
+        return;
+      }
+      var notifyTest = e.target.closest('[data-mq-notify-test]');
+      if (notifyTest) { runNotifyTest(); return; }
+
       if (e.target.closest('[data-mq-set-save]')) { saveForm(); return; }
       if (e.target.closest('[data-mq-set-weather-sense]')) { runWeatherSense(); return; }
       if (e.target.closest('[data-mq-set-weather-sync-app]')) { syncWeatherAppIntoForm(); return; }
-
-      var apiNav = e.target.closest('[data-mq-set-api-nav]');
-      if (apiNav) {
-        var apiPanelId = apiNav.getAttribute('data-mq-set-api-nav');
-        if (apiPanelId && global.miyaSettingsApp && typeof global.miyaSettingsApp.open === 'function') {
-          // 明确告诉设置 App：这是从当前角色的聊天设置进入的 API 子页。
-          // 返回时应关闭设置 App，而不是回到桌面的“设置”主页。
-          global.miyaSettingsApp.open(apiPanelId, { fromChatContactSettings: true });
-        }
-        return;
-      }
 
       var zoneToggle = e.target.closest('[data-mq-set-zone-toggle]');
       if (zoneToggle) {
@@ -2308,6 +2792,20 @@
         if (sw.id === 'mq-set-lifelike') {
           var memBody = pageEl.querySelector('[data-mq-set-body]');
           syncLifeLikeAgainstTimedBackground(memBody);
+        }
+        /* 通知开关：状态要落到系统偏好里，否则切走再回来会弹回去 */
+        if (sw.id === 'mq-notify-sw') {
+          if (on && global.miyaGetNotificationApi && global.miyaGetNotificationApi()) {
+            global.miyaRequestNotificationPermission().then(function (perm) {
+              var granted = perm === 'granted';
+              if (global.miyaSetSystemPrefs) global.miyaSetSystemPrefs({ notify: granted });
+              sw.classList.toggle('is-on', granted);
+              sw.setAttribute('aria-checked', granted ? 'true' : 'false');
+              toast(granted ? '通知已开启' : (perm === 'denied' ? '通知权限被拒绝' : '需要通知权限'));
+            });
+          } else {
+            if (global.miyaSetSystemPrefs) global.miyaSetSystemPrefs({ notify: on });
+          }
         }
         return;
       }
@@ -2579,6 +3077,15 @@
         };
         reader.readAsText(file, 'utf-8');
       }
+
+      /* 备份导入：文件选择后交给 miyaBackup 引擎（原设置 App 的那套） */
+      if (e.target.matches('[data-mq-set-backup-file]')) {
+        var bfs = e.target.files ? Array.prototype.slice.call(e.target.files) : [];
+        e.target.value = '';
+        if (!bfs.length) return;
+        if (global.miyaBackup) global.miyaBackup.importFiles(bfs);
+        return;
+      }
     });
   }
 
@@ -2591,9 +3098,24 @@
   if (!global.miyaChatRoomExtras) global.miyaChatRoomExtras = {};
   global.miyaChatRoomExtras.patchTokenUsageInSettings = patchTokenUsageInSettings;
 
+  /**
+   * 打开某个会话的设置页，并直接进入指定子视图。
+   *
+   * 给谁用：桌面设置 App 删除后，`global.miyaSettingsApp.open(panelId)`
+   * 那条老路径要能落到这里对应的子视图上（见 miya-settings-app.js 的兼容层）。
+   * 万一还有别处按老面板名跳转，也不用改调用点。
+   */
+  function openSubViewForChat(chatId, subKey) {
+    if (!SUB_VIEW_TITLES[subKey]) return false;
+    open(chatId);
+    openSubView(subKey);
+    return true;
+  }
+
   global.miyaChatContactSettings = {
     open: open,
     close: close,
+    openSubViewForChat: openSubViewForChat,
     save: saveForm,
     refreshContextUsage: refreshContextUsagePanel
   };

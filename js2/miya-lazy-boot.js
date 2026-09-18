@@ -24,30 +24,30 @@
         'js1/miya-couple-whisper-engine.js?v=3',
         'js1/miya-couple-whisper.js?v=4',
         'js1/miya-couple-photos.js?v=5',
-        'js1/miya-couple-app.js?v=10'
+        'js1/miya-couple-app.js?v=11'
       ]
     },
     diaryUi: {
       css: ['css/miya-diary.css?v=13'],
       js: [
         'js2/miya-diary-scheduler.js?v=4',
-        'js2/miya-diary-app.js?v=10'
+        'js2/miya-diary-app.js?v=11'
       ]
     },
     itineraryUi: {
       css: ['css/miya-itinerary.css?v=3'],
-      js: ['js2/miya-itinerary-app.js?v=10']
+      js: ['js2/miya-itinerary-app.js?v=11']
     },
     weatherUi: {
       css: ['css/miya-weather.css?v=9'],
       js: [
         'js2/miya-api-bridge.js?v=2',
-        'js2/miya-weather-app.js?v=12'
+        'js2/miya-weather-app.js?v=13'
       ]
     },
     memoryUi: {
       css: ['css/miya-memory.css?v=9'],
-      js: ['js2/miya-memory-app.js?v=10']
+      js: ['js2/miya-memory-app.js?v=11']
     },
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],
@@ -55,8 +55,8 @@
         'js2/miya-api-bridge.js?v=2',
         'js2/miya-fun-sayguess-store.js?v=3',
         'js2/miya-fun-sayguess-bridge.js?v=6',
-        'js2/miya-fun-sayguess-app.js?v=9',
-        'js2/miya-fun-app.js?v=2'
+        'js2/miya-fun-sayguess-app.js?v=10',
+        'js2/miya-fun-app.js?v=3'
       ]
     }
   };

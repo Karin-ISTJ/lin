@@ -25,9 +25,7 @@
   }
 
   function toast(msg) {
-    if (global.miyaSettingsApp && global.miyaSettingsApp.toast) {
-      global.miyaSettingsApp.toast(msg);
-    }
+    if (typeof global.miyaToast === 'function') global.miyaToast(msg);
   }
 
   function renderPanelHtml() {
@@ -105,20 +103,11 @@
       toast('这个联系人还没有会话，先和他聊一句再来');
       return;
     }
-    /* 先关掉设置 App，再打开聊天设置，避免两层全屏页叠在一起。
-       设置 App 关闭动效约 220ms，等它退场后再打开更干净。 */
-    var openIt = function () {
-      if (global.miyaChatApp && typeof global.miyaChatApp.open === 'function') {
-        try { global.miyaChatApp.open(); } catch (e) {}
-      }
-      try { mod.open(chat.id); } catch (e) {}
-    };
-    if (global.miyaSettingsApp && typeof global.miyaSettingsApp.close === 'function') {
-      global.miyaSettingsApp.close();
-      setTimeout(openIt, 240);
-    } else {
-      openIt();
+    /* 桌面设置 App 已删除，不再有「先关它再开」的问题，直接进聊天设置。 */
+    if (global.miyaChatApp && typeof global.miyaChatApp.open === 'function') {
+      try { global.miyaChatApp.open(); } catch (e) {}
     }
+    try { mod.open(chat.id); } catch (e) {}
   }
 
   function bindPanel() {
@@ -329,37 +318,6 @@
     }).catch(function () { toast('保存失败'); return false; });
   }
 
-  function bindDefaultsPanel() {
-    var panel = $('miya-st-panel-chat-defaults');
-    if (!panel || panel.dataset.bound) return;
-    panel.dataset.bound = '1';
-    panel.innerHTML = renderDefaultsHtml();
-    bindTogglesIn(panel);
-
-    panel.addEventListener('click', function (e) {
-      var saveBtn = e.target.closest('#miya-ct-def-save');
-      if (saveBtn) { saveDefaultsForm(); return; }
-      var resetBtn = e.target.closest('[data-def-reset]');
-      if (resetBtn) {
-        var cid = resetBtn.getAttribute('data-def-reset');
-        var mod = global.miyaChatGlobalSettings;
-        if (cid && mod && typeof mod.resetContactOverride === 'function') {
-          mod.resetContactOverride(cid).then(function () {
-            toast('已恢复为全局默认');
-            renderOverrideList();
-          });
-        }
-        return;
-      }
-    });
-  }
-
-  function onDefaultsPanelOpen() {
-    bindDefaultsPanel();
-    fillDefaultsForm();
-    renderOverrideList();
-  }
-
   /**
    * 顶栏保存按钮的入口：本页已无可保存内容。
    * 保留该导出是因为 settings App 里对 TOPBAR_SAVE_PANELS 里的面板会统一调用它，
@@ -374,9 +332,45 @@
     hydrateContactPicker();
   }
 
+  /**
+   * 把「聊天默认值」面板挂进调用方给的容器里。
+   *
+   * 原先这个面板只能渲染进桌面设置 App 的 #miya-st-panel-chat-defaults。
+   * 桌面设置删除后，它需要在聊天设置的子视图里有个新家 ——
+   * 但那边用的是 render() 整页重绘，不能沿用 dataset.bound 那种
+   * 「绑一次就忘了」的做法（重绘后旧节点连事件一起被丢掉）。
+   *
+   * 所以这里每次都用全新的 DOM 重建并重新绑事件，调用方可以放心地
+   * 反复调它。容器由调用方给，本模块不再假设任何固定宿主 id。
+   */
+  function mountDefaultsInto(container) {
+    if (!container) return false;
+    container.innerHTML = renderDefaultsHtml();
+    var panel = container.querySelector('.mi-set-defaults') || container;
+    bindTogglesIn(panel);
+    /* 内部按钮用委托绑在容器上：容器每次是新节点，重复绑不会有残留 */
+    container.addEventListener('click', function (e) {
+      if (e.target.closest('#miya-ct-def-save')) { saveDefaultsForm(); return; }
+      var resetBtn = e.target.closest('[data-def-reset]');
+      if (resetBtn) {
+        var cid = resetBtn.getAttribute('data-def-reset');
+        var mod = global.miyaChatGlobalSettings;
+        if (cid && mod && typeof mod.resetContactOverride === 'function') {
+          mod.resetContactOverride(cid).then(function () {
+            toast('已恢复为全局默认');
+            renderOverrideList();
+          });
+        }
+      }
+    });
+    fillDefaultsForm();
+    renderOverrideList();
+    return true;
+  }
+
   global.miyaChatSettingsPanel = {
     onPanelOpen: onPanelOpen,
-    onDefaultsPanelOpen: onDefaultsPanelOpen,
+    mountDefaultsInto: mountDefaultsInto,
     saveFromTopbar: saveFromTopbar
   };
 })(window);

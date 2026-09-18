@@ -150,8 +150,8 @@
   }
 
   function toast(msg) {
-    if (global.miyaSettingsApp && global.miyaSettingsApp.toast) {
-      global.miyaSettingsApp.toast(msg);
+    if (typeof global.miyaToast === 'function') {
+      global.miyaToast(msg);
       return;
     }
     var el = document.createElement('div');
@@ -1251,7 +1251,6 @@
     wallpapers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l4-4 4 4 5-6 4 5"/></svg>',
     wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="16" cy="14" r="1" fill="currentColor"/></svg>',
     emoji: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
-    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/></svg>',
     help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.2 1.8c0 1.8-2.2 2.2-2.2 3.7" stroke-linecap="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>',
     about: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 11v5" stroke-linecap="round"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>',
     dress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" stroke-linejoin="round"/></svg>'
@@ -1263,13 +1262,15 @@
       { title: '我的相册', action: 'album', icon: 'album' },
       { title: '壁纸管理', action: 'wallpapers', icon: 'wallpapers' },
       { title: '我的钱包', action: 'wallet', icon: 'wallet' },
-      { title: '美化管理', action: 'dress', icon: 'emoji', grid: true },
-      { title: '设置', action: 'settings', icon: 'settings', mine: true }
+      { title: '美化管理', action: 'dress', icon: 'emoji', grid: true }
     ];
+    /* 「设置」项已删除：桌面设置 App 与这里的齿轮曾是两个入口，
+       现在统一并进「联系人聊天设置」页，本菜单不再留指路项。
+       （见 miya-chat-contact-settings.js 的 renderPage / SUB_VIEW_TITLES） */
     return items.map(function (item) {
-      var attrs = item.mine
-        ? ' data-mine-action="settings"'
-        : (item.grid ? ' data-mq-mine-grid="' + item.action + '"' : ' data-mq-mine-action="' + item.action + '"');
+      var attrs = item.grid
+        ? ' data-mq-mine-grid="' + item.action + '"'
+        : ' data-mq-mine-action="' + item.action + '"';
       return '<div class="soft-menu__item"' + attrs + '>' +
         '<span class="soft-menu__item-icon">' + (SOFT_MENU_ICONS[item.icon] || '') + '</span>' +
         '<span class="soft-menu__item-title">' + esc(item.title) + '</span>' +
@@ -1517,12 +1518,6 @@
       if (storyBtn) {
         e.preventDefault();
         openChatByContact(storyBtn.getAttribute('data-contact-id'));
-        return;
-      }
-
-      if (t.closest('[data-mine-action="settings"]') && global.miyaSettingsApp) {
-        e.preventDefault();
-        global.miyaSettingsApp.open('miya-st-panel-contact-chat');
         return;
       }
 
@@ -1799,7 +1794,7 @@
     el.setAttribute('hidden', '');
     el.setAttribute('aria-hidden', 'true');
     if (!document.querySelector('.miya-beautify-app.is-open') &&
-        !document.querySelector('.miya-settings-app.is-open') &&
+        !document.querySelector('.mi-set-page.is-open') &&
         !document.querySelector('.miya-worldbook-app.is-open') &&
         !document.querySelector('.miya-chat-app.is-open') &&
         !document.querySelector('.miya-memory-app.is-open')) {
@@ -1872,6 +1867,10 @@
     onUiThemeChange: onUiThemeChange,
     toast: toast,
     resolveContactAvatarUrl: resolveContactAvatarUrl,
-    resolveContactAvatarUrlAsync: resolveContactAvatarUrlAsync
+    resolveContactAvatarUrlAsync: resolveContactAvatarUrlAsync,
+    /* 测试后门：把「我的」菜单的 HTML 直接生成出来。
+       菜单是点开才渲染的，测试若只查 DOM 会读到 0 条，
+       那样分不清「入口被删了」还是「菜单还没画」。 */
+    __buildMineMenuForTest: buildMineMenuHtml
   };
 })(window);

@@ -285,7 +285,7 @@
       document.body,
       document.getElementById('miya-chat-app'),
       document.getElementById('qq-room-overlay'),
-      document.getElementById('miya-settings-app'),
+      document.getElementById('mq-set-page'),
       document.getElementById('miya-beautify-app'),
       document.getElementById('ncm-overlay'),
       roomEl

@@ -3161,3 +3161,148 @@
 }
 .mi-wall-manage__actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .mi-wall-manage__hint { margin: 0; }
+
+/* ── 生图设置（独立全屏 App）───────────────────────────────────
+ *
+ * 从桌面「生图」图标进入。样式与聊天设置页（.mi-set-page）同源，
+ * 因为两者都是「全屏设置页」这一形态 —— 视觉上不该出现两套观感。
+ *
+ * 这里只写差异部分：没有底部保存按钮（生图的保存是各分区自己的
+ * 按钮职责），所以顶栏右侧留一个占位撑住标题居中。
+ */
+.miya-igapp {
+  --st-bg: #F5F3EF;
+  --st-card-bg: rgba(255, 255, 255, 0.72);
+  --st-text-primary: #1A1A1A;
+  --st-text-secondary: #6B6B6B;
+  --st-text-tertiary: #999999;
+  --st-text-muted: #B8B5B0;
+  --st-accent: #007AFF;
+  --st-accent-warm: #E85D4C;
+  --st-border: rgba(0, 0, 0, 0.04);
+  --st-border-strong: rgba(0, 0, 0, 0.08);
+
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  z-index: 640;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Serif SC', 'Inter', serif;
+  color: var(--st-text-primary);
+  background: var(--st-bg);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+.miya-igapp[hidden] { display: none !important; }
+
+.miya-igapp .st-ambient-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.miya-igapp .st-ambient-bg::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(circle, rgba(0, 122, 255, 0.04) 0%, transparent 70%);
+}
+.miya-igapp .st-ambient-bg::after {
+  content: '';
+  position: absolute;
+  bottom: -10%;
+  left: -15%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(232, 93, 76, 0.03) 0%, transparent 70%);
+}
+
+.miya-igapp__navbar {
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(245, 243, 239, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--st-border);
+}
+.miya-igapp__spacer { width: 52px; }
+
+.miya-igapp__scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 16px calc(40px + env(safe-area-inset-bottom));
+}
+
+/* 面板本体：原先是设置抽屉里的一个 ins-vault-panel，
+   现在是页面主体，横向占满即可。 */
+.miya-igapp-body { display: block; }
+
+/* ── 聊天设置 · 页内子视图 ─────────────────────────────────────
+ *
+ * API 表单、备份、存储用量这些「独立一页」的内容，
+ * 用同一个返回头条 + 卡片堆叠的骨架，保证翻进去的观感一致。
+ */
+.mi-set-subview__head {
+  padding: 4px 0 18px;
+}
+.mi-set-subview__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--st-text-secondary, #6B6B6B);
+  background: transparent;
+  border: 1px solid var(--st-border-strong, rgba(0, 0, 0, 0.08));
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mi-set-subview__back:active { background: rgba(0, 0, 0, 0.03); }
+
+.mi-set-subview__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--st-text-primary, #1A1A1A);
+}
+.mi-set-subview__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--st-text-tertiary, #999999);
+}
+
+.mi-set-subview__card {
+  margin-bottom: 14px;
+}
+.mi-set-subview__card .st-form-section__title {
+  margin: 0 0 12px;
+}
+
+.mi-set-subview__actions {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0 calc(20px + env(safe-area-inset-bottom));
+}
+.mi-set-subview__actions .st-action-btn { flex: 1; }

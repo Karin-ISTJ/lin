@@ -122,7 +122,6 @@
     function getOverlayAppApis() {
         return [
             global.miyaBeautifyApp,
-            global.miyaSettingsApp,
             global.miyaWorldbookApp,
             global.miyaContactsApp,
             global.miyaMemoryApp,
@@ -133,7 +132,7 @@
     }
 
     var OVERLAY_APP_SELECTOR =
-        '.miya-beautify-app.is-open, .miya-settings-app.is-open, .miya-worldbook-app.is-open, ' +
+        '.miya-beautify-app.is-open, .mi-set-page.is-open, .miya-worldbook-app.is-open, ' +
         '.miya-contacts-app.is-open, #miya-memory-app.is-open, ' +
         '#miya-itinerary-app.is-open, ' +
         '#miya-couple-app.is-open, #miya-offline-app.is-open';

@@ -1328,7 +1328,7 @@
     app.classList.remove('is-open');
     app.setAttribute('hidden', '');
     app.setAttribute('aria-hidden', 'true');
-    if (!document.querySelector('.miya-settings-app.is-open') &&
+    if (!document.querySelector('.mi-set-page.is-open') &&
         !document.querySelector('.miya-worldbook-app.is-open')) {
       document.body.classList.remove('miya-app-open');
     }

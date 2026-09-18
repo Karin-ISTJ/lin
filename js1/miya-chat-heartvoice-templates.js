@@ -219,8 +219,8 @@
       global.miyaChatApp.toast(msg);
       return;
     }
-    if (global.miyaSettingsApp && global.miyaSettingsApp.toast) {
-      global.miyaSettingsApp.toast(msg);
+    if (typeof global.miyaToast === 'function') {
+      global.miyaToast(msg);
       return;
     }
     var el = document.createElement('div');

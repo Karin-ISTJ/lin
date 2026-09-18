@@ -40,15 +40,14 @@
   var audioCtx = null;
   var playingAudio = null;
   var blobUrlCache = Object.create(null);
-  var uiBound = false;
   /* 最近一次「UI 反馈音」的播放记录，供排查与测试断言（headless 下听不到声） */
   var lastPlay = null;
 
   function $(id) { return document.getElementById(id); }
 
   function toast(msg) {
-    if (global.miyaSettingsApp && typeof global.miyaSettingsApp.toast === 'function') {
-      global.miyaSettingsApp.toast(msg);
+    if (typeof global.miyaToast === 'function') {
+      global.miyaToast(msg);
       return;
     }
     var div = document.createElement('div');
@@ -465,9 +464,20 @@
   }
 
   function bindSettingsUi() {
-    if (uiBound) return;
-    uiBound = true;
-
+    /*
+     * 每次打开面板都重新绑。
+     *
+     * 这段原先用一次性 `uiBound` 守卫 —— 在桌面设置 App 里成立，因为那块面板
+     * 是 index.html 里的静态 DOM，绑一次就一直在。
+     *
+     * 现在提示音面板搬进了「联系人聊天设置」的子视图，而那个页面是整页
+     * innerHTML 重绘（renderPage）：重绘后旧节点连事件一起被丢掉，
+     * 守卫却已经置位，于是第二次进来点开关就没反应了（静默失效）。
+     *
+     * 换成 dataset.bound 也没用 —— 新节点上没有这个标记，但旧节点的监听
+     * 已经随节点一起消失，所以「每次都绑」才是这里唯一正确的做法。
+     * 节点每次都是新的，重复绑不会叠加。
+     */
     var sw = $('miya-st-sw-msgsound');
     if (sw) {
       sw.addEventListener('click', function () {

@@ -125,7 +125,6 @@
   var APP_FONT_TARGETS = [
     { key: 'chat', label: '聊天', selectors: ['.miya-chat-app'] },
     { key: 'chat-timestamp', label: '聊天时间戳' },
-    { key: 'set', label: '设置', selectors: ['.miya-settings-app'] },
     { key: 'book', label: '世界书', selectors: ['.miya-worldbook-app'] },
     { key: 'memory', label: '记忆', selectors: ['.miya-memory-app'] },
     { key: 'store', label: '线下', selectors: ['.miya-offline-app'] },
@@ -960,7 +959,7 @@
   }
 
   function onHomeCopyPointer(e) {
-    if (e.target.closest('.miya-beautify-app, .miya-settings-app, .miya-worldbook-app, .modal, #modal')) return;
+    if (e.target.closest('.miya-beautify-app, .mi-set-page, .miya-worldbook-app, .modal, #modal')) return;
     if (activeCopyInput) {
       if (activeCopyInput.el.contains(e.target)) return;
       closeCopyInput(true);

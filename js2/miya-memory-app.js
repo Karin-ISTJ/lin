@@ -587,7 +587,7 @@
     el.setAttribute('hidden', '');
     el.setAttribute('aria-hidden', 'true');
     if (!document.querySelector('.miya-beautify-app.is-open') &&
-        !document.querySelector('.miya-settings-app.is-open') &&
+        !document.querySelector('.mi-set-page.is-open') &&
         !document.querySelector('.miya-worldbook-app.is-open') &&
         !document.querySelector('.miya-chat-app.is-open') &&
         !document.querySelector('.miya-memory-app.is-open')) {
