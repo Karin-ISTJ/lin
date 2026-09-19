@@ -677,6 +677,50 @@
     }
 
     /**
+     * 删除线下楼层时，回收由该楼层写入的记忆表内容。
+     *
+     * ── 与线上版（miya-chat-store 的 purgeMemoryRowsBySource）的关系 ──
+     * 两者调用的是同一个底层实现 MiyaMemoryTableStore.removeRowsBySource，
+     * 差别只在**传什么 id**：
+     *   · 线上：传聊天室消息 id（记忆表写入时记的来源就是它）
+     *   · 线下：传线下会话消息 id（线下引擎回传的 result.message.id）
+     *
+     * 记忆表按 chatId 分桶，线上线下共用同一个桶 —— 所以这里**不需要**
+     * 传 chatId，removeRowsBySource 会遍历所有桶按来源 id 回收。
+     * 这是刻意设计：一条线下消息的镜像可能散落在多个线上线程
+     *（主线 + castMirrors），而记忆行只认「线下消息 id」这一个坐标。
+     *
+     * 老数据没有溯源信息时底层会退化为「不回收」，不会误删。
+     *
+     * @param {string} messageId 线下会话消息 id
+     */
+    function purgeMemoryRowsBySource(messageId) {
+        var mid = String(messageId || '').trim();
+        if (!mid) return;
+        var mts = global.MiyaMemoryTableStore;
+        if (!mts || typeof mts.removeRowsBySource !== 'function') return;
+        try {
+            return mts.removeRowsBySource(null, [mid]).then(function (res) {
+                var n = res && Number(res.removed) || 0;
+                /* 只有真的删掉了行才提示，避免每删一条都弹（多数楼层没写过记忆） */
+                if (n > 0) {
+                    try {
+                        if (global.miyaChatRoom && global.miyaChatRoom.toast) {
+                            global.miyaChatRoom.toast('已同步回收 ' + n + ' 行记忆表内容');
+                        }
+                    } catch (eToast) {}
+                }
+                return n;
+            }).catch(function () {
+                /* 记忆回收失败不应阻断删除流程本身 */
+                return 0;
+            });
+        } catch (e) {
+            return Promise.resolve(0);
+        }
+    }
+
+    /**
      * 把一条线下消息的最新内容同步到它在线上的全部镜像。
      *
      * 与 purgeMessageOnlineMirrors 成对：删除会清掉所有落点，编辑也应覆盖所有落点，
@@ -2359,6 +2403,23 @@
              * 基于 id 的查找继续歧义。软删后立刻压实。
              */
             store._dedupeMessages(chatId, sessionId);
+            /*
+             * 回收由这一层写入的记忆表内容 —— 线下侧的对应收口。
+             *
+             * 记忆表（miya-memory-tables-v1）按 chatId 分桶，线上线下共用同一个桶
+             * （线下引擎也是拿线上 chatId 调 MiyaMemoryTableApp）。
+             * 但行溯源记的是**线下消息 id**（见 afterGenerate 的 result.message），
+             * 因此这里必须用线下消息 id 去回溯，才能命中线下写入的那些行。
+             *
+             * 为什么必须在本函数收口，而不是在调用方：
+             * 线下删除楼层的入口有多个（单条删除、刷新键、removeMessagesFrom
+             * 的批量循环），但它们最终**全部**收敛到本函数。
+             * 在这一处收口，上面的删除链路不用各改一遍，也不会漏。
+             *
+             * 位置放在 _dedupeMessages 之后：压实完成后再回收，
+             * 避免一边删行一边还在按 id 查找的中间态干扰。
+             */
+            purgeMemoryRowsBySource(messageId);
             return last;
         },
         /*

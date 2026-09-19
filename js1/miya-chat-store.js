@@ -4792,6 +4792,62 @@
         },
 
         /*
+         * 删除楼层后，回收由这些楼层写入的记忆表行。
+         *
+         * ── 为什么需要 ──
+         * 记忆表（miya-memory-tables-v1）与聊天消息（miya-chat-meta）是两套独立存储，
+         * 且记忆表按 chatId 分桶。删除楼层**不改 chatId、不删会话**，
+         * 于是桶、表、行全部原封不动，下一轮生成立刻被重新注入 ——
+         * 表现为「我删过的那段剧情，AI 还记得」。
+         *
+         * 另外三个删除入口（清空记录 / 删会话 / 删联系人）都已收口，
+         * 只有 deleteMessage / deleteMessages 漏了。但这里**不能**照搬它们的
+         * resetChat / dropChat：那两个是「整个会话」粒度，而本路径删的是
+         * 「某几层」，一刀清空等于「删一层 = 失忆」，误伤远大于收益。
+         *
+         * 正确做法是按**行溯源**精确回收：每行在写入时记录了来源消息 id
+         * （见 MiyaMemoryTableEngine.processAssistantReply），
+         * 这里把来源命中被删楼层的行摘掉，其余行完整保留。
+         *
+         * 老数据没有溯源信息时函数内部会退化为「不回收」，
+         * 绝不会因为溯源缺失而误删有效记忆。
+         *
+         * @param {string} chatId
+         * @param {string[]} removedMsgIds
+         */
+        purgeMemoryRowsBySource: function (chatId, removedMsgIds) {
+            var cid = String(chatId || '').trim();
+            var ids = (Array.isArray(removedMsgIds) ? removedMsgIds : [])
+                .map(function (x) { return String(x || '').trim(); })
+                .filter(Boolean);
+            if (!cid || !ids.length) return Promise.resolve(0);
+            var mts = global.MiyaMemoryTableStore;
+            if (!mts || typeof mts.removeRowsBySource !== 'function') return Promise.resolve(0);
+            return mts
+                .removeRowsBySource(cid, ids)
+                .then(function (res) {
+                    var n = res && Number(res.removed) || 0;
+                    /*
+                     * 只有真的删掉了行才提示。
+                     * 绝大多数楼层并没有写入过记忆（闲聊不落表），
+                     * 若无差别弹提示，用户每删一条都看到「已回收记忆」会很吵。
+                     */
+                    if (n > 0) {
+                        try {
+                            if (global.miyaChatRoom && global.miyaChatRoom.toast) {
+                                global.miyaChatRoom.toast('已同步回收 ' + n + ' 行记忆表内容');
+                            }
+                        } catch (eToast) {}
+                    }
+                    return n;
+                })
+                .catch(function () {
+                    /* 记忆回收失败不应阻断删除流程本身 */
+                    return 0;
+                });
+        },
+
+        /*
          * 删除消息后统一收口：把被删消息占用的「可见序号区间」交给各摘要模块调整索引。
          *
          * 背景：摘要（summaryList / megaSummaryList）与角色记忆（charMemoryList）用
@@ -4917,6 +4973,9 @@
             return store
                 .adjustIndicesAfterRemoval(chatId, removedIndexes)
                 .then(function () {
+                    return purgeMemoryRowsBySource(chatId, removedIdList);
+                })
+                .then(function () {
                     return refreshChatPreviewFromVisible(chatId, { bumpNow: false });
                 })
                 .then(function () {
@@ -4973,6 +5032,10 @@
              * 预览会读取摘要内容，若索引已错位，预览里显示的摘要区间也是错的。
              */
             var chain = store.adjustIndicesAfterRemoval(chatId, removedIndexes);
+            /* 记忆表按行溯源回收（与 deleteMessage 同一收口，理由见该函数注释） */
+            chain = chain.then(function () {
+                return store.purgeMemoryRowsBySource(chatId, removedIdList);
+            });
             chain = chain.then(function () {
                 return refreshChatPreviewFromVisible(chatId, { bumpNow: false });
             });
@@ -5052,7 +5115,19 @@
             var removedIds = slice.map(function (m) {
                 return m.id;
             });
-            var chain = refreshChatPreviewFromVisible(cid, { bumpNow: false });
+            /*
+             * 记忆表按行溯源回收。
+             *
+             * purgeMessagesRange 是「重回 / 重新生成」用的区间删除，
+             * 与 deleteMessages 同属「删掉若干楼层」的语义 ——
+             * 只是粒度从「零散楼层」变成「连续区间」，
+             * 因此同样必须回收由这些楼层写入的记忆，否则重回后
+             * AI 依然记得被重写掉的那一版剧情。
+             */
+            var chain = store.purgeMemoryRowsBySource(cid, removedIds);
+            chain = chain.then(function () {
+                return refreshChatPreviewFromVisible(cid, { bumpNow: false });
+            });
             if (
                 JSON.stringify(nextSummary) !== JSON.stringify(settings.summaryList) ||
                 JSON.stringify(nextMega) !== JSON.stringify(settings.megaSummaryList) ||

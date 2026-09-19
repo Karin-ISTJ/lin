@@ -372,26 +372,75 @@
     if (!eng) return;
     // online path 返回的是已落库的消息数组，离线/预约路径返回 { message, raw } 等
     var text = '';
+    /*
+     * sourceMsgIds 收集本轮落地消息的 id，供行溯源使用（见 processAssistantReply）。
+     *
+     * 在线路径 ctx.result = { messages: [...], thinking }，其中 messages 是
+     * **已落库**的消息数组，每条都带 id；离线/预约路径 result 形如
+     * { message, raw } 或字符串，只有能拿到 id 时才建立溯源。
+     */
+    var sourceMsgIds = [];
+    function collectIds(list) {
+      (Array.isArray(list) ? list : []).forEach(function (m) {
+        if (!m || typeof m !== 'object') return;
+        if (!m.id) return;
+        var s = String(m.id).trim();
+        if (s && sourceMsgIds.indexOf(s) < 0) sourceMsgIds.push(s);
+      });
+    }
     if (typeof ctx.result === 'string') {
       text = ctx.result;
     } else if (Array.isArray(ctx.result)) {
       // 在线路径：[{role, content}, ...]，取 assistant 正文拼接
-      text = ctx.result
-        .filter(function (m) {
-          return m && m.role === 'assistant' && !m.excludedFromContext &&
-            String(m.type || 'text') === 'text' && m.content;
-        })
+      var assistantMsgs = ctx.result.filter(function (m) {
+        return m && m.role === 'assistant' && !m.excludedFromContext &&
+          String(m.type || 'text') === 'text' && m.content;
+      });
+      text = assistantMsgs
         .map(function (m) { return String(m.content); })
         .join('\n');
+      /*
+       * 溯源只认「确实承载了 <tableEdit> 的那条消息」。
+       * 若一轮有多个气泡，不能把正文消息 id 也当作来源 ——
+       * 那样删掉一条旁白就会连带回收正文写入的记忆。
+       * 因此这里只收集正文里真的出现 tableEdit 的消息。
+       */
+      assistantMsgs.forEach(function (m) {
+        if (/<tableEdit>/i.test(String(m.content || ''))) collectIds([m]);
+      });
+      if (!sourceMsgIds.length) collectIds(assistantMsgs);
+    } else if (ctx.result.messages) {
+      /* { messages: [...] } 形态（与在线路径同源，兼容直接透传 ctx.result 的调用方） */
+      var msgs = (ctx.result.messages || []).filter(function (m) {
+        return m && m.role === 'assistant' && String(m.content || '').trim();
+      });
+      text = msgs
+        .map(function (m) { return String(m.content); })
+        .join('\n');
+      msgs.forEach(function (m) {
+        if (/<tableEdit>/i.test(String(m.content || ''))) collectIds([m]);
+      });
+      if (!sourceMsgIds.length) collectIds(msgs);
     } else if (ctx.result.reply) {
       text = ctx.result.reply;
+      if (ctx.result.message) collectIds([ctx.result.message]);
     } else if (ctx.result.message && ctx.result.message.content) {
+      /*
+       * 线下（预约）路径：引擎回传 result = { message, lines, raw }。
+       * message 是**已落库**的 assistant 消息，带 id —— 正是线下楼层的来源标识。
+       *
+       * 注意这里的 id 是**线下会话消息 id**（appointment store 里的 id），
+       * 不是线上聊天室的消息 id。两者互不冲突：线下的删除入口
+       * （MiyaAppointmentStore.deleteMessage）拿到的也正是这个 id，
+       * 因此删除时按同一口径回溯即可命中。
+       */
       text = ctx.result.message.content;
+      collectIds([ctx.result.message]);
     } else if (ctx.result.raw) {
       text = ctx.result.raw;
     }
     if (!text) return;
-    var res = eng.processAssistantReply(chatId, text);
+    var res = eng.processAssistantReply(chatId, text, { sourceMsgIds: sourceMsgIds });
     /*
      * 把「写入未生效」摆到用户眼前。
      *

@@ -630,8 +630,36 @@
     }
   }
 
-  function applyActions(tables, actions, settings) {
+  /**
+   * 应用记忆表写入动作。
+   *
+   * @param {Array} tables
+   * @param {Array} actions
+   * @param {object} settings
+   * @param {object} [incomingRowSource] 既有的行溯源表。传入后会随动作执行
+   *        同步维护（insertRow 裁剪 / deleteRow 位移都要重排），
+   *        并在返回值里给出更新后的溯源表。
+   *        不传则只维护本轮 placements，行为与改动前一致。
+   */
+  function applyActions(tables, actions, settings, incomingRowSource) {
     var maxRows = (settings && settings.maxRowsPerTable) || 40;
+    var rowKey = function (ti, ri) {
+      return String(ti) + ':' + String(ri);
+    };
+    var parseRowKey = function (k) {
+      var m = /^(\d+):(\d+)$/.exec(String(k || ''));
+      return m ? { tableIndex: parseInt(m[1], 10), rowIndex: parseInt(m[2], 10) } : null;
+    };
+    var rowSource =
+      incomingRowSource && typeof incomingRowSource === 'object'
+        ? (function () {
+            var c = {};
+            Object.keys(incomingRowSource).forEach(function (k) {
+              c[k] = incomingRowSource[k];
+            });
+            return c;
+          })()
+        : null;
     var next = tables.map(function (t) {
       return {
         id: t.id,
@@ -654,6 +682,19 @@
      * 用户在聊天里完全无感，模型说了要记、表格却没变，只能反复重试。
      */
     var fail = [];
+    /*
+     * placements 记录「这次写入落地到了哪一行」，供上层建立行溯源。
+     *
+     * ── 为什么必须在这里采集，而不能由上层事后推算 ──
+     * insertRow 的目标行号是**运行时确定**的（= push 前的 rows.length），
+     * 上层拿到的 tables 是终态，无法区分「本来就存在的行」和「本轮新增的行」。
+     * 因此必须在动作执行的当下捕获。
+     *
+     * ⚠️ 行号会因裁剪而失效：insertRow 超过 maxRowsPerTable 时从头部裁行，
+     * 所有既有行号整体左移。这里在每次裁剪后**立即重排已采集的位置**，
+     * 保证 placements 里的行号始终对应 tables 的终态。
+     */
+    var placements = [];
     actions.forEach(function (act) {
       var args = parseArgs(act.rawArgs);
       if (!args || !args.length) {
@@ -678,12 +719,85 @@
           return sanitizeCell(v);
         });
         table.rows.push(row);
-        if (table.rows.length > maxRows) table.rows = table.rows.slice(-maxRows);
+        /* 新增行落地的行号（裁剪前）—— 供行溯源使用 */
+        var placedRow = table.rows.length - 1;
+        if (table.rows.length > maxRows) {
+          /*
+           * 从头部裁掉溢出行，所有行号整体左移 cut 位。
+           * 已采集的 placements 必须同步左移，并把被裁掉的那些**丢掉** ——
+           * 它们对应的行已经不存在了，若保留，将来删楼层时会误删
+           * 恰好落到同一行号上的无辜内容。
+           */
+          var cut = table.rows.length - maxRows;
+          table.rows = table.rows.slice(-maxRows);
+          placements = placements
+            .filter(function (p) {
+              return p.tableIndex !== ti || p.rowIndex >= cut;
+            })
+            .map(function (p) {
+              if (p.tableIndex !== ti) return p;
+              return { tableIndex: p.tableIndex, rowIndex: p.rowIndex - cut, op: p.op };
+            });
+          /* 既有溯源同步左移，被裁掉的行溯源一并丢弃（理由同 deleteRow 分支） */
+          if (rowSource) {
+            var trimmed = {};
+            Object.keys(rowSource).forEach(function (k) {
+              var p = parseRowKey(k);
+              if (!p || p.tableIndex !== ti) {
+                trimmed[k] = rowSource[k];
+                return;
+              }
+              if (p.rowIndex < cut) return; /* 该行已被裁掉 */
+              trimmed[rowKey(ti, p.rowIndex - cut)] = rowSource[k];
+            });
+            rowSource = trimmed;
+          }
+          placedRow -= cut;
+        }
+        if (placedRow >= 0) {
+          placements.push({ tableIndex: ti, rowIndex: placedRow, op: 'insertRow' });
+        }
         log.push('insertRow ' + ti);
       } else if (act.op === 'deleteRow') {
         var ri = Number(args[1]);
         if (Number.isFinite(ri) && ri >= 0 && ri < table.rows.length) {
           table.rows.splice(ri, 1);
+          /*
+           * 删行会让该表内**其后所有行号减一**，两处都必须同步重排：
+           *   ① 本轮已采集的 placements（否则追出来的行号指向错误的行）；
+           *   ② **既有的 rowSource**（见 applyActions 的 rowSource 参数）。
+           *
+           * ② 曾经漏掉，后果实测为：模型用 deleteRow 删掉第 0 行后，
+           * 原本第 1、2 行的溯源仍停留在旧行号上，整体错位一格 ——
+           * 之后删楼层就会回收错的行。这是「行号会失效」的第二种情形，
+           * 与 maxRows 头部裁剪（第一种）一样必须在写入当下同步处理。
+           */
+          placements = placements
+            .filter(function (p) {
+              return !(p.tableIndex === ti && p.rowIndex === ri);
+            })
+            .map(function (p) {
+              if (p.tableIndex !== ti || p.rowIndex < ri) return p;
+              return { tableIndex: p.tableIndex, rowIndex: p.rowIndex - 1, op: p.op };
+            });
+          if (rowSource && typeof rowSource === 'object') {
+            var shifted = {};
+            Object.keys(rowSource).forEach(function (k) {
+              var p = parseRowKey(k);
+              if (!p) {
+                shifted[k] = rowSource[k];
+                return;
+              }
+              if (p.tableIndex !== ti) {
+                shifted[k] = rowSource[k];
+                return;
+              }
+              if (p.rowIndex === ri) return; /* 该行没了，溯源一并回收 */
+              var nextRow = p.rowIndex < ri ? p.rowIndex : p.rowIndex - 1;
+              shifted[rowKey(ti, nextRow)] = rowSource[k];
+            });
+            rowSource = shifted;
+          }
           log.push('deleteRow ' + ti + ',' + ri);
         } else {
           fail.push({ op: act.op, reason: 'rowIndex', tableIndex: ti, rowIndex: ri });
@@ -699,6 +813,15 @@
               table.rows[riu][ci] = sanitizeCell(v);
             }
           });
+          /*
+           * updateRow 也计入溯源。
+           *
+           * 理由：模型「更新」一行往往是把这一行改写成当前剧情的内容，
+           * 该行的信息此刻已经归属于本轮楼层。若不给它打上本轮来源，
+           * 删掉本轮楼层后这行会以「前一轮的旧来源」留存下来，
+           * 内容却是被删楼层写的 —— 正是用户抱怨的「幽灵行」。
+           */
+          placements.push({ tableIndex: ti, rowIndex: riu, op: 'updateRow' });
           log.push('updateRow ' + ti + ',' + riu);
         } else {
           fail.push({ op: act.op, reason: 'rowIndex', tableIndex: ti, rowIndex: riu });
@@ -708,7 +831,14 @@
         fail.push({ op: act.op, reason: 'unknownOp' });
       }
     });
-    return { tables: next, log: log, failures: fail };
+    return {
+      tables: next,
+      log: log,
+      failures: fail,
+      placements: placements,
+      /* 传入了既有溯源才回传，避免调用方误以为拿到的是一份完整溯源表 */
+      rowSource: rowSource
+    };
   }
 
   /** 把失败明细压成一句给用户看得懂的话；没有失败返回空串 */
@@ -732,7 +862,17 @@
     return '记忆表：' + n + ' 条写入未生效（' + parts.join('、') + '）';
   }
 
-  function processAssistantReply(chatId, replyText) {
+  /**
+   * 处理一轮回复里的记忆表写入。
+   *
+   * @param {string} chatId
+   * @param {string} replyText
+   * @param {{sourceMsgIds?: string[]}} [opts] sourceMsgIds 为本轮落地消息的 id
+   *        （通常一个或多个 assistant 气泡）。用于建立**行溯源**：
+   *        把这次写入的行标记为「由这些楼层生成」，用户删除楼层时即可精确回收。
+   *        不传则只写表、不更新溯源（保持既有调用方的行为不变）。
+   */
+  function processAssistantReply(chatId, replyText, opts) {
     var store = global.MiyaMemoryTableStore;
     if (!store) return { text: replyText, applied: false };
     var settings = store.loadSettings();
@@ -743,9 +883,56 @@
     var clean = stripTableEditFromReply(replyText);
     if (!actions.length) return { text: clean, applied: false };
     var tables = store.getChatTables(chatId);
-    var result = applyActions(tables, actions, settings);
+    /*
+     * 把既有溯源交给 applyActions 一起维护：
+     * insertRow 触发 maxRows 头部裁剪、deleteRow 造成行号位移时，
+     * 已存在的溯源必须同步重排，否则会整体错位。
+     */
+    var prevSource =
+      typeof store.getChatRowSource === 'function' ? store.getChatRowSource(chatId) || {} : {};
+    var result = applyActions(tables, actions, settings, prevSource);
     /* 只要有动作成功落地，才写库；全部失败则保持原样，不动用户数据 */
-    if (result.log.length) store.setChatTables(chatId, result.tables);
+    if (result.log.length) {
+      /*
+       * 溯源基准必须用 applyActions 回传的那一份。
+       *
+       * 它在动作执行过程中已被同步重排（maxRows 裁剪 / deleteRow 位移引起
+       * 的行号变化）。若改用 store.getChatRowSource() 重新读取，
+       * 拿到的是**尚未落库的旧行号**，会让重排白做、溯源重新错位。
+       * result.rowSource 为 null 表示本次没传既有溯源，用空表即可。
+       */
+      var nextSource = result.rowSource || {};
+      var srcIds = ((opts && opts.sourceMsgIds) || [])
+        .map(function (x) {
+          return String(x || '').trim();
+        })
+        .filter(Boolean);
+      if (srcIds.length && typeof store.rowKey === 'function') {
+        /*
+         * 以一个「代表 id」标记本轮写入的所有行。
+         *
+         * 为什么不给每条消息 id 各标一次：一轮回复可能有多个气泡
+         * （正文 / 旁白 / 系统提示），但它们同属这一轮生成，
+         * 删除其中任一条都意味着这一轮剧情不再成立，此时该轮写入的记忆
+         * 都应当一起回收。因此统一用**首个落地消息 id** 作为该轮代表，
+         * 避免出现「删了旁白但正文的记忆还在」的碎片状态。
+         */
+        var repId = srcIds[0];
+        (result.placements || []).forEach(function (p) {
+          /*
+           * 同一行被本轮多次写入时，直接覆盖为最新来源即可 ——
+           * 后者胜出与表格「最后一笔生效」的语义一致。
+           */
+          nextSource[store.rowKey(p.tableIndex, p.rowIndex)] = repId;
+        });
+        /*
+         * 重新写入的行（updateRow）会让该行**脱离**旧楼层的归属：
+         * 上面已用新代表 id 覆盖了它的键，无需额外处理。
+         * 而本轮没碰过的行，其溯源保持不变 —— 删旧楼层时它们才该被回收。
+         */
+      }
+      store.setChatTables(chatId, result.tables, nextSource);
+    }
     try {
       console.log('[MiyaMemoryTable] applied', result.log, result.failures);
     } catch (e) {}
@@ -805,6 +992,14 @@
     applyActions: applyActions,
     describeFailures: describeFailures,
     injectIntoMessages: injectIntoMessages,
+    /** 供删除链路调用：按来源楼层回收记忆表行 */
+    removeRowsBySource: function (chatId, removedMsgIds) {
+      var store = global.MiyaMemoryTableStore;
+      if (!store || typeof store.removeRowsBySource !== 'function') {
+        return Promise.resolve({ removed: 0, tables: [] });
+      }
+      return store.removeRowsBySource(chatId, removedMsgIds);
+    },
     tableToCsvBlock: tableToCsvBlock,
     parseArgs: parseArgs,
     sanitizeCell: sanitizeCell
