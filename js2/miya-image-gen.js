@@ -63,18 +63,46 @@
    * 各方言的可选尺寸。generic 直接复用 NovelAI 那套 ——
    * 因为它们约束完全相同（都是 64 倍数、64–1600），
    * NovelAI 尺寸集里已经含真 3:4（768x1024）和真 4:3（1024x768）。
+   *
+   * ⚠️ 2026-09 修正：generic 的候选集**收窄到比例白名单**。
+   *
+   * 原先这里放的是 NovelAI 全集，含 832x1216（13:19 ≈ 0.684）这类
+   * **只有 NovelAI 自己认**的冷门比例。用户选中它 → 原样发给中转站
+   * → 撞 aspect_ratio 白名单 → 400。下拉里能选到一个注定失败的值，
+   * 是把 bug 摆在用户面前让他踩。
+   *
+   * 现在只保留三方（OpenAI / SD / NAI 中转站）交集里都会认的比例。
+   * NovelAI 直连仍走它自己的全集（见 NOVELAI_SIZES），因为直连时
+   * 832x1216 恰恰是官方标准档，收窄了反而错。
    */
   var GENERIC_SIZES = [
     /* 竖版：由窄到宽 */
+    { v: '1024x1792', label: '9:16 竖版' },
     { v: '1024x1536', label: '2:3 竖版' },
+    { v: '1024x1024', label: '1:1 正方形' },
+    /* 横版：由窄到宽 */
+    { v: '1536x1024', label: '3:2 横版' },
+    { v: '1792x1024', label: '16:9 横版' }
+  ];
+
+  /*
+   * NovelAI **直连**的尺寸全集。
+   *
+   * 与 GENERIC_SIZES 分开是有意的：直连 image.novelai.net 时，
+   * 832x1216 是官方标准竖版档，必须留着；而走中转站时它是 400 的
+   * 元凶。同一串数字在两个端点上的合法性不同 —— 这正是本文开头
+   * 「决定尺寸约束的是端点，不是模型名」那句话的具体后果。
+   */
+  var NOVELAI_SIZES = [
     { v: '832x1216', label: '13:19 竖版（NovelAI 标准）' },
+    { v: '1024x1536', label: '2:3 竖版' },
     { v: '768x1024', label: '3:4 竖版' },
     { v: '960x1280', label: '3:4 竖版（大）' },
     { v: '1024x1024', label: '1:1 正方形' },
     { v: '1472x1472', label: '1:1 正方形（高清）' },
-    /* 横版：由窄到宽 */
     { v: '1024x768', label: '4:3 横版' },
     { v: '1280x960', label: '4:3 横版（大）' },
+    { v: '1216x832', label: '19:13 横版（NovelAI 标准）' },
     { v: '1536x1024', label: '3:2 横版' }
   ];
 
@@ -124,22 +152,23 @@
    *
    * 纠正策略按方言区分，因为「救回来」和「不要乱动」的取舍不同：
    *   generic / custom —— 用户可能填了非法数值，就近映射到合法尺寸，
-   *                       因为这些站的规则明确（64 倍数），救得回来
+   *                       因为这些站的规则明确（64 倍数 + 比例白名单），救得回来
    *   dalle2/3/gptimage —— **不纠正**。它们的尺寸是硬白名单，
    *                       猜错模型去替换，很可能改成另一个同样被拒的值，
    *                       不如原样发出去让服务端明确报错
+   *
+   * ⚠️ generic 是**双约束**：64 倍数 **和** 比例白名单。
+   *
+   * 曾经这里只用 normalizeNovelAiSize（单约束：64 倍数），
+   * 结果 832x1216（13:19）这种「数值合法、比例冷门」的值被原样放行，
+   * 撞中转站的 aspect_ratio 白名单吃 400。数值合法 ≠ 比例合法。
    */
   function resolveSizeForDialect(sizeStr, dialect) {
     var d = normalizeSizeDialect(dialect);
     var raw = trim(sizeStr);
 
     if (d === SIZE_DIALECTS.GENERIC) {
-      var fixed = normalizeNovelAiSize(raw);
-      return {
-        size: fixed,
-        changed: fixed !== raw,
-        reason: fixed !== raw ? '该尺寸不符合 64 倍数规则，已就近调整为 ' + fixed : ''
-      };
+      return normalizeGenericSize(raw);
     }
 
     if (d === SIZE_DIALECTS.CUSTOM) {
@@ -228,6 +257,118 @@
     { ratio: 9 / 16, v: '832x1216' },
     { ratio: 16 / 9, v: '1216x832' }
   ];
+
+  /*
+   * ── 中转站的比例白名单（generic 方言专用）──────────────────────
+   *
+   * ⚠️ 这一段是被真实 400 打出来的，不是推演：
+   *
+   *   POST https://api.rua.chat/v1/images/generations
+   *   尺寸选了下拉里的「13:19 竖版（NovelAI 标准）」= 832x1216
+   *   → HTTP 400
+   *     {"error":{"message":"aspect_ratio 不受支持…",
+   *               "type":"invalid_request_error"}}
+   *
+   * 关键认知：**中转站校验的是「比例」，不是「64 倍数」。**
+   *
+   * 旧的 normalizeNovelAiSize 只认 NovelAI 那一条规则（宽高各为 64 的
+   * 倍数、64–1600），832x1216 完美通过 —— 于是被原样发出去，撞上
+   * 中转站的比例白名单，400。数值合法 ≠ 比例合法，这是两件事。
+   *
+   * 832x1216 ≈ 0.684（13:19），这是个**只有 NovelAI 自己爱用**的冷门比例；
+   * 主流白名单里根本没有这一档，所以它必然被判非法。
+   *
+   * 所以 generic 方言要**双约束**：先过 64 倍数，再过比例白名单。
+   * 比例不在白名单里就吸附到最近的合法档 —— 用户表达的是「我要张竖图」，
+   * 而不是「我要精确的 0.684」，就近吸附符合意图；硬顶着发出去只会 400。
+   *
+   * 白名单取的是 OpenAI / SD / NAI 三方**交集里最保守的一组**，
+   * 覆盖 DALL·E 3、GPT-Image、SD 系、NAI 系中转站都会认的比例。
+   */
+  var GENERIC_RATIO_WHITELIST = [
+    { ratio: 1, v: '1024x1024', label: '1:1 正方形' },
+    { ratio: 2 / 3, v: '1024x1536', label: '2:3 竖版' },
+    { ratio: 3 / 2, v: '1536x1024', label: '3:2 横版' },
+    { ratio: 9 / 16, v: '1024x1792', label: '9:16 竖版' },
+    { ratio: 16 / 9, v: '1792x1024', label: '16:9 横版' }
+  ];
+
+  /*
+   * 比例吸附：把任意比例映射到白名单里最近的一档。
+   *
+   * 用**比例空间的相对差**而不是绝对差来比较 —— 因为 3:2 (1.5) 与
+   * 16:9 (1.778) 的绝对差是 0.278，而 2:3 (0.667) 与 9:16 (0.563) 的
+   * 绝对差只有 0.104，用绝对差会把竖版判断得比横版「更不准」，
+   * 这是几何量的量纲问题。相对差能抵消掉这个不对称。
+   *
+   * 返回 { v, ratio, diff }，diff 是相对差，供调用方决定要不要提示用户。
+   */
+  function nearestGenericRatio(ratio) {
+    var best = null;
+    var bestDiff = Infinity;
+    GENERIC_RATIO_WHITELIST.forEach(function (row) {
+      var diff = Math.abs(row.ratio - ratio) / row.ratio;
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = row;
+      }
+    });
+    return best ? { v: best.v, ratio: best.ratio, label: best.label, diff: bestDiff } : null;
+  }
+
+  /*
+   * generic 方言的尺寸解析：**先验 64 倍数，再验比例白名单**。
+   *
+   * 两步都不能省：
+   *   · 只验 64 倍数  → 832x1216 这类冷门比例漏过去，撞 aspect_ratio 400（就是这次的 bug）
+   *   · 只验比例白名单 → 数值本身可能不合法（如 500x750），被别家站点拒
+   */
+  function normalizeGenericSize(v) {
+    var raw = trim(v);
+    var p = parseSizeInput(raw);
+    if (!p) return { size: '1024x1024', changed: raw !== '1024x1024', reason: '' };
+
+    if (p.w && p.h) {
+      var ok = function (n) { return n >= 64 && n <= 1600 && n % 64 === 0; };
+      if (ok(p.w) && ok(p.h)) {
+        /* 数值合法 → 再过比例白名单 */
+        var hit = nearestGenericRatio(p.w / p.h);
+        if (hit && hit.diff <= 0.02) {
+          /* 已经是白名单内的比例（相对差 2% 内视为同一档），原样放行 */
+          return { size: p.w + 'x' + p.h, changed: false, reason: '' };
+        }
+        if (hit) {
+          /*
+           * 比例冷门，但能吸附到白名单档位 —— 换掉。
+           *
+           * 阈值给得很宽（0.35）：这里的目标是「保证能出图」，
+           * 而不是「精确还原用户的冷门比例」。因为比例白名单是站点
+           * 硬约束，没有谈判空间：不发合法比例就是 400。
+           */
+          if (hit.diff <= 0.35) {
+            return {
+              size: hit.v,
+              changed: true,
+              reason: raw + ' 的比例（' + (p.w / p.h).toFixed(3) + '）不在中转站的比例白名单内，已就近调整为 ' + hit.label + '（' + hit.v + '）'
+            };
+          }
+        }
+      }
+      p = { ratio: p.w / p.h };
+    }
+
+    if (p.ratio) {
+      var hit2 = nearestGenericRatio(p.ratio);
+      if (hit2) {
+        return {
+          size: hit2.v,
+          changed: hit2.v !== raw,
+          reason: hit2.v !== raw ? '已按比例映射到 ' + hit2.label + '（' + hit2.v + '）' : ''
+        };
+      }
+    }
+    return { size: '1024x1024', changed: raw !== '1024x1024', reason: '' };
+  }
 
   /*
    * 把 "3:4" 或 "832x1216" 之类的输入统一解析成 {w,h}。
@@ -350,6 +491,11 @@
   var presetsCache = null;
   var presetsReady = null;
   var inFlight = Object.create(null);
+  /*
+   * 「尺寸已被自动调整」的提示只弹一次。
+   * 批量生图时每次请求都弹一遍会变成刷屏，反而盖住真正的错误。
+   */
+  var sizeChangeNotified = false;
 
   function trim(s) {
     return String(s == null ? '' : s).trim();
@@ -825,6 +971,18 @@
       cfg.openai.sizeDialect
     );
     var size = sizeResolved.size || '1024x1024';
+    /*
+     * 尺寸被纠正过就明确告诉用户，避免「所见非所用」。
+     *
+     * 这条提示是通用化时顺手补上的：generic 方言现在会做比例吸附，
+     * 用户选了 832x1216 实际发的是 1024x1536 —— 不提示的话，
+     * 用户会以为「我选的尺寸没生效」，反过来报一个假 bug。
+     * 只提示一次（本次会话内），不刷屏。
+     */
+    if (sizeResolved.changed && sizeResolved.reason && !sizeChangeNotified) {
+      sizeChangeNotified = true;
+      toast(sizeResolved.reason);
+    }
     var payload = {
       model: cfg.openai.model,
       prompt: trim(opts.prompt),
@@ -1383,6 +1541,95 @@
     return Promise.resolve();
   }
 
+  /*
+   * ── 把 raw HTTP 错误翻译成「用户能据此行动」的话 ────────────────
+   *
+   * 改动起因：用户报告「nai 模型报 400，gptimage2.5 正常」，
+   * 而界面上只显示一句被截断的
+   *
+   *   生图 API 返回错误：HTTP 400: {"error":{"message":"aspect_ratio 不受支…
+   *
+   * 三个问题叠在一起，让这条错误完全没法用：
+   *
+   *   1. **截断点选错了**。原来截 120 字符，恰好把 message 的后半句
+   *      「支持的比例：[…]」切掉 —— 而那正是唯一有用的信息。
+   *      这次排查为此多花了整整一轮往返。
+   *
+   *   2. **不区分责任方**。400（我配错了）/ 429（站点限流）/
+   *      500 503（站点自己挂了）在界面上长得一模一样，用户根本
+   *      不知道该改配置还是该换个模型等一会儿。用户这次的截图
+   *      里 2 条 503 + 5 条 429 + 3 条 500，全是站点的锅，
+   *      但界面只会显示「生图 API 返回错误」。
+   *
+   *   3. **不说下一步做什么**。错误信息必须给出动作 —— 换模型、
+   *      等一会儿、还是去改尺寸。
+   *
+   * ⚠️ 关于截断长度的取舍：这里放宽到 300 字符，并把 message 字段
+   * **优先单独抽出来**。因为中转站的错误体是结构化 JSON，
+   * 关键信息都在 message 里；按整串截断会被前面的
+   * {"error":{"message": 这段样板文字白吃掉一大截预算。
+   */
+  function extractApiErrorDetail(text) {
+    var t = trim(text);
+    if (!t) return '';
+    try {
+      var j = JSON.parse(t);
+      var msg = j && j.error && (j.error.message || j.error.msg);
+      if (!msg && j && typeof j.message === 'string') msg = j.message;
+      if (msg) {
+        var extra = j && j.error && j.error.param ? '（参数：' + j.error.param + '）' : '';
+        return trim(msg) + extra;
+      }
+    } catch (e) {}
+    /* 不是 JSON（HTML 错误页 / 纯文本网关提示）→ 原样返回，交给下面截断 */
+    return t;
+  }
+
+  function formatImageGenHttpError(code) {
+    var m = String(code).match(/^HTTP\s+(\d{3})\s*(?::\s*([\s\S]*))?$/);
+    if (!m) return null;
+    var status = parseInt(m[1], 10);
+    var detail = extractApiErrorDetail(m[2] || '');
+    var shown = detail ? '：' + detail.slice(0, 300) : '';
+
+    if (status === 400) {
+      /*
+       * 400 里最常见的是比例不合法。识别出关键词就直说解法，
+       * 不要让用户去猜「aspect_ratio 不受支持」是什么意思。
+       */
+      if (/aspect_ratio|aspect ratio|不支持的?尺寸|size .*not supported|invalid size/i.test(detail)) {
+        return '生图失败：该尺寸的比例不被当前接口接受。' +
+          '请到生图设置里换一个「图片尺寸」（推荐 1:1 正方形 或 2:3 竖版），' +
+          '或改用 gpt-image 系列模型。' + shown;
+      }
+      return '生图失败：接口认为请求参数不合法。请检查模型名、尺寸是否被该站支持。' + shown;
+    }
+    if (status === 401 || status === 403) {
+      return '生图失败：密钥无效或无权访问该模型，请到生图设置里重新填写密钥。' + shown;
+    }
+    if (status === 402) {
+      return '生图失败：账户余额 / 点数不足，请检查站点账户状态。' + shown;
+    }
+    if (status === 404) {
+      return '生图失败：该站点没有这个接口或模型。' +
+        '请确认网关地址是否要带 /v1，以及模型名是否在该站的可用列表里。' + shown;
+    }
+    if (status === 429) {
+      return '生图失败：请求过于频繁（429 限流），站点账号池可能已耗尽。' +
+        '请稍后再试，或换用 gpt-image 系列模型。' + shown;
+    }
+    if (status >= 500) {
+      /*
+       * 5xx 一律是**站点的锅**，要把这句话说清楚。
+       * 用户这次的截图正是 503/500 扎堆 —— 他需要知道这跟自己
+       * 的配置无关，等着或者换模型就行，反复重试和改配置都是白费。
+       */
+      return '生图失败：站点服务器异常（HTTP ' + status + '），' +
+        '这是服务端问题、与你的配置无关。建议换用 gpt-image 系列模型，或稍后再试。' + shown;
+    }
+    return '生图 API 返回错误：HTTP ' + status + shown;
+  }
+
   function formatImageGenError(err) {
     var code = err && err.message ? String(err.message) : '';
     if (code === 'image_gen_disabled' || code === 'openai_not_configured' || code === 'novelai_not_configured') {
@@ -1397,8 +1644,9 @@
      * 直接透传即可，不要再套一层「生图失败：」把它埋掉。
      */
     if (/^NovelAI |^网络错误：/.test(code)) return code;
-    if (code.indexOf('HTTP ') === 0) return '生图 API 返回错误：' + code.slice(0, 120);
-    if (code) return '生图失败：' + code.slice(0, 120);
+    var httpMsg = formatImageGenHttpError(code);
+    if (httpMsg) return httpMsg;
+    if (code) return '生图失败：' + code.slice(0, 300);
     return '生图失败，请检查配置与网络';
   }
 
@@ -2727,7 +2975,7 @@
      * OpenAI 兼容端按用户声明的**方言**取表 —— 因为决定尺寸约束的是
      * 端点而不是模型名（中转站的模型名是 NovelAI 的）。
      */
-    var sizes = provider === 'novelai' ? GENERIC_SIZES : sizeDialectList(dialect);
+    var sizes = provider === 'novelai' ? NOVELAI_SIZES : sizeDialectList(dialect);
     sizes.forEach(function (item) {
       var op = document.createElement('option');
       op.value = item.v;
@@ -3082,6 +3330,12 @@
     normalizeSizeDialect: normalizeSizeDialect,
     resolveSizeForDialect: resolveSizeForDialect,
     GENERIC_SIZES: GENERIC_SIZES,
+    NOVELAI_SIZES: NOVELAI_SIZES,
+    GENERIC_RATIO_WHITELIST: GENERIC_RATIO_WHITELIST,
+    nearestGenericRatio: nearestGenericRatio,
+    normalizeGenericSize: normalizeGenericSize,
+    extractApiErrorDetail: extractApiErrorDetail,
+    formatImageGenError: formatImageGenError,
     DALLE3_SIZES: DALLE3_SIZES,
     DALLE2_SIZES: DALLE2_SIZES,
     GPTIMAGE_SIZES: GPTIMAGE_SIZES,

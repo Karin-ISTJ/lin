@@ -187,9 +187,15 @@
       if (k === 'backgroundMessage') {
         /* backgroundMessage 里混着会话级运行时字段（下次推送时间、基线时间戳等）。
            它们由每个会话自己维护，不属于「这个联系人的配置」，
-           存进全局配置只会变成脏数据，这里先剔干净。 */
+           存进全局配置只会变成脏数据，这里先剔干净。
+           SESSION_SCOPED_BM_KEYS（farm / timeEvents）同理 —— 它们是每个
+           聊天独立的数据，混进 perContact 覆盖会被冻结成脏快照
+           （farm 和 timeEvents 各踩过一次，见 applyToChatSettings 内注释）。
+           两份清单都要剔；当前唯一调用方传进来的本就是干净构造的
+           bgPatch，这里是防御未来新调用方把完整 backgroundMessage 塞进来。 */
         var clean = Object.assign({}, settings[k]);
         CHAT_LEVEL_BM_KEYS.forEach(function (bk) { delete clean[bk]; });
+        SESSION_SCOPED_BM_KEYS.forEach(function (bk) { delete clean[bk]; });
         slice[k] = clean;
         return;
       }

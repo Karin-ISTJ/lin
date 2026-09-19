@@ -185,7 +185,28 @@
     return out;
   }
 
-  async function collectStorageContext() {
+  /*
+   * 存储用量快照。
+   *
+   * force 参数以前是「接了但不用」—— collectStorageContext 无参数、也无缓存，
+   * 注释却承诺 force=true 绕过缓存。文档与实现不符比没有文档更糟：
+   * 调用方按注释以为拿到了新鲜数据，实际拿到的是什么全看运气。
+   *
+   * 现在改成**真缓存 + force 语义落地**：
+   *   collect()        → 命中缓存则复用（默认 TTL 内不重复扫 IDB）
+   *   collect(true)    → 强制重扫，并把结果写回缓存
+   * 扫描要遍历 localStorage + 多个 IDB 库，是重活；
+   * 重新扫描按钮和后台上下文统计都在调它，不加缓存会白扫很多遍。
+   */
+  var STORAGE_CTX_TTL_MS = 4000;
+  var storageCtxCache = null;
+  var storageCtxCacheAt = 0;
+
+  async function collectStorageContext(force) {
+    var now = Date.now();
+    if (!force && storageCtxCache && now - storageCtxCacheAt < STORAGE_CTX_TTL_MS) {
+      return storageCtxCache;
+    }
     var lsSizes = {};
     var lsPlaceholder = {};
     try {
@@ -251,14 +272,29 @@
         quota = Number(est.quota) || 0;
       } catch (e4) {}
     }
-    return { groupLs: groupLs, stableTotal: stableTotal, quota: quota };
+    /*
+     * 写回缓存。注意 quota 要走 navigator.storage.estimate()，偶发较慢，
+     * 缓存下来正好省掉重复的异步往返。
+     */
+    storageCtxCache = { groupLs: groupLs, stableTotal: stableTotal, quota: quota };
+    storageCtxCacheAt = Date.now();
+    return storageCtxCache;
   }
 
 
+  /*
+   * 失效存储用量快照缓存。
+   *
+   * 外部数据被整体替换后（导入备份、清空分类）必须调用，否则会拿到
+   * 4 秒内的旧数字 —— 「导入完了但用量没变」就是这么来的。
+   * 早期实现引用了从未声明的 storageContextCache /
+   * storageContextPromise / storageSummaryHydrated，strict mode 下
+   * 一调用就 ReferenceError，所以一度退化成空操作；现在缓存层补上了，
+   * 这里也恢复成真失效。
+   */
   function invalidateStorageCache() {
-    storageContextCache = null;
-    storageContextPromise = null;
-    storageSummaryHydrated = false;
+    storageCtxCache = null;
+    storageCtxCacheAt = 0;
   }
 
 
@@ -390,7 +426,36 @@
         ok++;
       } catch (e) {}
     }
+    /* 改过数据就要让用量快照失效，否则面板还会显示压缩前的数字 */
+    if (ok > 0) invalidateStorageCache();
     return { ok: ok, saved: saved };
+  }
+
+  /**
+   * 删除 collectChatMediaImages() 给出的聊天图片记录。
+   * 导出接口早期就挂着这个名字，但函数本体在从设置 App 搬出时丢了，
+   * 调用即 TypeError —— 这里补上（与 compressAllChatImages 同构：
+   * 逐条删 IDB 记录 + 失效 blob URL，单条失败不中断整批）。
+   */
+  async function deleteAllChatImages(items) {
+    var ok = 0;
+    var freed = 0;
+    var list = Array.prototype.slice.call(items || []);
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it || !it.key) continue;
+      try {
+        await idbDeleteNamedDbKey('miya-chat-media', 'blobs', it.key);
+        if (global.miyaChatStore && typeof global.miyaChatStore.invalidateBlobUrl === 'function') {
+          global.miyaChatStore.invalidateBlobUrl(it.key);
+        }
+        freed += Number(it.size) || 0;
+        ok++;
+      } catch (e) {}
+    }
+    /* 同上：删过就必须失效，否则「点了清空、用量没降」 */
+    if (ok > 0) invalidateStorageCache();
+    return { ok: ok, freed: freed };
   }
 
 
@@ -427,7 +492,12 @@
     }
     if (cat.id === 'api') {
       global.miyaInvalidateApiConfigCache && global.miyaInvalidateApiConfigCache();
-      invalidateApiPresetsCache();
+      /* 早期这里调用了一个不存在的 invalidateApiPresetsCache()，
+         strict mode 下 ReferenceError —— 预设列表的内存缓存也漏掉了失效。
+         改为与 miya-backup.js 一致的守卫调用。 */
+      if (global.miyaApiPresets && typeof global.miyaApiPresets.invalidate === 'function') {
+        global.miyaApiPresets.invalidate();
+      }
     }
     if (cat.id === 'worldbook' && global.miyaWorldbookStore) global.miyaWorldbookStore.invalidateCache && global.miyaWorldbookStore.invalidateCache();
     if (cat.id === 'contacts' && global.miyaContactsStore) global.miyaContactsStore.invalidateCache && global.miyaContactsStore.invalidateCache();
@@ -454,6 +524,14 @@
     if (cat.id === 'offline' && global.MiyaAppointmentStore && global.MiyaAppointmentStore.invalidateCache) {
       global.MiyaAppointmentStore.invalidateCache();
     }
+    /*
+     * 最后必须失效**自己的**用量快照缓存。
+     *
+     * 上面一长串都在失效「别人」的缓存，唯独漏了自己 —— 加了 4 秒 TTL
+     * 之后，清完分类紧接着刷新面板会读到旧数字，表现为
+     * 「点了清理，用量没降」。所有分类共用这一处出口，放在末尾最稳。
+     */
+    invalidateStorageCache();
   }
 
   /* ── 对外接口 ────────────────────────────────────────────────
@@ -476,7 +554,4 @@
     /* 外部数据被替换（导入备份）后让统计缓存失效 */
     invalidate: function () { invalidateStorageCache(); }
   };
-
-  /* 兼容旧调用点：原设置 App 内部就叫 invalidateStorageCache */
-  var invalidateStorageCache = function () { storageContextCache = null; storageContextPromise = null; };
 })(typeof window !== 'undefined' ? window : globalThis);

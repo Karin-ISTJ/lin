@@ -476,6 +476,54 @@
         };
     }
 
+    /**
+     * 把 summaryBlocks 转成 API system 消息。
+     *
+     * 必须走这里而不是 buildSummaryBlocksText：后者只把各块正文拼成
+     * 一段裸文本，块头里的「【线下场景总结 · 会话xxx · 第a–b条】」会被丢掉，
+     * 连带把「这是本场已经发生过的剧情总结、不是待接的新消息」这个定位也丢了。
+     *
+     * ── 为什么要按 channel 打来源前缀 ──
+     * 「记忆档案」里的总结有两个互不相干的来源：
+     *   offline ← session.summaryList      线下卷宗自己的总结
+     *   online  ← chatSettings.summaryList 线上「记忆功能」的沉淀总结
+     *
+     * 两者是**两套独立存储**：删掉一个线下卷宗，只会清掉 offline 那份，
+     * 线上那份原封不动。而线下剧情总结在生成时往往会被同时写进线上记忆，
+     * 于是用户会遇到一个看似见鬼的现象 ——
+     *   删掉卷宗 → 卷宗列表空了、记忆表格也空了 →
+     *   线下思维链里却还整段读得到当年卷宗里的内容。
+     * 那不是删除失败，是线上那份同源副本仍在按设计生效。
+     *
+     * 光靠「有内容」无法区分这两者。加上来源前缀后，
+     * 用户看到的记忆块就能自己说明它来自哪里，
+     * 想彻底清干净时也知道该去哪一处删（记忆功能 / 记忆表格里删对应总结）。
+     */
+    function summarizeBlocksToApiText(blocks) {
+        var ordered = (blocks || [])
+            .slice()
+            .sort(function (a, b) {
+                return (a.orderKey || a.ts || 0) - (b.orderKey || b.ts || 0);
+            })
+            .map(function (b) {
+                var body = String((b && b.content) || '').trim();
+                if (!body) return '';
+                if (String((b && b.channel) || '') === 'online') {
+                    return '【线上记忆-' + String(b.kind || 'summary') + '】\n' + body;
+                }
+                return body;
+            })
+            .filter(Boolean);
+        if (!ordered.length) return '';
+        return [
+            '【对话历史记忆·总结】',
+            '以下为线上与线下历史的压缩总结，请结合使用。',
+            '注意：这些是「已经发生过的事」，不是当前待接的新消息，请勿当作本轮要回应的内容。',
+            '',
+            ordered.join('\n\n')
+        ].join('\n');
+    }
+
     function slotsToApiMessages(slotItems) {
         var out = [];
         (slotItems || []).forEach(function (it) {
@@ -565,10 +613,16 @@
         if (!sumText && !items.length) return;
         apiMessages.push({ role: 'system', content: buildMemoryInteropPreambleBlock('offline') });
         if (sumText) {
-            apiMessages.push({
-                role: 'system',
-                content: '【对话历史记忆·总结】\n以下为线上与线下历史的压缩总结，请结合使用：\n\n' + sumText
-            });
+            /*
+             * 总结已经带着自己的抬头，此处不再套一层 —— 原文案写成
+             * 「【对话历史记忆·总结】\n以下为线上与线下历史的压缩总结…」，
+             * 但 line 263 的 buildWorldbookContextText 会把这段文本
+             * **原样**丢进世界书的检测上下文里。那层壳在上下文匹配里被当成
+             * 「一条需要回应的消息」读，模型于是顺着总结里的旧剧情往下续，
+             * 表现为「线下开场沿用早已删掉的往期剧情」。抬头只留一次，
+             * 并明确标注这是历史而非待接内容。
+             */
+            apiMessages.push({ role: 'system', content: sumText });
         }
         if (items.length) {
             injectCrossMemoryToApiMessages(apiMessages, items, '线上及往期线下');
@@ -586,6 +640,7 @@
         slotsToApiMessages: slotsToApiMessages,
         buildCrossMemorySystemBlock: buildCrossMemorySystemBlock,
         buildSummaryBlocksText: buildSummaryBlocksText,
+        summarizeBlocksToApiText: summarizeBlocksToApiText,
         injectCrossMemoryToApiMessages: injectCrossMemoryToApiMessages,
         buildMemoryInteropPreambleBlock: buildMemoryInteropPreambleBlock,
         injectAppointmentCrossMemory: injectAppointmentCrossMemory,
@@ -610,11 +665,12 @@
             var memoryCount =
                 settings && settings.memoryCount ? clampInt(settings.memoryCount, 1, 500, 40) : 40;
             var pack = collectOfflineCrossForAppointment(chatId, contact, profile, settings, memoryCount, opts);
-            var summaryText = buildSummaryBlocksText(pack.summaryBlocks);
+            var summaryText = summarizeBlocksToApiText(pack.summaryBlocks);
             var slotBlock = buildCrossMemorySystemBlock(pack.slotItems);
             return {
                 summaryText: summaryText,
                 slotBlock: slotBlock,
+                summaryBlocks: pack.summaryBlocks,
                 slotItems: pack.slotItems
             };
         }

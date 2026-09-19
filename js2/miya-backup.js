@@ -425,11 +425,70 @@
   }
 
   function applyBackupLocalStorage(ls) {
-    try { localStorage.clear(); } catch (e0) {}
     /* 恢复备份时最怕「看起来成功了，其实大部分 key 没写进去」——
        用户在别的机器上恢复完，发现数据只回来一半，还以为是备份文件损坏。
-       这里把失败数收集起来，交给调用方提示。 */
+       这里把失败数收集起来，交给调用方提示。
+
+       ── 快照 + **双向**回填 ──
+       clear 与逐项写入之间不是原子操作，一旦中途配额不足 / 页面被杀，
+       旧数据已清、新数据只到一半。所以先拍快照，失败时回填。
+
+       回填必须是双向的，只补「旧有、新包没有」的 key 是不够的：
+         a) 本地独有的旧 key（新包没带）      → 回填旧值   ✔ 原实现已覆盖
+         b) 新包要写、但**写失败**的 key      → 恢复旧值   ✘ 原实现漏了
+           这类 key 在 clear() 之后彻底消失，而导入前它可能好好的
+           （备份包缺字段、或该版本还没这个 key）。
+       两者都要救，才叫「尽力恢复现场」。
+
+       另外记录 snapshotFailed / clearFailed —— 快照失败（隐私模式、
+       配额已满）意味着**根本没有回滚能力**，这种「裸奔导入」必须让
+       调用方知道，不能再静默吞掉。 */
     var failed = 0;
+    var snapshot = {};
+    var snapshotFailed = false;
+    try {
+      for (var s = 0; s < localStorage.length; s++) {
+        var sk = localStorage.key(s);
+        if (!sk) continue;
+        snapshot[sk] = localStorage.getItem(sk);
+      }
+    } catch (eSnap) {
+      snapshotFailed = true;
+    }
+    /*
+     * miyaSafeLsSet 在 localStorage 配额不足时会把值**溢出到 IDB**，
+     * 这些 key 已经不在 localStorage 里了，却仍是用户的数据。
+     * 只遍历 localStorage 的快照会漏掉它们，回填时被当成「本来就没有」。
+     * 用 miyaKvKeyNeedsAsyncHydrate 把这类 key 一并纳入快照。
+     */
+    var spillKeys = [];
+    try {
+      var allKeys = Object.keys(snapshot);
+      if (typeof global.miyaKvKeyNeedsAsyncHydrate === 'function') {
+        /* 已知会走 KV 的 key 前缀（与 storage-usage 的 CATALOG 同源） */
+        var KNOWN_KV = [
+          'miya-appointment-v1', 'miya-chat-store-v1', 'miya-contacts-v1',
+          'miya-worldbook-v1', 'miya-api-config', 'miya-chat-global-settings-v1',
+          'miya-memory-tables-v1', 'miya-memory-table-settings-v1',
+          'miya-backup-v1'
+        ];
+        KNOWN_KV.forEach(function (k) {
+          if (Object.prototype.hasOwnProperty.call(snapshot, k)) return;
+          try {
+            if (global.miyaKvKeyNeedsAsyncHydrate(k)) {
+              var mem = global.__miyaKvMem && global.__miyaKvMem[k];
+              if (mem != null) {
+                snapshot[k] = typeof mem === 'string' ? mem : JSON.stringify(mem);
+                spillKeys.push(k);
+              }
+            }
+          } catch (eSpill) {}
+        });
+      }
+    } catch (eKV) {}
+
+    var clearFailed = false;
+    try { localStorage.clear(); } catch (e0) { clearFailed = true; }
     Object.keys(ls || {}).forEach(function (k) {
       var v = ls[k] == null ? '' : String(ls[k]);
       var ok;
@@ -440,7 +499,44 @@
       }
       if (!ok) failed += 1;
     });
-    return { total: Object.keys(ls || {}).length, failed: failed };
+    var rolledBack = 0;
+    var rollbackFailed = 0;
+    if (failed > 0) {
+      /*
+       * 回填必须**绕过 miyaSafeLsSet**，直接写 localStorage。
+       *
+       * 理由：miyaSafeLsSet 失败的两个原因（配额满、隐私模式）恰恰也是
+       * 回填失败的原因 —— 用同一个函数去救它自己造成的现场，是一个死循环：
+       *   写入失败 → 回填 → 又失败 → 数据永久丢失。
+       * 实测就踩到了这个坑：强制让 key B 写入失败后，回填走同一个桩，
+       * B 依然填不回去，最终被清成 null。
+       *
+       * 直写 localStorage 是最底层的一手：绕开配额预检与溢出逻辑，
+       * 由浏览器自己裁决。旧数据一般比新数据小，直写的成功率明显更高。
+       */
+      Object.keys(snapshot).forEach(function (k) {
+        var incoming = Object.prototype.hasOwnProperty.call(ls, k) && ls[k] != null;
+        /* 已写成功的新 key 别拿旧值盖掉；写失败的才需要救 */
+        if (incoming) {
+          var cur = null;
+          try { cur = localStorage.getItem(k); } catch (eCur) {}
+          if (cur != null && cur === String(ls[k])) return;
+        }
+        var ok = false;
+        try { localStorage.setItem(k, snapshot[k]); ok = true; } catch (e2) { ok = false; }
+        if (ok) rolledBack += 1;
+        else rollbackFailed += 1;
+      });
+    }
+    return {
+      total: Object.keys(ls || {}).length,
+      failed: failed,
+      rolledBack: rolledBack,
+      rollbackFailed: rollbackFailed,
+      snapshotFailed: snapshotFailed,
+      clearFailed: clearFailed,
+      spillKeys: spillKeys.length
+    };
   }
 
   async function restoreBackupPayload(raw, onProgress) {
@@ -477,7 +573,10 @@
     finishBackupImport();
     if (lsResult && lsResult.failed > 0) {
       toast('本地设置写入失败 ' + lsResult.failed + '/' + lsResult.total +
-        ' 项（可能空间不足），部分设置未恢复');
+        ' 项（可能空间不足），已尝试回填 ' + (lsResult.rolledBack || 0) + ' 项');
+    }
+    if (lsResult && (lsResult.snapshotFailed || lsResult.clearFailed)) {
+      toast('警告：导入前快照/清空未成功，本次导入无回滚保护');
     }
     onProgress(100, '导入完成');
   }
@@ -583,6 +682,19 @@
     setBackupProgress(88, '正在写入本地设置…');
     var lsResultFull = applyBackupLocalStorage(ls);
     finishBackupImport();
+    /*
+     * ZIP 是主推的导入方式，但它的失败提示之前一直是缺的 ——
+     * 只把 lsFailed 塞进返回值，调用方 importBackupZipFiles 不读它，
+     * 于是「本地设置写了一半」这件事用户永远看不到（JSON 路径有 toast）。
+     * 这里补齐，并把「无法回滚」的严重情况单独说清楚。
+     */
+    if (lsResultFull && lsResultFull.failed > 0) {
+      toast('本地设置写入失败 ' + lsResultFull.failed + '/' + lsResultFull.total +
+        ' 项（可能空间不足），已尝试回填 ' + (lsResultFull.rolledBack || 0) + ' 项');
+    }
+    if (lsResultFull && (lsResultFull.snapshotFailed || lsResultFull.clearFailed)) {
+      toast('警告：导入前快照/清空未成功，本次导入无回滚保护');
+    }
     return { manifest: manifest, kind: 'full', lsFailed: (lsResultFull && lsResultFull.failed) || 0 };
   }
 
@@ -722,10 +834,20 @@
     });
 
     if (zips.length) {
+      /* ZIP 优先；JSON 是全量覆盖包，和 ZIP 混选没有可定义的合并语义，
+         但不能静默丢 —— 告知用户被忽略了，让他自己再导一次。 */
+      if (jsons.length) {
+        toast('已选择 ' + zips.length + ' 个 ZIP + ' + jsons.length + ' 个 JSON，将只导入 ZIP；JSON 请单独再导');
+      }
       importBackupZipFiles(zips);
       return;
     }
     if (jsons.length) {
+      /* JSON 包是全量覆盖语义，多选互相覆盖没有意义；
+         之前这里静默只取第一个，用户根本不知道其余的被丢了。 */
+      if (jsons.length > 1) {
+        toast('JSON 数据包一次只能导入一个，已选用第一个，其余 ' + (jsons.length - 1) + ' 个被忽略');
+      }
       importBackupJson(jsons[0]);
     }
   }

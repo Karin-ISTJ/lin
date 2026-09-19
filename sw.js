@@ -1,4 +1,4 @@
-var CACHE = 'miya-v239-karin';
+var CACHE = 'miya-v244-karin';
 /*
  * 版本哨兵：SW 侧的构建号。
  * index.html 里有同值的 <meta name="miya-sw-build" content="sw-2">，

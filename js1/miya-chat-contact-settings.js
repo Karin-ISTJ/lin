@@ -2017,6 +2017,23 @@
 
   function saveForm() {
     if (!store || !state.chatId || !pageEl) return Promise.resolve();
+    /*
+     * 顶栏「保存」在子视图内同样可见（ensurePage 的 header 是常驻的）。
+     * 此时 [data-mq-set-body] 里只有子视图 DOM，readForm 会把缺失的根级
+     * 控件读成空值 / 关闭 / 默认值并真实落库 —— 实测会清空备注与语音 ID、
+     * 关掉免打扰 / 天气感知 / 时间感知 / 主动发消息、清空世界书排序。
+     * 所以子视图内点顶栏保存一律转为保存当前子视图：
+     *   · api-chat / api-voice → 走 saveSubViewForm，与子视图内「保存」按钮同链路
+     *   · 其余子视图没有可存表单，提示即可，绝不触碰根级配置
+     */
+    if (state.subView) {
+      if (state.subView === 'api-chat' || state.subView === 'api-voice') {
+        saveSubViewForm(state.subView);
+      } else {
+        toast('本页无需保存');
+      }
+      return Promise.resolve();
+    }
     var root = pageEl.querySelector('[data-mq-set-body]');
     var data = readForm(root);
     var c = ctx();
@@ -2066,7 +2083,11 @@
       }
       return emojiChain;
     }).then(function () {
-      if (c.contact && store.setContactWorldbookEntryOrder && Array.isArray(data.worldbookEntryOrder)) {
+      if (c.contact && store.setContactWorldbookEntryOrder &&
+          Array.isArray(data.worldbookEntryOrder) && data.worldbookEntryOrder.length) {
+        /* length 守卫：空数组几乎必然来自「排序区根本不在 DOM 里」（子视图/
+           未渲染完成），而不是用户真的清空了排序 —— 排序区只能上下移动，
+           没有删除行的操作。applyFormDraft 侧早有同样的守卫，这里对齐。 */
         return store.setContactWorldbookEntryOrder(c.contact.id, data.worldbookEntryOrder);
       }
     }).then(function () {
@@ -2991,6 +3012,26 @@
     });
   }
 
+  /*
+   * MiniMax TTS 目前公开的语音模型清单。
+   * TTS 没有标准的「拉模型列表」接口（/models 是对话 API 的），
+   * 所以这里给内置清单而不是 ⟳ 拉取 —— 之前只渲染当前值一个 option，
+   * 模型只能看不能换。若配置里存着清单外的值（旧模型 / 新发布的模型），
+   * 按「当前值保值」原则追加 option，绝不静默清空。
+   */
+  var VOICE_MODEL_PRESETS = [
+    'speech-01-hd', 'speech-01-turbo', 'speech-02-hd', 'speech-02-turbo'
+  ];
+
+  function voiceModelSelectOptions(curModel) {
+    var ids = VOICE_MODEL_PRESETS.slice();
+    var cur = String(curModel || '').trim();
+    if (cur && ids.indexOf(cur) < 0) ids.push(cur);
+    return '<option value="">选择模型</option>' + ids.map(function (id) {
+      return '<option value="' + esc(id) + '"' + (id === cur ? ' selected' : '') + '>' + esc(id) + '</option>';
+    }).join('');
+  }
+
   function renderApiVoiceSub() {
     var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
     var tts = cfg.minimaxTts || {};
@@ -3002,7 +3043,7 @@
         '<label class="ins-field-label" for="mq-voice-group">群组 ID</label>' +
         '<input type="text" class="ins-text-input" id="mq-voice-group" placeholder="控制台群组 ID" autocomplete="off" value="' + esc(tts.groupId || '') + '">' +
         '<label class="ins-field-label" for="mq-voice-model">语音模型</label>' +
-        '<select class="ins-select" id="mq-voice-model"><option value="' + esc(tts.model || '') + '">' + esc(tts.model || '选择模型') + '</option></select>' +
+        '<select class="ins-select" id="mq-voice-model">' + voiceModelSelectOptions(tts.model) + '</select>' +
         '<label class="ins-field-label">语速 <span id="mq-voice-speed-lbl">' + esc(num(tts.speed, 1)) + '</span></label>' +
         '<input type="range" class="ins-range" id="mq-voice-speed" min="0.5" max="2" step="0.1" value="' + esc(num(tts.speed, 1)) + '">' +
         '<label class="ins-field-label">音量 <span id="mq-voice-vol-lbl">' + esc(num(tts.volume, 1)) + '</span></label>' +
@@ -3079,7 +3120,11 @@
       '<div class="st-form-card">' +
         '<div class="ins-meter-list" data-mq-set-storage-groups><p class="mi-empty-hint">正在计算…</p></div>' +
       '</div>' +
-      '<div class="ins-storage-images" data-mq-set-storage-images></div>'
+      '<div class="ins-storage-images" data-mq-set-storage-images></div>' +
+      '<div class="mi-btn-row" data-mq-set-storage-img-actions hidden>' +
+        '<button type="button" class="st-action-btn" data-mq-set-storage-img-compress>一键压缩图片</button>' +
+        '<button type="button" class="st-action-btn" data-mq-set-storage-img-clear>清空聊天图片</button>' +
+      '</div>'
     );
   }
 
@@ -3255,15 +3300,74 @@
      scheduleSubViewHydrate + applySubViewHydrate，单独这一个已无调用点，
      留着只会让人以为 storage 走的是另一套逻辑。 */
 
+  /* 图片清理动作：点击时按需收集（不缓存 blob 引用），操作完成后刷新统计 */
+  function storageImgActionsBusy(busy) {
+    if (!pageEl) return;
+    pageEl.querySelectorAll('[data-mq-set-storage-img-compress],[data-mq-set-storage-img-clear]').forEach(function (b) {
+      b.disabled = !!busy;
+    });
+  }
+
+  function withStorageImages(label, run) {
+    var su = global.miyaStorageUsage;
+    if (!su || typeof su.collectChatMediaImages !== 'function') return;
+    storageImgActionsBusy(true);
+    su.collectChatMediaImages().then(function (list) {
+      /* 注意：collectChatMediaImages 返回的是 { items, totalBytes, count }，
+         没有 length 字段 —— 用 list.count 判断，别写 list.length */
+      if (!list || !list.count) { toast('没有可处理的聊天图片'); return null; }
+      return run(su, list);
+    }).catch(function () {
+      toast(label + '失败');
+    }).then(function () {
+      storageImgActionsBusy(false);
+      refreshStorageSub();
+    });
+  }
+
+  function compressStorageImages() {
+    withStorageImages('压缩', function (su, list) {
+      toast('正在压缩 ' + list.count + ' 张图片…');
+      return su.compressAllChatImages(list.items).then(function (res) {
+        toast('已压缩 ' + ((res && res.ok) || 0) + ' 张，节省 ' + su.formatBytes((res && res.saved) || 0));
+      });
+    });
+  }
+
+  function clearStorageImages() {
+    withStorageImages('清空', function (su, list) {
+      return dialog({
+        mode: 'confirm',
+        title: '清空聊天图片',
+        message: '将删除全部 ' + list.count + ' 张聊天图片（聊天记录本身不受影响），不可恢复。是否继续？',
+        confirmText: '清空',
+        cancelText: '取消'
+      }).then(function (ok) {
+        if (!ok) return null;
+        return su.deleteAllChatImages(list.items).then(function (res) {
+          toast('已删除 ' + ((res && res.ok) || 0) + ' 张图片');
+        });
+      });
+    });
+  }
+
   function refreshStorageSub() {
     if (!pageEl || state.subView !== 'storage') return;
-    var groupsEl = pageEl.querySelector('[data-mq-set-storage-groups]');
-    var quotaEl = pageEl.querySelector('[data-mq-set-storage-quota]');
-    var imagesEl = pageEl.querySelector('[data-mq-set-storage-images]');
     var su = global.miyaStorageUsage;
-    if (!groupsEl || !su) return;
+    if (!su) return;
+    /*
+     * collect(true) 是异步的，耗时期间任何一次重绘（后台上下文统计、
+     * store 更新触发的 scheduleRender）都会把子视图 DOM 整个换掉。
+     * 所以所有节点引用都在回调里**重新查询**，绝不使用进入函数时的
+     * 旧引用 —— 旧引用会把扫描结果写进已成孤儿的节点，表现就是
+     * 「点了重新扫描没反应」。图片分支同理（它还有第二层异步）。
+     */
     su.collect(true).then(function (ctx) {
-      if (state.subView !== 'storage') return;
+      if (!pageEl || state.subView !== 'storage') return;
+      var groupsEl = pageEl.querySelector('[data-mq-set-storage-groups]');
+      var quotaEl = pageEl.querySelector('[data-mq-set-storage-quota]');
+      var imagesEl = pageEl.querySelector('[data-mq-set-storage-images]');
+      if (!groupsEl) return;
       var rows = (su.CATALOG || []).map(function (c) {
         var b = (ctx.groupLs && ctx.groupLs[c.id]) || 0;
         var pct = ctx.stableTotal > 0 ? Math.round(b / ctx.stableTotal * 100) : 0;
@@ -3278,14 +3382,33 @@
           ? '小手机本地数据合计 ' + su.formatBytes(ctx.stableTotal) + ' / ' + su.formatBytes(ctx.quota)
           : '小手机本地数据合计 ' + su.formatBytes(ctx.stableTotal);
       }
-      if (imagesEl && typeof su.collectChatMediaImages === 'function') {
-        su.collectChatMediaImages().then(function (list) {
-          if (state.subView !== 'storage' || !imagesEl) return;
-          if (!list || !list.length) { imagesEl.innerHTML = ''; return; }
-          imagesEl.innerHTML = '<p class="ins-field-label ins-field-label--section">聊天图片（' + list.length + ' 张）</p>';
-        }).catch(function () {});
-      }
+      if (!imagesEl || typeof su.collectChatMediaImages !== 'function') return;
+      su.collectChatMediaImages().then(function (list) {
+        if (!pageEl || state.subView !== 'storage') return;
+        /* 第二层异步：同样重新查询（第一次查询后仍可能发生重绘） */
+        var imagesEl2 = pageEl.querySelector('[data-mq-set-storage-images]');
+        var actionsEl = pageEl.querySelector('[data-mq-set-storage-img-actions]');
+        if (!imagesEl2) return;
+        if (!list || !list.count) {
+          imagesEl2.innerHTML = '<p class="mi-empty-hint">聊天里还没有本地图片</p>';
+          if (actionsEl) actionsEl.hidden = true;
+          return;
+        }
+        /* 只显示数量与占用；图片清单在点压缩/清空时按需重新收集，
+           不在这里长期持有 blob 引用（几百张图会把内存吃满）。 */
+        imagesEl2.innerHTML = '<p class="ins-field-label ins-field-label--section">聊天图片（' + list.count + ' 张，约 ' + esc(su.formatBytes(list.totalBytes)) + '）</p>' +
+          '<p class="st-form-hint">压缩：转为 JPG（最长边 1280），聊天记录不受影响。清空：删除全部图片，不可恢复。</p>';
+        if (actionsEl) actionsEl.hidden = false;
+      }).catch(function () {
+        if (state.subView !== 'storage' || !pageEl) return;
+        var imagesEl2 = pageEl.querySelector('[data-mq-set-storage-images]');
+        var el = pageEl.querySelector('[data-mq-set-storage-img-actions]');
+        if (imagesEl2) imagesEl2.innerHTML = '';
+        if (el) el.hidden = true;
+      });
     }).catch(function () {
+      if (!pageEl || state.subView !== 'storage') return;
+      var groupsEl = pageEl.querySelector('[data-mq-set-storage-groups]');
       if (groupsEl) groupsEl.innerHTML = '<p class="mi-empty-hint">统计失败</p>';
     });
   }
@@ -3504,6 +3627,8 @@
       if (e.target.closest('#mq-api2-fetch')) { fetchChatModels('fallback'); return; }
 
       if (e.target.closest('[data-mq-set-storage-refresh]')) { refreshStorageSub(); return; }
+      if (e.target.closest('[data-mq-set-storage-img-compress]')) { compressStorageImages(); return; }
+      if (e.target.closest('[data-mq-set-storage-img-clear]')) { clearStorageImages(); return; }
 
       var bkExport = e.target.closest('[data-mq-set-backup-export]');
       if (bkExport) {

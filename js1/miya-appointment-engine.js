@@ -260,7 +260,21 @@
                 });
         }
         if (cross) {
-            if (cross.summaryText) parts.push(String(cross.summaryText));
+            /*
+             * 这一段只用于**世界书关键词命中**，不是送进请求的正文。
+             *
+             * 关键：只喂「时间线片段」，绝不把「总结」喂进来。
+             * 时间线片段是一条条 〔时间·线上/线下〕角色：正文 的行，
+             * 关键词命中拿它有天然依据 —— 里面出现的名词就是剧情里真出现过的名词。
+             *
+             * 而总结是模型对旧剧情写的压缩叙述，里面同样满是关键词，却来自
+             * 早已发生的场次。原文案连 summaryText 一起 concat 进来，
+             * 于是「用户早先删掉的卷宗」只要其总结还在任何地方存活过一轮，
+             * 就会把当年的世界书条目重新打亮，模型拿到那份上下文后顺着旧剧情
+             * 往下写 —— 用户看到的就是「思维链读到了我删过的卷宗内容」。
+             * 真正把总结送给模型的只有 injectAppointmentCrossMemory 一处，
+             * 让它单独负责，世界书这里不重复、也不借道。
+             */
             (cross.slotItems || []).forEach(function (it) {
                 var body = String((it && it.content) || '').trim();
                 if (body) parts.push(body);
