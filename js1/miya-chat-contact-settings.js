@@ -6,7 +6,7 @@
 
   var store = null;
   var pageEl = null;
-  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null, apiPresetPick: '' };
+  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null, apiPresetPick: '', apiModelPick: '', apiModel2Pick: '', apiModelPickBase: null, apiModel2PickBase: null };
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
@@ -2218,6 +2218,12 @@
       /* 副线路温度：原版面板有这个字段，压缩重写时丢了 —— 补回 */
       if (Number.isFinite(temp2)) patch.fallbackTemperature = temp2;
       if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig(patch);
+      /* 草稿对齐刚落盘的值（基线同步 = 草稿继续有效且等于配置）：
+         避免下一次重绘把旧草稿回填成「没保存的模型」 */
+      state.apiModelPick = patch.model || '';
+      state.apiModelPickBase = String(patch.model || '');
+      state.apiModel2Pick = patch.fallbackModel || '';
+      state.apiModel2PickBase = String(patch.fallbackModel || '');
       toast('对话 API 已保存');
       return;
     }
@@ -2318,9 +2324,92 @@
     '</div>';
   }
 
+  /*
+   * 草稿的「基线校验」：草稿只在正式配置没有偏离记录基线时才有效。
+   *
+   * 为什么需要：草稿的使命是「用户切了模型但还没点保存」期间活过重绘；
+   * 但如果正式配置在这之后被**外部**改动（导入备份 / 云同步 / 别的面板），
+   * 旧草稿再压上去就会把面板锁死在旧选择上 —— 反向护栏被破坏。
+   * 记录草稿那一刻的 cfg.model 作基线：配置仍等于基线 → 草稿继续有效；
+   * 配置已偏离 → 草稿作废，面板跟随正式配置。
+   * 保存成功 / 载入预设后会把基线重新对齐到已落盘的值，不影响正常流程。
+   */
+  function modelDraftPick(pick, base, curModel) {
+    if (!pick) return '';
+    return (base != null && base === String(curModel == null ? '' : curModel)) ? pick : '';
+  }
+
+  /*
+   * ── 对话 API · 模型下拉的 options ────────────────────────────
+   *
+   * 与预设下拉同款「三层防御」的最内层：渲染时就**同步**带上
+   * miyaApiModelCache 里该线路已有的模型列表（localStorage 同步读，
+   * 不用等网络）。
+   *
+   * 为什么必须做：模型列表此前只活在 DOM 里 —— 点 ⟳ 拉回来填进
+   * <select>，render() 一整块换 innerHTML 就没了，且没有任何机制
+   * 把它长回来（applySubViewHydrate 只补预设下拉）。用户「拉列表 →
+   * 切换模型 → 触发一次重绘（顶部保存 / 异步 scheduleRender）」之后，
+   * 下拉只剩切换前的旧模型一个选项；再点保存，写回去的就是旧模型
+   * —— 用户看到的就是「切换了模型，保存不住，又变回去了」。
+   *
+   * 保值规则（两条都为了堵「select 赋值静默失败」）：
+   *   · selValue（草稿/当前选中）不在列表里 → 追加为 option；
+   *   · curModel（正式配置里的模型）不在列表里 → 也追加。
+   * 只要值在 options 里存在，selected 才挂得住；否则浏览器会把
+   * select.value 悄悄置空，随后的保存就把模型清空写盘。
+   */
+  function modelSelectHtml(id, curModel, base, key, selValue) {
+    var pick = selValue != null ? String(selValue).trim() : '';
+    var current = String(curModel || '').trim();
+    var ids = [];
+    var cache = global.miyaApiModelCache;
+    if (cache && cache.read) {
+      var cached = cache.read(base, key);
+      if (cached && cached.length) ids = cached.slice();
+    }
+    if (pick && ids.indexOf(pick) < 0) ids.push(pick);
+    if (current && ids.indexOf(current) < 0) ids.push(current);
+    if (!ids.length) {
+      /* 没缓存也没配置：维持原版形态 —— 只有一个占位项 */
+      return '<select class="ins-select" id="' + id + '">' +
+        '<option value="">' + (current ? esc(current) : '选择模型') + '</option>' +
+      '</select>';
+    }
+    ids.sort();
+    var chosen = pick || current;
+    return '<select class="ins-select" id="' + id + '">' +
+      '<option value="">选择模型</option>' +
+      ids.map(function (m) {
+        return '<option value="' + esc(m) + '"' + (m === chosen ? ' selected' : '') + '>' + esc(m) + '</option>';
+      }).join('') +
+    '</select>';
+  }
+
   function renderApiChatSub() {
     var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
     function num(v, d) { return v == null || v === '' ? d : v; }
+    /*
+     * 模型缓存按「表单里的线路」分桶（base + 密钥尾4位）。
+     * 重绘时正式配置可能是**保存前**的旧值 —— 典型：用户在副线路里
+     * 手填了网关和密钥、点了 ⟳ 拉到列表、还没点保存，一次重绘过来
+     * cfg.fallbackBaseUrl 仍是空的，按配置找桶必然落空。
+     * 而此刻**旧 DOM 还没被换掉**（renderSubView 的返回值还没写进
+     * innerHTML），先把旧表单里的线路值抓出来当桶键；旧节点不存在
+     * （首次渲染）才退回正式配置。
+     */
+    function prevVal(sel) {
+      var el = pageEl ? pageEl.querySelector(sel) : null;
+      return el ? String(el.value || '').trim() : null;
+    }
+    var prevBase = prevVal('#mq-api-base');
+    var prevKey = prevVal('#mq-api-key');
+    var prev2Base = prevVal('#mq-api2-base');
+    var prev2Key = prevVal('#mq-api2-key');
+    var mainBase = prevBase != null ? prevBase : (cfg.baseUrl || '');
+    var mainKey = prevKey != null ? prevKey : (cfg.apiKey || '');
+    var fbBase = prev2Base != null ? prev2Base : (cfg.fallbackBaseUrl || '');
+    var fbKey = prev2Key != null ? prev2Key : (cfg.fallbackApiKey || '');
     /*
      * 结构与字段严格对齐「桌面设置 App → 对话」面板（迁移前的原版），
      * 分三段：接口预设 → 主线路 → 副线路。
@@ -2373,7 +2462,8 @@
           '<button type="button" class="ins-icon-btn" id="mq-api-fetch" title="拉取模型">⟳</button>' +
         '</div>' +
         '<label class="ins-field-label" for="mq-api-model">模型</label>' +
-        '<select class="ins-select" id="mq-api-model"><option value="' + esc(cfg.model || '') + '">' + esc(cfg.model || '选择模型') + '</option></select>' +
+        modelSelectHtml('mq-api-model', cfg.model, mainBase, mainKey,
+          modelDraftPick(state.apiModelPick, state.apiModelPickBase, cfg.model)) +
         '<label class="ins-field-label">温度 <span id="mq-api-temp-lbl">' + esc(num(cfg.temperature, 1)) + '</span></label>' +
         '<input type="range" class="ins-range" id="mq-api-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.temperature, 1)) + '">' +
       '</div>' +
@@ -2389,7 +2479,8 @@
           '<button type="button" class="ins-icon-btn" id="mq-api2-fetch" title="拉取模型">⟳</button>' +
         '</div>' +
         '<label class="ins-field-label" for="mq-api2-model">模型</label>' +
-        '<select class="ins-select" id="mq-api2-model"><option value="' + esc(cfg.fallbackModel || '') + '">' + esc(cfg.fallbackModel || '选择模型') + '</option></select>' +
+        modelSelectHtml('mq-api2-model', cfg.fallbackModel, fbBase, fbKey,
+          modelDraftPick(state.apiModel2Pick, state.apiModel2PickBase, cfg.fallbackModel)) +
         '<label class="ins-field-label">温度 <span id="mq-api2-temp-lbl">' + esc(num(cfg.fallbackTemperature, 1)) + '</span></label>' +
         '<input type="range" class="ins-range" id="mq-api2-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.fallbackTemperature, 1)) + '">' +
         '<div class="st-toggle-in-form">' +
@@ -2499,6 +2590,13 @@
   function applySubViewHydrate(key) {
     if (key === 'api-chat') {
       if (presetPickEl()) hydrateApiPresets();
+      /*
+       * 模型下拉也要补：renderSubView 的静态骨架此刻只带着渲染瞬间
+       * 读到的缓存列表，若渲染与 hydrate 之间缓存被更新（典型：点 ⟳
+       * 的网络结果刚写完缓存，用户又触发了一次重绘），这里再同步读
+       * 一次，保证下拉拿到的是最新的那份列表。幂等，节点不在就跳过。
+       */
+      hydrateChatModelOptions();
       return;
     }
     if (key === 'chat-defaults') {
@@ -2547,6 +2645,36 @@
     };
   }
 
+  /*
+   * select 赋值：值在 options 里不存在时先追加一个 option 再赋值。
+   *
+   * 为什么不能直接 el.value = v：<select> 赋一个不存在的值会**静默失败**，
+   * value 被浏览器置成 ''。预设刚载入时模型下拉通常只有一个旧模型的
+   * option（用户还没点 ⟳ 拉列表），`set('#mq-api-model', p.model)` 失败后：
+   *   · 表单上模型显示不对（预设明明带模型 B，下拉却是空的）；
+   *   · 更糟的是用户随后点「保存」—— 表单快照读出 model='' 写进配置，
+   *     把预设「选中即生效」刚写好的模型直接清空。
+   * 这就是「切了预设/切换模型，一保存就没了」的另一半根源。
+   */
+  function setSelectValueKeepingOption(sel, v) {
+    var el = pageEl.querySelector(sel);
+    if (!el) return;
+    var val = v == null ? '' : String(v);
+    if (val) {
+      var has = false;
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].value === val) { has = true; break; }
+      }
+      if (!has) {
+        var opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        el.appendChild(opt);
+      }
+    }
+    el.value = val;
+  }
+
   /* 把一份预设写回表单。不改 state、不落盘 —— 用户随后点「保存」才生效，
      这样「载入」是一次可反悔的预览，符合预设的用法。 */
   function applyApiPresetToForm(p) {
@@ -2557,10 +2685,11 @@
     }
     set('#mq-api-base', p.baseUrl);
     set('#mq-api-key', p.apiKey);
-    set('#mq-api-model', p.model);
+    /* 模型是 <select>：option 不存在时赋值静默失败 → 先补 option（见上方说明） */
+    setSelectValueKeepingOption('#mq-api-model', p.model);
     set('#mq-api2-base', p.fallbackBaseUrl);
     set('#mq-api2-key', p.fallbackApiKey);
-    set('#mq-api2-model', p.fallbackModel);
+    setSelectValueKeepingOption('#mq-api2-model', p.fallbackModel);
     var fb = pageEl.querySelector('#mq-api-fallback');
     if (fb) {
       fb.classList.toggle('is-on', !!p.fallbackEnabled);
@@ -2618,6 +2747,12 @@
       syncTempLabel('#mq-api2-temp', '#mq-api2-temp-lbl');
       /* 选中项也记进 state：重绘后 <select> 是新的，靠它回填 */
       state.apiPresetPick = name;
+      /* 模型草稿同步成预设里的值（基线一并对齐，配置此刻已等于预设值）
+         —— 否则下一次重绘会用旧草稿把刚载入的模型选中态覆盖回旧模型 */
+      state.apiModelPick = p.model != null ? String(p.model) : '';
+      state.apiModelPickBase = state.apiModelPick;
+      state.apiModel2Pick = p.fallbackModel != null ? String(p.fallbackModel) : '';
+      state.apiModel2PickBase = state.apiModel2Pick;
       var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
       if (nameEl) nameEl.value = name;
       toast('已载入：' + name);
@@ -2731,6 +2866,39 @@
     }).catch(function () { toast('导入失败'); });
   }
 
+  /* ── 对话 API · 重绘后回填模型下拉 ────────────────────────────
+   *
+   * 供 applySubViewHydrate('api-chat') 调用：从 miyaApiModelCache
+   * 同步读出该线路（baseUrl + 密钥尾4位 分桶）的列表，填进下拉。
+   * 与渲染层（modelSelectHtml）同源同一份缓存，这里只负责把
+   * 「渲染之后才落到缓存里的新列表」补上，属于幂等的第二层防御。
+   *
+   * 保值规则与 fetchChatModels.applyOptions 一致：当前选中值不在
+   * 列表里就追加为 option，绝不退回空 —— select.value 一旦被置空，
+   * 用户下一次点「保存」就会把模型清空写进配置。
+   */
+  function hydrateChatModelOptions() {
+    if (!pageEl) return;
+    var cache = global.miyaApiModelCache;
+    if (!cache || typeof cache.read !== 'function') return;
+    function fill(selId, baseId, keyId) {
+      var selEl = pageEl.querySelector(selId);
+      if (!selEl) return;
+      var baseEl = pageEl.querySelector(baseId);
+      var keyEl = pageEl.querySelector(keyId);
+      var ids = cache.read(baseEl ? baseEl.value : '', keyEl ? keyEl.value : '');
+      if (!ids || !ids.length) return;
+      var current = String(selEl.value || '').trim();
+      if (current && ids.indexOf(current) < 0) ids = ids.concat([current]);
+      selEl.innerHTML = '<option value="">选择模型</option>' + ids.map(function (id) {
+        return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
+      }).join('');
+      if (current) selEl.value = current;
+    }
+    fill('#mq-api-model', '#mq-api-base', '#mq-api-key');
+    fill('#mq-api2-model', '#mq-api2-base', '#mq-api2-key');
+  }
+
   /* ── 对话 API · 拉取模型 ──────────────────────────────────────
    *
    * 与生图面板同款：GET {root}/models，Bearer 用密钥。
@@ -2767,19 +2935,37 @@
     function applyOptions(ids) {
       if (!ids || !ids.length) { toast('没有取到模型'); return; }
       var current = String(selEl.value || '').trim();
+      /*
+       * 当前值不在列表里也**追加为 option 保住**，而不是退回占位项。
+       * 原先的 `: ''` 会把 select.value 悄悄置空 —— 用户拉一次列表，
+       * 已选好的模型就没了；随后点「保存」，model 以空串写进配置，
+       * 表现就是「模型保存不了 / 莫名被清空」。
+       */
+      if (current && ids.indexOf(current) < 0) ids = ids.concat([current]);
       selEl.innerHTML = '<option value="">选择模型</option>' + ids.map(function (id) {
         return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
       }).join('');
-      /* 当前值还在列表里就保住，否则退回占位项 */
-      selEl.value = ids.indexOf(current) >= 0 ? current : '';
+      selEl.value = current;
       toast('已获取 ' + ids.length + ' 个模型');
     }
 
-    /* 先出缓存 —— 点一下立刻有东西，网络结果回来再覆盖 */
+    /* 先出缓存 —— 点一下立刻有东西，网络结果回来再覆盖。
+     *
+     * ⚠️ 参数形状必须是 (base, key)：read/write 内部自己算分桶
+     * （openAiCompatibleApiRoot(base) + '|' + 密钥尾4位）。
+     * 原先这里写成 cache.read(cache.bucket(base, key)) /
+     * cache.write(cache.bucket(base, key), ids) —— 把算好的桶串
+     * 当 base 传进去，函数内部会再归一化一次（还会拼出
+     * `…/v1|aaaa/v1` 这种废 key），write 那侧更直接：
+     * 第二个参数（被当成 key）是 ids 数组，真正的 ids 参数是
+     * undefined，`!ids` 一挡就 return —— **缓存从未写入过**。
+     * 表现：点 ⟳ 当场有列表，任何一次重绘后列表必丢（渲染层
+     * 读到的缓存永远是空的），模型下拉退化成只剩当前模型一个
+     * 选项，用户切换的模型随之被抹回旧值 —— 「保存不了」。 */
     var cache = global.miyaApiModelCache;
     var cachedIds = null;
     if (cache && cache.read) {
-      cachedIds = (cache.read(cache.bucket(base, key)) || null);
+      cachedIds = (cache.read(base, key) || null);
       if (cachedIds && cachedIds.length) applyOptions(cachedIds);
     }
 
@@ -2794,7 +2980,7 @@
         return x && x.id ? String(x.id) : '';
       }).filter(Boolean).sort() : [];
       if (!ids.length) throw new Error('empty');
-      if (cache && cache.write) cache.write(cache.bucket(base, key), ids);
+      if (cache && cache.write) cache.write(base, key, ids);
       applyOptions(ids);
     }).catch(function (err) {
       /* 有缓存就先别打扰用户 —— 屏幕上已经有可选模型了 */
@@ -3201,6 +3387,10 @@
     state.subView = null;
     /* 同理丢弃预设下拉记忆，重新从当前生效的线路出发 */
     state.apiPresetPick = '';
+    state.apiModelPick = '';
+    state.apiModelPickBase = null;
+    state.apiModel2Pick = '';
+    state.apiModel2PickBase = null;
     ensurePage();
     pageEl.hidden = false;
     pageEl.classList.add('is-open');
@@ -3256,6 +3446,10 @@
     /* 关掉设置页就丢弃预设下拉的记忆 —— 下次进来从当前线路重新认，
        避免把上一个会话选中的预设名带到另一个会话上。 */
     state.apiPresetPick = '';
+    state.apiModelPick = '';
+    state.apiModelPickBase = null;
+    state.apiModel2Pick = '';
+    state.apiModel2PickBase = null;
     if (pageEl) {
       pageEl.classList.remove('is-open');
       pageEl.hidden = true;
@@ -3711,6 +3905,27 @@
         /* 记下选中项，供重绘后回填（重绘会换出全新的 <select>，value 是空的） */
         state.apiPresetPick = String(e.target.value || '');
         loadApiPresetFromPick();
+        return;
+      }
+
+      /*
+       * 模型下拉：记进 state 草稿，供重绘后回填。
+       *
+       * 与 apiPresetPick 同一个病：重绘换出的新 <select> 只会按
+       * 「正式配置 + 模型缓存」恢复 options，用户切了但还没保存的
+       * 选中值若不记下来，一次顶部保存 / 异步重绘就回退到旧模型，
+       * 再点「保存」写回去的就是旧模型 —— 「切换模型保存不了」。
+       * 草稿在保存成功、载入预设时同步为已落盘的值，open()/close()
+       * 时清空，不会把 A 会话的未保存编辑带进 B 会话。
+       */
+      if (e.target.matches('#mq-api-model')) {
+        state.apiModelPick = String(e.target.value || '');
+        state.apiModelPickBase = String((global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) ? (global.miyaGetApiConfigCached().model || '') : '');
+        return;
+      }
+      if (e.target.matches('#mq-api2-model')) {
+        state.apiModel2Pick = String(e.target.value || '');
+        state.apiModel2PickBase = String((global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) ? (global.miyaGetApiConfigCached().fallbackModel || '') : '');
         return;
       }
 
