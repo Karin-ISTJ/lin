@@ -77,6 +77,23 @@
     return !!controllers[keyOf(scope)];
   }
 
+  /*
+   * 停止某个 scope 的生成。
+   *
+   * 返回值语义：**true = 确实 abort 掉了一个在跑的 controller**。
+   * 该 scope 本来就没在跑（controllers 里没有）→ false。
+   *
+   * 为什么要把这个区分做出来：
+   *   旧版无论有没有 controller 都 return true，调用方只能靠「有没有
+   *   抛异常」判断成败 —— 于是「什么都没停」和「停成功了」在调用方
+   *   眼里完全一样，界面一律弹「已停止生成」。
+   *
+   *   线下停止键失效正是这么被掩盖的：控制器从来没登记，stop 空转，
+   *   却一路 return true 到 UI，用户看到提示、内容还在往外蹦。
+   *
+   *   注意：返回 false **不代表出错**，只代表「没有在跑的生成可停」。
+   *   调用方应据此决定要不要给用户提示，而不是当成失败重试。
+   */
   function stop(scope, opts) {
     var key = keyOf(scope);
     var o = opts && typeof opts === 'object' ? opts : {};
@@ -91,7 +108,7 @@
     }
     if (!Object.keys(controllers).length) globalGate.markIdle();
     if (!o.silent) emit({ type: 'stop', scope: key, reason: o.reason || 'user', meta: meta[key] || null });
-    return true;
+    return !!ctl;
   }
 
   function finish(scope, result) {

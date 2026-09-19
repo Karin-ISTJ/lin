@@ -4194,14 +4194,28 @@
         return isChatApiBusy(chatId);
     }
 
+    /*
+     * 停止线上生成。
+     *
+     * 返回值语义：true = 确实中断了一个在跑的生成。
+     *
+     * 与线下 stopAppointment 对齐 —— 旧版这里也是无脑 return true，
+     * 界面据此弹「已停止生成」。线上当前是好的（sendChat 会 begin，
+     * 且它是唯一的生成入口），但同样的谎言不该留着：
+     * 一旦将来有人再加一条绕过 sendChat 的生成路径，
+     * 这里就会重演线下那个「提示说停了、内容还在蹦」的 bug。
+     */
     function stopChatGeneration(chatId) {
         var id = String(chatId || '');
+        var scope = id ? 'chat:' + id : 'chat:';
         var genLife = global.MiyaGenerationLifecycle;
+        var ctl = (genLife && typeof genLife.getController === 'function')
+            ? genLife.getController(scope) : null;
         if (genLife && typeof genLife.stop === 'function') {
-            genLife.stop(id ? 'chat:' + id : 'chat:', { reason: 'user' });
+            genLife.stop(scope, { reason: 'user' });
         }
         if (id) releaseChatApi(id);
-        return true;
+        return !!ctl;
     }
 
     function buildLocalTokenUsage(built, replyRaw) {

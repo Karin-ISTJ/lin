@@ -3771,10 +3771,32 @@
         if (state.chatId === cid) {
           stopTypingWait();
           var code = err && err.message ? err.message : String(err);
+          var abortedHere = code === 'aborted' || code === 'AbortError'
+            || (global.MiyaGenerationLifecycle
+                && global.MiyaGenerationLifecycle.isAbortError
+                && global.MiyaGenerationLifecycle.isAbortError(err));
           if (code === 'api_not_configured') toast('请先在设置中配置对话 API');
           else if (code === 'chat_api_busy') toast('该会话正在请求 API');
-          else if (code === 'aborted' || code === 'AbortError' || (global.MiyaGenerationLifecycle && global.MiyaGenerationLifecycle.isAbortError && global.MiyaGenerationLifecycle.isAbortError(err))) {
-            toast('已停止生成');
+          else if (abortedHere) {
+            /*
+             * abort **不在这里**弹提示。
+             *
+             * 这是修复一处重复提示：
+             *   旧的这里是 toast('已停止生成')，而发送键的点击处理里
+             *   也是 toast('已停止生成')。用户点一次停止 → 弹两次。
+             *
+             * 为什么把「提示的所有权」判给点击处理那边：
+             *   · 只有点击处理知道「是不是用户主动点的」——它能读到
+             *     stopped（真的中断到了生成）；
+             *   · 这里的 abort 可能是**非用户触发**的，例如
+             *     lifecycle.begin 的 supersede 会 abort 掉上一轮，
+             *     或 clearChatMessages 以 reason:'clear' 收口。
+             *     那些情况弹「已停止生成」是错的 —— 用户没点停止。
+             *
+             * 语义分层：点击处理负责「告诉用户结果」，这里只负责
+             * 「安静地收尾」。线下 runStream 的 catch 也是同样的静默
+             * 处理（app.js 里 isAbortError 直接 return），两边保持一致。
+             */
           }
           else if (code === 'empty_reply' || code === 'empty') {
             if (scheduleEmptyReplyRetry()) return;
@@ -5479,16 +5501,28 @@
         e.preventDefault();
         if (state.sending || (sendBtn.classList.contains('is-stop'))) {
           var eng = engine || global.miyaChatEngine;
+          /*
+           * stopped 取引擎的**真实**返回，而不是「调用没抛异常」。
+           *
+           * 见 miya-chat-engine.js 的 stopChatGeneration 说明：
+           * 无脑弹「已停止生成」在「其实没在跑」时是误导。
+           * 线下就是因为这个谎言把「点了没反应」掩盖了很久。
+           */
+          var stopped = false;
           if (eng && typeof eng.stopChatGeneration === 'function') {
-            eng.stopChatGeneration(state.chatId);
+            stopped = eng.stopChatGeneration(state.chatId) === true;
           } else if (global.MiyaGenerationLifecycle) {
-            global.MiyaGenerationLifecycle.stop('chat:' + String(state.chatId || ''), { reason: 'user' });
+            var scope = 'chat:' + String(state.chatId || '');
+            var had = (typeof global.MiyaGenerationLifecycle.getController === 'function')
+              ? global.MiyaGenerationLifecycle.getController(scope) : null;
+            global.MiyaGenerationLifecycle.stop(scope, { reason: 'user' });
+            stopped = !!had;
           }
           state.sending = false;
           setSendButtonGenerating(false);
           setComposeDisabled(false);
           stopTypingWait();
-          toast('已停止生成');
+          if (stopped) toast('已停止生成');
           return;
         }
         handleSend();

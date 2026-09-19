@@ -209,15 +209,31 @@ check('S0 前置：生命周期模块已加载', !!(Life && Life.begin && Life.s
 })();
 
 // ─────────────────────────────────────────────
-// S3：核心 —— 未 begin 时，stop 是空转（这就是用户看到的「失效」）
+// S3：核心 —— 未 begin 时，stop 必须**如实报告「没停到东西」**
+//
+// ⚠️ 这条断言曾经是**反向**的。
+//
+// 最初写这一套测试时，S3 的用途是「把缺陷本身钉下来」：
+//   旧版 Lifecycle.stop 无论有没有 controller 都 return true，
+//   于是断言写成  ok === true  ——用来记录「假成功」这个事实。
+//
+// 后来修复时把 stop 的返回值改成 !!ctl（有 controller 才 true），
+// 这条断言就必须**跟着翻过来**，否则它会在修复后反而报错 ——
+// 那会让人误以为「修复引入了回归」，其实是断言过时了。
+//
+// 现在它守的是**修好之后**的契约：平静状态（无生成在跑）下，
+// stop 返回 false，调用方据此不弹「已停止生成」。
 // ─────────────────────────────────────────────
 (function S3() {
-  // 模拟现状：没有任何人 begin
+  // 平静状态：没有任何人 begin
   const before = Life.getController(SCOPE);
   const ok = Life.stop(SCOPE, { reason: 'user' });
-  check('S3 未 begin 时 stop 返回 true 但什么都没停（假成功）',
-    ok === true && before === null,
+  check('S3 未 begin 时 stop 返回 false（如实报告没停到东西）',
+    ok === false && before === null,
     'stop 返回 ' + ok + '，controller=' + String(before));
+  check('S3b 且信号语义一致：无 controller 即无 abort 可言',
+    before === null,
+    'controller=' + String(before));
 })();
 
 // ─────────────────────────────────────────────
