@@ -4973,7 +4973,18 @@
             return store
                 .adjustIndicesAfterRemoval(chatId, removedIndexes)
                 .then(function () {
-                    return purgeMemoryRowsBySource(chatId, removedIdList);
+                    /*
+                     * 必须带 store. 前缀。
+                     *
+                     * purgeMemoryRowsBySource 是 store 的方法（约 4818 行），
+                     * 不是本文件作用域里的函数 —— 漏了前缀就是一个裸标识符引用，
+                     * 会在 **每次删除消息** 时抛 ReferenceError，
+                     * 整个 deleteMessage 返回的 Promise 直接 reject。
+                     *
+                     * 同族的另外两处（deleteMessages / purgeMessagesRange）
+                     * 都正确写成了 store.purgeMemoryRowsBySource，此处是唯一漏网。
+                     */
+                    return store.purgeMemoryRowsBySource(chatId, removedIdList);
                 })
                 .then(function () {
                     return refreshChatPreviewFromVisible(chatId, { bumpNow: false });

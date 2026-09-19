@@ -74,9 +74,28 @@ def strip_comments(src):
     """
     去掉注释，但要保持行数不变（用等长空白替换），
     否则行号会整体错位，报出来的位置全是假的。
+
+    ⚠️ 必须同时识别**正则字面量**，否则会丢同步。
+
+    踩过的坑：miya-api-config.js 有一行
+        .replace(/[\\/:*?"<>|]/g, '_')
+    正则里含一个 `"`。若扫描器只认「注释 + 字符串」，
+    它会把这个 `"` 当成字符串起点，然后一路吃到下一个 `"`，
+    导致这行之后**整个文件的注释剥离全部失效** ——
+    表现为注释里的 getCached() / find() 被 P7 当成真代码，
+    报了 6 个根本不存在的「漏写前缀」HIGH。
     """
     out = list(src)
     i, n = 0, len(src)
+    # 判断当前位置是否处于「可以出现正则字面量」的位置：
+    # 前一个非空白字符是运算符/开括号/分号/逗号/关键字之一
+    prev_sig = ''
+
+    def _regex_allowed():
+        if not prev_sig:
+            return True
+        return prev_sig in '(,=:[!&|?{};+-*%~^<>'
+
     while i < n:
         c = src[i]
         if c == '/' and i + 1 < n and src[i + 1] == '/':
@@ -95,6 +114,32 @@ def strip_comments(src):
                 if out[k] != '\n':
                     out[k] = ' '
             i = j + 2
+        elif c == '/' and _regex_allowed():
+            # 正则字面量：/.../flags —— 跳过整段，避免其中的引号被误认
+            j = i + 1
+            in_class = False
+            while j < n:
+                ch = src[j]
+                if ch == '\\':
+                    j += 2
+                    continue
+                if ch == '\n':
+                    break  # 正则不跨行，说明判断错了，按普通字符处理
+                if ch == '[':
+                    in_class = True
+                elif ch == ']':
+                    in_class = False
+                elif ch == '/' and not in_class:
+                    break
+                j += 1
+            if j < n and src[j] == '/':
+                j += 1
+                while j < n and src[j].isalpha():  # flags
+                    j += 1
+                i = j
+                prev_sig = 'x'
+                continue
+            i += 1
         elif c in ('"', "'", '`'):
             quote = c
             j = i + 1
@@ -104,9 +149,14 @@ def strip_comments(src):
                     continue
                 if src[j] == quote:
                     break
+                if src[j] == '\n' and quote != '`':
+                    break  # 未闭合，及时收手，避免吃穿整个文件
                 j += 1
             i = j + 1
+            prev_sig = 'x'
         else:
+            if not c.isspace():
+                prev_sig = c
             i += 1
     return ''.join(out)
 
@@ -361,6 +411,67 @@ def main():
                     'MEDIUM', 'P6', fn, ln,
                     'setInterval 无 clearInterval 且无幂等守卫（可能累积泄漏）',
                     '若该行位于事件回调或渲染函数内，反复进入会导致定时器叠加'))
+
+    # ══════════════════════════════════════════════════════════
+    # P7：漏写对象前缀 —— 裸标识符引用本对象的方法
+    #
+    # 缺陷模式（本轮线删消息 bug 的成因）：
+    #   store 对象里定义了一批方法（deleteMessage / purgeXxx / ...），
+    #   在同一个「对象字面量」内部调用时**必须带 store. 前缀**，
+    #   因为方法名不是本文件作用域里的函数，而是 store 的属性。
+    #
+    #   漏了前缀就是一个裸标识符引用 —— 语法完全合法、静态检查也不报，
+    #   但运行时一执行到这行就抛 ReferenceError，整条 Promise 链 reject。
+    #
+    # 为什么难发现：
+    #   · 同一个函数体里往往还有几处写对了（store.xxx），
+    #     人眼扫过去只会确认「哦，它调用了 xxx」，不会注意少了个前缀
+    #   · 只在走到那一行时炸，前面的逻辑全部正常执行
+    #   · 调用方通常是 .then(...) 链，reject 落到用户手里就成了「静默失败」
+    #
+    # 判定：找形如  return bareName(  或  = bareName(  的调用，
+    #      其中 bareName 恰好是本文件某对象字面量上定义的方法名，
+    #      且该行的其他位置没有 store./self./this. 之类的前缀。
+    #
+    # 关键排除项：**同名模块级函数**。
+    #   本项目大量存在「模块作用域同名函数 + store 方法」的写法，
+    #   例如 refreshChatPreviewFromVisible / storeMediaBlob /
+    #   dedupeContactsAndPrivateChats / renderDecoLayer 等，
+    #   它们在文件顶部就有 function 声明，裸调用完全合法。
+    #   第一版没有做这个排除，一下报了 39 个假 HIGH —— 全是这类同名函数。
+    #   因此：只要该名字在本文件存在 `function name(` 声明，就跳过。
+    # ══════════════════════════════════════════════════════════
+    for fn, src in cleaned.items():
+        # 收集该文件里「对象字面量方法名」：形如 `        name: function (`
+        method_names = set()
+        for mm in re.finditer(r'^\s{4,}([A-Za-z_$][\w$]*)\s*:\s*function\s*\(',
+                              src, re.M):
+            method_names.add(mm.group(1))
+        if not method_names:
+            continue
+        # 本文件所有「模块级/局部函数声明」的名字 —— 裸调用它们是合法的
+        declared = set(re.findall(r'\bfunction\s+([A-Za-z_$][\w$]*)\s*\(', src))
+        # 变量赋值形式的函数也算：var f = function ( / const f = (…)
+        declared |= set(re.findall(
+            r'\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:function|\()', src))
+        for mm in sorted(method_names - declared):
+            # 裸调用：前面不是 . 也不是标识符字符
+            pat = r'(?<![\w$.])' + re.escape(mm) + r'\s*\('
+            for use in re.finditer(pat, src):
+                ln = line_of(src, use.start())
+                lines = src.splitlines()
+                line = lines[ln - 1] if ln - 1 < len(lines) else ''
+                # 排除「定义处本身」（`name: function (` 已由上面正则匹配）
+                if re.search(re.escape(mm) + r'\s*:\s*function', line):
+                    continue
+                # 排除别的对象/命名空间上恰好同名的方法（this.xxx / foo.xxx）
+                if re.search(r'\.\s*' + re.escape(mm) + r'\s*\(', line):
+                    continue
+                findings.append(Finding(
+                    'HIGH', 'P7', fn, ln,
+                    '疑似漏写对象前缀：%s( 为裸标识符' % mm,
+                    '本文件存在方法 `%s`，此处却未带前缀 → 运行到该行必然 ReferenceError'
+                    % mm))
 
     # ══════════════════════════════════════════════════════════
     # 输出
