@@ -193,6 +193,40 @@
     return tables;
   }
 
+  /**
+   * 把 chatId 翻译成人能看懂的名字。
+   *
+   * 原来标题只显示 chatId 后 6 位（「记忆表格 · foxkak」），
+   * 用户看到这个完全对不上是哪个聊天 —— 尤其在他想确认
+   * 「AI 说的事件七到底存在哪」的时候，连该翻哪一页都不知道。
+   *
+   * 这里优先给「联系人名」（私聊）或「群名」（群聊），
+   * 拿不到才退回 id 尾号，保证任何情况下都不会出现空标题。
+   */
+  function describeChat(chatId) {
+    var cid = String(chatId || '');
+    if (!cid) return '(未选择聊天)';
+    var out = '';
+    try {
+      var st = global.miyaChatStore;
+      if (st && typeof st.findChat === 'function') {
+        var chat = st.findChat(cid);
+        if (chat) {
+          if (chat.type === 'group') {
+            out = String(chat.title || '').trim();
+            if (!out) out = '群聊';
+          } else {
+            var contact = chat.name ? null : (st.findContact ? st.findContact(chat.contactId) : null);
+            out = String((contact && contact.name) || chat.title || chat.name || '').trim();
+          }
+        }
+      }
+    } catch (e) {}
+    if (!out) out = '未命名';
+    /* 附带 id 尾号，便于排查时对得上聊天记录 */
+    return out + '（' + cid.slice(-6) + '）';
+  }
+
   function render() {
     renderSettingsBar();
     var tables = getTables();
@@ -200,7 +234,50 @@
     renderTabs(tables);
     renderTable(tables[state.tableIndex]);
     var title = $('miya-mt-title');
-    if (title) title.textContent = '记忆表格 · ' + (state.chatId || '').slice(-6);
+    if (title) title.textContent = '记忆表格 · ' + describeChat(state.chatId);
+    renderScopeHint();
+  }
+
+  /**
+   * 显示「本页只属于当前这个聊天」以及「还有哪些聊天也存着表格」。
+   *
+   * 存在的理由：记忆表格按 chatId 分桶，一个聊天一张表。
+   * 用户遇到过「AI 说事件七，我哪里都找不到」——原因之一就是他不知道
+   * 这里只显示**当前聊天**的表，别的聊天的表在别处。
+   * 把这层信息摆明，就不需要靠猜。
+   */
+  function renderScopeHint() {
+    var host = $('miya-mt-scope');
+    if (!host) return;
+    var store = global.MiyaMemoryTableStore;
+    var others = [];
+    try {
+      var all = typeof store.listChatIds === 'function' ? store.listChatIds() : [];
+      others = all.filter(function (id) { return String(id) !== String(state.chatId); });
+    } catch (e) {}
+    var rowsHtml = '';
+    others.slice(0, 12).forEach(function (id) {
+      var n = 0;
+      try {
+        var ts = store.getChatTables(id) || [];
+        ts.forEach(function (t) {
+          if (t && t.id === 't_event') n = (t.rows || []).length;
+        });
+      } catch (e2) {}
+      rowsHtml +=
+        '<button type="button" class="miya-mt-other" data-mt-other="' + esc(id) + '">' +
+        esc(describeChat(id)) + '（事件 ' + n + ' 条）</button>';
+    });
+    if (!others.length) {
+      host.innerHTML =
+        '<p class="miya-mt-note">本表只属于「' + esc(describeChat(state.chatId)) +
+        '」。目前没有其他聊天存有记忆表。</p>';
+      return;
+    }
+    host.innerHTML =
+      '<p class="miya-mt-note">本表只属于「' + esc(describeChat(state.chatId)) +
+      '」——记忆表按聊天分开存，别的聊天看不到这里的行，反之亦然。</p>' +
+      '<p class="miya-mt-note">其他聊天的记忆表：' + rowsHtml + '</p>';
   }
 
   function bind() {
@@ -210,6 +287,18 @@
     var back = $('miya-mt-back');
     if (back) back.addEventListener('click', close);
     app.addEventListener('click', function (e) {
+      /* 切到「其他聊天」的记忆表：先保存当前编辑，再换桶重新渲染 */
+      var other = e.target.closest('[data-mt-other]');
+      if (other) {
+        var target = String(other.getAttribute('data-mt-other') || '').trim();
+        if (!target) return;
+        persist(readDomIntoTables()).then(function () {
+          state.chatId = target;
+          state.tableIndex = 0;
+          render();
+        });
+        return;
+      }
       var tab = e.target.closest('[data-mt-tab]');
       if (tab) {
         persist(readDomIntoTables()).then(function () {
@@ -218,8 +307,7 @@
         });
         return;
       }
-      var del = e.target.closest('[data-mt-del-row]');
-      if (del) {
+      var del = e.target.closest('[data-mt-del-row]');      if (del) {
         var tables = readDomIntoTables();
         var t = tables[state.tableIndex];
         var ri = Number(del.getAttribute('data-mt-del-row'));

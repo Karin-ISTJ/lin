@@ -3094,7 +3094,17 @@
      * 每个模块都用 try/catch + 能力探测包裹：模块可能未加载（懒加载）或版本较旧
      * 没有对应清理 API，此时静默跳过，绝不让清理失败反过来阻断删除联系人本身。
      */
-    function purgeContactScopedData(contactId) {
+    /**
+     * 清理某个联系人的全部「按 contactId / chatId 分桶」的独立存储。
+     *
+     * @param {string} contactId
+     * @param {string[]} [knownChatIds]
+     *   调用方在**把该角色的 chat 从 metaCache.chats 移除之前**算好的 chatId 列表。
+     *   为什么必须由调用方传：本函数在 removeContact 里是在 chats 已被过滤之后跑的，
+     *   此时再用 metaCache.chats 反查 chatId 会得到空集。记忆表格就是按 chatId
+     *   分桶的，拿不到 chatId 就等于清不掉（实测踩过：桶数 1 → 1）。
+     */
+    function purgeContactScopedData(contactId, knownChatIds) {
         var key = String(contactId || '').trim();
         if (!key) return Promise.resolve(false);
 
@@ -3158,6 +3168,48 @@
             var ap = global.MiyaAppointmentStore;
             if (ap && typeof ap.removeAllForContact === 'function') return ap.removeAllForContact(key);
             return null;
+        });
+
+        /*
+         * 记忆表格：桶是按 chatId 存的，不是按 contactId。
+         * 所以不能凭 contactId 直接删 —— 得先把该角色名下所有 chat 找出来，
+         * 再逐个 dropChat。这也是它一直漏掉的原因：
+         * 上面那些清理项都是「按 contactId 分桶」，而记忆表格是唯一一个
+         * 按 chatId 分桶的派生记忆，收口时被漏在外面。
+         *
+         * chatId 来源优先用调用方传入的 knownChatIds（见函数头注释：
+         * 此时 metaCache.chats 里已经没有这个角色了）；只有在调用方没传时，
+         * 才退回自己查一遍，聊胜于无。
+         */
+        safe('memoryTable', function () {
+            var mts = global.MiyaMemoryTableStore;
+            if (!mts || typeof mts.dropChat !== 'function') return null;
+            var ids = [];
+            if (Array.isArray(knownChatIds)) {
+                ids = knownChatIds.map(String).filter(Boolean);
+            }
+            if (!ids.length) {
+                (metaCache.chats || []).forEach(function (ch) {
+                    if (!ch) return;
+                    if (String(ch.contactId || '') === key) { ids.push(String(ch.id || '')); return; }
+                    if (ch.type === 'group') {
+                        var members = Array.isArray(ch.memberIds) ? ch.memberIds : [];
+                        if (members.map(String).indexOf(key) >= 0) ids.push(String(ch.id || ''));
+                    }
+                });
+            }
+            /* 去重 */
+            var seen = Object.create(null);
+            ids = ids.filter(function (id) {
+                if (!id || seen[id]) return false;
+                seen[id] = true;
+                return true;
+            });
+            if (!ids.length) return null;
+            var jobs = ids.map(function (id) {
+                try { return mts.dropChat(id); } catch (e) { return null; }
+            });
+            return Promise.all(jobs);
         });
 
         /* 返回聚合结果：调用方（removeContact）可等待全部清理落定 */
@@ -4132,6 +4184,17 @@
             var key = String(id || '');
             metaCache.contacts = metaCache.contacts.filter(function (c) { return c.id !== key; });
             var chatIds = metaCache.chats.filter(function (ch) { return ch.contactId === key; }).map(function (ch) { return ch.id; });
+            /*
+             * 群聊里该角色是成员的那些 chat 也要记下来 —— 记忆表格是按 chatId
+             * 分桶的，同一个角色在群里的表是另一个桶，只按 contactId 找不全。
+             */
+            var groupChatIds = metaCache.chats
+                .filter(function (ch) {
+                    if (!ch || ch.type !== 'group') return false;
+                    var members = Array.isArray(ch.memberIds) ? ch.memberIds : [];
+                    return members.map(String).indexOf(key) >= 0;
+                })
+                .map(function (ch) { return ch.id; });
             metaCache.chats = metaCache.chats.filter(function (ch) { return ch.contactId !== key; });
             chatIds.forEach(function (cid) { delete metaCache.messagesByChat[cid]; });
             invalidateLookupCache();
@@ -4140,8 +4203,14 @@
                读到上一段关系的残留。这里统一收口（详见 purgeContactScopedData）。
                约会 store 的清理是异步的（需先等 IndexedDB hydrate），先发起，
                再等 saveMeta 落盘后一并返回，保证 removeContact 的 Promise 完成时
-               该角色的残留数据已清干净。 */
-            var purgeDone = key ? purgeContactScopedData(key) : null;
+               该角色的残留数据已清干净。
+
+               ★ 注意顺序陷阱：上面第 4165 行已经把这个角色的 chat 从 metaCache.chats
+                 里过滤掉了，purgeContactScopedData 里再想「按 contactId 找 chatId」
+                 就永远找不到 —— 所以这里必须把**过滤前**算好的 chatIds 显式传进去。
+                 记忆表格的清理正是踩在这个坑上（初版实现没传，实测桶清不掉）。 */
+            var purgedChatIds = chatIds.concat(groupChatIds);
+            var purgeDone = key ? purgeContactScopedData(key, purgedChatIds) : null;
             return saveMeta().then(function () {
                 return purgeDone || null;
             }).then(function () {
@@ -4355,6 +4424,24 @@
             metaCache.chats.splice(idx, 1);
             if (metaCache.messagesByChat[cid]) delete metaCache.messagesByChat[cid];
             invalidateLookupCache();
+            /*
+             * 记忆表格桶要跟着删。
+             *
+             * 它存在另一个键（miya-memory-tables-v1），删聊天不会自动带上。
+             * 不删的后果不是「多占一点空间」，而是**孤儿桶会在 chatId 被复用
+             * 时复活**：createChat 对同一联系人是幂等的，重建后拿回同一个 chat id，
+             * 于是上一次关系里归纳出来的事件表原封不动地接着用 ——
+             * 表现出来就是「删了聊天重新开始，AI 还记得以前的事」。
+             *
+             * 这里用 dropChat（整桶移除）而不是 resetChat：
+             * 聊天都没了，不该留一个空壳桶等着被复用。
+             */
+            try {
+                var mtStore = global.MiyaMemoryTableStore;
+                if (mtStore && typeof mtStore.dropChat === 'function') {
+                    mtStore.dropChat(cid);
+                }
+            } catch (eMt) {}
             return saveMeta();
         },
 
@@ -5211,6 +5298,31 @@
                 idbDelete(k);
             });
             return chain.then(function () {
+                /*
+                 * 记忆表格也必须一并清掉。
+                 *
+                 * 不同的存储、同样的用户预期：「清空聊天记录」意味着这个角色
+                 * 的事我不记得了。但记忆表格存在 miya-memory-tables-v1，
+                 * 与聊天消息（miya-chat-meta）完全独立，清消息不会碰它。
+                 * 于是出现一种很难自查的现象：
+                 *   清空记录 → 重新发一模一样的一句话 →
+                 *   AI 回「这在重要事件表的事件七里已经发生过」
+                 * 用户去界面里找「事件七」，却根本不知道要去哪找 ——
+                 * 它不在聊天记录里，而在另一个存储的表格里。
+                 *
+                 * 记忆表格是**派生记忆**（由对话内容归纳而来），
+                 * 对话都清了，派生记忆留着没有意义，只会持续污染上下文。
+                 * 因此这里同步清空（用 resetChat 而非 dropChat：
+                 * 保留桶与表结构，用户下次进来仍是熟悉的五张空表）。
+                 */
+                try {
+                    var mtStore = global.MiyaMemoryTableStore;
+                    if (mtStore && typeof mtStore.resetChat === 'function') {
+                        return mtStore.resetChat(cid).then(function () {
+                            return saveMeta();
+                        });
+                    }
+                } catch (eMt) {}
                 return saveMeta();
             });
         },

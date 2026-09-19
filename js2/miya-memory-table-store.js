@@ -191,6 +191,39 @@
     return setChatTables(chatId, defaultTables());
   }
 
+  /**
+   * 彻底删掉某个聊天的记忆表格桶。
+   *
+   * 与 resetChat 的区别很重要：
+   *   resetChat 把桶重置为「默认空表」—— 桶**仍然存在**，只是行的内容被清空。
+   *   dropChat  把桶**整个移除** —— 连桶一起消失，不留任何痕迹。
+   *
+   * 为什么需要后者：记忆表格是按 chatId 分桶存的，而 chatId 在
+   * 「清空聊天记录 / 删除聊天 / 删除联系人」这些动作之后**可能被复用**
+   * （createChat 对同一联系人是幂等的，会返回已有 chat）。
+   * 若只做 reset，用户以后重新和这个角色聊天时，桶里的表结构会以
+   * 「默认空表」的样子出现 —— 看起来干净，但只要哪天有旧数据回填，
+   * 内容就又回来了。直接删桶才是真正的干净。
+   */
+  function dropChat(chatId) {
+    var id = String(chatId || '');
+    if (!id) return Promise.resolve(false);
+    var all = loadAll();
+    if (!all.chats || !Object.prototype.hasOwnProperty.call(all.chats, id)) {
+      return Promise.resolve(false);
+    }
+    delete all.chats[id];
+    return saveAll(all).then(function () {
+      return true;
+    });
+  }
+
+  /** 列出所有存在记忆表格的 chatId（供清理时遍历/排查残留） */
+  function listChatIds() {
+    var all = loadAll();
+    return Object.keys(all.chats || {});
+  }
+
   function exportChat(chatId) {
     return {
       version: 1,
@@ -217,6 +250,8 @@
     setChatTables: setChatTables,
     ensureChat: ensureChat,
     resetChat: resetChat,
+    dropChat: dropChat,
+    listChatIds: listChatIds,
     exportChat: exportChat,
     importChat: importChat,
     normalizeTable: normalizeTable

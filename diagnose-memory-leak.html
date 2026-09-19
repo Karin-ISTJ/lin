@@ -33,6 +33,7 @@ textarea{width:100%;height:260px;margin-top:12px;background:#000;color:#0f0;bord
 <script src="js1/miya-chat-store.js?v=60"></script>
 <script src="js1/miya-appointment-memory.js?v=16"></script>
 <script src="js1/miya-appointment-store.js?v=52"></script>
+<script src="js2/miya-memory-table-store.js"></script>
 <script>
 function log(s){ document.getElementById('out').value += s + '\n'; }
 function fmt(n){ return n==null?'—':(n<1024?n+' B':(n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB')); }
@@ -245,8 +246,83 @@ document.getElementById('go').addEventListener('click', async function(){
   } catch(e) { log('  读取失败: ' + e.message); }
   log('');
 
-  // ── 6) 全库关键词扫描 ──
-  log('【6】全库扫描：还有哪些地方存着内容');
+  // ── 6) 记忆表格：AI 说的「事件N」就藏在这里 ──
+  log('【6】记忆表格（AI 说的「事件七」= 重要事件表的 rowIndex 7）');
+  log('    这是独立存储（miya-memory-tables-v1），清空聊天记录**不会**清它');
+  try {
+    var mts = window.MiyaMemoryTableStore;
+    var r6 = readLsJson('miya-memory-tables-v1');
+    var pack = (r6.data && r6.data.chats) || {};
+    var bucketIds = Object.keys(pack);
+    /*
+     * 裸读 localStorage 可能为空 —— miyaSafeLsSet 在配额吃紧时会把整个键
+     * 挪进 IndexedDB，此时 localStorage 里查不到，但数据是存在的。
+     * 模块 API 走的是同一套读取逻辑，能正确拿到。
+     */
+    if (!bucketIds.length && mts && typeof mts.listChatIds === 'function') {
+      try {
+        bucketIds = mts.listChatIds() || [];
+        if (bucketIds.length) log('  (localStorage 为空，改用模块 API listChatIds 读取)');
+      } catch (eApi) {
+        log('  (listChatIds 调用失败: ' + eApi.message + ')');
+      }
+    }
+    /* 用模块 API 建一份权威的桶内容快照，供下面逐行输出使用 */
+    var packByApi = {};
+    if (mts && typeof mts.getChatTables === 'function') {
+      bucketIds.forEach(function (bid) {
+        try { packByApi[bid] = { tables: mts.getChatTables(bid) }; } catch (eT) {}
+      });
+      if (Object.keys(packByApi).length) pack = packByApi;
+    }
+    log('  存储键 miya-memory-tables-v1: ' + (r6.raw ? fmt(r6.raw.length) : '不存在/已溢出到 IDB'));
+    log('  桶（聊天）总数: ' + bucketIds.length);
+    if (!bucketIds.length) {
+      log('  （没有任何记忆表格数据）');
+    } else {
+      /* 逐个桶列出，并标出哪些桶是有内容的（空桶不算残留） */
+      var withContent = [];
+      bucketIds.forEach(function(bid){
+        var ts = (pack[bid] && pack[bid].tables) || [];
+        var parts = [];
+        var totalRows = 0;
+        ts.forEach(function(t){
+          var n = ((t && t.rows) || []).length;
+          if (n > 0) { parts.push(String(t.name || t.id) + ' ' + n + ' 行'); totalRows += n; }
+        });
+        if (totalRows > 0) withContent.push({ id: bid, desc: parts.join('、'), rows: totalRows });
+      });
+      log('  其中有内容的桶: ' + withContent.length + ' 个');
+      withContent.forEach(function(b){
+        log('    · 聊天 ' + String(b.id).slice(-8) + '：' + b.desc);
+      });
+      log('');
+      log('  ── 重要事件表逐行（这是 AI 会引用编号的地方）──');
+      bucketIds.forEach(function(bid){
+        var ts = (pack[bid] && pack[bid].tables) || [];
+        var ev = ts.filter(function(t){ return t && t.id === 't_event'; })[0];
+        var rows = (ev && ev.rows) || [];
+        if (!rows.length) return;
+        log('    聊天 ' + bid.slice(-8) + ' 的重要事件表，共 ' + rows.length + ' 行：');
+        rows.forEach(function(row, ri){
+          var cells = Array.isArray(row) ? row : Object.keys(row).map(function(k){ return row[k]; });
+          var txt = cells.map(function(c){ return String(c == null ? '' : c); }).join(' | ');
+          log('      rowIndex ' + ri + '（即「事件' +
+              (ri === 0 ? '一' : ri === 1 ? '二' : ri === 2 ? '三' : ri === 3 ? '四' :
+               ri === 4 ? '五' : ri === 5 ? '六' : ri === 6 ? '七' : ri === 7 ? '八' :
+               ri === 8 ? '九' : ri === 9 ? '十' : (ri + 1)) +
+              '」）= ' + txt.replace(/\s+/g, ' ').slice(0, 70));
+        });
+      });
+      if (!withContent.length) {
+        log('  ✓ 所有桶都是空的（记忆表里没有内容）');
+      }
+    }
+  } catch(e) { log('  读取失败: ' + e.message); }
+  log('');
+
+  // ── 7) 全库关键词扫描 ──
+  log('【7】全库扫描：还有哪些地方存着内容');
   try {
     var keys = [];
     for (var i=0;i<localStorage.length;i++){ keys.push(localStorage.key(i)); }

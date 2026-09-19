@@ -132,3 +132,28 @@
   background: #1a1a1a;
   color: #fff;
 }
+
+/* ── 作用域提示：明确「本表只属于当前聊天」+ 快速切到其他聊天的表 ── */
+.miya-mt-scope {
+  margin: 0 0 10px;
+}
+.miya-mt-scope .miya-mt-note {
+  margin: 0 0 6px;
+  line-height: 1.55;
+}
+.miya-mt-other {
+  display: inline-block;
+  margin: 0 6px 6px 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(120,100,80,.28);
+  border-radius: 999px;
+  background: rgba(255,255,255,.72);
+  color: #6b5a48;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease;
+}
+.miya-mt-other:hover {
+  background: #fff;
+  border-color: rgba(120,100,80,.5);
+}
