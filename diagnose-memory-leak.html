@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>记忆残留诊断</title>
+<style>
+:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--warn:#ff6b6b;--ok:#4ade80;--acc:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+h1{font-size:17px;margin:0 0 4px}
+.sub{color:var(--mut);font-size:12px;margin-bottom:14px}
+button{background:var(--acc);color:#000;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer}
+button:active{opacity:.7}
+textarea{width:100%;height:260px;margin-top:12px;background:#000;color:#0f0;border:1px solid var(--line);border-radius:8px;padding:10px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre;overflow:auto}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0}
+.k{color:var(--mut);font-size:12px}
+.v{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all}
+.warn{color:var(--warn);font-weight:700}
+.ok{color:var(--ok)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px dashed #222}
+.row:last-child{border-bottom:0}
+</style>
+</head>
+<body>
+<h1>记忆残留诊断</h1>
+<div class="sub">把这份文件放到 Karin 的 index.html 同目录下打开，点下面的按钮。</div>
+
+<button id="go">开始诊断</button>
+<textarea id="out" readonly placeholder="结果会显示在这里，复制整段发给我"></textarea>
+
+<script src="js2/miya-storage.js?v=17"></script>
+<script src="js1/miya-chat-store.js?v=60"></script>
+<script src="js1/miya-appointment-memory.js?v=16"></script>
+<script src="js1/miya-appointment-store.js?v=52"></script>
+<script>
+function log(s){ document.getElementById('out').value += s + '\n'; }
+function fmt(n){ return n==null?'—':(n<1024?n+' B':(n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB')); }
+
+/*
+ * 存储读取要分三层兜底，缺一层就会误报「不存在」：
+ *   ① 模块 API（getMeta / getSessions / getDeletedSessionIds）—— 最可靠；
+ *   ② localStorage 主键；
+ *   ③ 同名 :backup 键 + IDB 溢出（miyaSafeLsSet 配额满时会把大键挪进 IDB，
+ *      此时 localStorage 读出来是空的，直接裸读会给出假阴性）。
+ */
+function readLsJson(key){
+  var raw = null;
+  try { raw = localStorage.getItem(key); } catch(e) {}
+  if (!raw) { try { raw = localStorage.getItem(key + ':backup'); } catch(e2) {} }
+  if (!raw) { try { raw = localStorage.getItem(key + '-backup'); } catch(e3) {} }
+  if (!raw) return { found: false, data: null, raw: null };
+  try { return { found: true, data: JSON.parse(raw), raw: raw }; }
+  catch(e) { return { found: true, data: null, raw: raw }; }
+}
+
+/* 从模块 API 尽力重建「镜像扫描」所需的数据 */
+async function metaRobust(st){
+  var mbc = {};
+  try {
+    var meta = st.getMeta ? st.getMeta() : null;
+    if (meta && meta.messagesByChat) mbc = meta.messagesByChat;
+  } catch(e) {}
+  if (!Object.keys(mbc).length) {
+    var r = readLsJson('miya-chat-meta');
+    if (r.data && r.data.messagesByChat) mbc = r.data.messagesByChat;
+  }
+  /* 仍为空则逐聊天列出（IDB 水合可能未完成） */
+  if (!Object.keys(mbc).length) {
+    try {
+      var chats = (st.getChats ? st.getChats() : []) || [];
+      if (chats.length) { mbc = {}; log('  (getMeta 为空，按 ' + chats.length + ' 个聊天逐条探测)'); }
+    } catch(e2) {}
+  }
+  return mbc;
+}
+
+document.getElementById('go').addEventListener('click', async function(){
+  var btn = this; btn.disabled = true; btn.textContent = '诊断中…';
+  await new Promise(function(r){ setTimeout(r, 1200); });   // 等 defer 模块就位与 IDB 水合
+  var out = document.getElementById('out');
+  out.value = '';
+  log('===== 记忆残留诊断 =====');
+  log('时间: ' + new Date().toLocaleString('zh-CN'));
+  log('');
+
+  var aps = window.MiyaAppointmentStore;
+  var st  = window.miyaChatStore;
+  var mem = window.MiyaAppointmentMemory;
+
+  if (!aps || !st) {
+    log('!! 没找到模块。请确认：');
+    log('   1) 这份 HTML 和 index.html 在同一个目录；');
+    log('   2) 通过 http(s) 打开（不是双击 file://）；');
+    log('   3) 下面的 js2/ js1/ 路径能访问到。');
+    log('');
+    log('  自检: storage=' + (typeof window.miyaStorage) + ' chatStore=' + (typeof window.miyaChatStore));
+    btn.disabled = false; btn.textContent = '开始诊断';
+    return;
+  }
+
+  try { if (st.init) await st.init(); } catch(eInit) {}
+  try { if (aps.ensureHydrated) await aps.ensureHydrated(); } catch(eHyd) {}
+
+  // ── 1) 线下卷宗：物理落盘情况 ──
+  log('【1】线下卷宗（往日卷宗）');
+  try {
+    var r1 = readLsJson('miya-appointment-v1');
+    var parsed = r1.data;
+    var byChat = (parsed && parsed.byChat) || {};
+    var live = 0, chatKeys = 0;
+    Object.keys(byChat).forEach(function(k){
+      var s = byChat[k] && byChat[k].sessions;
+      if (Array.isArray(s) && s.length) { chatKeys++; live += s.length; }
+    });
+    var tomb = (parsed && parsed.deletedSessionIds) || {};
+    var tombIds = Object.keys(tomb);
+    log('  存储键 miya-appointment-v1: ' + (r1.raw ? fmt(r1.raw.length) : '不存在'));
+    log('  当前存活卷宗数: ' + live + '（分布在 ' + chatKeys + ' 个聊天）');
+    log('  墓碑（已删 id）数: ' + tombIds.length);
+    if (tombIds.length) {
+      log('  ── 最近 10 个墓碑：');
+      tombIds.slice(-10).forEach(function(id){ log('      ' + id); });
+    }
+    // 卷宗里的总结和正文总量
+    var sumN = 0, msgN = 0;
+    Object.keys(byChat).forEach(function(k){
+      ((byChat[k] && byChat[k].sessions) || []).forEach(function(s){
+        sumN += ((s && s.summaryList) || []).length;
+        msgN += ((s && s.messages) || []).filter(function(m){ return m && !m.deleted; }).length;
+      });
+    });
+    log('  卷宗内总结条数: ' + sumN + '，有效正文条数: ' + msgN);
+  } catch(e) { log('  读取失败: ' + e.message); }
+  log('');
+
+  // ── 2) 线上记忆总结（记忆功能 / 记忆表格）──
+  log('【2】线上记忆总结 chatSettings 双清单');
+  try {
+    var chats = (st.getChats ? st.getChats() : []) || [];
+    log('  聊天总数: ' + chats.length);
+    var totalS = 0, totalM = 0, totalC = 0;
+    chats.forEach(function(c){
+      var s = st.getChatSettings ? st.getChatSettings(c.id) : null;
+      if (!s) return;
+      var sl = (s.summaryList || []).length;
+      var ml = (s.megaSummaryList || []).length;
+      var cl = (s.charMemoryList || []).length;
+      totalS += sl; totalM += ml; totalC += cl;
+      if (sl || ml || cl) {
+        log('  - ' + (c.name || c.id) + '：分镜 ' + sl + ' / 大总结 ' + ml + ' / 角色记忆 ' + cl);
+      }
+    });
+    log('  合计：分镜 ' + totalS + '，大总结 ' + totalM + '，角色记忆 ' + totalC);
+    if (totalS === 0 && totalM === 0) log('  （两个清单都是空的 —— 和你在界面上看到的一致）');
+  } catch(e) { log('  读取失败: ' + e.message); }
+  log('');
+
+  // ── 3) 记忆表格独立存储 ──
+  log('【3】记忆表格独立存储');
+  try {
+    var t1 = localStorage.getItem('miya-memory-tables-v1');
+    var t2 = localStorage.getItem('miya-memory-table-settings-v1');
+    log('  miya-memory-tables-v1: ' + (t1 ? fmt(t1.length) : '不存在'));
+    log('  miya-memory-table-settings-v1: ' + (t2 ? fmt(t2.length) : '不存在'));
+  } catch(e) { log('  读取失败: ' + e.message); }
+  log('');
+
+  // ── 4) 【关键】线上线程里残留的 offlineMeet 镜像 ──
+  log('【4】关键：聊天线程里残留的「线下镜像」');
+  log('    （被删卷宗的正文会以 offlineMeet 标记留在聊天记录里）');
+  try {
+    var mbc = await metaRobust(st);
+    log('  已扫描聊天线程数: ' + Object.keys(mbc).length);
+    if (!Object.keys(mbc).length) {
+      log('  ⚠ 一条线程都没读到 —— 可能是 IDB 尚未水合完成。');
+      log('    请刷新页面后重试；若始终为 0，说明本浏览器里确实没有聊天数据。');
+    }
+    var found = 0;
+    Object.keys(mbc).forEach(function(chatId){
+      var arr = mbc[chatId] || [];
+      var hit = arr.filter(function(m){ return m && m.offlineMeet; });
+      var liveHit = hit.filter(function(m){ return !m.deleted && String(m.content||'').trim(); });
+      if (liveHit.length) {
+        found += liveHit.length;
+        log('  - 聊天 ' + chatId + '：offlineMeet 镜像 ' + hit.length +
+            ' 条，其中【仍存活且有内容】' + liveHit.length + ' 条  ⚠️');
+      }
+    });
+    if (!found) log('  ✓ 没有存活的镜像残留');
+    else {
+      log('');
+      log('  ⚠️⚠️ 找到 ' + found + ' 条存活的线下镜像 —— 这就是泄漏源。');
+      log('      它们不在「记忆档案」里，而是以聊天记录的身份');
+      log('      混在线下场景的消息历史里送给模型。');
+      log('      下面列出前 6 条（截断到 60 字）：');
+      var shown = 0;
+      Object.keys(mbc).forEach(function(chatId){
+        if (shown >= 6) return;
+        ((mbc[chatId] || []).filter(function(m){ return m && m.offlineMeet && !m.deleted && String(m.content||'').trim(); }))
+          .forEach(function(m){
+            if (shown >= 6) return;
+            shown++;
+            log('      [' + chatId.slice(-8) + '] sess=' + String(m.appointmentSessionId||'').slice(-8) +
+                ' :: ' + String(m.content||'').replace(/\s+/g,' ').slice(0,60));
+          });
+      });
+    }
+  } catch(e) { log('  读取失败: ' + e.message); }
+  log('');
+
+  // ── 5) 墓碑与存活镜像的交叉比对（决定性证据）──
+  log('【5】交叉比对：已删卷宗 id 是否还有存活镜像');
+  try {
+    var tombSet = {};
+    if (aps && typeof aps.getDeletedSessionIds === 'function') {
+      (aps.getDeletedSessionIds() || []).forEach(function(id){ tombSet[String(id)] = true; });
+      log('  (墓碑取自模块 API getDeletedSessionIds)');
+    } else {
+      var r5 = readLsJson('miya-appointment-v1');
+      var tombs = (r5.data && r5.data.deletedSessionIds) || {};
+      Object.keys(tombs).forEach(function(k){ tombSet[k] = true; });
+      log('  (墓碑取自存储键 miya-appointment-v1)');
+    }
+    log('  墓碑总数: ' + Object.keys(tombSet).length);
+    var mbc2 = await metaRobust(st);
+    var orphans = {};
+    Object.keys(mbc2).forEach(function(chatId){
+      ((mbc2[chatId]) || []).forEach(function(m){
+        if (!m || !m.offlineMeet || m.deleted) return;
+        if (!String(m.content||'').trim()) return;
+        var sid = String(m.appointmentSessionId||'').trim();
+        if (sid && tombSet[sid]) orphans[sid] = (orphans[sid]||0) + 1;
+      });
+    });
+    var oids = Object.keys(orphans);
+    if (!oids.length) log('  ✓ 没有「已删卷宗却仍有存活镜像」的情况');
+    else {
+      log('  ⚠️⚠️ 确诊：以下【已删除】的卷宗仍有存活镜像渗入上下文');
+      oids.slice(0,10).forEach(function(sid){ log('      ' + sid + ' → ' + orphans[sid] + ' 条'); });
+      log('');
+      log('  ★ 这就是根因：卷宗删了，但它在聊天记录里的镜像还在，');
+      log('    线下场景把本场消息历史整段送给模型，镜像就混在里面。');
+    }
+  } catch(e) { log('  读取失败: ' + e.message); }
+  log('');
+
+  // ── 6) 全库关键词扫描 ──
+  log('【6】全库扫描：还有哪些地方存着内容');
+  try {
+    var keys = [];
+    for (var i=0;i<localStorage.length;i++){ keys.push(localStorage.key(i)); }
+    var rows = keys.map(function(k){
+      var v = localStorage.getItem(k) || '';
+      return { k:k, len:v.length };
+    }).filter(function(r){ return r.len > 2000; })
+      .sort(function(a,b){ return b.len - a.len; });
+    log('  体积 > 2KB 的键（前 15，按大小降序）：');
+    rows.slice(0,15).forEach(function(r){ log('      ' + fmt(r.len).padStart(9) + '  ' + r.k); });
+  } catch(e) { log('  读取失败: ' + e.message); }
+
+  log('');
+  log('===== 诊断结束，复制以上全部内容 =====');
+  btn.disabled = false; btn.textContent = '再诊断一次';
+});
+</script>
+</body>
+</html>

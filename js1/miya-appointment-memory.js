@@ -162,15 +162,50 @@
             });
     }
 
-    /** 线下 session 总结范围 + 消息 id→序号，供线上 API 按条过滤镜像（仅去掉已总结段，保留未总结尾巴） */
+    /**
+     * 线下 session 总结范围 + 消息 id→序号 + 已删卷宗墓碑，
+     * 供线上 API 按条过滤镜像。
+     *
+     * ── 为什么这里必须读墓碑 ──
+     * 本函数的数据源是 aps.exportForMemory() → getSessionsByContact()，
+     * **只返回活着的卷宗**。于是「卷宗已被删除」这件事在旧口径下表现为
+     * 「上下文里根本没有这个 session」，而下游 shouldKeepOfflineMirror
+     * 把「查不到」当成「无需过滤」，一律放行 ——
+     * 结果是**删除动作亲手关掉了过滤**，已删卷宗的镜像反而畅通无阻地
+     * 带着正文进入 API。用户看到的就是「我删过的卷宗内容，AI 还记得」。
+     *
+     * 墓碑（deletedSessionIds）是删除留下的物理事实，与卷宗是否还在列表里无关，
+     * 把它一并装进上下文，下游才能把「已删」与「从未总结」区分开。
+     */
     function buildOfflineMirrorFilterContext(chatId, contactId) {
         var ctx = {
             sessionRanges: Object.create(null),
             msgIndexById: Object.create(null),
-            hiddenMsgIds: Object.create(null)
+            hiddenMsgIds: Object.create(null),
+            /* 已被删除的卷宗 id 集合（墓碑） */
+            tombstoned: Object.create(null),
+            /* 是否成功读到墓碑表；读不到时下游要退化到保守策略 */
+            tombstoneKnown: false
         };
         var aps = apStore();
-        if (!aps || typeof aps.exportForMemory !== 'function') return ctx;
+        if (!aps) return ctx;
+        /*
+         * 先装墓碑，再装活卷宗。
+         * 顺序无关紧要（两张表独立），但墓碑必须**无条件**尝试装载 ——
+         * 哪怕下面因为拿不到 contactId 提前 return，墓碑也已就位。
+         */
+        try {
+            if (typeof aps.getDeletedSessionIds === 'function') {
+                (aps.getDeletedSessionIds() || []).forEach(function (id) {
+                    var s = String(id || '').trim();
+                    if (s) ctx.tombstoned[s] = true;
+                });
+                ctx.tombstoneKnown = true;
+            }
+        } catch (eTombs) {
+            ctx.tombstoneKnown = false;
+        }
+        if (typeof aps.exportForMemory !== 'function') return ctx;
         var cid = String(contactId || '').trim();
         if (!cid && chatId) cid = resolveContactId(chatId);
         if (!cid) return ctx;
@@ -215,7 +250,51 @@
         var apId = String(m.appointmentMsgId || '').trim();
         if (apId && hiddenIds && hiddenIds[apId]) return false;
         var sid = String(m.appointmentSessionId || '').trim();
-        if (!sid) return true;
+
+        /*
+         * 墓碑优先：镜像所属卷宗已被删除 → 一律丢弃，内容不进 API。
+         *
+         * 这一条必须**排在区间判断之前**，因为它是唯一能覆盖
+         * 「卷宗已删、exportForMemory 里查不到它、因而 sessionRanges 为空」
+         * 这种情形的判据。旧实现缺了这一条，于是：
+         *   删除卷宗 → 上下文里没有该 session → ranges 查不到 →
+         *   按第 255 行的旧分支 `return true` 放行 → 内容照旧注入。
+         * 用户抱怨的「删过的卷宗 AI 还记得」，就是这条路径。
+         *
+         * 放在 hidden 之后是为了不改动隐藏层既有的丢弃语义（两者结果一致）。
+         */
+        if (sid && filterCtx.tombstoned && filterCtx.tombstoned[sid]) return false;
+
+        /*
+         * 卷宗已从列表消失、又不是明确的活卷宗 —— 视为已删除。
+         *
+         * 墓碑有 30 天 TTL 与 500 条上限，过期后上面的判据就失效了。
+         * 这里补一道不依赖时间的判据：镜像自称属于某个 session，
+         * 但该 session 既不在活卷宗索引里、也不在墓碑表里 ——
+         * 说明它已经不存在了（删除太久 / 被清理 / 数据迁移丢弃）。
+         * 此时**不能**再按「没有区间」放行，否则过期墓碑会让内容重新泄漏。
+         *
+         * 仅在墓碑表成功读到（tombstoneKnown）时启用，
+         * 避免存储异常导致整条链路误删正常内容。
+         */
+        if (
+            sid &&
+            filterCtx.tombstoneKnown &&
+            !filterCtx.msgIndexById[sid] &&
+            !filterCtx.sessionRanges[sid]
+        ) {
+            return false;
+        }
+
+        if (!sid) {
+            /*
+             * 镜像没有 appointmentSessionId —— 无法归属任何卷宗。
+             * 正常写入（mirrorMessageToChat）一定会带上这个字段，
+             * 缺失只可能来自旧版本数据或异常写入，属于无法验证来源的孤儿。
+             * 无主的镜像不该带去内容进上下文。
+             */
+            return false;
+        }
         var ranges = filterCtx.sessionRanges[sid];
         if (!ranges || !ranges.length) return true;
         var mid = apId;

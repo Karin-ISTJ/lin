@@ -609,6 +609,12 @@
             softDeleteChatMirror(st, t, m);
         }
 
+        /*
+         * 第一路：卷宗自己的消息上记着镜像 id（chatMirrorId / castMirrors）。
+         * 精确、便宜，但有前提 —— 卷宗对象必须是**真正那一份**。
+         * deleteSession 在宿主桶找不到时会退化成 {messages: []} 的空壳，
+         * 这一路就什么都点不到，全靠下面的第二路兜底。
+         */
         (sess.messages || []).forEach(function (msg) {
             if (!msg) return;
             if (msg.chatMirrorId) mark(primary, msg.chatMirrorId);
@@ -619,15 +625,39 @@
             }
         });
 
+        /*
+         * 第二路：全库扫镜像，按 appointmentSessionId 认领。
+         *
+         * 这是删除能否清干净的关键。镜像散布在「主线程 + 每个 cast 成员的私聊」
+         * 多条线程上，只靠第一路（需要卷宗对象完好）不够。
+         *
+         * 口径放宽的缘由：appointmentSessionId 在某些历史数据里可能缺失或被
+         * 迁移改写过，一旦不等就永远扫不到，镜像便以 deleted:false 存活，
+         * 而 recoverSessionsFromChatMirrors 又能凭这些存活镜像把**已删卷宗
+         * 整卷复活** —— 表现就是「删过的卷宗过一阵又回来了」。
+         * 因此这里额外接受「appointmentMsgId 命中本卷宗消息 id」的镜像。
+         */
         var meta = typeof st.getMeta === 'function' ? st.getMeta() : null;
         var messagesByChat = meta && meta.messagesByChat;
         if (!messagesByChat || typeof messagesByChat !== 'object') return;
+
+        /* 卷宗内所有消息 id，用于第二路补充匹配 */
+        var ownMsgIds = Object.create(null);
+        (sess.messages || []).forEach(function (msg) {
+            if (msg && msg.id) ownMsgIds[String(msg.id)] = true;
+        });
+
         Object.keys(messagesByChat).forEach(function (tid) {
             var arr = messagesByChat[tid] || [];
             for (var i = 0; i < arr.length; i++) {
                 var m = arr[i];
                 if (!m || m.deleted || !m.offlineMeet) continue;
-                if (String(m.appointmentSessionId || '').trim() !== sid) continue;
+                var hit = String(m.appointmentSessionId || '').trim() === sid;
+                if (!hit) {
+                    var apMid = String(m.appointmentMsgId || '').trim();
+                    if (apMid && ownMsgIds[apMid]) hit = true;
+                }
+                if (!hit) continue;
                 mark(tid, m.id);
             }
         });
@@ -2569,9 +2599,37 @@
         deleteSession: function (chatId, sessionId) {
             var sid = String(sessionId || '').trim();
             if (!sid) return;
+            load();
             var sess = store.getSession(chatId, sid);
+            /*
+             * 宿主桶里找不到时，**先去别的桶把真身捞出来**，再退化到空壳。
+             *
+             * 原实现直接构造 {id, chatId, messages: []}，丢掉两样东西：
+             *   · 真实 chatId —— 第一路 mark(primary, chatMirrorId) 会指向错误线程，
+             *     镜像软删打空；
+             *   · messages   —— 第一路整个失效（没有 chatMirrorId 可点名）。
+             * 于是只剩「按 appointmentSessionId 全库扫」一条路可走，而那条路
+             * 对 appointmentSessionId 缺失的历史数据又无效 —— 镜像留在原处，
+             * 后续 recoverSessionsFromChatMirrors 还会把它复活成卷宗。
+             *
+             * 真实场景确实会出现桶不匹配：migrateSessionsToCanonicalChat 会把
+             * 卷宗搬到 canonical chat 下，UI 若还拿着旧 chatId 调删除就会落空。
+             */
             if (!sess) {
-                /* 宿主桶找不到时仍按 id 扫全库镜像，避免多人/迁移残留 */
+                Object.keys(cache.byChat || {}).some(function (key) {
+                    var bucket = cache.byChat[key];
+                    if (!bucket || !Array.isArray(bucket.sessions)) return false;
+                    var found = bucket.sessions.filter(function (s) {
+                        return s && String(s.id) === sid;
+                    })[0];
+                    if (!found) return false;
+                    sess = found;
+                    /* 用真身自己的 chatId 覆盖，保证第一路点到正确线程 */
+                    return true;
+                });
+            }
+            if (!sess) {
+                /* 确实全库都没有：仍按 id 扫全库镜像，避免多人/迁移残留 */
                 sess = { id: sid, chatId: chatId, messages: [] };
             }
             /* 彻底删除：线下卷宗 + 线上镜像一并清掉，不再注入上下文 */
@@ -2746,6 +2804,32 @@
             b.activeSessionId = '';
             flushSave();
             return sess;
+        },
+        /*
+         * 墓碑查询对外开口。
+         *
+         * 为什么必须开这个口子：
+         *   「删掉卷宗后，AI 仍然读得到里面的内容」这个现象，根子在
+         *   镜像过滤（MiyaAppointmentMemory.shouldKeepOfflineMirror）
+         *   **只看「卷宗是否还活着且带总结区间」**。而 exportForMemory
+         *   只返回活着的卷宗，于是删完之后过滤器查不到任何区间，
+         *   把「没有区间」误当成「无需过滤」，把所有镜像一律放行 ——
+         *   删除动作反而让内容更容易进 API，完全反直觉。
+         *
+         *   墓碑（deletedSessionIds）是删除动作留下的**物理事实**，
+         *   与卷宗是否还在列表里无关。让过滤器能直接读到它，
+         *   才能把「已删」与「从未总结」这两种语义分开。
+         */
+        isSessionTombstoned: function (sessionId) {
+            var sid = String(sessionId || '').trim();
+            if (!sid) return false;
+            load();
+            return isSessionTombstoned(sid);
+        },
+        getDeletedSessionIds: function () {
+            load();
+            var map = currentTombstoneMap();
+            return Object.keys(map || {});
         },
         flushSave: flushSave,
         invalidateCache: function () { cache = null; }
