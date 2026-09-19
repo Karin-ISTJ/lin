@@ -9,6 +9,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no, date=no, email=no, address=no">
   <meta name="apple-mobile-web-app-title" content="Karin">
+  <!--
+    版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
+    SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
+  -->
+  <meta name="miya-sw-build" content="sw-2">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=52" type="image/png">
@@ -3497,6 +3502,6 @@
   <script defer src="miya-auth/auth.js?v=5"></script>
   <script defer src="js2/miya-st-prompt-presets-store.js?v=33"></script>
   <script defer src="js2/miya-st-prompt-presets-app.js?v=33"></script>
-  <script defer src="js1/app.js?v=93"></script>
+  <script defer src="js1/app.js?v=94"></script>
 </body>
 </html>

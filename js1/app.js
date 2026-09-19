@@ -625,10 +625,47 @@
     if (e.target.id === 'modal') document.getElementById('modal').hidden = true;
   });
 
+  /*
+   * Service Worker + 版本哨兵。
+   *
+   * 背景（「修好的 bug 过一两天又复发」的根治链，配套 sw.js 的 key 归一化）：
+   * 旧机制下 SW 离线回退会按路径翻缓存里任意 ?v= 的旧副本 ——
+   * 修复后的代码在网络抖动时被旧版本顶掉，用户看到的就是「改完好、过几天又出现」。
+   *
+   * 哨兵职责：SW 接管/广播构建号时与本页 <meta name="miya-sw-build"> 比对，
+   * **SW 比页面新**才自动刷新一次页面 —— 磁盘已是新版、当前页面还捧着
+   * 旧副本的窗口期由此关闭。方向判断防住镜像场景（页面新、SW 旧）：
+   * 那种情况刷新反而可能在离线时回退到旧缓存页，所以只在 SW 更新时刷。
+   * sessionStorage 防循环：一次会话最多自动刷新一次。
+   */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    function miyaSwBuildNum(s) {
+      var m = /(\d+)\s*$/.exec(String(s || '').trim());
+      return m ? Number(m[1]) : 0;
+    }
+    function miyaHandleSwBuild(swBuild) {
+      try {
+        if (sessionStorage.getItem('miya-sw-build-reloaded') === '1') return;
+        var meta = document.querySelector('meta[name="miya-sw-build"]');
+        var pageBuild = meta ? String(meta.getAttribute('content') || '').trim() : '';
+        if (!pageBuild) return;
+        if (miyaSwBuildNum(swBuild) <= miyaSwBuildNum(pageBuild)) return; /* SW 不比页面新，不刷 */
+        sessionStorage.setItem('miya-sw-build-reloaded', '1');
+        location.reload();
+      } catch (e) { /* 无痕/禁存储环境静默放弃，不影响功能 */ }
+    }
+    navigator.serviceWorker.addEventListener('message', function (event) {
+      var d = event && event.data;
+      if (d && d.type === 'miya-sw-build') miyaHandleSwBuild(d.build);
+    });
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=84').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=85').then(function (reg) {
         try { reg.update(); } catch (e) {}
+        /* 主动问一次（防 SW 的 activate 广播早于本页注册监听而错过） */
+        var ctl = navigator.serviceWorker.controller || (reg && (reg.active || reg.installing || reg.waiting));
+        if (ctl) {
+          try { ctl.postMessage({ type: 'miya-get-build' }); } catch (e2) {}
+        }
       }).catch(function () {});
     });
   }
