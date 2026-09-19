@@ -42,7 +42,7 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
 const engSrc = read('js1/miya-chat-engine.js');
 
 /* 取出 buildRegenerateTailNudge 的函数体（保留原格式，便于读字符串） */
-const fnMatch = engSrc.match(/function\s+buildRegenerateTailNudge\s*\(\)\s*\{[\s\S]*?\n    \}/);
+const fnMatch = engSrc.match(/function\s+buildRegenerateTailNudge\s*\([^)]*\)\s*\{[\s\S]*?\n    \}/);
 const fnBody = fnMatch ? fnMatch[0] : '';
 check('Q1a 定位到 buildRegenerateTailNudge 函数体', !!fnBody,
   fnBody ? ('长度 ' + fnBody.length) : '未匹配');
@@ -52,13 +52,32 @@ check('Q1b 含「上一版回复已被丢弃」的明确告知',
   /已被用户丢弃|已被丢弃|上一版/.test(fnBody),
   '命中=' + /已被用户丢弃|已被丢弃|上一版/.test(fnBody));
 
-check('Q1c 含「换一个切入角度」类改写要求',
-  /换一个切入角度|换角度|另一种|重新回应/.test(fnBody),
-  '命中=' + /换一个切入角度|换角度|另一种|重新回应/.test(fnBody));
+check('Q1c 含「换方向」类改写要求（换一个角度切入…）',
+  /换一个角度切入|换一个切入角度|换角度|换一个话题侧重/.test(fnBody),
+  '命中=' + /换一个角度切入|换一个切入角度|换角度|换一个话题侧重/.test(fnBody));
+
+/*
+ * Q1e（v8.4 新增）：必须**明确排除**「同义改写」这条歧义读法。
+ *
+ * 用户原话：「『换个说法』这句话有歧义 是同一个意思换个说法还是换一种别的」
+ * 只说「换一个角度」还不够 —— 模型完全可以理解成「同一个意思换套词」。
+ * 所以要求文里出现显式的排除句。
+ */
+check('Q1e 显式排除「同义改写」歧义读法',
+  /不是[\s\S]{0,40}换一组词|同义改写/.test(fnBody),
+  '命中=' + /不是[\s\S]{0,40}换一组词|同义改写/.test(fnBody));
+
+/* Q1f（v8.4 新增）：上一版原文必须被**引用**出来。
+   上下文里那一轮已被 omitTrailingAssistantRound 摘掉，
+   不引用原文，模型无从对照「要躲开什么」。 */
+check('Q1f 引用上一版原文（avoidBlock）',
+  /avoidBlock/.test(fnBody) && /上一次的回复原文是/.test(fnBody),
+  '含avoidBlock=' + /avoidBlock/.test(fnBody) +
+  ' 含引用引导语=' + /上一次的回复原文是/.test(fnBody));
 
 check('Q1d 含「禁止复述/换皮重复」的负面约束',
-  /禁止复述|换皮|重复你上一版/.test(fnBody),
-  '命中=' + /禁止复述|换皮|重复你上一版/.test(fnBody));
+  /严禁与其雷同|禁止复述|换皮|重复你上一版/.test(fnBody),
+  '命中=' + /严禁与其雷同|禁止复述|换皮|重复你上一版/.test(fnBody));
 
 /* ── Q3 约束必须保护人设、且禁止元叙述 ── */
 check('Q3a 要求保持人设与剧情连贯（防为求新而 OOC）',
@@ -80,8 +99,8 @@ const appendBody = appendMatch ? appendMatch[0] : '';
 check('Q2a 定位到 appendManualActionTailNudge', !!appendBody);
 
 check('Q2b 改写约束仅在 opts.isRegenerate 分支内被调用',
-  /if\s*\(opts\.isRegenerate\)\s*\{[\s\S]{0,200}?buildRegenerateTailNudge\s*\(/.test(appendBody),
-  '命中=' + /if\s*\(opts\.isRegenerate\)\s*\{[\s\S]{0,200}?buildRegenerateTailNudge\s*\(/.test(appendBody));
+  /if\s*\(opts\.isRegenerate\)\s*\{[\s\S]{0,400}?buildRegenerateTailNudge\s*\(/.test(appendBody),
+  '命中=' + /if\s*\(opts\.isRegenerate\)\s*\{[\s\S]{0,400}?buildRegenerateTailNudge\s*\(/.test(appendBody));
 
 /*
  * Q2c：buildRegenerateTailNudge 在整个引擎里**只应有一处调用点**，
@@ -183,10 +202,14 @@ if (eng) {
   const literals = (fnBody.match(/'((?:[^'\\]|\\.)*)'/g) || [])
     .map(function (s) { return s.slice(1, -1); });
   const joined = literals.join('');
+  /*
+   * v8.4：措辞从「换一个切入角度」改成「换一个角度切入」，
+   * 并补上「同义改写」的显式排除。拼接结果里这些必须都在。
+   */
   check('Q5c 拼接后的 nudge 文本含改写约束关键词',
-    /换一个切入角度/.test(joined) && /禁止复述/.test(joined),
-    '拼接长度=' + joined.length + '  含换角度=' + /换一个切入角度/.test(joined) +
-    '  含禁复述=' + /禁止复述/.test(joined));
+    /换一个角度切入/.test(joined) && /同义改写/.test(joined),
+    '拼接长度=' + joined.length + '  含换角度=' + /换一个角度切入/.test(joined) +
+    '  含排除同义改写=' + /同义改写/.test(joined));
 }
 
 console.log('__RESULT__' + JSON.stringify(results));

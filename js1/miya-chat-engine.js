@@ -649,11 +649,7 @@
     }
 
     function buildManualReplyToUserTailNudge() {
-        return (
-            '（上下文中末条为用户发言、你方尚未回复：须回应自你方上一条回复之后、截止上下文末尾连续出现的用户消息；更早用户发言仅作背景，禁止回应其它轮次旧话题；' +
-            ONLINE_THREE_PART_TAIL +
-            '；禁止群聊「角色名：」多角色格式）'
-        );
+        return '（' + buildManualReplyToUserTailNudgeInline() + '）';
     }
 
     /*
@@ -668,8 +664,19 @@
      *   · 原本这条 nudge 只说「重新生成本轮回复」，**没说「别跟上一次一样」**
      *
      * 输入相同 + 采样相同 ⇒ 输出趋同是数学上的必然，不是模型偷懒。
-     * 所以这里补上显式的改写意图：告诉模型「上一版已被丢弃」，
-     * 并要求换一个切入角度，而不是把同一句话重说一遍。
+     *
+     * ── 关于「换一个切入角度」的歧义（用户第二次反馈）──
+     *
+     * 用户原话：「『换个说法』这句话有歧义 是同一个意思换个说法还是换一种别的」
+     *
+     * 这个质疑是对的。原措辞只说「换一个切入角度」，模型完全可能理解成
+     * 「同一个意思换套词」（同义改写），而不是「换一个回应的方向」。
+     * 这两种理解差别很大：
+     *   · 同义改写 → 用户看到的还是同一句话，等于没改
+     *   · 换方向   → 才是用户真正想要的
+     *
+     * 所以这里改成**明确排他**的表述：先排除「只换词」这条歧义读法，
+     * 再给出具体可执行的换法。宁可啰嗦一点，也不要让模型猜。
      *
      * 措辞上的几个约束（都踩过或推演过）：
      *   1. 必须要求「保持人设与剧情一致」—— 否则模型容易为了不一样
@@ -680,24 +687,206 @@
      *   4. 长度不做硬性要求 —— 强行要求「更长/更短」会让长短
      *      这件小事喧宾夺主，反而不自然。
      */
-    function buildRegenerateTailNudge() {
+    function buildRegenerateTailNudge(lastReplyText) {
+        var prev = String(lastReplyText || '').trim();
+        /*
+         * 把上一版原文**直接引用**出来，比抽象地说「你上一版」有效得多。
+         *
+         * 原因：上下文已经被 omitTrailingAssistantRound 摘掉了那一轮，
+         * 模型看到的对话历史里**根本没有自己上一版说过什么**。
+         * 只对它说「不要重复上一版」，它其实无从对照 —— 只能凭空揣测。
+         * 把原文贴出来，它才有明确的规避对象。
+         *
+         * 截断到 400 字：防止超长回复把 nudge 撑得过大，
+         * 也避免喧宾夺主（我们只要它「知道说过什么」，不要它「重读一遍」）。
+         */
+        if (prev.length > 400) prev = prev.slice(0, 400) + '…';
+        var avoidBlock = prev
+            ? '你上一次的回复原文是：「' + prev + '」；本次严禁与其雷同。'
+            : '';
         return (
             '（【重回·生成】须严格按上文 system 中【重回】块所列「本轮用户消息」重新生成本轮回复；更早对话仅作背景，禁止回应其它轮次用户发言；' +
             /*
-             * 以下是本轮新增的改写约束。放在【重回】块之后、
-             * 格式约束之前，让「改写」这件事先于「怎么写」被读到。
+             * 改写约束：放在【重回】块之后、格式约束之前，
+             * 让「改写」这件事先于「怎么写」被读到。
              */
-            '【本轮为重新生成·上一版回复已被用户丢弃】请换一个切入角度重新回应，' +
-            '禁止复述、改写或换皮重复你上一版已说过的内容、句式与结构；' +
-            '可换措辞、换情绪落点、换话题侧重或换回应层次，但必须保持人设、语气习惯与当前剧情连贯；' +
-            '不要为了求新而偏离角色或编造新设定；' +
+            '【本轮为重新生成·上一版回复已被用户丢弃】' +
+            avoidBlock +
+            '这里要求的「不要一样」**不是**让你把同一个意思换一组词再说一遍 —— ' +
+            '同义改写仍然算重复，用户一眼就能看出是同一句话。' +
+            '要换的是**回应的方向**：换一个角度切入、换一个情绪落点、' +
+            '或换一个话题侧重（可以在原话题上另起一个侧面，也可以自然转到相关的新话题），' +
+            '让这一版在内容和侧重上与前一次明显不同。' +
+            '但必须保持人设、语气习惯与当前剧情连贯，不要为了求新而偏离角色或编造新设定；' +
             '禁止在回复里提及「重新生成」「换一种说法」「上一版」这类元叙述，直接给出新回复即可；' +
             ONLINE_THREE_PART_TAIL +
             '）'
         );
     }
 
-    function appendManualActionTailNudge(apiMessages, opts, historyTailState, hasExtraUserText) {
+    /*
+     * 读「上一版回复原文」。
+     *
+     * 为什么需要单独一个函数：
+     *
+     * 重新生成时，上一版回复已经被 withdrawLastAssistantRound 删掉了，
+     * **不在上下文里** —— 只对被删掉的东西说「别重复」，模型无从对照。
+     *
+     * chat.lastRawAssistantReply 是每一次生成成功后由引擎落盘的原始回复
+     * （写 chatPatch 时记录，见 sendChat 内 lastRawAssistantReply 赋值），
+     * 正好把上一版留住了。
+     *
+     * chatId 优先用外层 buildApiMessages 的形参透传进来的那个，
+     * 回退到 opts.chatId。两条都拿不到就返回空串，
+     * buildRegenerateTailNudge 会在 prev 为空时自动省略那一段引用，
+     * 不影响主流程。
+     */
+    /*
+     * 把「上一版原文」收拾成适合塞进 nudge 的形式。
+     *
+     * lastRawAssistantReply 存的是**模型原始输出**，
+     * 里面通常带着 <thinking>…</thinking> 之类的思维链。
+     * 把它整段贴进 nudge 有两个坏处：
+     *   1. 思维链往往比正文长得多，一截就把 400 字的额度吃光了，
+     *      真正要规避的**正文反而被截掉** —— 模型还是看不到要躲什么；
+     *   2. 思维链里常有一堆自我推演的措辞，会干扰模型对
+     *      「上一版说了什么」的判断。
+     *
+     * 所以先抽正文再截断。抽不出正文就退回原文（至少不是空的）。
+     */
+    function normalizePrevReplyForNudge(raw) {
+        var text = String(raw || '').trim();
+        if (!text) return '';
+        try {
+            if (typeof extractBodyForBubbles === 'function') {
+                var body = String(extractBodyForBubbles(text) || '').trim();
+                if (body) return body;
+            }
+        } catch (e) {}
+        /* 退路：至少把思维链剥掉 */
+        try {
+            text = text.replace(/<(thinking|think)\b[^>]*>[\s\S]*?<\/\1>/gi, '').trim();
+        } catch (e2) {}
+        return text;
+    }
+
+    function readLastRawAssistantReply(chatId) {
+        try {
+            var st = global.miyaChatStore;
+            if (!st || typeof st.findChat !== 'function') return '';
+            var cid =
+                typeof resolveApiChatId === 'function'
+                    ? resolveApiChatId(chatId)
+                    : String(chatId || '');
+            var row = st.findChat(cid) || st.findChat(chatId);
+            if (row && row.lastRawAssistantReply) {
+                return normalizePrevReplyForNudge(row.lastRawAssistantReply);
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    /*
+     * resumeRewrite：用户「删掉一条不满意的角色回复 → 自己再发一条」。
+     *
+     * 这种情况**点不到重新生成按钮**（那条消息已经没了），
+     * 走的是普通发送，于是拿到的是 buildManualReplyToUserTailNudge ——
+     * 里面**一句改写约束都没有**。上下文和上一次逐字相同，
+     * 采样参数也相同，模型当然会把几乎一样的话再吐一遍。
+     * 这正是用户第二次反馈「删除消息后还是会有概率发一模一样的消息」的原因。
+     *
+     * 与 isRegenerate 的区别只有一个：isRegenerate 走的是
+     * 【重回】块那份专用 nudge（还要叠加 omitTrailingAssistantRound 等），
+     * 这里只临时借用同一段改写约束，不动其它任何逻辑。
+     */
+    /*
+     * 「删掉上一版 + 自己再说一句」路径专用的改写 nudge。
+     *
+     * 基础语义仍旧是 buildManualReplyToUserTailNudge（末条是用户发言，
+     * 要回应刚说的话、别去接旧话题），只是在其后补上改写约束。
+     * 这样即使模型把改写约束理解得过头，第一句也已经把它按回了
+     * 「以用户刚发的话为主」这条正轨上。
+     */
+    function buildResumeRewriteTailNudge(lastReplyText) {
+        var prev = String(lastReplyText || '').trim();
+        if (prev.length > 400) prev = prev.slice(0, 400) + '…';
+        var avoidBlock = prev
+            ? '被你弃掉的那一版原话是：「' + prev + '」；本次严禁与其雷同。'
+            : '';
+        return (
+            '（' +
+            buildManualReplyToUserTailNudgeInline() +
+            '；【你刚删掉了自己上一版的回复】该版已被弃用，' +
+            avoidBlock +
+            '这里要求的「不要一样」**不是**让你把同一个意思换一组词再说一遍 —— ' +
+            '同义改写仍然算重复，用户一眼就能看出是同一句话。' +
+            '要换的是**回应的方向**：换一个角度切入、换一个情绪落点、' +
+            '或换一个话题侧重（可以在原话题上另起一个侧面，也可以自然转到相关的新话题），' +
+            '让这一版在内容和侧重上与前一次明显不同。' +
+            '但必须保持人设、语气习惯与当前剧情连贯，不要为了求新而偏离角色或编造新设定；' +
+            '禁止在回复里提及「重新生成」「换一种说法」「上一版」这类元叙述；' +
+            '）'
+        );
+    }
+
+    /*
+     * 抽出 buildManualReplyToUserTailNudge 的正文（不含最外层括号与格式尾），
+     * 供上面那个串接版本复用，避免两处措辞各自漂移。
+     */
+    function buildManualReplyToUserTailNudgeInline() {
+        return '上下文中末条为用户发言、你方尚未回复：须回应自你方上一条回复之后、截止上下文末尾连续出现的用户消息；更早用户发言仅作背景，禁止回应其它轮次旧话题；' +
+            ONLINE_THREE_PART_TAIL +
+            '；禁止群聊「角色名：」多角色格式';
+    }
+
+    /*
+     * 判断这一次发送该不该套「删了上一版、重新答一遍」的改写约束。
+     *
+     * 判据（三条全中才算，宁可漏也不能误伤正常聊天）：
+     *   1. 会话上确实挂着「刚删掉末尾角色回复」的标记（store 侧打的）；
+     *   2. 标记还新鲜 —— store 里的标记是内存态、10 分钟有效；
+     *   3. **上下文楼层与删除当时不同**。这条是关键：
+     *      标记是一次性的，若用户删完只是刷新了页面、或者这一版根本没
+     *      生成成功（末尾还是那条旧消息），标记不该被白白吃掉。
+     *
+     * 消费动作只做一次：取到就立刻 consume，
+     * 免得用户连发两句时第二句也被当成「重答」。
+     */
+    function shouldApplyResumeRewrite(apiChatId, opts) {
+        try {
+            var st = global.miyaChatStore;
+            if (!st || typeof st.peekRewriteResume !== 'function') return false;
+            var cid = resolveApiChatId(apiChatId);
+            var mark = st.peekRewriteResume(cid) || st.peekRewriteResume(apiChatId);
+            if (!mark || !mark.armed) return false;
+            /*
+             * 新鲜度判定：只做**下限**护栏，不做等值比较。
+             *
+             * 真实流程是「删消息 → 打字发送 → 点触发回复」，
+             * 那一条用户消息已经先落进 store 了，所以取用时的可见条数
+             * 天然比删除那一刻多 1。早年用等值比较（cur === floorAt）
+             * 的结果就是一条都命中不了 —— 这就是用户持续看到复读的原因。
+             *
+             * 上界不设：用户在删完之后隔了几轮才想起来点回复，
+             * 那确实已经不该算「重答」；但那种情况本就罕见，
+             * 而且下一条护栏（consume 一次性）已经能兜住连发。
+             * 宁可放宽，也不要再次出现「明明删了却完全不生效」。
+             */
+            var cur = 0;
+            try {
+                if (typeof st.getMessages === 'function') {
+                    cur = (st.getMessages(cid) || []).length;
+                }
+            } catch (eCur) {}
+            if (cur && mark.floorAt && cur < mark.floorAt - 1) return false;
+            if (typeof st.consumeRewriteResume === 'function') {
+                return !!st.consumeRewriteResume(cid);
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    function appendManualActionTailNudge(apiMessages, opts, historyTailState, hasExtraUserText, apiChatId, resumeRewrite) {
         opts = opts && typeof opts === 'object' ? opts : {};
         if (!Array.isArray(apiMessages)) return;
         if (opts.isAutoPush || opts.isOffline || opts.isMomentsAuto || opts.isLifeLike) return;
@@ -706,8 +895,22 @@
         var tail;
         if (opts.isRegenerate) {
             if (historyTailState === 'user_spoke_last') {
-                tail = buildRegenerateTailNudge();
+                tail = buildRegenerateTailNudge(
+                    readLastRawAssistantReply(apiChatId || opts.chatId)
+                );
             }
+        } else if (resumeRewrite && historyTailState === 'user_spoke_last') {
+            /*
+             * 只借用改写约束那一段，不套【重回】块。
+             *
+             * 为什么不能整段复用 buildRegenerateTailNudge：
+             * 那一版开头写着「须严格按上文 system 中【重回】块所列『本轮用户消息』」，
+             * 而这条路径下 system 里**根本没有【重回】块**，
+             * 模型会去找一个不存在的东西，反而更容易胡来。
+             */
+            tail = buildResumeRewriteTailNudge(
+                readLastRawAssistantReply(apiChatId || opts.chatId)
+            );
         } else if (historyTailState === 'assistant_spoke_last') {
             tail = buildManualContinueTailNudge();
         } else if (historyTailState === 'user_spoke_last') {
@@ -3425,7 +3628,36 @@
         }
 
         if (!opts.isAutoPush && !opts.isOffline && !opts.isMomentsAuto && !opts.isLifeLike) {
-            appendManualActionTailNudge(apiMessages, opts, historyTailState, !!extra);
+            /*
+             * resumeRewrite 的判定条件与下发给 nudge 的条件**刻意不同**：
+             *
+             * nudge 只在 skipUserMessage && !extra 时下发（即「本轮用户话已经在历史里」），
+             * 但引擎调用方一律是 buildApiMessages(chatId, '', options)，
+             * 所以 !extra 恒成立；而普通发送不会传 skipUserMessage ——
+             * 用户那句话是 persistUser 刚写进 store、以「历史里最后一条」的身份出现的。
+             *
+             * 也就是说：真正的普通发送 path 里 opts.skipUserMessage 是 undefined。
+             * 早期版本在这里也要求 skipUserMessage，结果就是**一条都没命中** ——
+             * 用户报的「删除后还有概率复读」依旧存在。
+             *
+             * 所以判定只认两件事：末条是用户发言 + store 上挂着新鲜的「删了角色回复」标记。
+             */
+            var resumeRewrite = false;
+            if (
+                !opts.isRegenerate &&
+                !extra &&
+                historyTailState === 'user_spoke_last'
+            ) {
+                resumeRewrite = shouldApplyResumeRewrite(apiChatId, opts);
+            }
+            appendManualActionTailNudge(
+                apiMessages,
+                opts,
+                historyTailState,
+                !!extra,
+                apiChatId,
+                resumeRewrite
+            );
         }
         if (opts.isMomentsAuto) {
             var momentsLines = [

@@ -138,9 +138,16 @@ async def main():
 
             tail_text = str(last.get("content") or "")
 
-            check("P3 nudge 含「换一个切入角度」改写要求",
-                  "换一个切入角度" in tail_text,
-                  "nudge 长度=%d" % len(tail_text))
+            # 措辞在 v8.4 统一为「换一个角度切入」（原「换一个切入角度」读起来
+            # 容易和「换个说法」混同，正是用户指出的歧义点）。两个都接受，
+            # 关键是必须命中「换方向」而不是「换措辞」这一类表述。
+            check("P3 nudge 含改写要求（换方向而非换措辞）",
+                  ("换一个角度切入" in tail_text or "换一个切入角度" in tail_text)
+                  and "同义改写" in tail_text,
+                  "nudge 长度=%d 换角度=%s 排除同义改写=%s"
+                  % (len(tail_text),
+                     ("换一个角度切入" in tail_text or "换一个切入角度" in tail_text),
+                     "同义改写" in tail_text))
 
             check("P4 nudge 含「上一版已被丢弃」告知",
                   "已被丢弃" in tail_text or "上一版" in tail_text,
@@ -154,7 +161,7 @@ async def main():
 
             # P6 非重答路径不带这条约束
             check("P6 非重答路径不含改写约束（隔离性）",
-                  not any("换一个切入角度" in str(m.get("content") or "")
+                  not any("同义改写" in str(m.get("content") or "")
                           for m in msgs[:-1]),
                   "其它消息里出现改写约束=False")
 

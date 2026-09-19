@@ -474,6 +474,186 @@ def main():
                     % mm))
 
     # ══════════════════════════════════════════════════════════
+    # P8：捕获阶段监听器吞掉消息行的点击，未给多选让路
+    #
+    # 缺陷模式（本轮「点图片进预览、要点边边才能选中」的成因）：
+    #   消息行内的可点元素（图片大图、生图重试、HTML 全屏…）
+    #   由 **document 上的 capture 监听器**处理；而"多选选中"由
+    #   **qq-room 上的 bubble 监听器**处理。
+    #
+    #   派发顺序：document(capture) → … → qq-room(bubble)
+    #   前者先跑且调了 stopPropagation() ⇒ 后者永远收不到事件。
+    #
+    # 为什么难发现：
+    #   两条监听器**各自都是对的**，语法、逻辑、单独测试都没问题。
+    #   问题只存在于两者的**阶段差**上 —— 是一个纯粹的顺序缺陷，
+    #   只读单个函数永远看不出来。
+    #
+    # 判定：在 document 级 capture click 处理函数里，
+    #      若出现了 stopPropagation()，但整个函数体内**没有任何**
+    #      multiSelect 相关的让路判断，则报警。
+    #
+    # ⚠️ 必须**逐分支**判断，不能整个函数体一起判断。
+    #
+    # 踩过的坑：bindGlobalImageClicks 这一个回调里连续处理了
+    # 「生图重试 / 下载 / 关闭 / 大图预览」四个分支。我在重试分支
+    # 加了让路判断后，整个函数体就"含 multiSelect"了 ——
+    # 于是把**没有**让路的大图预览分支一起判成安全，
+    # 修复回退后 P8 竟然一声不响。第一版就是这么漏的。
+    #
+    # 现在的做法：以每个 `e.target.closest('...')` 为锚点切段，
+    # 每段内部**独立**检查是否既有 stopPropagation 又有让路判断。
+    #
+    # 三类必须排除的假阳性（都是实跑后确认过的）：
+    #   1. 目标压根不在消息行内 —— 例如工具栏的 AI 回复按钮
+    #      (#qq-room-ai)。点它不影响多选。
+    #   2. 目标不在消息行内且尚未展开 —— 例如开场白抽屉，
+    #      只有抽屉开着才会 stopPropagation，而抽屉不在消息列表里。
+    #   3. 该页面没有多选功能 —— 例如朋友圈。没有多选，
+    #      自然不需要让路。
+    # 判定方式：看这一段是否**触及消息行标记**。
+    # 消息行相关的选择器/属性：data-msg-id、qq-msg、qq-card、
+    # data-mq-img-view、data-mq-img-gen-retry、data-miya-chat-html-fs。
+    # ══════════════════════════════════════════════════════════
+    MSG_ROW_HINTS = (
+        'data-msg-id', 'qq-msg', 'qq-card',
+        'data-mq-img-view', 'data-mq-img-gen-retry',
+        'data-miya-chat-html-fs', 'findMsgRowFromTarget',
+    )
+    for fn, src in cleaned.items():
+        if 'document.addEventListener' not in src:
+            continue
+        # 整个文件都没多选能力 → 不适用本检查（如朋友圈）
+        if 'multiSelect' not in src:
+            continue
+        # 逐个抓 document 上的 capture 阶段 click 回调（第 3 参数为 true）
+        pat = re.compile(
+            r"document\.addEventListener\(\s*'click'\s*,\s*function\s*\(([^)]*)\)\s*\{")
+        for m in pat.finditer(src):
+            start = m.end()
+            # 括号配平找函数体结束
+            depth = 1
+            i = start
+            while i < len(src) and depth > 0:
+                ch = src[i]
+                if ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                i += 1
+            body = src[start:i]
+            # 只看 capture 阶段：回调闭合后紧跟 , true)
+            tail = src[i:i + 12]
+            if not re.match(r'\s*,\s*true\s*\)', tail):
+                continue
+            if 'stopPropagation' not in body:
+                continue
+            # 以 closest 锚点切段，逐段独立判断
+            anchors = [a.start() for a in re.finditer(r"\.closest\s*\(", body)]
+            if not anchors:
+                anchors = [0]
+            segments = []
+            for idx, a in enumerate(anchors):
+                seg_end = anchors[idx + 1] if idx + 1 < len(anchors) else len(body)
+                segments.append((a, body[a:seg_end]))
+            for seg_off, seg in segments:
+                if 'stopPropagation' not in seg:
+                    continue
+                ln = line_of(src, start + seg_off)
+                # 该分支有让路判断 → 安全
+                if re.search(r'multiSelect|isPicked|pickMode', seg):
+                    findings.append(Finding(
+                        'INFO', 'P8', fn, ln,
+                        'document(capture) 点击分支已为多选让路',
+                        '含 stopPropagation，且该分支已判断 multiSelect → 安全'))
+                    continue
+                # 该分支未触及消息行 → 与该缺陷无关
+                if not any(h in seg for h in MSG_ROW_HINTS):
+                    findings.append(Finding(
+                        'INFO', 'P8', fn, ln,
+                        'document(capture) 点击分支未触及消息行（无需让路）',
+                        '含 stopPropagation，但目标元素不在消息行内 → 不影响多选'))
+                    continue
+                findings.append(Finding(
+                    'MEDIUM', 'P8', fn, ln,
+                    'document(capture) 点击分支会吞掉多选点击（未让路）',
+                    '该 capture 分支调用了 stopPropagation() 却未判断 multiSelect；'
+                    '其目标元素位于消息行内，多选模式下将无法选中该消息'))
+
+    # ══════════════════════════════════════════════════════════
+    # P9：跨文件「标记契约」——打标方与读标方的条件必须相容
+    # ══════════════════════════════════════════════════════════
+    #
+    # 缺陷家族（v8.4 亲历）：
+    #   store 侧打了「刚删掉末尾角色回复」的标记，
+    #   engine 侧读取该标记的准入条件里却写着 `opts.skipUserMessage` ——
+    #   而真实用户流程是「先打字发送，再点触发回复」，
+    #   那一步的 opts.skipUserMessage 是 undefined。
+    #   两边各自都「正确」，合起来却一条都命中不了。
+    #
+    # 这类缺陷和 P1–P8 是同一家族：调用点存在、被调方存在、语法合法、
+    # 不报错，只是**契约不相容**导致机制空转，而且表现为静默失效。
+    #
+    # 这里无法做通用的语义证明，但可以抓住最典型的错法：
+    # 读标方的准入条件里出现「只有某一条调用路径才会传」的私有选项。
+    PRIVATE_OPTS = ('skipUserMessage',)
+    # 读标/打标的两个关键名字。只要任一出现，就认为启用了这套标记契约。
+    marker_present = any(
+        ('peekRewriteResume' in s or 'shouldApplyResumeRewrite' in s)
+        for s in cleaned.values()
+    )
+    if marker_present:
+        for fn, src in cleaned.items():
+            # 判定逻辑可能分散在两处：
+            #   ① shouldApplyResumeRewrite 本体
+            #   ② 它被调用处的那个 if 准入条件（v8.4 的 bug 就在这儿）
+            # 两处都要看，否则会漏掉真正出问题的那一半。
+            spans = []
+            for pat in (r'function\s+shouldApplyResumeRewrite\s*\(',
+                        r'function\s+buildApiMessages\s*\('):
+                body, start = func_body(src, pat)
+                if body:
+                    spans.append((body, start))
+            for body, start in spans:
+                # 先定位所有 resumeRewrite 的判定点；只在它**附近**找私有选项，
+                # 否则 buildApiMessages 里别处的 opts.skipUserMessage
+                #（比如通话态的续说分支）会被误判成同一个问题。
+                anchors = []
+                pos = body.find('resumeRewrite')
+                while pos >= 0:
+                    anchors.append(pos)
+                    pos = body.find('resumeRewrite', pos + 1)
+                if not anchors:
+                    continue
+                for opt in PRIVATE_OPTS:
+                    offset = 0
+                    while True:
+                        idx = body.find('opts.' + opt, offset)
+                        if idx < 0:
+                            break
+                        offset = idx + 1
+                        # 与该私有选项同处一个「判定块」：500 字符内出现 resumeRewrite
+                        if not any(abs(idx - a) <= 500 for a in anchors):
+                            continue
+                        # 必须是判定条件的一部分（带取反 / && / if），
+                        # 单纯把它当参数转交不算问题
+                        line_start = body.rfind('\n', 0, idx) + 1
+                        line_end = body.find('\n', idx)
+                        if line_end < 0:
+                            line_end = len(body)
+                        seg = body[line_start:line_end]
+                        if '!' not in seg and '&&' not in seg and 'if' not in seg:
+                            continue
+                        ln = line_of(src, start + idx)
+                        findings.append(Finding(
+                            'HIGH', 'P9', fn, ln,
+                            '读标方准入条件与打标方契约不相容（%s）' % opt,
+                            '该处把 opts.%s 当作「该不该套改写约束」的前提，'
+                            '但真实调用路径（打字发送 → 点触发回复）不会传它，'
+                            '结果是标记永远读不到、机制静默空转。'
+                            '判定应只依赖历史状态与 store 上的标记' % opt))
+
+    # ══════════════════════════════════════════════════════════
     # 输出
     # ══════════════════════════════════════════════════════════
     order = {'HIGH': 0, 'MEDIUM': 1, 'INFO': 2, '⚪': 3}

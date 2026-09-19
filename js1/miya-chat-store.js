@@ -2474,6 +2474,99 @@
      *
      * 删除消息前调用（删除后序号已左移，无法还原）。
      */
+    /*
+     * ══════════ 「刚删掉末尾角色回复」标记 ══════════
+     *
+     * 场景（用户报的）：
+     *   角色回了一句用户不满意 → 用户长按删掉这条 → 自己再打一句发出去
+     *   → 角色几乎原样复读一遍。
+     *
+     * 为什么重新生成的修复没覆盖它：
+     *   那条「重新生成」是长按角色**现存**消息才有的按钮。
+     *   消息一旦被删，按钮没了，用户只能走普通发送 ——
+     *   而普通发送的 nudge 里**一句改写约束都没有**。
+     *   上下文和上一次逐字相同、采样参数也相同，模型自然复读。
+     *
+     * 判据只有一条：**被删的必须是当前末尾那条可见的角色消息**。
+     * 多选删多条、删中间某条、删用户自己的话 —— 都不算，
+     * 因为那些情况用户并不在要求「换一个版本」。
+     *
+     * 存内存不存盘：它只服务紧接着的那一次生成，
+     * 刷新页面之后再打字，那就是一次全新的正常对话。
+     * 离开页面自然失效，不需要任何回收逻辑。
+     */
+    var rewriteResume = {};
+    var REWRITE_RESUME_TTL_MS = 10 * 60 * 1000;
+
+    function isTrailingVisibleAssistantMessage(chatId, msgId) {
+        var cid = String(chatId || '').trim();
+        var mid = String(msgId || '').trim();
+        if (!cid || !mid) return false;
+        var arr = metaCache && metaCache.messagesByChat && metaCache.messagesByChat[cid];
+        if (!Array.isArray(arr) || !arr.length) return false;
+        /* 与 getMessages 同一套可见性判定，顺序按 createdAt 稳定排序 */
+        var visible = arr
+            .filter(function (m) {
+                return m && !m.deleted && !m.offlineMeet && !isMomentsMemoryRow(m);
+            })
+            .slice()
+            .sort(function (a, b) {
+                return (a.createdAt || 0) - (b.createdAt || 0);
+            });
+        if (!visible.length) return false;
+        var last = visible[visible.length - 1];
+        if (String(last.id) !== mid) return false;
+        /* 只认角色说的，不认用户自己说的 */
+        if (last.role !== 'assistant') return false;
+        return true;
+    }
+
+    function markRewriteResume(chatId, msgId) {
+        var cid = String(chatId || '').trim();
+        if (!cid) return;
+        /*
+         * floorAt 记的是**删除那一刻**的可见条数。
+         *
+         * 这里踩过一次坑：最初拿它和「取用时的条数」做等值比较，
+         * 结果真实流程里一条都没命中 —— 因为用户是
+         * 「先删消息，再打字发送，最后点触发回复」，
+         * 那一条用户消息已经先落进 store 了，条数比删除时多 1。
+         *
+         * 所以判定必须用**区间**而不是等值，见 peekRewriteResume 的说明。
+         */
+        var arr = metaCache && metaCache.messagesByChat && metaCache.messagesByChat[cid];
+        var visibleCount = 0;
+        if (Array.isArray(arr)) {
+            visibleCount = arr.filter(function (m) {
+                return m && !m.deleted && !m.offlineMeet && !isMomentsMemoryRow(m);
+            }).length;
+        }
+        rewriteResume[cid] = {
+            armed: true,
+            lastDeletedAssistantId: String(msgId || '').trim(),
+            floorAt: visibleCount,
+            at: Date.now()
+        };
+    }
+
+    /*
+     * 取该会话最近一条可见角色消息的 id。
+     *
+     * 用途：确认「发出这一版之后，标记就已经消费过了」——
+     * 若末尾还是当初那条消息，说明这一版根本没生成成功，
+     * 标记应当保留，别让用户白删一次。
+     */
+    function lastRawAssistantMessageId(list) {
+        var arr = Array.isArray(list) ? list : [];
+        for (var i = arr.length - 1; i >= 0; i--) {
+            var m = arr[i];
+            if (!m || m.deleted || m.offlineMeet) continue;
+            if (isMomentsMemoryRow(m)) continue;
+            if (m.role === 'assistant') return m.id;
+        }
+        return '';
+    }
+
     function collectVisibleIndexOfIds(chatId, msgIds) {
         var want = {};
         (Array.isArray(msgIds) ? msgIds : []).forEach(function (id) {
@@ -4945,6 +5038,21 @@
              * 可见序号的算法必须与 getMessages 完全一致（过滤 deleted/offlineMeet/momentsMemory）。
              */
             var removedIndexes = collectVisibleIndexOfIds(chatId, removedIdList);
+            /*
+             * 删除前判断「这一条是不是末尾那条角色回复」——这是
+             * 「删掉不满意的回复 → 自己再说一句」这个场景的唯一判据，
+             * 必须在 filter 之前算，删完就看不到它了。
+             *
+             * 用户反馈过：删掉角色消息、自己再说一句，角色还是有概率原样复读。
+             * 原因是这条路径点不到「重新生成」按钮（那条消息已经没了），
+             * 拿到的是普通回复的 nudge，里面没有任何改写约束。
+             *
+             * 这里只打一个标记，不在这里做任何生成决策 ——
+             * 万一后面那次生成没发（用户删了又走开），
+             * 引擎侧还有「只认最近一次、且要新旧楼层不同」的兜底，
+             * 不会让这个标记无限期挂着误伤后续正常聊天。
+             */
+            var shouldMarkRewriteResume = isTrailingVisibleAssistantMessage(chatId, key);
             metaCache.messagesByChat[chatId] = metaCache.messagesByChat[chatId].filter(function (m) {
                 return String(m.id) !== key;
             });
@@ -4994,9 +5102,51 @@
                 })
                 .then(function () {
                     return flushSaveMeta({ withBackup: true, forceEmergency: true }).then(function () {
+                        /*
+                         * 落盘成功之后再打「刚删掉末尾角色回复」的标记。
+                         * 顺序反过来的话，落盘失败会留下一个错误的标记，
+                         * 让下一次正常发送被误判成「重答」。
+                         */
+                        if (shouldMarkRewriteResume) markRewriteResume(chatId, key);
                         return true;
                     });
                 });
+        },
+
+        /*
+         * ── 「刚删掉末尾角色回复」标记 ──
+         *
+         * 存在 store 的挂载点上（不是 localStorage）：它只服务紧接着的
+         * 下一次生成，属于会话内的瞬时状态，不该持久化 ——
+         * 刷新页面后用户再打字，那就是一次全新的正常对话。
+         */
+        markRewriteResume: function (chatId, msgId) {
+            markRewriteResume(chatId, msgId);
+        },
+
+        consumeRewriteResume: function (chatId) {
+            var cid = String(chatId || '').trim();
+            if (!cid || !rewriteResume) return false;
+            if (!rewriteResume[cid] || !rewriteResume[cid].armed) return false;
+            /*
+             * 只认最近一次删除，且**取用一次即失效**。
+             * 不 consume 的话，用户删一条 → 打一句 → 再打一句，
+             * 第二句也会被当成「重答」，那就跑偏了：既然已经回过了，
+             * 第二句显然是要接着聊，不是要求重写。
+             */
+            rewriteResume[cid].armed = false;
+            return true;
+        },
+
+        peekRewriteResume: function (chatId) {
+            var cid = String(chatId || '').trim();
+            if (!cid || !rewriteResume || !rewriteResume[cid]) return null;
+            return {
+                armed: !!rewriteResume[cid].armed,
+                lastDeletedAssistantId: rewriteResume[cid].lastDeletedAssistantId || '',
+                floorAt: rewriteResume[cid].floorAt || 0,
+                lastReplyIdSeen: rewriteResume[cid].lastReplyIdSeen || ''
+            };
         },
 
         findMessageChatId: function (msgId) {

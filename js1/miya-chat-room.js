@@ -5345,6 +5345,14 @@
     document.addEventListener('click', function (e) {
       var retryBtn = e.target.closest('[data-mq-img-gen-retry]');
       if (retryBtn) {
+        /*
+         * 多选态让路：与下方图片大图预览同理。
+         *
+         * 重试按钮长在「生图失败」的消息卡片里，也是一个消息行内的
+         * 可点元素。多选时用户点它是想选中这条消息，
+         * 不该触发重试（那还会真发一次生图请求）。
+         */
+        if (state.multiSelectMode) return;
         e.preventDefault();
         e.stopPropagation();
         var msgId = retryBtn.getAttribute('data-msg-id') || '';
@@ -5374,6 +5382,34 @@
       }
       var viewBtn = e.target.closest('[data-mq-img-view]');
       if (!viewBtn) return;
+      /*
+       * ── 多选模式下，点图片必须「选中」而不是「打开大图」──
+       *
+       * 用户报的原话：
+       *   「点删除开始选消息的时候 如果我点图片 容易点进图片预览状态
+       *     要点发图片的边边才能选中」
+       *
+       * 根因是**两条监听器的阶段不同**：
+       *
+       *   · 本函数（图片大图预览）：document 上的 **capture** 监听
+       *   · 多选选中（qq-room 的 click）：roomEl 上的 **bubble** 监听
+       *
+       * roomEl 是 document 的后代，事件派发顺序必然是
+       *   document(capture) → … → roomEl(bubble)
+       * 也就是**本函数先跑**。而它下面调了 e.stopPropagation()，
+       * 事件被就地截断 —— roomEl 上那段多选逻辑根本没机会执行。
+       *
+       * 为什么表现为「容易」而不是「必然」：
+       * 图片卡片是 <button data-mq-img-view> 包着 <img>，整张图都在
+       * 按钮内，理论上点哪都应命中。但用户实际点击时若落在
+       * 按钮的**外边距/相邻空隙**，closest 匹配不到，
+       * 本函数就 return 了，事件于是正常冒泡到 roomEl —— 这才选中成功。
+       * 这就是「点边边才能选中」的由来。
+       *
+       * 修法：多选态直接让路。注意这里必须**只 return、不 stopPropagation**，
+       * 把事件原样交给 roomEl 的多选逻辑处理。
+       */
+      if (state.multiSelectMode) return;
       e.preventDefault();
       e.stopPropagation();
       var blobKey = viewBtn.getAttribute('data-msg-img') || '';
@@ -5396,6 +5432,12 @@
     document.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-miya-chat-html-fs="1"]');
       if (!btn) return;
+      /*
+       * 多选态让路：与图片大图预览同理。
+       * 「全屏查看」位于 HTML 消息卡片内，同属消息行内的可点元素；
+       * 多选时点它应当是「选中这条消息」，而不是弹全屏。
+       */
+      if (state.multiSelectMode) return;
       e.preventDefault();
       e.stopPropagation();
       var panel = btn.closest('.qq-room__html-panel');
@@ -6279,6 +6321,24 @@
     hydrateMessageMedia: hydrateBubbleMedia,
     resetViewportLayout: function () {
       resetRoomViewportLayout(true);
+    },
+    /*
+     * 测试钩子：直接进入多选模式。
+     *
+     * 真实入口是「长按消息 → 菜单 → 删除」，在 e2e 里模拟长按需要
+     * 精确的 pointerdown/up 时序与坐标，脆弱且与本次要验的点击行为无关。
+     * 这里开一个显式入口，让测试能稳定地摆好前置状态。
+     */
+    __testEnterMultiSelect: function (seedMsgId) {
+      enterMultiSelectMode(seedMsgId);
+      return true;
+    },
+    __testExitMultiSelect: function () {
+      exitMultiSelectMode();
+      return true;
+    },
+    __testIsMultiSelect: function () {
+      return !!state.multiSelectMode;
     }
   };
 })(window);
