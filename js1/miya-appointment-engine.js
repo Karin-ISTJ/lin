@@ -2070,6 +2070,50 @@
         });
     }
 
+    /*
+     * 本轮生成的生命周期 scope。
+     *
+     * 必须和 stopAppointment 拼出来的键**完全一致**，否则停止键找不到
+     * controller，只能空转。两处都从这一个函数取名，就没有写岔的可能。
+     */
+    function genScopeFor(chatId, sessionId) {
+        return 'offline:' + String(chatId) + '::' + String(sessionId);
+    }
+
+    /*
+     * 幂等登记生成生命周期，并把 signal 交给 handlers。
+     *
+     * 为什么需要幂等：
+     *   sendAppointment / regenerateAppointment 会先自己 begin 一次
+     *   （它们还要负责 finish / fail 的收尾语义），随后回调到
+     *   runAppointmentCompletion。如果这里**无条件**再 begin，
+     *   lifecycle.begin 内部那句 `stop(key, {silent:true, reason:'supersede'})`
+     *   会把前一秒刚建好的 controller 当场 abort 掉 —— signal 立刻变成
+     *   aborted，fetch 一发起就死，表现为「发消息秒失败」。
+     *
+     *   所以：已经有人在管这个 scope 就**复用**它的 controller，
+     *   只有在没人管时（界面直连 runAppointmentCompletion 的三条路径）
+     *   才由这里接管登记。
+     *
+     * 返回值 owner：
+     *   'outer'  —— controller 由调用方持有，收尾也归调用方
+     *   'self'   —— 由本函数登记，收尾由本函数负责
+     *   'none'   —— 没有生命周期模块，退化为「不可停止」（不报错）
+     */
+    function ensureGenerationScope(chatId, sessionId, handlers) {
+        var scope = genScopeFor(chatId, sessionId);
+        var genLife = global.MiyaGenerationLifecycle;
+        if (!genLife || typeof genLife.begin !== 'function') return { scope: scope, owner: 'none' };
+        var existing = (typeof genLife.getController === 'function') ? genLife.getController(scope) : null;
+        if (existing) {
+            if (existing.signal) handlers.signal = existing.signal;
+            return { scope: scope, owner: 'outer' };
+        }
+        var ctl = genLife.begin(scope, { kind: 'offline' });
+        if (ctl && ctl.signal) handlers.signal = ctl.signal;
+        return { scope: scope, owner: 'self' };
+    }
+
     function runAppointmentCompletion(chatId, sessionId, handlers) {
         handlers = handlers && typeof handlers === 'object' ? handlers : {};
         var aps = apStore();
@@ -2081,6 +2125,15 @@
         if (!baseUrl || !apiKey || !model) {
             return Promise.reject(new Error('api_not_configured'));
         }
+        /*
+         * 生命周期登记 —— 必须在所有 await 之前同步完成。
+         *
+         * 这里是线下全部生成路径的**唯一汇聚点**（界面三条路径都直连本函数），
+         * 所以登记放这里，界面怎么调都一定能被 stopAppointment 停掉。
+         * 放在 sendAppointment / regenerateAppointment 是不够的：那两条
+         * 界面根本不走，停止键点下去 controllers 里空空如也。
+         */
+        var gen = ensureGenerationScope(chatId, sessionId, handlers);
         if (handlers.onStatus) handlers.onStatus('coming');
         /* ST 生成参数在进入异步前读取一次，保证本轮请求参数稳定 */
         var stGen = getStGenerationSettings();
@@ -2090,6 +2143,27 @@
          */
         var regenRun = !!handlers.replaceLastAssistant;
         var regenAttempt = Math.floor(Number(handlers.regenerateAttempt) || 0);
+
+        /*
+         * 统一收尾：只有「本函数登记的」才由本函数清理。
+         * 外层（sendAppointment 等）自己登记的情形，收尾归外层 ——
+         * 它们还要区分 finish / fail / abort 三种语义，这里代劳会打架。
+         */
+        function settleGeneration(err, value) {
+            if (gen.owner !== 'self') return;
+            var life = global.MiyaGenerationLifecycle;
+            if (!life) return;
+            if (err) {
+                if (life.isAbortError && life.isAbortError(err)) {
+                    if (life.stop) life.stop(gen.scope, { silent: true, reason: 'abort' });
+                } else if (life.fail) {
+                    life.fail(gen.scope, err);
+                }
+            } else if (life.finish) {
+                life.finish(gen.scope, value);
+            }
+        }
+
         /* 先让「书写中」上屏，再拼 prompt，避免按发送瞬间卡死 */
         return yieldToPaint().then(function () {
             var built = buildApiMessages(chatId, sessionId, '', {
@@ -2389,6 +2463,27 @@
                 return result;
             });
             }); /* pluginReady offline */
+        }).then(function (v) {
+            /* 正常收尾：本函数登记的 scope 由本函数 finish */
+            settleGeneration(null, v);
+            return v;
+        }, function (err) {
+            /*
+             * 失败/中止收尾。
+             *
+             * 用户点「停止生成」→ stopAppointment → genLife.stop()
+             * → ctl.abort() → fetch 抛 AbortError → 走到这里。
+             * 必须用 isAbortError 分流，否则一次正常的中止会被记成
+             * 「生成故障」，污染 lifecycle 的错误统计与事件订阅方。
+             *
+             * 另外要显式把 replyInFlight 的忙碌标记清掉：abort 之后
+             * 那条 finally（在外层 sendAppointment 里）不一定还有机会跑，
+             * 而只要这个标记还在，用户下一句就会被 `busy` 挡回去 ——
+             * 「停止之后发不出消息」正是这么来的。
+             */
+            if (gen.owner === 'self') delete replyInFlight[String(chatId) + '::' + String(sessionId)];
+            settleGeneration(err, null);
+            throw err;
         });
     }
 
@@ -2489,12 +2584,34 @@
         });
     }
 
+    /*
+     * 停止线下生成。
+     *
+     * 返回「有没有真的停到一个在跑的生成」，而不是无脑 true。
+     *
+     * 旧版无论有没有生成在跑都返回 true，界面据此弹「已停止生成」——
+     * 于是「点击 → 提示成功 → 但内容还在往外蹦」被当成偶发 bug 排查了很久。
+     * 真实的成因是控制器压根没登记（界面直连 runAppointmentCompletion，
+     * 没人调 begin），stop 拿到 undefined 直接跳过，却一样返回 true。
+     *
+     * 现在登记点已经补上（见 ensureGenerationScope），这里再把「有没有
+     * 真的 abort 到东西」如实回传，界面就能区分「停住了」和「本来就没在跑」。
+     *
+     * scope 键统一走 genScopeFor，和登记处同源，杜绝两处拼写走岔。
+     */
     function stopAppointment(chatId, sessionId) {
         var key = String(chatId) + '::' + String(sessionId);
+        var scope = genScopeFor(chatId, sessionId);
         var genLife = global.MiyaGenerationLifecycle;
-        if (genLife && genLife.stop) genLife.stop('offline:' + key, { reason: 'user' });
+        var ctl = (genLife && typeof genLife.getController === 'function')
+            ? genLife.getController(scope) : null;
+        if (genLife && genLife.stop) genLife.stop(scope, { reason: 'user' });
         delete replyInFlight[key];
-        return true;
+        /*
+         * 返回值语义：true = 确实中断了一个在跑的生成。
+         * 没有 controller（本来就没在跑）→ false，界面不该弹「已停止」。
+         */
+        return !!ctl;
     }
 
     function isBusy(chatId, sessionId) {

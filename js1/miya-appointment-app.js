@@ -3013,21 +3013,37 @@ function renderWriter() {
      */
     function stopOfflineGeneration() {
         var eng = apEngine();
+        /*
+         * stopped 取引擎的**真实**返回，而不是「调用没抛异常」。
+         *
+         * 旧版这里写死 true，只要 stopAppointment 不抛就算成功，
+         * 于是「控制器根本没登记、什么都没停」也照弹「已停止生成」——
+         * 用户看到提示、内容却继续往外蹦，正是他报告的「停止键失效」。
+         * 现在引擎如实回传有没有 abort 到在跑的生成，这里才不会撒谎。
+         */
         var stopped = false;
         if (eng && typeof eng.stopAppointment === 'function') {
             try {
-                eng.stopAppointment(ui.chatId, ui.sessionId);
-                stopped = true;
+                stopped = eng.stopAppointment(ui.chatId, ui.sessionId) === true;
             } catch (e) { /* 停不掉也要把 UI 放回可交互，别把人卡住 */ }
         } else {
             var genLife = global.MiyaGenerationLifecycle;
             if (genLife && typeof genLife.stop === 'function') {
                 try {
-                    genLife.stop('offline:' + String(ui.chatId || '') + '::' + String(ui.sessionId || ''), { reason: 'user' });
-                    stopped = true;
+                    var scope = 'offline:' + String(ui.chatId || '') + '::' + String(ui.sessionId || '');
+                    var had = (typeof genLife.getController === 'function')
+                        ? genLife.getController(scope) : null;
+                    genLife.stop(scope, { reason: 'user' });
+                    stopped = !!had;
                 } catch (e2) {}
             }
         }
+        /*
+         * 只在真的中断了生成时才提示。
+         *
+         * 本来就没在跑（比如界面态没及时复位、用户连点两下）→ 静默，
+         * 不弹「已停止生成」制造「明明没停却说停了」的错觉。
+         */
         if (stopped) toast('已停止生成');
         /* 交给 runStream 的 finally 收尾；这里只兜底恢复 UI，避免引擎没抛错时一直锁着 */
         var app = document.getElementById('miya-offline-app');
@@ -5638,6 +5654,18 @@ function renderWriter() {
          */
         __testRegenFloor: function (msg, keepVersion) {
             regenerateFloor(msg, keepVersion);
+        },
+        /*
+         * 测试专用后门：直连「停止生成」的界面处理。
+         *
+         * 同 __testRegenFloor 的理由 —— 停止键的**界面收尾**部分
+         * （撤 is-stop、解锁输入框、清 xw-generating）需要能被单独验证，
+         * 否则只能靠「真跑一轮生成再点一下」，又慢又不稳。
+         *
+         * 只做透传，不含任何业务判断。
+         */
+        __testStopGeneration: function () {
+            stopOfflineGeneration();
         }
     };
 })(window);
