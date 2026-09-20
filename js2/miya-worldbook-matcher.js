@@ -32,6 +32,25 @@
     });
   }
 
+  /*
+   * 角色别名展开：一个"角色"在系统里可能有多个 ID —— 联系人记录 id、
+   * 挂载的 characterId、编年史 chronicleId。世界书面板在选择角色时
+   * （resolveRolesForWorldbook）会把 characterId 和 id **各列成一张卡**，
+   * 用户点哪张，boundRoleIds 里存的就是哪个。
+   *
+   * 因此比较"这个条目是不是绑当前角色"时，两侧都必须先展开成别名集合再求交，
+   * 只比字面值必然漏。
+   *
+   * ⚠️ 加固点：旧实现只有 `cs.findCharacter(roleId)` 一条路，而 findCharacter
+   * 依赖 contactsStore 已经 hydrate（readState() 命中缓存）。联系人存储稍有
+   * 闪失（未 whenReady / 缓存未 hydrate / 该行缺字段）就返回 null，别名只剩
+   * 字面值 —— 表现为「局部词条绑了角色却集体未命中」，且面板不给任何线索。
+   *
+   * 现在按可靠性依次尝试多条路径，任一成功即并集：
+   *   ① findCharacter（最快，命中缓存）
+   *   ② 全表 listCharacters 兜底（慢一点，但一定能看到真实数据）
+   *   ③ 从 worldbook store 已存条目里反查该 ID 的"孪生"（避免数据迁移期丢失）
+   */
   function expandRoleAliases(roleId) {
     var set = {};
     function add(v) {
@@ -39,12 +58,38 @@
       if (v) set[v] = true;
     }
     add(roleId);
+
+    var key = String(roleId || '').trim();
+    if (!key) return Object.keys(set);
+
+    function absorbRow(row) {
+      if (!row || typeof row !== 'object') return;
+      add(row.id);
+      add(row.characterId);
+      add(row.chronicleId);
+    }
+
     var cs = global.miyaContactsStore;
-    if (cs && typeof cs.findCharacter === 'function') {
-      var row = cs.findCharacter(roleId);
-      if (row) {
-        add(row.id);
-        add(row.characterId);
+    if (cs && typeof cs === 'object') {
+      /* ① 直查缓存 */
+      if (typeof cs.findCharacter === 'function') {
+        try { absorbRow(cs.findCharacter(key)); } catch (e1) { /* 继续兜底 */ }
+      }
+      /* ② 全表兜底：按任一 ID 字段命中同一行 */
+      if (typeof cs.listCharacters === 'function') {
+        try {
+          var list = cs.listCharacters() || [];
+          for (var i = 0; i < list.length; i++) {
+            var row = list[i];
+            if (!row || typeof row !== 'object') continue;
+            if (String(row.id || '').trim() === key ||
+                String(row.characterId || '').trim() === key ||
+                String(row.chronicleId || '').trim() === key) {
+              absorbRow(row);
+              break;
+            }
+          }
+        } catch (e2) { /* 兜底也失败就只留字面值 */ }
       }
     }
     return Object.keys(set);

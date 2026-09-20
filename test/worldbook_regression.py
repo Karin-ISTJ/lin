@@ -704,9 +704,13 @@ console.log('\n\u3010I\u3011\u5168\u5c40\u8bcd\u6761\u751f\u6548\u8303\u56f4\u5f
      runOne({ scope: 'global', constant: true, key: [] }, 'offline').matched.length === 1,
      '\u7ebf\u4e0b=' + runOne({ scope: 'global', constant: true, key: [] }, 'offline').matched.length);
 
-  /* I8：局部词条未绑角 —— 仍应被拒（语义不得因本次修复而放宽） */
-  ck('I8 \u5c40\u90e8\u8bcd\u6761\u672a\u7ed1\u89d2\u4ecd\u4e0d\u6ce8\u5165',
-     runOne({ scope: 'local' }, 'offline').matched.length === 0,
+  /* I8：局部词条未绑角 —— 与诊断台口径一致：视为「不限制角色」，应注入。
+     世界书面板 renderDiag 明说「局部词条未绑定任何联系人 —— 按当前实现视为
+     『不限制角色』，会对所有联系人注入」，编辑器 saveEditor 会拦截新存的
+     这种条目，所以它只来自导入/历史数据。prompt 层若另拦一道，就会出现
+     「诊断台说会注入、面板说未命中」—— 正是本缺陷的本质症状。 */
+  ck('I8 \u5c40\u90e8\u8bcd\u6761\u672a\u7ed1\u89d2\u6309\u300c\u4e0d\u9650\u5236\u89d2\u8272\u300d\u6ce8\u5165\uff08\u4e0e\u8bca\u65ad\u53f0\u4e00\u81f4\uff09',
+     runOne({ scope: 'local' }, 'offline').matched.length === 1,
      '\u7ebf\u4e0b=' + runOne({ scope: 'local' }, 'offline').matched.length);
 
   /* I9：局部词条绑角 —— 线下照常命中 */

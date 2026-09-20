@@ -930,6 +930,9 @@
       /* 快照里也带上「被预算裁掉几条」，否则快照模式同样只会报一个孤零零的
          命中数，用户仍无法分辨「没匹配上」和「匹配了但被裁了」。 */
       worldbookDropped: Number(snapshot.worldbookDropped) || 0,
+      /* 【W11】线下引擎在 0 命中时写入的逐条诊断。快照模式此前只报一个 0，
+         用户拿不到任何线索，只能靠人肉读代码逐层猜。这里把它透出给渲染层。 */
+      worldbookZeroDiag: snapshot.worldbookZeroDiag || null,
       entries: [],
       totalInStore:
         global.miyaWorldbookStore && typeof global.miyaWorldbookStore.listEntries === 'function'
@@ -1298,7 +1301,13 @@
             : '') +
           '，当前' + (snapshot.worldbookLiveZero && snapshot.worldbookLiveZero.offlineMode ? '线下' : '线上') +
           '口径未命中世界书。</p>' +
-          renderWbZeroHints(snapshot.worldbookLiveZero));
+          /* 快照诊断优先：那是「上一次真实发送」时算出来的，比实时预估更贴近现场。
+             只有快照没有（老的生成记录 / 线上快照）时才落回实时预测的诊断。 */
+          renderWbZeroHints(
+            (snapshot.worldbookZeroDiag && snapshot.worldbookZeroDiag.reasons)
+              ? snapshot.worldbookZeroDiag
+              : snapshot.worldbookLiveZero
+          ));
 
     function renderWbZeroHints(lz) {
       if (!lz) return '';

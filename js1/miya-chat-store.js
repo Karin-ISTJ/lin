@@ -1657,6 +1657,51 @@
                引擎写得多认真也会在 updateChat 的 normalize 一层被静默丢掉，
                面板永远读到 undefined。 */
             source: String(raw.source || '').slice(0, 20),
+            /* 【W11】0 命中诊断：线下引擎在命中为 0 时写入每个启用条目的
+               拒绝理由。必须列入白名单，否则 updateChat 这一层会把它丢掉，
+               面板拿不到任何排查线索 —— 正是上面那条教训的又一次应用。 */
+            worldbookZeroDiag: normalizeWorldbookZeroDiag(raw.worldbookZeroDiag),
+            updatedAt: Number.isFinite(at) && at > 0 ? at : 0
+        };
+    }
+
+    /** 0 命中诊断（线下快照专用）：条目清单 + 逐条拒绝理由 + 当时下发的角色 ID */
+    function normalizeWorldbookZeroDiag(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        var reasonsRaw = Array.isArray(raw.reasons) ? raw.reasons : [];
+        var reasons = [];
+        var i;
+        for (i = 0; i < reasonsRaw.length && reasons.length < 200; i++) {
+            var r = reasonsRaw[i];
+            if (!r || typeof r !== 'object') continue;
+            var name = String(r.name || r.id || '').trim().slice(0, 120);
+            if (!name) continue;
+            var bound = Array.isArray(r.bound)
+                ? r.bound.map(function (x) { return String(x || '').slice(0, 80); }).filter(Boolean).slice(0, 20)
+                : [];
+            reasons.push({
+                id: String(r.id || '').slice(0, 80),
+                name: name,
+                scope: String(r.scope || '').slice(0, 20),
+                reach: String(r.reach || '').slice(0, 20),
+                bound: bound,
+                constant: !!r.constant,
+                hasKeys: !!r.hasKeys,
+                injected: !!r.injected,
+                reason: String(r.reason || '').slice(0, 60),
+                reasonLabel: String(r.reasonLabel || '').slice(0, 120),
+                detail: String(r.detail || '').slice(0, 200)
+            });
+        }
+        var roleIds = Array.isArray(raw.roleIds)
+            ? raw.roleIds.map(function (x) { return String(x || '').slice(0, 80); }).filter(Boolean).slice(0, 20)
+            : [];
+        var at = Number(raw.updatedAt);
+        return {
+            enabled: Math.max(0, Math.floor(Number(raw.enabled) || 0)),
+            total: Math.max(0, Math.floor(Number(raw.total) || 0)),
+            roleIds: roleIds,
+            reasons: reasons,
             updatedAt: Number.isFinite(at) && at > 0 ? at : 0
         };
     }

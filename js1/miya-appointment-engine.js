@@ -1017,11 +1017,67 @@
         var sessionMsgs = aps.getSessionMessages(chatId, sessionId);
         var slice = sessionMsgs.slice();
         var castContacts = resolveSessionCastContacts(st, sess, contact);
-        var castRoleIds = castContacts
-            .map(function (c) {
-                return String((c && c.id) || '').trim();
-            })
-            .filter(Boolean);
+        /* 【W11 修复】线下角色 ID 必须用**别名全集**，不能只手取 contact.id。
+           ------------------------------------------------------------------
+           旧实现：
+
+               var castRoleIds = castContacts.map(function (c) {
+                   return String((c && c.id) || '').trim();
+               }).filter(Boolean);
+
+           只取记录 id 一个值。而世界书面板的角色选择器
+           （miya-worldbook-store.resolveAvailableRoles → contactsStore
+           .resolveRolesForWorldbook）把同一个角色的 **characterId 和 id
+           各列成一张卡**：
+
+               [c.characterId, c.id].forEach(function (rid) { ... 各推一行 ... });
+
+           用户点的是哪张卡，boundRoleIds 里存的就是哪个 ID。若存的是
+           characterId，而这里只喂 contact.id，两者是否等价**完全依赖**
+           matcher.expandRoleAliases 能通过 global.miyaContactsStore
+           .findCharacter 把别名展开出来。
+
+           实测（线下、局部词条绑角色、无关键词）：
+             · contactsStore 就绪、别名可展开        → 命中 1
+             · contactsStore 未就绪 / findCharacter 落空 → **命中 0**
+
+           也就是说：**联系人存储稍有闪失，用户的局部词条就会集体「未命中」，
+           且面板只报一个 0，不给任何线索。**
+
+           线上链路不会这样 —— 它走 collectContactRoleIds(contact)，一次收
+           characterId / chronicleId / store 里的 id/characterId 多个值，
+           天然对别名不敏感。线下这里是自己攒的一份，比线上窄，属于老问题。
+
+           修法：与线上同源，直接用 engine 导出的 collectContactRoleIds，
+           并把 cast 里每个联系人的 ID 全集都并进来。 */
+        var castRoleIds = [];
+        (function () {
+            var seen = Object.create(null);
+            var push = function (v) {
+                var id = String(v || '').trim();
+                if (!id || seen[id]) return;
+                seen[id] = true;
+                castRoleIds.push(id);
+            };
+            var engRef2 = eng();
+            var collectIds =
+                engRef2 && typeof engRef2.collectContactRoleIds === 'function'
+                    ? engRef2.collectContactRoleIds
+                    : null;
+            castContacts.forEach(function (c) {
+                if (!c) return;
+                /* 宽集合优先：characterId / chronicleId / store 别名一次收齐 */
+                if (collectIds) {
+                    try {
+                        collectIds(c).forEach(push);
+                    } catch (eCollect) { /* 落回窄集合，别因为一个联系人的取 ID 失败而全废 */ }
+                }
+                /* 兜底：无论 collectIds 是否可用，记录 id 一定要在 */
+                push(c.id);
+                push(c.characterId);
+                push(c.chronicleId);
+            });
+        })();
 
         var mem = global.MiyaAppointmentMemory;
         var cross =
@@ -1343,7 +1399,12 @@
                同名同构）：runAppointmentCompletion 收尾要拿它拼「本轮真实发送」的
                快照写进宿主 chat 行 —— 缺了这份 meta，快照里的世界书
                命中数/候选数/注入字符数就全是 0，等于白写。 */
-            worldbookMeta: (wbBundle && wbBundle.meta) || null
+            worldbookMeta: (wbBundle && wbBundle.meta) || null,
+            /* 【W11 诊断】供 writeOfflinePromptSnapshot 在 0 命中时还原现场：
+               explainEntry 需要的 contextText 与本次下发的角色 ID 集合。
+               不带上这两样，快照里就只剩一个光秃秃的 0，用户和排查者都无从下手。 */
+            worldbookDiagContext: worldbookContextText || '',
+            worldbookDiagRoleIds: castRoleIds.slice()
         };
     }
 
@@ -2240,6 +2301,70 @@
             /* 线下标记：设置页靠它区分「上次发送」是线上还是线下，
                不带这个字段，用户就会把线下快照的世界书命中误读成线上行为。 */
             bd.source = 'offline';
+            /* 【W11 诊断】0 命中时把「为什么」一并落进快照。
+               ------------------------------------------------------------------
+               此前快照只记 worldbookMatched 一个数字。用户看到 0 时，
+               面板不给任何线索，只能靠人肉读代码逐层猜 —— 这个缺陷因此
+               在线上多绕了好几轮。这里在命中为 0 时，对每个**启用**条目
+               调 matcher.explainEntry，把拒绝原因和当前下发角色的 ID 集合
+               一起写进快照，面板直接展示。 */
+            try {
+                var wbMetaForDiag = (built && built.worldbookMeta) || null;
+                if (!wbMetaForDiag || !(Number(wbMetaForDiag.matched) > 0)) {
+                    var matcherRef = global.miyaWorldbookMatcher;
+                    var wbStoreRef = global.miyaWorldbookStore;
+                    if (matcherRef && wbStoreRef && typeof wbStoreRef.listEntries === 'function') {
+                        var allRows = wbStoreRef.listEntries() || [];
+                        var enabledRows = allRows.filter(function (e) {
+                            if (!e || e.enabled === false) return false;
+                            return typeof wbStoreRef.isEntryGroupEnabled !== 'function'
+                                || wbStoreRef.isEntryGroupEnabled(e);
+                        });
+                        var wbCtx = String((built && built.worldbookDiagContext) || '');
+                        var castRoleIdsForDiag = Array.isArray(built && built.worldbookDiagRoleIds)
+                            ? built.worldbookDiagRoleIds
+                            : [];
+                        var diagCfg = {
+                            contextText: wbCtx,
+                            promptContext: 'offline',
+                            roleId: castRoleIdsForDiag[0] || '',
+                            roleIds: castRoleIdsForDiag
+                        };
+                        var reasons = enabledRows.map(function (e) {
+                            var r = null;
+                            try {
+                                r = typeof matcherRef.explainEntry === 'function'
+                                    ? matcherRef.explainEntry(e, diagCfg)
+                                    : null;
+                            } catch (eExp) { r = null; }
+                            return {
+                                id: String(e.id || ''),
+                                name: String(e.name || e.id || ''),
+                                scope: String(e.scope || 'global'),
+                                reach: typeof matcherRef.getEntryGlobalReach === 'function'
+                                    ? String(matcherRef.getEntryGlobalReach(e) || '')
+                                    : String(e.globalReach || ''),
+                                bound: Array.isArray(e.boundRoleIds) ? e.boundRoleIds.slice() : [],
+                                constant: !!e.constant,
+                                hasKeys: typeof matcherRef.hasAnyKeywords === 'function'
+                                    ? !!matcherRef.hasAnyKeywords(e)
+                                    : false,
+                                injected: !!(r && r.injected),
+                                reason: r ? String(r.reason || '') : 'explain_unavailable',
+                                reasonLabel: r ? String(r.reasonLabel || r.reason || '') : '',
+                                detail: r ? String(r.detail || '') : ''
+                            };
+                        });
+                        bd.worldbookZeroDiag = {
+                            enabled: enabledRows.length,
+                            total: allRows.length,
+                            roleIds: castRoleIdsForDiag.slice(),
+                            reasons: reasons,
+                            updatedAt: Date.now()
+                        };
+                    }
+                }
+            } catch (eZeroDiag) { /* 诊断失败绝不拖累快照写入 */ }
             /* 用量与线上 buildLocalTokenUsage 同构：本地按字符粗算，
                API 返回 usage 时如实记录在 completion.data 里（此处沿用本地口径，
                与线上本地兜底一致，避免两条链路数字口径打架）。 */

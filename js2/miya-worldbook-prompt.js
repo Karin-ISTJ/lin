@@ -319,40 +319,35 @@
     function notExcluded(entry) {
       return entry && entry.id && !excludeSet[String(entry.id)];
     }
-    var matchPool = entries;
-    /* 【W10 修复】线下（scopeMode==='appointment'）的匹配池过滤 —— 收窄到正确的边界。
+    /* 【W11 修复】线下（scopeMode==='appointment'）的匹配池过滤 —— 最终收口为「不过滤」。
        ------------------------------------------------------------------
-       最初这里写的是「只保留 boundRoleIds 非空的词条」：
+       这一处的历史：
+         v8  写的是「只保留 boundRoleIds 非空的词条」→ 把「全局设定类」条目
+             （世界观/地点/物品/组织，本就不绑角色）整类剔除，线下候选恒为 0。
+         v9  发现问题后整条删掉，方向对，但当时没意识到「局部词条」这半边。
+         v10 又收窄成「全局留池、局部必须绑角」，想守住「局部=绑角色」的语义。
+         v11 最终确认：**连这半边也是多余的**，理由如下。
 
-           matchPool = entries.filter(function (entry) {
-             var roles = Array.isArray(entry && entry.boundRoleIds) ? entry.boundRoleIds : [];
-             return roles.length > 0;      // ← 把「全局设定类」词条整类也剔除了
-           });
+       权威口径只有一处 —— matcher 的 roleMatches：
 
-       这条过滤的**初衷是对的**（局部词条必须绑角色），但**范围下错了**：
-       世界观 / 地点 / 物品 / 组织这类词条本来就不绑任何角色（它们绑定的是
-       "世界"，不是"某个人"），却被一并剔除 → 线下候选恒为 0 →
-       「模型高级」显示「世界书未命中」。
+           var bound = entry.boundRoleIds || [];
+           if (!bound.length) return true;      // 未绑定 = 不限制角色
 
-       中间还走过一版「整条删掉」的修法，但那又把**局部词条必须绑角**这条
-       底线一起放开了：未绑角的 local 词条会开始注入，而线上链路
-       （miya-chat-engine.js 的 collectBoundLocalBindingsForRoleIds /
-       listBindableLocalWorldbookEntries 两处都有 `if (!bound.length) return`）
-       和世界书面板都不认它，等于制造出「线下注入、线上不注入、面板不认」
-       的新不一致。
+       世界书面板诊断台（miya-worldbook-app.js renderDiag）据此如实告诉用户
+       「局部词条未绑定任何联系人 —— 按当前实现视为『不限制角色』，会对所有
+       联系人注入」，并把它标成 warn 级提示（而非错误）。世界书编辑器保存时
+       也确实会拦截「局部但未绑定」（saveEditor），所以这种条目只在
+       导入数据 / 历史数据里出现。
 
-       所以正确边界是：
-         · scope !== 'local'（全局词条）→ 一律留在池内，是否生效交给
-           matcher.matchEntry 按 globalReach 裁决；
-         · scope === 'local'（局部词条）→ 仍必须绑定了角色才进池。
-       这样既修好全局词条被吞，也不放宽局部词条的既有语义。 */
-    if (scopeMode === 'appointment') {
-      matchPool = entries.filter(function (entry) {
-        if (!entry) return false;
-        if (String(entry.scope) !== 'local') return true;
-        return Array.isArray(entry.boundRoleIds) && entry.boundRoleIds.length > 0;
-      });
-    }
+       也就是说「未绑角局部会注入」是整个系统**已经对外承诺**的行为。
+       prompt 层再拦一道，只会造成：
+         · 诊断台说「会注入」→ 面板说「未命中」→ 用户不知道该信谁（本缺陷的本质症状）；
+         · 修复一轮又一轮，每次只挪动边界、判据依然两套。
+
+       所以最终选择「本层不做任何 scope 过滤」：matchPool = entries。
+       是否生效完全交给 matcher.matchEntry 按 scope / globalReach / 绑定关系裁决，
+       与诊断台、与线上链路共用同一套判据。 */
+    var matchPool = entries;
     var roleIds = Array.isArray(cfg.roleIds)
       ? cfg.roleIds.map(function (x) { return String(x || '').trim(); }).filter(Boolean)
       : [];
