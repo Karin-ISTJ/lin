@@ -439,6 +439,38 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
        cs.indexOf('readCodeVersionFingerprint') >= 2,
        '\u7f3a\u5c11\u6307\u7eb9\u6e32\u67d3\u6216\u91c7\u96c6\u51fd\u6570');
   })();
+
+  /* E7：线下（scopeMode='appointment'）判据一致性守卫。
+       缺陷：prompt 层曾把「未绑定角色的条目」整段滤出线下匹配池，
+       而 matcher（线上链路与世界书诊断台共用）判「未绑定角色=通用，放行」
+       —— 用户在诊断台看到「会注入」，线下生成后面板却「世界书未命中」。
+       守卫确保三处判据同权：未绑定角色的通用条目线下也能命中；
+       同时保护两道合法关卡不被误删：绑定其它角色 → 排除；仅线上范围 → 线下排除。 */
+  (function () {
+    const off = { promptContext: 'offline', scopeMode: 'appointment' };
+    const on = { promptContext: 'online' };
+    const r1 = build([mk('G1', 'front', { key: ['\u82f9\u679c'] })], CTX, off);
+    ck('E7a \u7ebf\u4e0b\uff1a\u672a\u7ed1\u5b9a\u89d2\u8272\u7684\u8bcd\u6761\u53ef\u547d\u4e2d\uff08\u4e0e\u7ebf\u4e0a/\u8bca\u65ad\u53f0\u540c\u6743\uff09',
+       has(r1, 'G1'), 'matched=' + ids(r1));
+    const r2 = build([mk('G2', 'front', { key: ['\u82f9\u679c'], scope: 'local', boundRoleIds: ['zzz'] })], CTX, off);
+    ck('E7b \u7ebf\u4e0b\uff1a\u7ed1\u5b9a\u5176\u5b83\u89d2\u8272\u7684\u8bcd\u6761\u4ecd\u88ab\u6392\u9664\uff08roleMatches \u4fdd\u6301\uff09',
+       !has(r2, 'G2'), 'matched=' + ids(r2));
+    const r3 = build([mk('G3', 'front', { key: ['\u82f9\u679c'], globalReach: 'online' })], CTX, off);
+    ck('E7c \u7ebf\u4e0b\uff1a\u4ec5\u7ebf\u4e0a\u8303\u56f4\u7684\u8bcd\u6761\u4ecd\u88ab\u6392\u9664\uff08\u8303\u56f4\u8bed\u4e49\u4fdd\u6301\uff09',
+       !has(r3, 'G3'), 'matched=' + ids(r3));
+    const r4 = build([mk('G4', 'front', { key: ['\u82f9\u679c'], globalReach: 'offline' })], CTX, off);
+    const r4on = build([mk('G4', 'front', { key: ['\u82f9\u679c'], globalReach: 'offline' })], CTX, on);
+    ck('E7d \u7ebf\u4e0b\uff1a\u4ec5\u7ebf\u4e0b\u8303\u56f4\u7684\u8bcd\u6761\u547d\u4e2d', has(r4, 'G4'),
+       'matched=' + ids(r4));
+    ck('E7e \u7ebf\u4e0a\uff1a\u4ec5\u7ebf\u4e0b\u8303\u56f4\u7684\u8bcd\u6761\u4e0d\u547d\u4e2d', !has(r4on, 'G4'),
+       'matched=' + ids(r4on));
+    const r5 = build([mk('G5', 'front', { key: [], constant: true })], '', off);
+    ck('E7f \u7ebf\u4e0b\uff1a\u5e38\u9a7b\uff08\u65e0\u5173\u952e\u8bcd\uff09\u5168\u5c40\u8bcd\u6761\u6ce8\u5165', has(r5, 'G5'),
+       'matched=' + ids(r5));
+    const r6 = build([mk('G1', 'front', { key: ['\u82f9\u679c'] })], CTX, on);
+    ck('E7g \u7ebf\u4e0a\u5bf9\u7167\uff1a\u540c\u8bcd\u6761\u540c\u6837\u547d\u4e2d\uff08\u7ebf\u4e0a\u4e0b\u884c\u4e3a\u4e0d\u56de\u9000\uff09',
+       has(r6, 'G1'), 'matched=' + ids(r6));
+  })();
 })();
 
 console.log('\n' + '\u2550'.repeat(58));

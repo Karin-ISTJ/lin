@@ -297,12 +297,16 @@
       return entry && entry.id && !excludeSet[String(entry.id)];
     }
     var matchPool = entries;
-    if (scopeMode === 'appointment') {
-      matchPool = entries.filter(function (entry) {
-        var roles = Array.isArray(entry && entry.boundRoleIds) ? entry.boundRoleIds : [];
-        return roles.length > 0;
-      });
-    }
+    /* scopeMode === 'appointment'（线下会话）曾在此处把「未绑定角色的条目」
+       整段滤出匹配池 —— 与 matcher 的判据正面冲突：
+         · matcher.roleMatches()：未绑定角色 = 通用条目，对任何会话放行；
+         · 诊断台 runDiag()：走 matcher，同样判「会注入」；
+         · 线上链路（无 scopeMode）：matchPool = 全量，未绑定角色的词条正常命中。
+       三处都放行的词条，唯独线下被这道过滤静默排除 —— 用户在世界书诊断里
+       看到「会注入」，线下生成后「模型高级」却显示「世界书未命中」，
+       两套判据各说各话。绑定角色与否的裁决权本就属于 matcher
+       （绑定了其它角色 → roleMatches 拒绝；globalReach=online → 仅线上），
+       prompt 层不应再加一道更严的暗门。故删除此过滤，线下与线上同权。 */
     var roleIds = Array.isArray(cfg.roleIds)
       ? cfg.roleIds.map(function (x) { return String(x || '').trim(); }).filter(Boolean)
       : [];
