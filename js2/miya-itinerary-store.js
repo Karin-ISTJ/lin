@@ -113,6 +113,23 @@
     return isoDate(d);
   }
 
+  /* 判定一条 schedule 的窗口是不是**旧口径**（前向窗口）。
+     新口径的硬性结构特征是：weekStart + 6 天**必须**等于今天 ——
+     因为窗口是「过去七天」，今天固定落在最后一天。
+
+     为什么不用日期阈值（比如「weekStart 早于今天就算旧」）来判：
+     那会把「今天刚生成的新数据」误判成旧数据，直接作废用户刚拿到的东西。
+     用「终点是不是今天」这个结构判据，只对真正不自洽的窗口下手。 */
+  function isLegacyWindow(weekStartIso, nowTs) {
+    var start = parseIso(weekStartIso);
+    if (!start) return true;                 // 解析不出来的脏值，一并作废
+    var expected = new Date(start);
+    expected.setDate(expected.getDate() + (WEEK_DAYS - 1));
+    var now = new Date(Number(nowTs) > 0 ? Number(nowTs) : Date.now());
+    now.setHours(0, 0, 0, 0);
+    return isoDate(expected) !== isoDate(now);
+  }
+
   function isScheduleExpired(schedule) {
     if (!schedule || !schedule.weekStart) return true;
     var end = weekEndDate(schedule.weekStart);
@@ -234,6 +251,16 @@
     if (!weekStart) {
       /* 缺省窗口是**过去七天**（今天往前 6 天起），不是「从今天起」。 */
       weekStart = pastWindowStartIso();
+    } else if (isLegacyWindow(weekStart)) {
+      /* 旧口径数据：weekStart 是「以今天为起点」的前向窗口（weekStart+6 ≠ 今天）。
+         v16 只修了生成侧，存量数据没被迁移，于是界面继续按旧窗口渲染
+         （今天起铺 7 天 = 未来七天），而 isScheduleExpired 又从 weekStart+6 起算，
+         这份数据还有 6 天不过期 —— 巡检不会重生成，用户只能一直看到错窗口。
+
+         这里直接作废（返回 null），由调用方走空态并等重新生成。
+         不清内容、而是整体作废，是因为旧内容是按「未来」写的，
+         日期改成过去后会出现「日期说过去、内容写将来」的矛盾。 */
+      return null;
     }
     var daysRaw = Array.isArray(raw.days) ? raw.days : [];
     var days = [];
@@ -286,12 +313,39 @@
     });
   }
 
+  /* 已被作废（旧口径）的行程 id。作用只有一个：让「作废」这件事**只发生一次**。
+
+     为什么需要它：旧数据作废后如果生成本身失败（网络/API 报错），
+     该角色会一直处于「没有 schedule」的状态。若不作任何记录，
+     每次 getSchedule 读到的都是同一条旧数据 → 每次触发都判「待生成」→ 反复重试，
+     用户看到的是不停闪的「生成中」，且每次都是真实的 API 调用。
+
+     v12 特意移除了「失败冷却」机制（理由见下方注释：冷却会让用户看不出为什么不再生成），
+     所以这里**不重引入冷却**，只做「同一条旧数据不重复作废」——
+     作废后它会从存储里被清掉，之后走的是正常的「无行程 → 生成」流程。 */
+  var purgedLegacyIds = {};
+
   function getSchedule(contactId) {
     var id = String(contactId || '').trim();
     if (!id) return null;
     var raw = loadRaw().schedules[id];
     if (!raw) return null;
-    return normalizeSchedule(raw, id);
+    var norm = normalizeSchedule(raw, id);
+    if (!norm) {
+      /* normalizeSchedule 返回 null 表示这条是旧口径数据（或结构损坏）。
+         就地清掉并落盘，避免它反复参与判定 / 反复触发重生成。
+         只清一次：清完 schedules[id] 就不存在了，后续走到上面的 !raw 提前返回。 */
+      if (!purgedLegacyIds[id]) {
+        purgedLegacyIds[id] = true;
+        delete loadRaw().schedules[id];
+        saveRaw();
+        if (global.console && typeof console.warn === 'function') {
+          console.warn('[itinerary] 检测到旧口径行程窗口（非「过去七天」），已作废并等待重新生成：' + id);
+        }
+      }
+      return null;
+    }
+    return norm;
   }
 
   function saveSchedule(contactId, schedule) {
@@ -424,6 +478,17 @@
       tz = aw && typeof aw.localTz === 'function' ? aw.localTz() : 'Asia/Shanghai';
     }
     var dateIso = isoDateForTz(ts, tz);
+    /* 兜底：窗口与「今天」必须自洽（schedule.weekStart + 6 == 今天）。
+
+       不自洽时宁可**不注入**，也不注入错的一天。原因是旧的前向窗口下
+       dateLabel = [今天, 今天+1, …]，今天恰好落成**第 1 天**，
+       findDayForDate 照样能匹配到 —— 于是「今天」被错当成窗口最早那天，
+       角色会拿着最早那天的行程演当下的对话。这种错误不会报错、也不会空，
+       只会让内容悄悄对不上时间，比彻底不注入更难查。
+
+       正常情况下这条守卫不会触发（getSchedule 已在读取时作废旧窗口），
+       留着是为了防止将来又有别的路径把不自洽的 schedule 送进来。 */
+    if (isLegacyWindow(schedule.weekStart, ts)) return null;
     var day = findDayForDate(schedule, dateIso);
     if (!day) return null;
     var slot = findSlotForMinutes(day, minutesInDayForTz(ts, tz));
@@ -442,13 +507,17 @@
 
   global.miyaItineraryStore = {
     STORAGE_KEY: STORAGE_KEY,
-    invalidateCache: function () { cache = null; },
+    /* 缓存作废时一并清掉「已作废」标记。
+       恢复备份（miya-backup.js）会调这里，恢复进来的数据要能被重新判定 —— 
+       否则还原了一份旧口径数据，却因为标记还在而被静默跳过、永远不清。 */
+    invalidateCache: function () { cache = null; purgedLegacyIds = {}; },
     WEEK_DAYS: WEEK_DAYS,
     WD_ZH: WD_ZH,
     isoDate: isoDate,
     parseIso: parseIso,
     weekEndDate: weekEndDate,
     pastWindowStartIso: pastWindowStartIso,
+    isLegacyWindow: isLegacyWindow,
     isScheduleExpired: isScheduleExpired,
     getSettings: getSettings,
     setAutoGenerate: setAutoGenerate,

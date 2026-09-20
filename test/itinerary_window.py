@@ -35,6 +35,33 @@ Karin · 「行程轨迹窗口方向」回归测试
     node test/itinerary_window.py    # 见文件末尾说明
 或直接：
     python3 test/itinerary_window.py
+
+第二轮缺陷（E 组）
+------------------
+v16 修好了**生成侧**，但界面仍显示未来七天（用户截图：VOL. 2026.09.20 — 2026.09.26，
+日历条 周日20 → 周六26）。原因是 v16 只兜底了「**缺失** weekStart」的情形：
+
+    var weekStart = String(raw.weekStart || '').trim();
+    if (!weekStart) weekStart = pastWindowStartIso();   // 只补缺，不纠正已有值
+
+存储里已有的旧 schedule（weekStart = 今天）被**原样透传**，
+weekEnd 与每天 dateLabel 都从它派生 → 界面继续渲染 20~26。
+
+而且它不会被自动替换：isScheduleExpired 以 weekStart+6 为终点，
+旧数据 weekStart=今天 → 终点=今天+6 → 还有 6 天判定「进行中」，巡检不认领。
+用户只能手动 REGENERATE —— 这就是「v16 修了但界面没变」。
+
+连带 bug：resolveCurrentItinerarySlice 用 findDayForDate(今天) 按 dateLabel 匹配，
+旧窗口下今天恰好是**第 1 天**，于是匹配成功但注入的是**最早那天**的行程，
+而不是最近的今天。不是「没行程」，是**错天**，更难察觉。
+
+处置（用户选择：旧数据直接作废，要求重新生成）
+----------------------------------------------
+新增 `store.isLegacyWindow(weekStart, now)`：结构判据 —— 新口径下
+weekStart+6 **必须**等于今天，否则视为旧口径。
+不用日期阈值判（会把「今天刚生成的新数据」误伤）。
+normalizeSchedule 命中即返回 null；getSchedule 就地清条并落盘；
+resolveCurrentItinerarySlice 加自洽兜底（宁可**不注入**也不错天）。
 """
 import json
 import os
@@ -125,6 +152,64 @@ out.push(['C5 提示词禁止写计划', bridgeSrc.indexOf('不要写计划') >=
 /* ── D. 导出面 ───────────────────────────────────────────── */
 out.push(['D1 store 导出 pastWindowStartIso',
           typeof st.pastWindowStartIso === 'function', '']);
+out.push(['D2 store 导出 isLegacyWindow',
+          typeof st.isLegacyWindow === 'function', '']);
+
+/* ── E. 存量旧数据必须被作废（v18） ──────────────────────── */
+/* 旧口径：weekStart = 今天，往后铺 7 天 → 终点 = 今天+6 ≠ 今天 */
+const legacyStart = todayIso;
+const legacyDays = (function () {
+  const base = (function (iso) {
+    const p = iso.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]);
+  })(legacyStart);
+  const arr = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base); d.setDate(d.getDate() + i);
+    arr.push({ dayIndex: i, weekday: st.WD_ZH[d.getDay()], dateLabel: st.isoDate(d),
+               dayMood: '日常', dayTheme: '日常安排',
+               slots: [{ timeStart: '08:30', timeEnd: '09:20', period: 'morning',
+                         title: '做早餐', location: '厨房', detail: '煎蛋烤吐司' }] });
+  }
+  return arr;
+})();
+
+/* E1 —— 直接锁住本次 bug 的输入形态（旧 B1 的盲区：只测了「无 weekStart」） */
+const legacyNorm = st.normalizeSchedule({ weekStart: legacyStart, days: legacyDays }, 'c1');
+out.push(['E1 旧口径 schedule（weekStart=今天）被作废 → null',
+          legacyNorm === null, legacyNorm ? 'weekStart=' + legacyNorm.weekStart : 'null']);
+
+/* E5 —— 「今天=第1天」是旧口径的结构性特征，正是错天注入的成因 */
+const legacyLabels = legacyDays.map(d => d.dateLabel);
+out.push(['E5 旧数据 dateLabel 以今天开头（今天=第 1 天 → 注入错天）',
+          legacyLabels[0] === todayIso && legacyLabels[6] !== todayIso,
+          legacyLabels[0] + ' … ' + legacyLabels[6]]);
+
+/* E7 —— 脏值边界 */
+out.push(['E7 weekStart 无法解析（脏值）亦作废',
+          st.normalizeSchedule({ weekStart: 'not-a-date', days: legacyDays }, 'c1') === null, '']);
+
+/* E6 —— 新口径数据不得被误伤（必须有这一条，否则「恒作废」也能骗过 E1） */
+const freshNorm = st.normalizeSchedule({ weekStart: startIso, days: legacyDays }, 'c2');
+out.push(['E6 新口径数据不被误伤（weekStart=今天-6 正常返回）',
+          !!freshNorm && freshNorm.weekStart === startIso,
+          freshNorm ? freshNorm.weekStart : 'null']);
+out.push(['E6b 新口径 weekEnd == 今天',
+          !!freshNorm && freshNorm.weekEnd === todayIso,
+          freshNorm ? freshNorm.weekEnd : 'null']);
+out.push(['E6c 新口径 7 天全部保留',
+          !!freshNorm && freshNorm.days.length === 7,
+          freshNorm ? String(freshNorm.days.length) : 'null']);
+
+/* E8 —— isLegacyWindow 自身的一致性 */
+out.push(['E8a isLegacyWindow(今天) === true（前向窗口）',
+          st.isLegacyWindow(todayIso) === true, '']);
+out.push(['E8b isLegacyWindow(今天-6) === false（新口径）',
+          st.isLegacyWindow(startIso) === false, '']);
+out.push(['E8c isLegacyWindow(今天-30) === true（历史窗口亦作废）',
+          (function () {
+            const d = new Date(t); d.setDate(d.getDate() - 30);
+            return st.isLegacyWindow(st.isoDate(d)) === true;
+          })(), '']);
 
 console.log(JSON.stringify(out));
 """
