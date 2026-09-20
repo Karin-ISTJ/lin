@@ -91,6 +91,10 @@
     return d;
   }
 
+  /* 行程窗口是**过去七天**：weekStart 为最早的一天，weekStart+6 = 今天。
+     因此它的终点就是「今天」，过期判定用当天 23:59:59.999。
+     注意：这里不能用「weekStart + 6 天 23:59」之外的口径，
+     否则会出现「列表说进行中、其实今天已不在窗口内」的错位。 */
   function weekEndDate(weekStartIso) {
     var start = parseIso(weekStartIso);
     if (!start) return null;
@@ -98,6 +102,15 @@
     end.setDate(end.getDate() + WEEK_DAYS - 1);
     end.setHours(23, 59, 59, 999);
     return end;
+  }
+
+  /* 过去七天的起点 = 今天往前推 (WEEK_DAYS - 1) 天，终点是今天。
+     这样「今天」始终落在窗口最后一天，当天对话一定能查到当前时段。 */
+  function pastWindowStartIso(nowTs) {
+    var d = new Date(Number(nowTs) > 0 ? Number(nowTs) : Date.now());
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - (WEEK_DAYS - 1));
+    return isoDate(d);
   }
 
   function isScheduleExpired(schedule) {
@@ -219,7 +232,8 @@
     if (!raw || typeof raw !== 'object') return null;
     var weekStart = String(raw.weekStart || '').trim();
     if (!weekStart) {
-      weekStart = isoDate(todayStart());
+      /* 缺省窗口是**过去七天**（今天往前 6 天起），不是「从今天起」。 */
+      weekStart = pastWindowStartIso();
     }
     var daysRaw = Array.isArray(raw.days) ? raw.days : [];
     var days = [];
@@ -434,6 +448,7 @@
     isoDate: isoDate,
     parseIso: parseIso,
     weekEndDate: weekEndDate,
+    pastWindowStartIso: pastWindowStartIso,
     isScheduleExpired: isScheduleExpired,
     getSettings: getSettings,
     setAutoGenerate: setAutoGenerate,

@@ -540,8 +540,10 @@
     var start = store && store.parseIso ? store.parseIso(weekStartIso) : null;
     if (!start) return '';
     var aw = global.MiyaChatAwareness;
+    /* 这是**过去七天**的日期清单：第 1 天最早，第 7 天就是今天。
+       模板里写明「刚过去」，避免模型把日期当成未来日程去写计划。 */
     var lines = [
-      '【本周时间】内化以下日期即可，在每日 theme 与细节中自然体现，勿单独解释：'
+      '【过去七天时间】内化以下日期即可，在每日 theme 与细节中自然体现，勿单独解释：'
     ];
     if (roleTz) lines.push('角色时区：' + roleTz);
     var i;
@@ -584,7 +586,11 @@
   function buildUserPrompt(contact, profile, opts) {
     opts = opts && typeof opts === 'object' ? opts : {};
     var store = global.miyaItineraryStore;
-    var weekStart = opts.weekStart || (store && store.isoDate ? store.isoDate(new Date()) : '');
+    /* 缺省取**过去七天**的起点（今天往前 6 天），终点是今天。
+       旧实现取的是「今天」，于是 7 天全落在未来 —— 与本功能的语义相反。 */
+    var weekStart = opts.weekStart || (store && store.pastWindowStartIso
+      ? store.pastWindowStartIso()
+      : (store && store.isoDate ? store.isoDate(new Date()) : ''));
     var seed = opts.seed != null ? opts.seed : Math.floor(Math.random() * 99999);
     var ctx = buildScheduleContext(contact, profile);
     var roleTz = opts.roleTz || getRoleTzForContact(contact, profile);
@@ -596,7 +602,8 @@
       ctx,
       '',
       '【生成任务】',
-      '为角色「' + String(contact && contact.name || '未知') + '」生成从 ' + weekStart + ' 起连续 7 天私人行程。',
+      '为角色「' + String(contact && contact.name || '未知') + '」回溯并整理从 ' + weekStart + ' 起连续 7 天（第 7 天为今天）的私人行程。',
+      '这段区间是**已经发生过的**：请按「已发生」来写，不要写计划、不要写「将要去」。',
       '随机种子 ' + seed + '（勿提及）。',
       '内容须贴合上文角色设定；7 天、每天 10-14 个时段不可少，每段细节 30-50 字。',
       '时段要细：三餐各约半小时到一小时，洗漱、通勤、摸鱼、休息等分开写；一段只做一件事，勿用大段模糊时段统称同一活动。',
@@ -655,9 +662,13 @@
     profile = profile || ctx.profile;
     opts = opts && typeof opts === 'object' ? opts : {};
     var store = global.miyaItineraryStore;
-    var weekStart = opts.weekStart || (store && store.isoDate
-      ? store.isoDate((function () { var d = new Date(); d.setHours(0, 0, 0, 0); return d; })())
-      : '');
+    /* 过去七天的起点 —— 与 buildUserPrompt / normalizeSchedule 的口径必须一致，
+       否则会出现「生成用未来、渲染按过去」的错位。 */
+    var weekStart = opts.weekStart || (store && store.pastWindowStartIso
+      ? store.pastWindowStartIso()
+      : (store && store.isoDate
+        ? store.isoDate((function () { var d = new Date(); d.setHours(0, 0, 0, 0); return d; })())
+        : ''));
     var seed = opts.seed != null ? opts.seed : Math.floor(Math.random() * 99999);
     var systemPrompt = buildSystemPrompt();
     var userPrompt = buildUserPrompt(contact, profile, {
