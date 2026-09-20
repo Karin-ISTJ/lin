@@ -1641,6 +1641,12 @@
             promptChars: Math.max(0, Math.floor(Number(raw.promptChars) || 0)),
             promptTokens: Math.max(0, Math.floor(Number(raw.promptTokens) || 0)),
             worldbookMatched: Math.max(0, Math.floor(Number(raw.worldbookMatched) || 0)),
+            /* 候选数必须随白名单透传：引擎 buildPromptSourceBreakdown 写了
+               worldbookConsidered，但这份字段表若不收，字段会在 updateChat
+               的 normalize 一层被静默丢弃 —— 面板永远读到 undefined，
+               「候选 6 → 命中 2」的差额在模型高级里就说不出话来。
+               跨层字段（引擎产出 → store 白名单 → 设置页读取）必须三层同步。 */
+            worldbookConsidered: Math.max(0, Math.floor(Number(raw.worldbookConsidered) || 0)),
             worldbookDropped: Math.max(0, Math.floor(Number(raw.worldbookDropped) || 0)),
             worldbookInSystem: raw.worldbookInSystem !== false,
             replyMsgId: String(raw.replyMsgId || '').slice(0, 60),

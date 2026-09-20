@@ -423,6 +423,14 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
     ck('\u8bbe\u7f6e\u9875\u6e32\u67d3\u6f0f\u6597\u5dee\u989d\u6587\u6848\uff08\u5019\u9009/\u6982\u7387\u5206\u7ec4\uff09',
        hasFunnel,
        hasFunnel ? '\u6587\u6848\u5728\u4f4d' : '\u6e32\u67d3\u5c42\u7f3a\u5c11\u6f0f\u6597\u5dee\u989d\u6587\u6848');
+    /* 中间层守卫：engine 写了、面板读了，但 store 的 normalizePromptBreakdown
+       白名单若不收，字段会在 updateChat 落库时被静默丢弃 —— 面板永远读到
+       undefined。跨层字段必须三层同步（引擎产出 → store 白名单 → 设置页）。 */
+    const stSrc = read('js1/miya-chat-store.js');
+    const stOk = stSrc.indexOf('worldbookConsidered:') >= 0;
+    ck('store \u767d\u540d\u5355\u900f\u51fa\u5019\u9009\u6570\uff08normalizePromptBreakdown\uff09',
+       stOk,
+       stOk ? '\u5df2\u900f\u51fa' : '\u4e2d\u95f4\u5c42\u4e22\u5b57\u6bb5\uff0c\u9762\u677f\u6c38\u8fdc\u8bfb\u4e0d\u5230');
   })();
 })();
 
