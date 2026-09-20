@@ -36,6 +36,17 @@
   animation: dyFadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 兜底：本体默认不显示，只有 .is-open 才铺开。
+   原因：本 App 是 fixed + inset:0 + z-index 529，一旦出现
+   「hidden 被摘掉、is-open 没加上」的中间态（异步初始化失败、
+   或 js1/app.js 的启动清理只补 hidden 而漏掉这种情况），
+   它就会变成一个盖住整屏、却点不动的空壳 ——
+   用户报的「点进去一张大图铺满整屏、不知道点哪里」即由此而来。
+   显式兜底后，半开态自动退回不可见，不再污染桌面。 */
+.miya-diary-app:not(.is-open) {
+  display: none;
+}
+
 @keyframes dyFadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }

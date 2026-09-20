@@ -34,6 +34,15 @@
   animation: itFadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 兜底：本体默认不显示，只有 .is-open 才铺开。
+   openItineraryApp 走 chatStore.init / contactsStore.whenReady 异步链，
+   一旦上游 reject 而无兜底，就会留下「hidden 摘了、is-open 没加」的
+   半开态 —— 本 App 是 fixed + inset:0 且 z-index 高于桌面，
+   会盖住整屏却点不动。显式兜底后，半开态自动退回不可见。 */
+.miya-itinerary-app:not(.is-open) {
+  display: none;
+}
+
 @keyframes itFadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }

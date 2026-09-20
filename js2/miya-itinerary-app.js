@@ -586,6 +586,17 @@
     }
   }
 
+  function doOpenItineraryApp(el) {
+    el.removeAttribute('hidden');
+    el.classList.add('is-open');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('miya-app-open');
+    state.view = 'roster';
+    state.selectedContactId = '';
+    setView('roster');
+    requestAnimationFrame(function () { renderAll(); });
+  }
+
   function openItineraryApp() {
     var el = $('miya-itinerary-app');
     if (!el) return;
@@ -594,16 +605,22 @@
     if (cs && cs.init) chain = chain.then(function () { return cs.init(); });
     var cts = global.miyaContactsStore;
     if (cts && cts.whenReady) chain = chain.then(function () { return cts.whenReady(); });
-    chain.then(function () {
-      el.removeAttribute('hidden');
-      el.classList.add('is-open');
-      el.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('miya-app-open');
-      state.view = 'roster';
-      state.selectedContactId = '';
-      setView('roster');
-      requestAnimationFrame(function () { renderAll(); });
-    });
+    chain
+      .then(function () {
+        doOpenItineraryApp(el);
+      })
+      .catch(function (err) {
+        /* 与日记 App 同因：这条异步链没有 catch 时，
+           上游任一环 reject 都会让界面永远放不出来（点了没反应）。
+           行程列表为空也能显示空态，降级打开优于静默失败。
+           先清掉可能的半开残留，避免盖住整屏。 */
+        console.warn('[miyaItineraryApp] pre-open chain failed, opening in degraded mode:', err);
+        if (!el.classList.contains('is-open')) {
+          el.setAttribute('hidden', '');
+          el.setAttribute('aria-hidden', 'true');
+        }
+        doOpenItineraryApp(el);
+      });
   }
 
   function closeItineraryApp() {

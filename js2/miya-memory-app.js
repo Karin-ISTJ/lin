@@ -563,21 +563,38 @@
       });
   }
 
+  function doOpenMemoryApp(el) {
+    selectedChatId = null;
+    el.removeAttribute('hidden');
+    el.classList.add('is-open');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('miya-app-open');
+    requestAnimationFrame(function () {
+      renderRoleList();
+      renderSummaryDetail(null);
+      enableRoleStripScroll();
+    });
+  }
+
   function openMemoryApp() {
     var el = $('miya-memory-app');
     if (!el) return;
-    ensureStore().then(function () {
-      selectedChatId = null;
-      el.removeAttribute('hidden');
-      el.classList.add('is-open');
-      el.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('miya-app-open');
-      requestAnimationFrame(function () {
-        renderRoleList();
-        renderSummaryDetail(null);
-        enableRoleStripScroll();
+    ensureStore()
+      .then(function () {
+        doOpenMemoryApp(el);
+      })
+      .catch(function (err) {
+        /* ensureStore 里串了 contactsStore.whenReady / chatStore.init / syncAll，
+           任一环 reject 都会让界面永远放不出来（点了没反应）。
+           记忆本体只依赖 chatStore 的缓存，降级打开比静默失败好。
+           注意：必须确保不留「hidden 摘了、is-open 没加」的半开残留。 */
+        console.warn('[miyaMemoryApp] ensureStore failed, opening in degraded mode:', err);
+        if (!el.classList.contains('is-open')) {
+          el.setAttribute('hidden', '');
+          el.setAttribute('aria-hidden', 'true');
+        }
+        doOpenMemoryApp(el);
       });
-    });
   }
 
   function closeMemoryApp() {

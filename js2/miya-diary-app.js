@@ -962,6 +962,31 @@
     if (readerBack) readerBack.addEventListener('click', closeReader);
   }
 
+  /* 把「放行界面」收敛成一个函数：它要么完整执行，要么完全不执行。
+     历史上这里是散在 then 尾部的内联代码，一旦上游 reject，
+     hidden 摘了一半、is-open 没加上，就会留下一个**盖住整屏但不可交互**
+     的半开状态（z-index 529 > 桌面），用户看到的就是
+     「点进去是一张大图、不知道点哪里」。 */
+  function doOpenDiaryApp(el) {
+    var rows = store() ? store().getAllContactRows() : [];
+    var profiles = getProfiles();
+    if (!state.selectedContactId && rows.length) {
+      state.selectedContactId = rows[0].id;
+    }
+    if (!state.selectedProfileId && profiles.length) {
+      state.selectedProfileId = profiles[0].id;
+    }
+    state.settingsContactId = state.selectedContactId;
+    el.removeAttribute('hidden');
+    el.classList.add('is-open');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('miya-app-open');
+    closeReader();
+    closeSettings();
+    closeUserPage();
+    requestAnimationFrame(function () { renderAll(); });
+  }
+
   function openDiaryApp() {
     var el = $('miya-diary-app');
     if (!el) return;
@@ -970,25 +995,22 @@
     if (cs && cs.init) chain = chain.then(function () { return cs.init(); });
     var cts = global.miyaContactsStore;
     if (cts && cts.whenReady) chain = chain.then(function () { return cts.whenReady(); });
-    chain.then(function () {
-      var rows = store() ? store().getAllContactRows() : [];
-      var profiles = getProfiles();
-      if (!state.selectedContactId && rows.length) {
-        state.selectedContactId = rows[0].id;
-      }
-      if (!state.selectedProfileId && profiles.length) {
-        state.selectedProfileId = profiles[0].id;
-      }
-      state.settingsContactId = state.selectedContactId;
-      el.removeAttribute('hidden');
-      el.classList.add('is-open');
-      el.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('miya-app-open');
-      closeReader();
-      closeSettings();
-      closeUserPage();
-      requestAnimationFrame(function () { renderAll(); });
-    });
+    chain
+      .then(function () {
+        doOpenDiaryApp(el);
+      })
+      .catch(function (err) {
+        /* 上游初始化失败（IDB 打不开 / contacts store 挂了）时，
+           仍要把界面放出来 —— 日记本体只依赖 diaryStore 的缓存，
+           联系人列表为空也能显示空态，比「点了没反应」好得多。
+           同时必须先确保没有半开残留，否则会盖住整屏。 */
+        console.warn('[miyaDiaryApp] pre-open chain failed, opening in degraded mode:', err);
+        if (!el.classList.contains('is-open')) {
+          el.setAttribute('hidden', '');
+          el.setAttribute('aria-hidden', 'true');
+        }
+        doOpenDiaryApp(el);
+      });
   }
 
   function closeDiaryApp() {

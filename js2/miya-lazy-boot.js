@@ -28,15 +28,15 @@
       ]
     },
     diaryUi: {
-      css: ['css/miya-diary.css?v=13'],
+      css: ['css/miya-diary.css?v=14'],
       js: [
         'js2/miya-diary-scheduler.js?v=4',
-        'js2/miya-diary-app.js?v=11'
+        'js2/miya-diary-app.js?v=12'
       ]
     },
     itineraryUi: {
-      css: ['css/miya-itinerary.css?v=3'],
-      js: ['js2/miya-itinerary-app.js?v=11']
+      css: ['css/miya-itinerary.css?v=4'],
+      js: ['js2/miya-itinerary-app.js?v=12']
     },
     weatherUi: {
       css: ['css/miya-weather.css?v=9'],
@@ -46,8 +46,8 @@
       ]
     },
     memoryUi: {
-      css: ['css/miya-memory.css?v=9'],
-      js: ['js2/miya-memory-app.js?v=11']
+      css: ['css/miya-memory.css?v=10'],
+      js: ['js2/miya-memory-app.js?v=12']
     },
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],

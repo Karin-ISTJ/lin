@@ -38,6 +38,16 @@
   visibility: visible;
 }
 
+/* 兜底：本体默认不显示，只有 .is-open 才铺开。
+   与日记 App 同因：openMemoryApp 走 ensureStore() 异步链，
+   一旦上游 reject 且没有兜底，就会留下
+   「hidden 摘了、is-open 没加」的半开态 ——
+   本 App 是 fixed + inset:0，会盖住整屏却点不动。
+   显式兜底后，半开态自动退回不可见。 */
+.miya-memory-app:not(.is-open) {
+  display: none;
+}
+
 /* 氛围背景：改为暖色柔和光晕（原网点/斜线漫画质感已移除） */
 .mm-veil {
   position: absolute;
