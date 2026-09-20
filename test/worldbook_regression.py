@@ -374,6 +374,35 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
     ck(f + ' \u4e0d\u518d\u786c\u7f16\u7801 2048 \u515c\u5e95', !hard,
        hard ? '\u4ecd\u5b58\u5728\u786c\u7f16\u7801\u515c\u5e95' : 'ok');
   });
+
+  /* E4b：调试台守卫 —— 调试台是观察主链路的仪表，不得自带 2048 默认值。
+     主链路修成「未配置不裁剪」后，若调试台仍按 2048 裁剪，用户在调试台
+     会看到「只命中两条」且与真实注入对不上，误判成修复无效。 */
+  (function () {
+    const appSrc = read('js2/miya-worldbook-app.js');
+    ck('\u8c03\u8bd5\u53f0 JS \u4e0d\u518d\u515c\u5e95 2048', appSrc.indexOf('|| 2048') < 0,
+       appSrc.indexOf('|| 2048') >= 0 ? '\u4ecd\u5b58\u5728 || 2048 \u515c\u5e95' : 'ok');
+    const html = read('index.html');
+    const m = html.match(/id="miya-wb-st-debug-budget"[^>]*/);
+    const hasDefault = !!(m && /value\s*=\s*"\s*\d+\s*"/.test(m[0]));
+    ck('\u8c03\u8bd5\u53f0\u9884\u7b97\u8f93\u5165\u6846\u65e0\u9ed8\u8ba4\u6570\u503c\uff08\u7559\u7a7a\u4e0d\u88c1\u526a\uff09', !hasDefault,
+       m ? m[0] : '\u672a\u627e\u5230\u8f93\u5165\u6846');
+  })();
+
+  /* E5：调试台运行路径 —— app.js 调试台走 st.runPipeline（与主链路的
+     buildWorldbookPrompt 是两条路），须单独锁行为：
+     留空预算 → 不裁剪；显式预算 → 照常生效。 */
+  (function () {
+    const st = s.miyaWorldbookST;
+    const p1 = st.runPipeline(big, { contextText: CTX, tokenBudget: null, dryRun: true });
+    ck('\u8c03\u8bd5\u53f0\u00b7\u7559\u7a7a\u9884\u7b97 \u2192 \u5168\u91cf\u6ce8\u5165',
+       (p1.selected || []).length === 6 && (p1.dropped || []).length === 0,
+       'selected=' + (p1.selected || []).length + ' dropped=' + (p1.dropped || []).length);
+    const p2 = st.runPipeline(big, { contextText: CTX, tokenBudget: 2048, dryRun: true });
+    ck('\u8c03\u8bd5\u53f0\u00b7\u663e\u5f0f 2048 \u2192 \u4ecd\u88c1\u526a',
+       (p2.selected || []).length > 0 && (p2.selected || []).length < 6,
+       'selected=' + (p2.selected || []).length + ' dropped=' + (p2.dropped || []).length);
+  })();
 })();
 
 console.log('\n' + '\u2550'.repeat(58));

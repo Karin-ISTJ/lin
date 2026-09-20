@@ -39,6 +39,7 @@ import asyncio
 import functools
 import http.server
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -240,10 +241,16 @@ async def main():
             }""")
 
         s0 = await load_seq()
-        await dispatch_build('sw-2')          # 与页面 meta 相同 → 不 reload
+        # 与页面 meta 相同 → 不 reload。
+        # meta 从部署副本动态读取：BUILD 每次发版递增（sw-3→sw-4→…），
+        # 硬编码 dispatch 值会在下一次提版后变成「旧于页面」，语义悄悄漂移。
+        html_src = open(os.path.join(site_a, 'index.html'), encoding='utf-8').read()
+        m_meta = re.search(r'<meta name="miya-sw-build" content="([^"]+)"', html_src)
+        meta_build = m_meta.group(1) if m_meta else 'sw-0'
+        await dispatch_build(meta_build)   # 与页面 meta 相同 → 不 reload
         await page.wait_for_timeout(700)
         s1 = await load_seq()
-        check('C1 build 相同不刷新', s1 == s0 + 1, '%d → %d' % (s0, s1))
+        check('C1 build 相同不刷新', s1 == s0 + 1, '%d → %d（meta=%s）' % (s0, s1, meta_build))
 
         await dispatch_build('sw-9')          # 新于页面 → reload 一次
         await page.wait_for_timeout(1200)
@@ -279,29 +286,34 @@ async def main():
         check('C4b 旧 build 广播后页面未导航', abs(ts1 - ts2) < 1e-6, '%s vs %s' % (ts1, ts2))
 
         # C5：主动询问 SW → 回包 build（锚定 sw.js 的 message handler + BUILD）
-        # 基线 sw.js 无 message handler、无 BUILD → 不回包（超时 null）。
+        # 页面 postMessage {type:'miya-get-build'}，SW 回 {type:'miya-sw-build', build}。
+        # 基线 sw.js 无 message handler、无 BUILD → 不回包（3s 超时 → null）。
         got_build = await page.evaluate("""() => new Promise(resolve => {
           var done = false;
-          var t = setTimeout(() => { if (!done) { done = true; resolve(null); } }, 2000);
-          function on(e) {
-            if (e && e.data && e.data.type === 'miya-sw-build') {
-              if (done) return;
-              done = true;
+          function finish(v) { if (!done) { done = true; resolve(v); } }
+          var t = setTimeout(function () { finish(null); }, 3000);
+          navigator.serviceWorker.addEventListener('message', function onMsg(ev) {
+            if (ev.data && ev.data.type === 'miya-sw-build') {
+              navigator.serviceWorker.removeEventListener('message', onMsg);
               clearTimeout(t);
-              navigator.serviceWorker.removeEventListener('message', on);
-              resolve(e.data.build);
+              finish(ev.data.build);
             }
-          }
-          navigator.serviceWorker.addEventListener('message', on);
-          var ctl = navigator.serviceWorker.controller;
-          if (!ctl) { done = true; clearTimeout(t); resolve('no-controller'); return; }
-          ctl.postMessage({ type: 'miya-get-build' });
+          });
+          try {
+            navigator.serviceWorker.controller.postMessage({ type: 'miya-get-build' });
+          } catch (e) { finish('NO_CONTROLLER'); }
         })""")
-        ok_c5 = got_build == 'sw-2'
+        # 期望值从部署副本的 sw.js 动态读取：硬编码 build 号会在每次提版后失配，
+        # 让这条「SW 主动回包」的锚定悄悄失效。
+        sw_src = open(os.path.join(site_a, 'sw.js'), encoding='utf-8').read()
+        m_build = re.search(r"var BUILD = '([^']+)'", sw_src)
+        expect_build = m_build.group(1) if m_build else None
+        ok_c5 = expect_build is not None and got_build == expect_build
         if os.environ.get('SW_BASELINE') == '1':
-            check('C5★[基线预期失败] SW 主动询问 → 回包 build=sw-2', not ok_c5, '基线 got=%r（旧 sw.js 无 message handler）' % got_build)
+            check('C5★[基线预期失败] SW 主动询问 → 回包 build=%s' % expect_build, not ok_c5, '基线 got=%r（旧 sw.js 无 message handler）' % got_build)
         else:
-            check('C5★ SW 主动询问 → 回包 build=sw-2（message handler + BUILD）', ok_c5, repr(got_build))
+            check('C5★ SW 主动询问 → 回包 build=%s（message handler + BUILD）' % expect_build, ok_c5,
+                  'got=%r expect=%r' % (got_build, expect_build))
 
         # ── 场景 D：缓存副本唯一性 ──────────────────────────────────
         print('场景 D：缓存 key 归一（同路径唯一副本，无 ?v= 残留）')

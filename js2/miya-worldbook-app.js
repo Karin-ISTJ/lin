@@ -984,7 +984,17 @@
           return;
         }
         var text = ($('miya-wb-st-debug-text') && $('miya-wb-st-debug-text').value) || '';
-        var budget = Number(($('miya-wb-st-debug-budget') && $('miya-wb-st-debug-budget').value) || 2048);
+        /* 预算取值：留空 = 不裁剪（与主链路「未配置即不裁剪」同一语义）。
+           ⚠️ 这里以前兜底 2048 —— 主链路已修成「未配置不裁剪」，但调试台
+           仍按 2048 裁剪，用户在调试台看到「只命中两条」，与真实注入对不上，
+           会误判成「修复无效」。调试台是观察主链路的仪表，仪表必须跟主链路
+           同口径：留空 → tokenBudget: null（runPipeline 内部退化为 Infinity），
+           显式填了正数才生效。 */
+        var rawBudget = ($('miya-wb-st-debug-budget') && $('miya-wb-st-debug-budget').value) || '';
+        var budgetNum = Number(rawBudget);
+        var budget = rawBudget.trim() !== '' && Number.isFinite(budgetNum) && budgetNum > 0
+          ? budgetNum
+          : null;
         var pipe = st.runPipeline(store.listEntries(), {
           contextText: text,
           tokenBudget: budget,
@@ -992,7 +1002,8 @@
           chatId: '__debug__'
         });
         var lines = [];
-        lines.push('scanLen=' + (pipe.scanText || '').length + ' usedTokens=' + pipe.usedTokens + ' budget=' + pipe.budgetTokens);
+        lines.push('scanLen=' + (pipe.scanText || '').length + ' usedTokens=' + pipe.usedTokens +
+          ' budget=' + (pipe.budgetTokens == null ? '∞（不裁剪）' : pipe.budgetTokens));
         lines.push('selected=' + (pipe.selected || []).length + ' dropped=' + (pipe.dropped || []).length);
 
         /* 分桶概览：把 position=4 的落点挑明。

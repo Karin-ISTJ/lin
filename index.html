@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-3">
+  <meta name="miya-sw-build" content="sw-4">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=52" type="image/png">
@@ -666,8 +666,8 @@
           <div id="miya-wb-st-debug-panel" hidden class="st-card" style="padding:12px;margin-bottom:12px">
             <p class="ins-field-label">扫描文本（模拟最近聊天）</p>
             <textarea id="miya-wb-st-debug-text" class="ins-textarea" rows="4" placeholder="粘贴要扫描的上下文…"></textarea>
-            <p class="ins-field-label">token 预算</p>
-            <input type="number" id="miya-wb-st-debug-budget" class="ins-text-input" value="2048" min="0">
+            <p class="ins-field-label">token 预算（留空 = 不裁剪，与主链路一致）</p>
+            <input type="number" id="miya-wb-st-debug-budget" class="ins-text-input" placeholder="留空 = 不裁剪" min="0">
             <button type="button" class="ins-chip ins-chip--gold" id="miya-wb-st-debug-run" style="margin-top:8px">运行扫描</button>
             <pre id="miya-wb-st-debug-out" style="white-space:pre-wrap;font-size:12px;margin-top:10px;max-height:240px;overflow:auto"></pre>
           </div>
@@ -3421,13 +3421,13 @@
   <script defer src="js1/miya-beautify-doc-import.js?v=3"></script>
   <script defer src="js2/miya-tavern-card-import.js?v=5"></script>
   <script defer src="js1/miya-contacts-app.js?v=12"></script>
-  <script defer src="js2/miya-worldbook-st.js?v=10"></script>
+  <script defer src="js2/miya-worldbook-st.js?v=11"></script>
   <script defer src="js2/miya-worldbook-store.js?v=17"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=7"></script>
-  <script defer src="js2/miya-worldbook-prompt.js?v=16"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=29"></script>
+  <script defer src="js2/miya-worldbook-prompt.js?v=17"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=30"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=8"></script>
-  <script defer src="js1/miya-chat-store.js?v=65"></script>
+  <script defer src="js1/miya-chat-store.js?v=66"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>
   <script defer src="js1/miya-chat-emoji-url.js?v=1"></script>
   <script defer src="js1/miya-chat-contacts-sync.js?v=3"></script>
@@ -3449,7 +3449,7 @@
   <script defer src="js2/miya-memory-table-app.js?v=5"></script>
   <script defer src="js1/miya-chat-time-events.js?v=3"></script>
   <script defer src="js1/miya-chat-farm.js?v=6"></script>
-  <script defer src="js1/miya-chat-engine.js?v=54"></script>
+  <script defer src="js1/miya-chat-engine.js?v=55"></script>
   <script defer src="js1/miya-chat-group.js?v=12"></script>
   <script defer src="js1/miya-chat-group-redpacket.js?v=9"></script>
   <script defer src="js1/miya-chat-wallpaper-picker.js?v=3"></script>
@@ -3475,7 +3475,7 @@
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=6"></script>
   <script defer src="js1/miya-chat-me.js?v=28"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=85"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=86"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=4"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=4"></script>
