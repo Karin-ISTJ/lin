@@ -314,6 +314,68 @@ console.log('\n\u3010D\u3011UI \u65b0\u5efa\u8bcd\u6761\u7684\u9ed8\u8ba4\u72b6\
      blk ? '\u672a\u627e\u5230 constant: true' : '\u672a\u627e\u5230\u65b0\u5efa\u5757');
 })();
 
+/* ──────────────────────────────────────────────────
+ * E. token 预算：未配置预算时**不得**裁剪
+ *
+ * 缺陷现象：6 条各约 1200 字的词条，真实发送链路上只注入 2 条，
+ *           面板报「命中 2 条」，另外 4 条进入 dropped[] 且无人展示。
+ *
+ * 根因：buildWorldbookPrompt / applyStDecoration / runPipeline 三处
+ *       各自硬编码兜底 2048，而 buildWorldbookBundle 从不传 tokenBudget，
+ *       于是这个隐形上限成为实际生效值。
+ *
+ * 本节点同时锁住「显式配置预算仍须生效」，防止修完变成永不裁剪。
+ * ────────────────────────────────────────────────── */
+console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f97\u88c1\u526a\uff0c\u663e\u5f0f\u914d\u7f6e\u5fc5\u987b\u751f\u6548');
+(function () {
+  /* 正文用**中文**：estimateTokens 区分中英（CJK 与 ASCII 折算率不同），
+     用 'x' 这类 ASCII 填充会明显低估 token 数，导致撞不到预算、
+     测试变成恒真。这里按 CJK 折算率反推，保证 6 条合计确实超 2048。 */
+  const LONG = 1200;
+  const FILL = '\u5185\u5bb9'.repeat(LONG / 2);
+  const big = [];
+  for (let i = 1; i <= 6; i++) {
+    big.push(mk('L' + i, 'middle', { key: [], constant: true, content: FILL }));
+  }
+
+  /* E1：不传预算 —— 曾经被 2048 裁到 2 条 */
+  const r1 = build(big, CTX);
+  ck('\u672a\u914d\u7f6e\u9884\u7b97\u65f6 6 \u6761\u5168\u90e8\u6ce8\u5165',
+     r1.matched.length === 6, '\u5b9e\u9645=' + r1.matched.length);
+  ck('\u672a\u914d\u7f6e\u9884\u7b97\u65f6\u65e0\u4efb\u4f55\u4e22\u5f03',
+     (r1.budget && r1.budget.dropped ? r1.budget.dropped.length : 0) === 0,
+     'dropped=' + (r1.budget && r1.budget.dropped ? r1.budget.dropped.length : 'n/a'));
+  ck('\u672a\u914d\u7f6e\u9884\u7b97\u65f6 budgetTokens \u4e3a null\uff08\u4ee3\u8868\u4e0d\u4e0a\u9650\uff09',
+     r1.budget && r1.budget.budgetTokens === null,
+     'budgetTokens=' + (r1.budget ? r1.budget.budgetTokens : 'n/a'));
+
+  /* E2：显式传预算 —— 裁剪必须照旧生效 */
+  const r2 = build(big, CTX, { tokenBudget: 2048 });
+  ck('\u663e\u5f0f\u4f20 2048 \u4ecd\u7136\u88c1\u526a',
+     r2.matched.length < 6 && r2.matched.length > 0,
+     '\u5b9e\u9645=' + r2.matched.length + ' dropped=' +
+     (r2.budget && r2.budget.dropped ? r2.budget.dropped.length : 'n/a'));
+  ck('\u88c1\u526a\u6570\u4e0e\u4fdd\u7559\u6570\u4e4b\u548c\u7b49\u4e8e\u5019\u9009\u6570',
+     (r2.matched.length + (r2.budget.dropped || []).length) === 6,
+     r2.matched.length + '+' + (r2.budget ? r2.budget.dropped.length : 0));
+
+  /* E3：候选数透出 —— 面板能说清「候选 N / 注入 M / 裁剪 K」 */
+  ck('\u5019\u9009\u6570\u5df2\u900f\u51fa\uff08consideredCount\uff09',
+     Number(r2.consideredCount) === 6, 'consideredCount=' + r2.consideredCount);
+  ck('\u88c1\u526a\u540d\u5355\u5df2\u900f\u51fa\uff08budget.dropped \u5e26 name\uff09',
+     Array.isArray(r2.budget && r2.budget.dropped) &&
+     r2.budget.dropped.length > 0 && !!r2.budget.dropped[0].name,
+     JSON.stringify((r2.budget && r2.budget.dropped) || []).slice(0, 60));
+
+  /* E4：源码守卫 —— 不得再出现硬编码 2048 兜底 */
+  ['js2/miya-worldbook-prompt.js', 'js2/miya-worldbook-st.js'].forEach(function (f) {
+    const src = read(f);
+    const hard = /budget\s*=\s*2048|:\s*2048\s*;/.test(src);
+    ck(f + ' \u4e0d\u518d\u786c\u7f16\u7801 2048 \u515c\u5e95', !hard,
+       hard ? '\u4ecd\u5b58\u5728\u786c\u7f16\u7801\u515c\u5e95' : 'ok');
+  });
+})();
+
 console.log('\n' + '\u2550'.repeat(58));
 console.log('\u901a\u8fc7 ' + pass + ' / \u5171 ' + (pass + fail));
 if (fail) console.log('\u5931\u8d25 ' + fail + ' \u9879');

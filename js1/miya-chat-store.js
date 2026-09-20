@@ -1641,6 +1641,7 @@
             promptChars: Math.max(0, Math.floor(Number(raw.promptChars) || 0)),
             promptTokens: Math.max(0, Math.floor(Number(raw.promptTokens) || 0)),
             worldbookMatched: Math.max(0, Math.floor(Number(raw.worldbookMatched) || 0)),
+            worldbookDropped: Math.max(0, Math.floor(Number(raw.worldbookDropped) || 0)),
             worldbookInSystem: raw.worldbookInSystem !== false,
             replyMsgId: String(raw.replyMsgId || '').slice(0, 60),
             isGroupReply: !!raw.isGroupReply,

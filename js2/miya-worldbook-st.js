@@ -615,9 +615,14 @@
     var filtered = applyGroupScoring(survived);
     debug.afterGroup = filtered.length;
 
-    /* 3) token 预算 */
+    /* 3) token 预算
+       ---------------------------------------------------------------
+       未显式配置预算 → 不裁剪（budget = null 时 applyTokenBudget 内部
+       会退化成 Infinity）。这里以前写死 2048，是把「没配置」和
+       「配了 2048」当成同一件事，结果给出一个隐形、不可见、不可调的
+       上限，把命中的词条按 order 静默裁掉，UI 却只报剩余数量。
+       真要限流请显式传 tokenBudget / budget。 */
     var budget = input.tokenBudget != null ? input.tokenBudget : input.budget;
-    if (budget == null) budget = 2048;
     var bud = applyTokenBudget(filtered, budget, input);
 
     return {
@@ -636,8 +641,8 @@
     input = input || {};
     var act = activateEntries(entries, input);
     var filtered = applyGroupScoring(act.activated || []);
+    /* 未配置预算 → 不裁剪，理由见 applyStDecoration 内注释 */
     var budget = input.tokenBudget != null ? input.tokenBudget : input.budget;
-    if (budget == null) budget = 2048;
     var bud = applyTokenBudget(filtered, budget, input);
     var buckets = partitionByDepth(bud.entries);
     return {

@@ -246,6 +246,30 @@
     return buckets;
   }
 
+  /* 未显式配置预算时的默认值：**不裁剪**。
+     ---------------------------------------------------------------
+     这里曾经硬编码 2048。那是一处凭空而来的数字：既不是 ST 的原义
+     （ST 默认关闭预算，由用户按需开启），也不来自 Miya 的任何设置项
+     —— buildWorldbookBundle 的 opts.tokenBudget 全线没人传，
+     applyStDecoration 的兜底同样写死 2048，于是它成了**实际生效且
+     不可见、不可调**的隐形上限。
+
+     后果是「命中了但注入不全」：6 条各 1200 字的词条约 4500 token，
+     按 order 倒序贪心装入 2048 后只剩 2 条，另外 4 条进入 dropped[]。
+     而主聊天链路上没有任何 UI 消费 dropped，用户只看到「命中 2 条」，
+     无从判断是被裁了还是压根没匹配上。
+
+     现在：没配置就不裁剪，把「要不要限流」的决定权交还使用者；
+     真要限流，走 tokenBudget / budget 显式传入（ST 调试台即走此路）。 */
+  var DEFAULT_BUDGET = Infinity;
+
+  function resolveWorldbookBudget(cfg) {
+    var c = cfg && typeof cfg === 'object' ? cfg : {};
+    if (c.tokenBudget != null && Number(c.tokenBudget) > 0) return Number(c.tokenBudget);
+    if (c.budget != null && Number(c.budget) > 0) return Number(c.budget);
+    return DEFAULT_BUDGET;
+  }
+
   function buildWorldbookPrompt(input) {
     var cfg = input && typeof input === 'object' ? input : {};
     var store = global.miyaWorldbookStore;
@@ -384,8 +408,12 @@
        把 Miya 的生效范围语义（scope / globalReach）覆盖掉。
        （sticky/cooldown/delay 见下方说明，本项目未实现） */
     var budgetMeta = null;
+    /* 进入 ST 裁决前的候选总数：即 Miya matcher 判定「应当注入」的词条数
+       （含 universalRows 合流之后）。面板据此把账说全：
+       候选 N → 命中 M → 实际注入 K，K < M 时差额就是被裁的。 */
+    var consideredCount = merged.length;
     if (st && typeof st.applyStDecoration === 'function') {
-      var budget = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
+      var budget = resolveWorldbookBudget(cfg);
       var dec = st.applyStDecoration(merged, {
         contextText: contextText,
         messages: cfg.messages,
@@ -403,7 +431,7 @@
       };
     } else if (st && typeof st.applyTokenBudget === 'function') {
       /* 兜底：ST 模块版本较旧、无 applyStDecoration 时，至少保住 token 预算能力 */
-      var budget2 = cfg.tokenBudget != null ? cfg.tokenBudget : (cfg.budget != null ? cfg.budget : 2048);
+      var budget2 = resolveWorldbookBudget(cfg);
       var bud = st.applyTokenBudget(merged, budget2);
       merged = bud.entries;
       budgetMeta = { usedTokens: bud.usedTokens, budgetTokens: bud.budgetTokens, dropped: bud.dropped };
@@ -489,7 +517,8 @@
       middleCount: buckets.middle.length,
       backCount: buckets.back.length,
       inChatCount: buckets.inChat.length,
-      budget: budgetMeta
+      budget: budgetMeta,
+      consideredCount: consideredCount
     };
   }
 

@@ -919,6 +919,9 @@
       worldbookCount: Number(snapshot.worldbookMatched) || 0,
       worldbookInSystem: snapshot.worldbookInSystem !== false,
       worldbookEmptyMatched: 0,
+      /* 快照里也带上「被预算裁掉几条」，否则快照模式同样只会报一个孤零零的
+         命中数，用户仍无法分辨「没匹配上」和「匹配了但被裁了」。 */
+      worldbookDropped: Number(snapshot.worldbookDropped) || 0,
       entries: [],
       totalInStore:
         global.miyaWorldbookStore && typeof global.miyaWorldbookStore.listEntries === 'function'
@@ -994,6 +997,8 @@
       worldbookCount: pm.worldbook_matched || entries.length || 0,
       worldbookInSystem: pm.worldbook_in_system !== false,
       worldbookEmptyMatched: pm.worldbook_empty_matched || 0,
+      worldbookDropped: pm.worldbook_dropped || 0,
+      worldbookConsidered: pm.worldbook_considered || 0,
       entries: entries,
       totalInStore: totalInStore,
       roleIds: Array.isArray(wb.roleIds) ? wb.roleIds : [],
@@ -1172,7 +1177,10 @@
       ? '<p class="mi-ctx-inject mi-ctx-inject--warn">世界书文本可能未完全写入系统提示，请检查绑定与关键词。</p>'
       : (snapshot.worldbookCount > 0
         ? '<p class="mi-ctx-inject mi-ctx-inject--ok">世界书已注入系统提示 · 命中 ' +
-          esc(formatNum(snapshot.worldbookCount)) + ' / 库内 ' + esc(formatNum(snapshot.totalInStore)) + ' 条</p>'
+          esc(formatNum(snapshot.worldbookCount)) + ' / 库内 ' + esc(formatNum(snapshot.totalInStore)) + ' 条' +
+          (snapshot.worldbookDropped > 0
+            ? '，另有 ' + esc(formatNum(snapshot.worldbookDropped)) + ' 条因预算被裁剪'
+            : '') + '</p>'
         : '<p class="mi-ctx-inject">库内共 ' + esc(formatNum(snapshot.totalInStore)) + ' 条，当前上下文未命中世界书。</p>');
 
     return '<div class="mi-ctx-detail-pop' + (open ? ' is-open' : '') + '" data-mq-set-ctx-pop aria-hidden="' + (open ? 'false' : 'true') + '">' +

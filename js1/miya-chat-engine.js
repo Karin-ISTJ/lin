@@ -583,7 +583,19 @@
                 middleCount: result && result.middleCount ? result.middleCount : layers.length,
                 backCount: result && result.backCount ? result.backCount : backLayers.length,
                 inChatCount: result && result.inChatCount ? result.inChatCount : 0,
-                matchedSummary: result && result.matchedSummary ? result.matchedSummary : []
+                matchedSummary: result && result.matchedSummary ? result.matchedSummary : [],
+                /* 预算裁决的账本透出：命中多少、最终留下多少、被裁掉哪些。
+                   以前这里只往上传 matched.length，dropped 被丢在
+                   result.budget 里无人消费 —— 用户看到「命中 2 条」时
+                   没有任何线索判断是被预算裁了还是压根没匹配上。
+                   这里带上去，让面板能把话说完整。 */
+                budgetDropped: result && result.budget && Array.isArray(result.budget.dropped)
+                    ? result.budget.dropped : [],
+                budgetDroppedCount: result && result.budget && Array.isArray(result.budget.dropped)
+                    ? result.budget.dropped.length : 0,
+                budgetTokens: result && result.budget ? result.budget.budgetTokens : null,
+                budgetUsedTokens: result && result.budget ? result.budget.usedTokens : 0,
+                consideredCount: result && Number(result.consideredCount) ? Number(result.consideredCount) : 0
             }
         };
     }
@@ -2449,6 +2461,13 @@
             }).length,
             has_heartvoice_rules: hasHvRules,
             worldbook_matched: Number(wb.matched) || 0,
+            /* 候选数（matcher 判定应当注入的总数）与被预算裁掉的条目数。
+               有这两个数，面板才能把「命中 2 条」说成
+               「候选 6 条，命中 2 条，预算不足裁剪 4 条」，而不是让人
+               对着一个孤零零的 2 猜是不是世界书没生效。 */
+            worldbook_considered: Number(wb.consideredCount) || Number(wb.matched) || 0,
+            worldbook_dropped: Number(wb.budgetDroppedCount) || 0,
+            worldbook_budget_tokens: wb.budgetTokens == null ? 0 : Number(wb.budgetTokens) || 0,
             worldbook_chars: wbChars,
             worldbook_in_system: wb.inSystem !== false,
             worldbook_empty_matched: Number(wb.emptyMatched) || 0,
@@ -2612,6 +2631,24 @@
     }
 
     /** 按来源分区统计 prompt 字符/token（供设置页展示） */
+    /* 世界书来源项的一句话说明。
+       命中数与候选数不一致时（候选 > 命中）必须把差额讲明，否则
+       读者会以为世界书没生效。差额来源见 wb.meta.budgetDropped。 */
+    function worldbookSourcePreview(wb) {
+        var meta = wb && typeof wb === 'object' ? wb : {};
+        var matched = Number(meta.matched) || 0;
+        var considered = Number(meta.consideredCount) || matched;
+        var dropped = Number(meta.budgetDroppedCount) || 0;
+        var text = '命中 ' + matched + ' 条世界书条目';
+        if (dropped > 0) {
+            text = '候选 ' + (considered || matched + dropped) + ' 条，注入 ' + matched +
+                ' 条，预算不足裁剪 ' + dropped + ' 条';
+        } else if (considered > matched) {
+            text = '候选 ' + considered + ' 条，注入 ' + matched + ' 条';
+        }
+        return text;
+    }
+
     function buildPromptSourceBreakdown(apiMessages, wbMeta) {
         var list = Array.isArray(apiMessages) ? apiMessages : [];
         var wb = wbMeta && typeof wbMeta === 'object' ? wbMeta : {};
@@ -2639,7 +2676,7 @@
                     label: PROMPT_SOURCE_LABELS.worldbook,
                     chars: wbChars,
                     tokens: wbTokens,
-                    preview: '命中 ' + (Number(wb.matched) || 0) + ' 条世界书条目'
+                    preview: worldbookSourcePreview(wb)
                 });
                 mainSystemAdjusted = true;
             } else if (src.isMainSystem && wbChars > 0 && src.chars <= wbChars) {
@@ -2662,7 +2699,7 @@
                 label: PROMPT_SOURCE_LABELS.worldbook,
                 chars: wbChars,
                 tokens: estimateTokensFromCharCount(wbChars),
-                preview: '命中 ' + (Number(wb.matched) || 0) + ' 条世界书条目'
+                preview: worldbookSourcePreview(wb)
             });
         }
 
@@ -2742,6 +2779,9 @@
             promptChars: promptChars,
             promptTokens: promptTokens,
             worldbookMatched: Number(wb.matched) || 0,
+            /* 被预算裁掉的条目数：快照也必须记，否则回看历史时同样
+               只有命中数、看不到差额，问题会被永久掩盖。 */
+            worldbookDropped: Number(wb.budgetDroppedCount) || 0,
             worldbookInSystem: wb.inSystem !== false,
             updatedAt: Date.now()
         };
