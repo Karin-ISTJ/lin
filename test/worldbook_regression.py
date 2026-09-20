@@ -431,6 +431,13 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
     ck('store \u767d\u540d\u5355\u900f\u51fa\u5019\u9009\u6570\uff08normalizePromptBreakdown\uff09',
        stOk,
        stOk ? '\u5df2\u900f\u51fa' : '\u4e2d\u95f4\u5c42\u4e22\u5b57\u6bb5\uff0c\u9762\u677f\u6c38\u8fdc\u8bfb\u4e0d\u5230');
+    /* E6b：版本指纹守卫 —— 「时间/字数/token 全不变」的排障需要先分清
+       「浏览器在跑旧代码」和「数据真的没变」。指纹把浏览器实际加载的
+       脚本版本亮在面板上，缺了它每次都要靠猜。 */
+    ck('\u9762\u677f\u6e32\u67d3\u7248\u672c\u6307\u7eb9\uff08\u4ee3\u7801\u6307\u7eb9\uff1astore v / sw\uff09',
+       cs.indexOf('\u4ee3\u7801\u6307\u7eb9\uff1astore v') >= 0 &&
+       cs.indexOf('readCodeVersionFingerprint') >= 2,
+       '\u7f3a\u5c11\u6307\u7eb9\u6e32\u67d3\u6216\u91c7\u96c6\u51fd\u6570');
   })();
 })();
 

@@ -1274,6 +1274,11 @@
     var timeNote = snapshot.fromSnapshot && snapshot.snapshotAt
       ? ' · ' + formatCtxTime(snapshot.snapshotAt)
       : ' · 预估';
+    /* 版本指纹直接亮在面板上：「时间/字数/token 全都不变」的排障里，
+       最费解的分岔是「浏览器还在跑旧代码」还是「数据真的没变」。
+       script src 的 ?v= 是浏览器实际加载的副本（加载了什么就是什么，
+       无法作假）——若指纹与最新包不符，缓存/部署问题当场实锤。 */
+    var fp = readCodeVersionFingerprint();
     return '<div class="mi-ctx-panel" data-mq-set-ctx-panel>' +
       '<button type="button" class="mi-ctx-stats mi-ctx-stats--clickable" data-mq-set-ctx-toggle aria-expanded="' + (open ? 'true' : 'false') + '">' +
         '<div class="mi-ctx-stat mi-ctx-stat--main">' +
@@ -1282,9 +1287,36 @@
         '</div>' +
         '<p class="mi-ctx-stat__sub">≈ ' + esc(formatNum(snapshot.estimatedTokens)) + ' token · ' + esc(injectNote) + timeNote + '</p>' +
         '<p class="mi-ctx-stat__note">' + (open ? '再次点击收起明细' : '点击查看 Token 来源分区') + '</p>' +
+        '<p class="mi-ctx-stat__note mi-ctx-stat__note--ver">代码指纹：store v' + esc(fp.storeV || '?') +
+          ' / ' + esc(fp.swBuild || '?') + (fp.swControlled ? ' · SW 受控' : ' · SW 未受控') + '</p>' +
       '</button>' +
       renderContextUsageDetailPop(snapshot, open) +
     '</div>';
+  }
+
+  /** 浏览器当前真实加载的代码版本（同步可得的三项）：
+      ① store.js 的 ?v=（实际执行的脚本副本版本）；
+      ② 页面 meta 的 SW 构建号（HTML 声明的期望构建）；
+      ③ 页面是否已被 Service Worker 接管。 */
+  function readCodeVersionFingerprint() {
+    var storeV = '';
+    try {
+      var scripts = document.querySelectorAll('script[src]');
+      for (var i = 0; i < scripts.length; i++) {
+        var m = /miya-chat-store\.js\?v=(\d+)/.exec(scripts[i].getAttribute('src') || '');
+        if (m) { storeV = m[1]; break; }
+      }
+    } catch (eFp) {}
+    var swBuild = '';
+    try {
+      var meta = document.querySelector('meta[name="miya-sw-build"]');
+      swBuild = meta ? String(meta.getAttribute('content') || '') : '';
+    } catch (eMb) {}
+    var controlled = false;
+    try {
+      controlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+    } catch (eSw) {}
+    return { storeV: storeV, swBuild: swBuild, swControlled: controlled };
   }
 
   function isContextUsageDetailOpen() {
