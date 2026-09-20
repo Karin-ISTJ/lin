@@ -2779,6 +2779,11 @@
             promptChars: promptChars,
             promptTokens: promptTokens,
             worldbookMatched: Number(wb.matched) || 0,
+            /* 候选数也进快照：consideredCount 是 matcher 判定「应当注入」的
+               总数（ST 概率/分组/预算裁决之前）。快照只记 matched 的话，
+               「候选 6 → 注入 2」的差额（4 条被概率/分组/预算裁掉）在回看
+               「上次发送」时永远说不出来，只能看到一个孤零零的 2。 */
+            worldbookConsidered: Number(wb.consideredCount) || Number(wb.matched) || 0,
             /* 被预算裁掉的条目数：快照也必须记，否则回看历史时同样
                只有命中数、看不到差额，问题会被永久掩盖。 */
             worldbookDropped: Number(wb.budgetDroppedCount) || 0,

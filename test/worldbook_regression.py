@@ -403,6 +403,27 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
        (p2.selected || []).length > 0 && (p2.selected || []).length < 6,
        'selected=' + (p2.selected || []).length + ' dropped=' + (p2.dropped || []).length);
   })();
+
+  /* E6：聊天设置「模型高级」漏斗守卫 —— 面板把账说全的三处必须同口径：
+     ① 引擎写 lastPromptBreakdown 快照时透出 worldbookConsidered（候选数）；
+     ② contact-settings 快照模式读取并透出（否则回看「上次发送」时只有孤零零的命中数）；
+     ③ 渲染层给出候选数 + 预算/概率分组两类差额文案。
+     概率掷骰、分组互斥掉条目此前完全无提示 —— 又一个「悄悄丢东西不出声」
+     的关卡，本守卫防止它在后续改动中悄悄退化回静默。 */
+  (function () {
+    const eng = read('js1/miya-chat-engine.js');
+    ck('\u5f15\u64ce\u5feb\u7167\u900f\u51fa\u5019\u9009\u6570\uff08worldbookConsidered\uff09',
+       eng.indexOf('worldbookConsidered:') >= 0,
+       eng.indexOf('worldbookConsidered:') >= 0 ? '\u5df2\u900f\u51fa' : 'buildPromptSourceBreakdown \u672a\u900f\u51fa');
+    const cs = read('js1/miya-chat-contact-settings.js');
+    ck('\u8bbe\u7f6e\u9875\u5feb\u7167\u8bfb\u53d6\u5019\u9009\u6570\uff08snapshot.worldbookConsidered\uff09',
+       cs.indexOf('snapshot.worldbookConsidered') >= 0,
+       cs.indexOf('snapshot.worldbookConsidered') >= 0 ? '\u5df2\u8bfb\u53d6' : '\u5feb\u7167\u6a21\u5f0f\u672a\u900f\u51fa');
+    const hasFunnel = cs.indexOf('\u5019\u9009 ') >= 0 && cs.indexOf('\u6982\u7387/\u5206\u7ec4') >= 0;
+    ck('\u8bbe\u7f6e\u9875\u6e32\u67d3\u6f0f\u6597\u5dee\u989d\u6587\u6848\uff08\u5019\u9009/\u6982\u7387\u5206\u7ec4\uff09',
+       hasFunnel,
+       hasFunnel ? '\u6587\u6848\u5728\u4f4d' : '\u6e32\u67d3\u5c42\u7f3a\u5c11\u6f0f\u6597\u5dee\u989d\u6587\u6848');
+  })();
 })();
 
 console.log('\n' + '\u2550'.repeat(58));

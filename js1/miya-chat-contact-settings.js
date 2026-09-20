@@ -917,6 +917,10 @@
       historyChars: 0,
       worldbookChars: wbRow ? wbRow.chars : 0,
       worldbookCount: Number(snapshot.worldbookMatched) || 0,
+      /* 快照模式同样透出候选数：引擎写 lastPromptBreakdown 时已带上
+         worldbookConsidered（ST 裁决前的候选总数）。没有它，回看「上次发送」
+         时只有一个孤零零的命中数，分不清是没匹配上还是被裁掉了。 */
+      worldbookConsidered: Number(snapshot.worldbookConsidered) || Number(snapshot.worldbookMatched) || 0,
       worldbookInSystem: snapshot.worldbookInSystem !== false,
       worldbookEmptyMatched: 0,
       /* 快照里也带上「被预算裁掉几条」，否则快照模式同样只会报一个孤零零的
@@ -1173,13 +1177,31 @@
       roundRows = '<p class="mi-empty-hint mi-empty-hint--inline">尚无上一轮回复记录，发送一条消息后更新</p>';
     }
 
+    /* 世界书漏斗口径：库内 N → 候选 M（matcher 判定应当注入）→ 命中 K（实际注入）。
+       差额三处来源必须逐项说破，否则对着一个孤零零的 K 只能瞎猜：
+       ① 候选之前的差额 = scope 过滤 / 关键词未命中（条目根本没进候选池）；
+       ② 预算裁剪（dropped，主链路默认不裁，显式配置才会出现）；
+       ③ 概率掷骰 / 分组互斥（ST 装饰阶段，此前完全无提示 —— 又一个
+          「悄悄丢东西不出声」的关卡，本次一并透出）。 */
+    var wbMatchedN = Number(snapshot.worldbookCount) || 0;
+    var wbConsideredN = Number(snapshot.worldbookConsidered) || wbMatchedN;
+    var wbDroppedN = Number(snapshot.worldbookDropped) || 0;
+    var wbStCutN = Math.max(0, wbConsideredN - wbMatchedN - wbDroppedN);
+    var wbCutParts = [];
+    if (wbDroppedN > 0) {
+      wbCutParts.push('另有 ' + esc(formatNum(wbDroppedN)) + ' 条因预算被裁剪');
+    }
+    if (wbStCutN > 0) {
+      wbCutParts.push('另有 ' + esc(formatNum(wbStCutN)) + ' 条经概率/分组未注入');
+    }
     var wbNote = snapshot.worldbookInSystem === false
       ? '<p class="mi-ctx-inject mi-ctx-inject--warn">世界书文本可能未完全写入系统提示，请检查绑定与关键词。</p>'
-      : (snapshot.worldbookCount > 0
+      : (wbMatchedN > 0
         ? '<p class="mi-ctx-inject mi-ctx-inject--ok">世界书已注入系统提示 · 命中 ' +
-          esc(formatNum(snapshot.worldbookCount)) + ' / 库内 ' + esc(formatNum(snapshot.totalInStore)) + ' 条' +
-          (snapshot.worldbookDropped > 0
-            ? '，另有 ' + esc(formatNum(snapshot.worldbookDropped)) + ' 条因预算被裁剪'
+          esc(formatNum(wbMatchedN)) + ' / 库内 ' + esc(formatNum(snapshot.totalInStore)) + ' 条' +
+          (wbConsideredN > wbMatchedN || wbCutParts.length
+            ? '（候选 ' + esc(formatNum(wbConsideredN)) + ' 条' +
+              (wbCutParts.length ? '，' + wbCutParts.join('，') : '') + '）'
             : '') + '</p>'
         : '<p class="mi-ctx-inject">库内共 ' + esc(formatNum(snapshot.totalInStore)) + ' 条，当前上下文未命中世界书。</p>');
 

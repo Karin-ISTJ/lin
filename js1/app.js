@@ -659,7 +659,7 @@
       if (d && d.type === 'miya-sw-build') miyaHandleSwBuild(d.build);
     });
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js?v=95').then(function (reg) {
+      navigator.serviceWorker.register('./sw.js?v=96').then(function (reg) {
         try { reg.update(); } catch (e) {}
         /* 主动问一次（防 SW 的 activate 广播早于本页注册监听而错过） */
         var ctl = navigator.serviceWorker.controller || (reg && (reg.active || reg.installing || reg.waiting));
