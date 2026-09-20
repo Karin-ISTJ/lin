@@ -3339,3 +3339,175 @@
   margin-top: 12px;
 }
 .mi-set-preset-actions .st-action-btn { flex: 1; min-width: 0; }
+
+/* ══════════════════════════════════════════════════════════
+   气泡参数调试器（js1/miya-chat-bubble-tuner.js）
+   折叠范式照抄 .mi-wb-sort-toggle / .mi-wb-sort-panel ——
+   标题行按钮 + body[hidden] + chev 旋转，是项目里既定的折叠语言。
+   ══════════════════════════════════════════════════════════ */
+
+.mi-bt-panel {
+  border: 1px solid var(--mi-line);
+  border-radius: 14px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.mi-bt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mi-bt-toggle:active { opacity: 0.72; }
+
+.mi-bt-toggle__ico {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.18s ease;
+}
+.mi-bt-panel.is-open .mi-bt-toggle__ico { transform: rotate(90deg); }
+
+.mi-bt-toggle__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mi-bt-toggle__meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--mi-sub);
+}
+
+.mi-bt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 14px 14px;
+}
+.mi-bt-body[hidden] { display: none !important; }
+
+.mi-bt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mi-line);
+}
+.mi-bt-group:first-child { padding-top: 0; border-top: 0; }
+
+.mi-bt-group__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--mi-sub);
+}
+
+/* ── 颜色组 ── */
+.mi-bt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.mi-bt-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.mi-bt-color__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--mi-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 项目里首个 input[type=color]，需要清掉 webkit 默认的内边距与圆角，
+   否则色块会缩在控件里显得很小。 */
+.mi-bt-color__input {
+  flex-shrink: 0;
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--mi-line-strong, rgba(0, 0, 0, 0.14));
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.mi-bt-color__input::-webkit-color-swatch-wrapper { padding: 2px; }
+.mi-bt-color__input::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.mi-bt-color__input::-moz-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+/* ── 滑块行 ── */
+.mi-bt-slide {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mi-bt-slide .ins-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.mi-bt-slide__val {
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mi-sub);
+}
+
+.mi-bt-note {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--mi-sub);
+}
+
+/* ── 操作行与提示 ── */
+.mi-bt-actions { margin-top: 2px; }
+
+.mi-bt-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--mi-sub);
+}
+.mi-bt-hint.is-warn { color: #b4553f; }
+
+/* 可选色（描边/聊天背景）的 hex 读数 —— 取色器无法表达「未指定」，
+   用这行小字让用户看清当前是默认还是具体色值。 */
+.mi-bt-color__hex {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mi-sub);
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
