@@ -1083,12 +1083,25 @@
                 var stMacroOpts = { contact: contact, profile: profile, history: slice };
                 stPresetFrontMessages = stEngine.buildStPresetMessages('front', stMacroOpts) || [];
                 stPresetBackMessages = stEngine.buildStPresetMessages('back', stMacroOpts) || [];
+                /* 【V9】必须复用 engine 的来源标记，不能手工重建 {role, content}。
+                   手工重建会把 __src（条目名 / identifier / position / depth）
+                   整个丢掉，于是「Token 来源明细」里这 20+ 条 ST 预设全部退化成
+                   裸 system 消息，被分类器兜底成「其它系统块」，用户既看不到
+                   条目名清单，也看不到「ST 预设」这一块的真实占比。
+                   线上链路（miya-chat-engine.js 的 frontTagged）走的就是
+                   stTaggedMessage，线下必须同构，否则同一次请求里
+                   「ST 预设」的统计会因链路不同而分裂。 */
+                var stTagger = typeof stEngine.stTaggedMessage === 'function'
+                    ? stEngine.stTaggedMessage
+                    : function (m) {
+                        return {
+                            role: m && (m.role === 'user' || m.role === 'assistant') ? m.role : 'system',
+                            content: (m && m.content) || ''
+                        };
+                    };
                 stPresetFrontMessages.forEach(function (m) {
                     if (!m || !String(m.content || '').trim()) return;
-                    apiMessages.push({
-                        role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
-                        content: String(m.content || '').trim()
-                    });
+                    apiMessages.push(stTagger(m));
                 });
             } catch (e) {}
         }
@@ -1151,9 +1164,16 @@
                 stEngine.injectStInChatMessages(apiMessages, historyStart, stPresetBackMessages);
             } catch (e) {}
         } else {
+            /* 兜底：engine 没导出注入器时也要保住 __src 标记，
+               否则 back 条目同样会掉进「其它系统块」。 */
+            var stTaggerBack = stEngine && typeof stEngine.stTaggedMessage === 'function'
+                ? stEngine.stTaggedMessage
+                : function (m) {
+                    return { role: m && m.role ? m.role : 'system', content: (m && m.content) || '' };
+                };
             stPresetBackMessages.forEach(function (m) {
                 if (!m || !String(m.content || '').trim()) return;
-                apiMessages.push({ role: m.role, content: String(m.content || '').trim() });
+                apiMessages.push(stTaggerBack(m));
             });
         }
 

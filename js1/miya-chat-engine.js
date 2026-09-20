@@ -5696,6 +5696,10 @@
         buildSystemPrompt: buildSystemPrompt,
         buildStPresetMessages: buildStPresetMessages,
         injectStInChatMessages: injectStInChatMessages,
+        /* 【V9】导出来源打标器：线下链路（miya-appointment-engine）此前手工重建
+           {role, content}，把 __src 丢掉，导致 20+ 条 ST 预设全被分类成
+           「其它系统块」。导出后两条链路共用同一个打标实现，不再各写一份。 */
+        stTaggedMessage: stTaggedMessage,
         buildStCotPromptBlock: buildStCotPromptBlock,
         buildStPresetCheckHint: buildStPresetCheckHint,
         buildApiMessages: buildApiMessages,

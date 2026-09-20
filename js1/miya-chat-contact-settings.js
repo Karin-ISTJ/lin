@@ -950,6 +950,24 @@
 
   function collectContextUsageLive(chatId, chatRow, eng) {
     var usageSettings = buildContextUsageSettings(chatId);
+    /*
+     * 【V9·口径跟随会话模式】线下约会与线上聊天**共用同一个 chatId**，
+     * 所以「这个聊天现在是什么模式」不能在会话数据上找，要看线下场次表
+     * 里该 chatId 有没有激活场次。有 → 用户此刻在意的是「下一轮线下生成
+     * 会注入什么」，实时预测就必须按线下口径算；否则按线上口径。
+     *
+     * 此前固定按线上口径预测，导致：宿主挂着线下约会、条目生效范围为
+     * 「仅线下」时，面板恒显示「未命中世界书」—— 一个对用户毫无意义
+     * （线下生成其实命中得好好的）却又极具误导性的 0。
+     */
+    var liveOfflineMode = false;
+    try {
+      var aps = global.miyaAppointmentStore;
+      if (aps && typeof aps.getActiveSession === 'function') {
+        var actSess = aps.getActiveSession(chatId);
+        liveOfflineMode = !!(actSess && (actSess.id || actSess.sessionId));
+      }
+    } catch (eOffMode) { liveOfflineMode = false; }
     var built = eng.buildApiMessages(chatId, '', {
       chatSettings: usageSettings || undefined
     });
@@ -994,17 +1012,13 @@
       summaryInject.actualBlockCount = summaryMeasured.blockCount;
       summaryInject.actualPreview = summaryMeasured.preview;
     }
-    /* 【V8·口径透明】实时分支走的是「线上口径」预测：buildApiMessages 固定
-       以 promptContext='online' 构建下一次线上请求。这不是 bug —— 线上聊天
-       本就不该注入「仅线下」词条 —— 但面板只报一个孤零零的 0，用户无法区分
-       「没匹配上」与「口径不含」。典型误读：宿主聊天挂着线下约会（条目全是
-       「仅线下」），实时预测显示 0，用户以为世界书坏了；而旧包的「命中 2 条」
-       来自一次真实线下生成写入的快照（线下口径）。两个数字口径不同。
-       0 命中时补三样东西：
+    /* 【V8·口径透明 + V9·跟随会话模式】0 命中时补三样东西：
        ① 启用条目数 —— 「库内 66 条」里真正开着的往往只有几条；
        ② 未命中原因 —— matcher.explainEntry 的人类可读结论，最多列 3 条；
-       ③ 线下口径预测 —— 同一批条目换 promptContext='offline' 再判一次，
-          > 0 就明说「仅线下词条不计入线上预测」，让口径差异自己开口。 */
+       ③ **另一口径**的预测数 —— 线下会话看线上口径、线上会话看线下口径。
+       口径差异（「仅线下」词条不进线上预测）必须让面板自己说破，
+       否则用户会把「选错了生效范围」或「在错误的模式下面板」误判成功能坏了。 */
+    var livePromptContext = liveOfflineMode ? 'offline' : 'online';
     var liveWbZero = null;
     if ((pm.worldbook_matched || entries.length || 0) === 0 && wbStore &&
         typeof wbStore.listEntries === 'function' &&
@@ -1025,7 +1039,7 @@
             roleId: liveRoleId,
             roleIds: liveRoleIds,
             contextText: '',
-            promptContext: 'online'
+            promptContext: livePromptContext
           });
         } catch (eDiag) { return; }
         if (d && !d.injected) {
@@ -1036,28 +1050,32 @@
           if (d.reason === 'reach_mismatch') reachBlocked += 1;
         }
       });
-      /* 线下口径预测：常驻 / 无关键词条目不依赖上下文，预测即准确；
+      /* 反向口径预测：常驻 / 无关键词条目不依赖上下文，预测即准确；
          带关键词条目因缺上下文只作参考，文案里注明「以快照为准」。 */
-      var offlinePredicted = 0;
+      var otherContext = liveOfflineMode ? 'online' : 'offline';
+      var otherPredicted = 0;
       var wp = global.miyaWorldbookPrompt;
       if (wp && typeof wp.buildWorldbookPrompt === 'function') {
         try {
-          var offRes = wp.buildWorldbookPrompt({
+          var otherOpts = {
             roleId: liveRoleId,
             roleIds: liveRoleIds,
             contextText: '',
-            scopeMode: 'appointment',
-            promptContext: 'offline',
+            promptContext: otherContext,
             skipChronicleProfile: true
-          });
-          offlinePredicted = offRes && Array.isArray(offRes.matched) ? offRes.matched.length : 0;
-        } catch (eOff) { offlinePredicted = 0; }
+          };
+          if (otherContext === 'offline') otherOpts.scopeMode = 'appointment';
+          var otherRes = wp.buildWorldbookPrompt(otherOpts);
+          otherPredicted = otherRes && Array.isArray(otherRes.matched) ? otherRes.matched.length : 0;
+        } catch (eOff) { otherPredicted = 0; }
       }
       liveWbZero = {
         enabled: enabledRows.length,
         reasons: reasons,
         reachBlocked: reachBlocked,
-        offlinePredicted: offlinePredicted
+        offlineMode: liveOfflineMode,
+        otherContext: otherContext,
+        otherPredicted: otherPredicted
       };
     }
     return {
@@ -1278,7 +1296,8 @@
           (snapshot.worldbookLiveZero && Number(snapshot.worldbookLiveZero.enabled) > 0
             ? '（启用 ' + esc(formatNum(snapshot.worldbookLiveZero.enabled)) + ' 条）'
             : '') +
-          '，当前线上口径未命中世界书。</p>' +
+          '，当前' + (snapshot.worldbookLiveZero && snapshot.worldbookLiveZero.offlineMode ? '线下' : '线上') +
+          '口径未命中世界书。</p>' +
           renderWbZeroHints(snapshot.worldbookLiveZero));
 
     function renderWbZeroHints(lz) {
@@ -1287,10 +1306,11 @@
       (Array.isArray(lz.reasons) ? lz.reasons : []).forEach(function (r) {
         if (r && r.detail) parts.push(esc(String(r.name || '未命名')) + '：' + esc(String(r.detail)));
       });
-      if (Number(lz.offlinePredicted) > 0) {
-        parts.push('按线下口径预测将命中 ' + esc(formatNum(Number(lz.offlinePredicted))) +
-          ' 条 —— 仅线下词条不计入线上预测；发送一条线下消息后以快照为准' +
-          (lz.reachBlocked > 0 ? '（' + esc(formatNum(Number(lz.reachBlocked))) + ' 条因生效范围被线上口径排除）' : '') + '。');
+      if (Number(lz.otherPredicted) > 0) {
+        var otherLabel = lz.otherContext === 'offline' ? '线下' : '线上';
+        parts.push('按' + otherLabel + '口径预测将命中 ' + esc(formatNum(Number(lz.otherPredicted))) +
+          ' 条 —— 生效范围会把词条限制在特定场景，当前预测口径不含它们' +
+          (lz.reachBlocked > 0 ? '（' + esc(formatNum(Number(lz.reachBlocked))) + ' 条因生效范围被排除）' : '') + '。');
       }
       if (!parts.length) return '';
       return '<p class="mi-ctx-inject mi-ctx-inject--hint">' + parts.join('<br>') + '</p>';
@@ -1310,7 +1330,10 @@
               : '下次请求 · Prompt 注入（' + esc(formatNum(snapshot.messageCount || 0)) + ' 条 message）') + '</h4>' +
             '<p class="mi-ctx-detail__hint">' + (snapshot.fromSnapshot
               ? '这是上一条消息真实发往 API 时的上下文构成快照，按来源字符数从多到少排列，条形长度即占比。Token 为本地粗算（中文约 1.6 字/token，与 API 账单可能略有出入）。'
-              : '以下为当前设置下，下一条消息将发往 API 的上下文构成（还没有生成记录，先给预估）。字符数按实际 request body 统计；Token 为本地粗算（中文约 1.6 字/token，与 API 账单可能略有出入）。') + '</p>' +
+              : '以下为当前设置下，下一条消息将发往 API 的上下文构成（还没有生成记录，先给预估）。字符数按实际 request body 统计；Token 为本地粗算（中文约 1.6 字/token，与 API 账单可能略有出入）。' +
+                (snapshot.worldbookLiveZero && snapshot.worldbookLiveZero.offlineMode
+                  ? ' 本会话有进行中的线下场次，实时预测已按线下口径计算。'
+                  : '')) + '</p>' +
               (snapshot.summaryInject
               ? '<p class="mi-ctx-inject' +
                 ((snapshot.summaryInject.actualInjectedChars || snapshot.summaryInject.contentChars || 0) > 5000

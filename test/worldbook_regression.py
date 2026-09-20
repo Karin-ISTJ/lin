@@ -579,20 +579,52 @@ console.log('\n\u3010F\u3011\u5e38\u9a7b\u8bcd\u6761\u8c41\u514d\u540c\u7ec4\u4e
      gDiag ? gDiag.reason + '\uff5c' + gDiag.detail : 'explainEntry \u4e0d\u53ef\u7528');
 
   const cs2 = read('js1/miya-chat-contact-settings.js');
-  ck('G3 \u9762\u677f 0 \u547d\u4e2d\u65f6\u91c7\u96c6\u539f\u56e0\u4e0e\u7ebf\u4e0b\u9884\u6d4b\uff08worldbookLiveZero\uff09',
+  ck('G3 \u9762\u677f 0 \u547d\u4e2d\u65f6\u91c7\u96c6\u539f\u56e0\u4e0e\u53e6\u4e00\u53e3\u5f84\u9884\u6d4b\uff08worldbookLiveZero\uff09',
      cs2.indexOf('worldbookLiveZero') >= 0 &&
-     cs2.indexOf('offlinePredicted') >= 0 &&
+     cs2.indexOf('otherPredicted') >= 0 &&
      cs2.indexOf('explainEntry') >= 0,
      '\u7f3a\u5c11\u91c7\u96c6\u70b9');
-  ck('G4 \u6e32\u67d3\u5c42\u628a\u539f\u56e0\u4e0e\u7ebf\u4e0b\u53e3\u5f84\u8bf4\u51fa\u6765',
-     cs2.indexOf('\u6309\u7ebf\u4e0b\u53e3\u5f84\u9884\u6d4b\u5c06\u547d\u4e2d') >= 0 &&
-     cs2.indexOf('\u4ec5\u7ebf\u4e0b\u8bcd\u6761\u4e0d\u8ba1\u5165\u7ebf\u4e0a\u9884\u6d4b') >= 0 &&
-     cs2.indexOf('\u5f53\u524d\u7ebf\u4e0a\u53e3\u5f84\u672a\u547d\u4e2d\u4e16\u754c\u4e66') >= 0,
+  ck('G4 \u6e32\u67d3\u5c42\u628a\u539f\u56e0\u4e0e\u53e6\u4e00\u53e3\u5f84\u8bf4\u51fa\u6765',
+     cs2.indexOf('\u6309') >= 0 && cs2.indexOf('\u53e3\u5f84\u9884\u6d4b\u5c06\u547d\u4e2d') >= 0 &&
+     cs2.indexOf('\u5f53\u524d') >= 0 && cs2.indexOf('\u53e3\u5f84\u672a\u547d\u4e2d\u4e16\u754c\u4e66') >= 0,
      '\u7f3a\u6e32\u67d3\u6587\u6848');
   ck('G5 \u4ee3\u7801\u6307\u7eb9\u5305\u542b\u4e16\u754c\u4e66\u6a21\u5757\u7248\u672c\uff08st/prompt \u7684 ?v=\uff09',
      cs2.indexOf('miya-worldbook-st') >= 0 && cs2.indexOf('wbStV') >= 0 &&
      cs2.indexOf('wbPromptV') >= 0,
      '\u6307\u7eb9\u4ecd\u662f\u65e7\u4e09\u9879');
+  /* G6：实时预测必须跟随会话模式 —— 线下与线上共用 chatId，
+       只能靠「该 chatId 有没有激活的线下场次」判断，不能固定走线上口径。 */
+  ck('G6 \u5b9e\u65f6\u9884\u6d4b\u8ddf\u968f\u4f1a\u8bdd\u6a21\u5f0f\uff08\u7ebf\u4e0b\u573a\u6b21 \u2192 \u7ebf\u4e0b\u53e3\u5f84\uff09',
+     cs2.indexOf('getActiveSession') >= 0 && cs2.indexOf('liveOfflineMode') >= 0,
+     '\u4ecd\u56fa\u5b9a\u6309\u7ebf\u4e0a\u53e3\u5f84\u9884\u6d4b');
+})();
+
+/* ──────────────────────────────────────────────────
+ * H. ST 预设来源标记：线下链路不得丢掉 __src
+ *
+ * 缺陷：miya-appointment-engine 手工重建 {role, content} 注入 front 预设，
+ * 把 __src（条目名/identifier/position/depth）整个丢掉。后果是用户 20+ 条
+ * ST 预设里，只有走 injectStInChatMessages 的少数几条能显示条目名，
+ * 其余全部被分类器兜底成「其它系统块」——用户既看不到「ST 预设」这一块，
+ * 也看不到自己导入的条目清单。
+ * ────────────────────────────────────────────────── */
+(function () {
+  console.log('\n\u3010H\u3011\u7ebf\u4e0b\u94fe\u8def\u4fdd\u7559 ST \u9884\u8bbe\u6765\u6e90\u6807\u8bb0');
+  const eng2 = read('js1/miya-chat-engine.js');
+  const ap = read('js1/miya-appointment-engine.js');
+  ck('H1 engine \u5bfc\u51fa stTaggedMessage\uff08\u8de8\u94fe\u8def\u5171\u7528\u6253\u6807\u5668\uff09',
+     /stTaggedMessage:\s*stTaggedMessage/.test(eng2),
+     '\u672a\u5bfc\u51fa\uff0c\u7ebf\u4e0b\u53ea\u80fd\u624b\u5199\u4e00\u4efd');
+  ck('H2 \u7ebf\u4e0b front \u9884\u8bbe\u8d70 stTagger \u800c\u975e\u624b\u5de5\u91cd\u5efa',
+     ap.indexOf('stTagger') >= 0 &&
+     /apiMessages\.push\(\s*stTagger\(m\)\s*\)/.test(ap),
+     '\u4ecd\u5728\u4e22 __src');
+  ck('H3 \u7ebf\u4e0b\u4e0d\u518d\u51fa\u73b0\u300c\u624b\u5de5\u91cd\u5efa role+content\u300d\u7684\u9884\u8bbe\u6ce8\u5165',
+     !/stPresetFrontMessages\.forEach[\s\S]{0,400}?apiMessages\.push\(\{\s*role:\s*m\.role\s*\|\|/.test(ap),
+     '\u65e7\u5199\u6cd5\u4f9d\u7136\u5b58\u5728');
+  ck('H4 \u7ebf\u4e0b back \u9884\u8bbe\u515c\u5e95\u4e5f\u4fdd\u7559\u6807\u8bb0',
+     ap.indexOf('stTaggerBack') >= 0,
+     '\u515c\u5e95\u5206\u652f\u4ecd\u4e22\u6807\u8bb0');
 })();
 
 console.log('\n' + '\u2550'.repeat(58));
