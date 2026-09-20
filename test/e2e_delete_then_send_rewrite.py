@@ -3,23 +3,29 @@
 E2E：删掉末尾角色回复后自己再说一句，改写约束真的进了请求体
 ============================================================
 
-对应用户的第二次反馈：
-    「我发现删除消息后还是会有概率发一模一样的消息」
+对应用户的第三次反馈：
+    「线上功能还是出现同样的问题」—— v8.4 自测全绿，线上照旧复读。
 
-为什么单独一个测试：
-    「重新生成」那条路径在 e2e_regenerate_prompt.py 里已经覆盖了，
-    但那要长按**现存**的角色消息才点得到按钮。消息一删，按钮就没了，
-    用户只能走普通回复 —— 而普通回复此前**一句改写约束都没有**。
-    这个测试专门盯这条缝。
+为什么 v8.4 全绿却线上失效（本轮修复的根因）：
+    UI 的单条删除**根本不走 store.deleteMessage**：
+      长按消息 → 菜单「删除」→ enterMultiSelectMode(种子=这一条)
+      → 多选栏「删除」→ deleteSelectedMessages → store.deleteMessages（批量接口）
+    而 v8.4 的打标只写在 deleteMessage（单条接口）里 ——
+    旧版 e2e 的删除步骤也是直接调 CS.deleteMessage，绕开了 UI，
+    所以「测绿、线上废」。这正是「测试覆盖率不等于场景覆盖率」的第三次上演。
 
 真实流程（必须按这个顺序走，否则会像最初那样一条都命中不了）：
     1. 长按删除末尾那条角色回复
+       e2e 里用 miyaChatRoom.__testEnterMultiSelect（官方测试钩子，
+       即「长按→菜单→删除」的落点）+ 点击**真实**多选栏删除按钮，
+       完整经过 deleteSelectedMessages → store.deleteMessages
     2. 在输入框打字，点「发送」（这一步只把用户消息写进 store）
     3. 点四角星「触发回复」按钮 → sendChat(cid, '', {skipUserMessage:true})
 
 断言：
-    R1   删除成功且消息确实没了
-    R1b  删除后挂上了「重说」标记
+    R0   造数成功
+    R1   真实 UI 删除成功且消息确实没了
+    R1b  **批量删除路径**挂上了「重说」标记（根因回归点：只认单条接口必红）
     R2   请求真的发出去了
     R3   末条是 user 角色的尾部 nudge
     R4   该 nudge 是「重说」版：含改写约束，且**不再**是裸的普通回复 nudge
@@ -27,6 +33,9 @@ E2E：删掉末尾角色回复后自己再说一句，改写约束真的进了�
     R6   nudge 明确排除了「同义改写」这条歧义读法
     R7   隔离性：没删过东西的会话正常回复**不带**改写约束
     R8   一次性：删完连点两次回复，第二次不再套改写约束
+    R9   多选删多条**不打标**（批量接口的「恰好一条」护栏）
+    R10  【重回】引用被撤回原文：撤回清空 chat 字段后，nudge 仍能引用快照
+    R11  【重回】成功后的下一次普通发送**不误伤**（陈旧标记已被清掉）
 
 跑法：python3 test/e2e_delete_then_send_rewrite.py
 """
@@ -71,7 +80,7 @@ async def _setup_chat(pg, tag, with_doomed=True):
 
 
 async def _real_user_turn(pg, cid, text):
-    """按真实顺序走一遍：打开 → 打字发送 → 点触发回复。"""
+    """按真实顺序走一遍：打开 → （后续步骤各自触发）。"""
     await pg.evaluate(
         """async ([cid]) => {
             if (window.miyaChatApp && window.miyaChatApp.open) await window.miyaChatApp.open();
@@ -82,6 +91,72 @@ async def _real_user_turn(pg, cid, text):
         [cid],
     )
     await pg.wait_for_timeout(900)
+
+
+async def _real_ui_delete(pg, cid, d_id):
+    """
+    走**真实 UI 删除链路**（不直接调 store 接口）：
+      长按 → 菜单「删除」 ≈ __testEnterMultiSelect(种子=这条)（官方测试钩子）
+      → 点击多选栏「删除」按钮 → deleteSelectedMessages → store.deleteMessages
+    返回删除后的探针结果。
+    """
+    entered = await pg.evaluate(
+        """([mid]) => {
+            const room = window.miyaChatRoom;
+            if (!room || typeof room.__testEnterMultiSelect !== 'function') {
+                return { err: 'no_hook' };
+            }
+            return { ok: room.__testEnterMultiSelect(String(mid)) };
+        }""",
+        [d_id],
+    )
+    if entered.get("err"):
+        return entered
+    # 点真实的「删除」按钮（走 deleteSelectedMessages → store.deleteMessages）
+    clicked = await pg.evaluate(
+        "() => { const btn = document.querySelector('[data-qq-multi-del]');"
+        " if (!btn) return { err: 'no_btn' }; btn.click(); return { ok: true }; }"
+    )
+    if clicked.get("err"):
+        return clicked
+    await pg.wait_for_timeout(600)
+    return await pg.evaluate(
+        """([cid, mid]) => {
+            const CS = window.miyaChatStore;
+            const left = CS.getMessages(String(cid)) || [];
+            return {
+                count: left.length,
+                stillThere: left.some(m => String(m.id) === String(mid)),
+                mark: CS.peekRewriteResume ? CS.peekRewriteResume(String(cid)) : null
+            };
+        }""",
+        [cid, d_id],
+    )
+
+
+async def _type_and_send(pg, text):
+    await pg.evaluate(
+        """([txt]) => {
+            const inp = document.getElementById('qq-room-input');
+            if (!inp) return { err: 'no_input' };
+            inp.value = String(txt);
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            const btn = document.getElementById('qq-room-send');
+            if (!btn) return { err: 'no_send_btn' };
+            btn.click();
+            return { ok: true };
+        }""",
+        [text],
+    )
+    await pg.wait_for_timeout(600)
+
+
+async def _click_ai_reply(pg):
+    await pg.evaluate("""() => {
+        const ai = document.getElementById('qq-room-ai');
+        if (ai) ai.click();
+    }""")
+    await pg.wait_for_timeout(2000)
 
 
 async def main():
@@ -137,7 +212,7 @@ async def main():
             msgs = (json.loads(raw) or {}).get("messages") or [{}]
             return str(msgs[-1].get("content") or "")
 
-        # ══════════ 主场景：删 → 打字 → 触发回复 ══════════
+        # ══════════ 主场景：真实 UI 删 → 打字 → 触发回复 ══════════
         setup = await _setup_chat(pg, "删后重说", with_doomed=True)
         check("R0 造数成功", not setup.get("error"), json.dumps(setup, ensure_ascii=False))
         if setup.get("error"):
@@ -148,54 +223,21 @@ async def main():
         cid = setup["cid"]
         await _real_user_turn(pg, cid, USER_FOLLOWUP)
 
-        dele = await pg.evaluate(
-            """async ([cid, mid]) => {
-                const CS = window.miyaChatStore;
-                try {
-                    await CS.deleteMessage(String(cid), String(mid));
-                } catch (e) {
-                    return { ok: false, err: String(e && e.message) };
-                }
-                const left = CS.getMessages(String(cid)) || [];
-                return {
-                    ok: true,
-                    count: left.length,
-                    stillThere: left.some(m => String(m.id) === String(mid)),
-                    mark: CS.peekRewriteResume ? CS.peekRewriteResume(String(cid)) : null
-                };
-            }""",
-            [cid, setup["dId"]],
-        )
-        check("R1 删除成功且消息确实没了",
-              dele.get("ok") and not dele.get("stillThere"),
+        dele = await _real_ui_delete(pg, cid, setup["dId"])
+        check("R1 真实 UI 删除成功且消息确实没了",
+              dele.get("count") is not None and not dele.get("stillThere") and not dele.get("err"),
               json.dumps(dele, ensure_ascii=False))
-        check("R1b 删除后挂上了「重说」标记",
+        # 根因回归点：标记必须由**批量删除路径**（deleteMessages）挂上。
+        # 修复前这里必红 —— 打标只存在于 deleteMessage，而 UI 从不调它。
+        check("R1b 批量删除路径挂上了「重说」标记",
               bool((dele.get("mark") or {}).get("armed")),
               json.dumps(dele.get("mark"), ensure_ascii=False))
 
         # 打字 + 发送（真实 UI：这一步只落用户消息）
-        typed = await pg.evaluate(
-            """([txt]) => {
-                const inp = document.getElementById('qq-room-input');
-                if (!inp) return { err: 'no_input' };
-                inp.value = String(txt);
-                inp.dispatchEvent(new Event('input', { bubbles: true }));
-                const btn = document.getElementById('qq-room-send');
-                if (!btn) return { err: 'no_send_btn' };
-                btn.click();
-                return { ok: true };
-            }""",
-            [USER_FOLLOWUP],
-        )
-        await pg.wait_for_timeout(600)
-        check("R2a 打字发送成功", not typed.get("err"), json.dumps(typed, ensure_ascii=False))
+        await _type_and_send(pg, USER_FOLLOWUP)
 
         # 点四角星触发回复
-        await pg.evaluate("""() => {
-            const ai = document.getElementById('qq-room-ai');
-            if (ai) ai.click();
-        }""")
-        await pg.wait_for_timeout(2000)
+        await _click_ai_reply(pg)
 
         caught = await pg.evaluate("() => window.__caught || []")
         check("R2 请求真的发出去了", len(caught) > 0, "捕获 %d 条" % len(caught))
@@ -229,18 +271,8 @@ async def main():
         s2 = await _setup_chat(pg, "干净会话", with_doomed=False)
         if not s2.get("error"):
             await _real_user_turn(pg, s2["cid"], "好")
-            await pg.evaluate("""() => {
-                const inp = document.getElementById('qq-room-input');
-                if (inp) { inp.value = '好'; inp.dispatchEvent(new Event('input', { bubbles: true })); }
-                const sb = document.getElementById('qq-room-send');
-                if (sb) sb.click();
-            }""")
-            await pg.wait_for_timeout(500)
-            await pg.evaluate("""() => {
-                const ai = document.getElementById('qq-room-ai');
-                if (ai) ai.click();
-            }""")
-            await pg.wait_for_timeout(1800)
+            await _type_and_send(pg, "好")
+            await _click_ai_reply(pg)
             c2 = await pg.evaluate("() => window.__caught || []")
             t2 = await last_tail()
             check("R7 隔离性：未删除的会话正常回复不带改写约束",
@@ -253,38 +285,87 @@ async def main():
         if not s3.get("error"):
             cid3 = s3["cid"]
             await _real_user_turn(pg, cid3, "第一句")
-            await pg.evaluate(
-                """async ([cid, mid]) => {
-                    try { await window.miyaChatStore.deleteMessage(String(cid), String(mid)); } catch (e) {}
-                }""",
-                [cid3, s3["dId"]],
-            )
-            await pg.evaluate("""() => {
-                const inp = document.getElementById('qq-room-input');
-                if (inp) { inp.value = '第一句'; inp.dispatchEvent(new Event('input', { bubbles: true })); }
-                const sb = document.getElementById('qq-room-send');
-                if (sb) sb.click();
-            }""")
-            await pg.wait_for_timeout(500)
-            await pg.evaluate("""() => { const ai = document.getElementById('qq-room-ai'); if (ai) ai.click(); }""")
-            await pg.wait_for_timeout(1800)
+            d3 = await _real_ui_delete(pg, cid3, s3["dId"])
+            check("R8 前置：真实 UI 删除后标记在",
+                  bool((d3.get("mark") or {}).get("armed")),
+                  json.dumps(d3.get("mark"), ensure_ascii=False))
+            await _type_and_send(pg, "第一句")
+            await _click_ai_reply(pg)
             t1 = await last_tail()
             has1 = RR_MARK in t1
 
-            await pg.evaluate("""() => {
-                const inp = document.getElementById('qq-room-input');
-                if (inp) { inp.value = '第二句'; inp.dispatchEvent(new Event('input', { bubbles: true })); }
-                const sb = document.getElementById('qq-room-send');
-                if (sb) sb.click();
-            }""")
-            await pg.wait_for_timeout(500)
-            await pg.evaluate("""() => { const ai = document.getElementById('qq-room-ai'); if (ai) ai.click(); }""")
-            await pg.wait_for_timeout(1800)
+            await _type_and_send(pg, "第二句")
+            await _click_ai_reply(pg)
             t2b = await last_tail()
             has2 = RR_MARK in t2b
 
             check("R8 一次性：第一句带约束、第二句不带", has1 and not has2,
                   "第一句含约束=%s 第二句含约束=%s" % (has1, has2))
+
+        # ══════════ R9 多选删多条不打标（批量接口护栏） ══════════
+        await pg.evaluate("() => { window.__caught.length = 0; }")
+        s4 = await _setup_chat(pg, "多选删多条", with_doomed=True)
+        if not s4.get("error"):
+            cid4 = s4["cid"]
+            await _real_user_turn(pg, cid4, "清理")
+            # 末尾角色回复 + 前面那条用户消息，一次批量删两条
+            batch = await pg.evaluate(
+                """async ([cid, dId]) => {
+                    const CS = window.miyaChatStore;
+                    const left = CS.getMessages(String(cid)) || [];
+                    const userId = (left.find(m => m.role === 'user') || {}).id;
+                    await CS.deleteMessages(String(cid), [String(dId), String(userId)]);
+                    return {
+                        count: (CS.getMessages(String(cid)) || []).length,
+                        mark: CS.peekRewriteResume ? CS.peekRewriteResume(String(cid)) : null
+                    };
+                }""",
+                [cid4, s4["dId"]],
+            )
+            no_mark = not bool((batch.get("mark") or {}).get("armed"))
+            await _type_and_send(pg, "还在吗")
+            await _click_ai_reply(pg)
+            t4 = await last_tail()
+            check("R9 多选删两条不打标、后续回复不带改写约束",
+                  no_mark and RR_MARK not in t4,
+                  "未打标=%s 尾nudge含约束=%s" % (no_mark, RR_MARK in t4))
+
+        # ══════════ R10/R11 【重回】：撤回快照引用 + 成功后不误伤 ══════════
+        await pg.evaluate("() => { window.__caught.length = 0; }")
+        s5 = await _setup_chat(pg, "重回快照", with_doomed=True)
+        if not s5.get("error"):
+            cid5 = s5["cid"]
+            await _real_user_turn(pg, cid5, "重回")
+            regen = await pg.evaluate(
+                """async (cid) => {
+                    const eng = window.miyaChatEngine;
+                    if (!eng || typeof eng.regenerateLastRound !== 'function') {
+                        return { error: 'no_regen_api' };
+                    }
+                    try {
+                        await eng.regenerateLastRound(String(cid));
+                        return { ok: true };
+                    } catch (e) {
+                        return { ok: false, err: String(e && e.message) };
+                    }
+                }""",
+                cid5,
+            )
+            await pg.wait_for_timeout(2000)
+            t5 = await last_tail()
+            check("R10 重回 nudge 引用被撤回的原文（快照回退）",
+                  DOOMED_REPLY[:14] in t5,
+                  "命中原句=%s regen=%s" % (DOOMED_REPLY[:14] in t5,
+                                            json.dumps(regen, ensure_ascii=False)))
+
+            # 重回已成功（一版新回复落库）→ 陈旧标记应被清掉：
+            # 此后普通发送**不得**再被误判成「删了重说」
+            await _type_and_send(pg, "聊点别的")
+            await _click_ai_reply(pg)
+            t6 = await last_tail()
+            check("R11 重回成功后的普通发送不误伤（无改写约束）",
+                  RR_MARK not in t6,
+                  "含改写约束=%s" % (RR_MARK in t6))
 
         await b.close()
 

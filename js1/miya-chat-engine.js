@@ -770,6 +770,19 @@
         return text;
     }
 
+    /*
+     * 「被撤回那一版的原文」快照，按 chatId 存，取一次即清。
+     *
+     * 为什么需要它：withdrawLastAssistantRound 会把 chat.lastRawAssistantReply
+     * **清空**（这是有意为之 —— 防止翻译/心声等消费方继续拿到已弃用的正文）。
+     * 但【重回】的改写 nudge 恰恰要引用这版原文（v8.4-a）：
+     * 撤回先清、nudge 后读，读到的永远是空串 —— 引用块在线上从来没有出现过，
+     * 模型被要求「别重复上一版」却根本不知道上一版说了什么。
+     * 撤回**之前**先把原文快照到这里，readLastRawAssistantReply 在
+     * chat 字段为空时回退取用。
+     */
+    var withdrawnPrevReplyByChat = Object.create(null);
+
     function readLastRawAssistantReply(chatId) {
         try {
             var st = global.miyaChatStore;
@@ -781,6 +794,23 @@
             var row = st.findChat(cid) || st.findChat(chatId);
             if (row && row.lastRawAssistantReply) {
                 return normalizePrevReplyForNudge(row.lastRawAssistantReply);
+            }
+            /*
+             * chat 字段为空时回退到「被撤回那一版」的快照（取一次即清）。
+             * 覆盖两条路：
+             *   1. 【重回】：撤回清空了 chat 字段，nudge 引用的正是这份快照 ——
+             *      否则改写约束永远「无对照可避」；
+             *   2. 重回请求失败后用户改走「删了/撤了再自己说一句」：
+             *      快照里存的正是那版被弃掉的原文。
+             */
+            var fallbackKeys = [cid, String(chatId || '')];
+            for (var i = 0; i < fallbackKeys.length; i++) {
+                var k = fallbackKeys[i];
+                if (k && withdrawnPrevReplyByChat[k]) {
+                    var snap = withdrawnPrevReplyByChat[k];
+                    delete withdrawnPrevReplyByChat[k];
+                    return normalizePrevReplyForNudge(snap);
+                }
             }
         } catch (e) {}
         return '';
@@ -880,7 +910,13 @@
             } catch (eCur) {}
             if (cur && mark.floorAt && cur < mark.floorAt - 1) return false;
             if (typeof st.consumeRewriteResume === 'function') {
-                return !!st.consumeRewriteResume(cid);
+                /*
+                 * 消费也要带兜底：peek 是「两个 id 都试」，consume 若只认
+                 * cid（canonical id），标记挂在原始 chatId 上时会出现
+                 * 「peek 得到、consume 不到」的半吊子状态 —— 判定通过、
+                 * nudge 却没换。两个 key 都试一遍。
+                 */
+                return !!(st.consumeRewriteResume(cid) || st.consumeRewriteResume(apiChatId));
             }
         } catch (e) {}
         return false;
@@ -3641,13 +3677,15 @@
              * 用户报的「删除后还有概率复读」依旧存在。
              *
              * 所以判定只认两件事：末条是用户发言 + store 上挂着新鲜的「删了角色回复」标记。
+             *
+             * 另外，通话/预约模式**不消费标记**：这两种流程的 nudge 有自己的
+             * 专用模板（appendManualActionTailNudge 对 callMode/appointmentMode
+             * 直接 return），标记若被它们吃掉，用户挂了电话回来再打字时
+             * 改写约束就凭空消失了 —— 又是一条「标记被静默消费」的复读缝。
              */
             var resumeRewrite = false;
-            if (
-                !opts.isRegenerate &&
-                !extra &&
-                historyTailState === 'user_spoke_last'
-            ) {
+            if (!opts.isRegenerate && !opts.callMode && !opts.appointmentMode &&
+                !extra && historyTailState === 'user_spoke_last') {
                 resumeRewrite = shouldApplyResumeRewrite(apiChatId, opts);
             }
             appendManualActionTailNudge(
@@ -4391,6 +4429,21 @@
         var msgs = loadApiHistory(st, cid);
         var ids = collectTrailingReplyRoundIds(msgs);
         if (!ids.length) return Promise.reject(new Error('no_assistant_round'));
+        /*
+         * 撤回会清空 chat.lastRawAssistantReply，但【重回】的改写 nudge 需要
+         * 引用这版原文（见 readLastRawAssistantReply 的回退说明）。
+         * 必须**在清空之前**把原文快照下来，晚了就只剩空串。
+         */
+        try {
+            var prevRow = st.findChat ? (st.findChat(msgChatId) || st.findChat(cid)) : null;
+            var prevRaw = String((prevRow && prevRow.lastRawAssistantReply) || '');
+            if (prevRaw) {
+                withdrawnPrevReplyByChat[cid] = prevRaw;
+                if (msgChatId && msgChatId !== cid) {
+                    withdrawnPrevReplyByChat[msgChatId] = prevRaw;
+                }
+            }
+        } catch (eSnap) {}
         var byBucket = Object.create(null);
         ids.forEach(function (id) {
             var bucket =
@@ -5376,6 +5429,31 @@
                     return store
                         .updateChat(chatId, chatPatch)
                         .then(function () {
+                            /*
+                             * 一版新回复已经落库：这个会话上任何还挂着的
+                             * 「删了重说」标记都作废 —— 被删的那版不再是末条，
+                             * 「紧接着重答一次」的语境已经不存在。
+                             *
+                             * 关键场景是【重回】：撤回末条角色消息走的是
+                             * store.deleteMessages（会打标）。若重回**成功**后
+                             * 不清掉它，用户下一次普通发送就会被误判成
+                             * 「删掉上一版要求重答」，还会把刚生成、
+                             * 明明还在历史里的回复当成「被弃版本」去规避。
+                             * 反过来，重回**失败**（没走到这里）时标记保留，
+                             * 用户改走「自己再说一句」仍能拿到改写约束 —— 两条路都对。
+                             */
+                            try {
+                                if (store.clearRewriteResume) {
+                                    store.clearRewriteResume(chatId);
+                                    var canonClearId =
+                                        typeof resolveApiChatId === 'function'
+                                            ? resolveApiChatId(chatId)
+                                            : '';
+                                    if (canonClearId && canonClearId !== chatId) {
+                                        store.clearRewriteResume(canonClearId);
+                                    }
+                                }
+                            } catch (eClear) {}
                             if (lifeLikeNextPushPatch && store.saveChatSettings) {
                                 return store.saveChatSettings(chatId, lifeLikeNextPushPatch);
                             }

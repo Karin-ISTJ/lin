@@ -2502,6 +2502,13 @@
         var cid = String(chatId || '').trim();
         var mid = String(msgId || '').trim();
         if (!cid || !mid) return false;
+        /*
+         * 群聊不打这个标：群聊的生成走 MiyaChatGroup.buildApiMessages，
+         * 那条链路里没有「删了重说」标记的消费方，标了也永远没人取，
+         * 只会挂着等 TTL。这条护栏只认单聊。
+         */
+        var chatRow = store.findChat(cid);
+        if (chatRow && chatRow.type === 'group') return false;
         var arr = metaCache && metaCache.messagesByChat && metaCache.messagesByChat[cid];
         if (!Array.isArray(arr) || !arr.length) return false;
         /* 与 getMessages 同一套可见性判定，顺序按 createdAt 稳定排序 */
@@ -5141,12 +5148,34 @@
         peekRewriteResume: function (chatId) {
             var cid = String(chatId || '').trim();
             if (!cid || !rewriteResume || !rewriteResume[cid]) return null;
+            /*
+             * 新鲜度在这里收口（常量 REWRITE_RESUME_TTL_MS 就定义在本文件顶部）：
+             * 引擎注释里一直写着「标记 10 分钟有效」，但此前没有任何一处真正
+             * 校验过 TTL —— 只要不刷新页面，标记就永远有效。过期标记一律
+             * 视为未武装（armed: false），引擎侧自然不会消费它。
+             */
+            var row = rewriteResume[cid];
+            var expired = !!(row.at && Date.now() - row.at > REWRITE_RESUME_TTL_MS);
             return {
-                armed: !!rewriteResume[cid].armed,
-                lastDeletedAssistantId: rewriteResume[cid].lastDeletedAssistantId || '',
-                floorAt: rewriteResume[cid].floorAt || 0,
-                lastReplyIdSeen: rewriteResume[cid].lastReplyIdSeen || ''
+                armed: !!row.armed && !expired,
+                lastDeletedAssistantId: row.lastDeletedAssistantId || '',
+                floorAt: row.floorAt || 0,
+                lastReplyIdSeen: row.lastReplyIdSeen || '',
+                at: row.at || 0
             };
+        },
+
+        /*
+         * 无条件清掉某会话的「删了重说」标记。
+         *
+         * 语义：一版**新的角色回复已经落库**时，任何还挂着的标记都过期作废 ——
+         * 被删的那版已经不是末条了，「紧接着重答一次」的语境不存在了。
+         * 典型场景见引擎 sendChat 成功路径的注释（重回成功后的防误伤）。
+         */
+        clearRewriteResume: function (chatId) {
+            var cid = String(chatId || '').trim();
+            if (!cid || !rewriteResume) return;
+            delete rewriteResume[cid];
         },
 
         findMessageChatId: function (msgId) {
@@ -5172,6 +5201,26 @@
                 if (key) drop[key] = true;
             });
             if (!Object.keys(drop).length) return Promise.resolve(0);
+            /*
+             * ⚠️ 「删了末尾角色回复 → 自己再说一句」的打标必须在这里，不能只在 deleteMessage。
+             *
+             * 线上 UI 的单条删除**根本不走 deleteMessage**：
+             *   长按消息 → 菜单「删除」→ enterMultiSelectMode(种子=这一条)
+             *   → 多选栏「删除」→ deleteSelectedMessages → **本函数**（批量接口）。
+             * v8.4 只在 deleteMessage 里打标，等于在线上一条都命中不了 ——
+             * 标记永远不被种下，引擎侧的改写 nudge 永远不触发，
+             * 这就是「删了再自己说、线上还是复读」的直接原因。
+             *
+             * 判据在 deleteMessage 的基础上多一条护栏：
+             *   本次删除必须**恰好一条**。多选删多条不算 —— 那种情况用户
+             *   在做清理，不是在要求换一个版本。
+             * 其余不变：必须是删除时刻末尾那条**可见角色消息**（在 filter
+             * 之前判定，删完就看不到了），用户自己的消息、中间楼层都不算。
+             */
+            var dropKeys = Object.keys(drop);
+            var shouldMarkRewriteResume =
+                dropKeys.length === 1 &&
+                isTrailingVisibleAssistantMessage(chatId, dropKeys[0]);
             /*
              * 删除前先记录这些消息的可见序号；删完序号已左移，无法再还原。
              * 用 drop 的 key 而非原始 msgIds，避免重复 id / 空白 id 导致序号算重。
@@ -5226,6 +5275,11 @@
             return chain.then(function () {
                 /* 删除属于不可丢失的持久化操作：这里直接 flush，避免刷新发生在 debounce 写盘之前。 */
                 return flushSaveMeta({ withBackup: true, forceEmergency: true }).then(function () {
+                    /*
+                     * 落盘成功之后再打标，与 deleteMessage 的顺序约束一致：
+                     * 落盘失败不留错误标记，否则下一次正常发送会被误判成「重答」。
+                     */
+                    if (shouldMarkRewriteResume) markRewriteResume(chatId, dropKeys[0]);
                     return removed;
                 });
             });
