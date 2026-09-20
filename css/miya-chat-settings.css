@@ -1116,6 +1116,13 @@
   color: #8a5a12;
   border: 1px solid #f0dcc0;
 }
+/* 【V8】0 命中时的口径说明 / 逐条原因（中性提示色，区别于 warn 的告警语气） */
+.mi-ctx-inject--hint {
+  background: #f2f6fb;
+  color: #3c5a7a;
+  border: 1px solid #d5e2f0;
+}
+.mi-ctx-inject--hint b { font-weight: 600; }
 .mi-ctx-wb__tag {
   font-size: 10px;
   color: #b45309;

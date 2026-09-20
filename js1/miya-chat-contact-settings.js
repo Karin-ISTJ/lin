@@ -994,6 +994,72 @@
       summaryInject.actualBlockCount = summaryMeasured.blockCount;
       summaryInject.actualPreview = summaryMeasured.preview;
     }
+    /* 【V8·口径透明】实时分支走的是「线上口径」预测：buildApiMessages 固定
+       以 promptContext='online' 构建下一次线上请求。这不是 bug —— 线上聊天
+       本就不该注入「仅线下」词条 —— 但面板只报一个孤零零的 0，用户无法区分
+       「没匹配上」与「口径不含」。典型误读：宿主聊天挂着线下约会（条目全是
+       「仅线下」），实时预测显示 0，用户以为世界书坏了；而旧包的「命中 2 条」
+       来自一次真实线下生成写入的快照（线下口径）。两个数字口径不同。
+       0 命中时补三样东西：
+       ① 启用条目数 —— 「库内 66 条」里真正开着的往往只有几条；
+       ② 未命中原因 —— matcher.explainEntry 的人类可读结论，最多列 3 条；
+       ③ 线下口径预测 —— 同一批条目换 promptContext='offline' 再判一次，
+          > 0 就明说「仅线下词条不计入线上预测」，让口径差异自己开口。 */
+    var liveWbZero = null;
+    if ((pm.worldbook_matched || entries.length || 0) === 0 && wbStore &&
+        typeof wbStore.listEntries === 'function' &&
+        global.miyaWorldbookMatcher &&
+        typeof global.miyaWorldbookMatcher.explainEntry === 'function') {
+      var enabledRows = wbStore.listEntries().filter(function (e) {
+        return e && e.enabled !== false;
+      });
+      var liveRoleIds = Array.isArray(wb.roleIds) ? wb.roleIds : [];
+      var liveRoleId = liveRoleIds[0] || '';
+      var reasons = [];
+      var reachBlocked = 0;
+      enabledRows.slice(0, 200).forEach(function (e) {
+        if (reasons.length >= 3) return;
+        var d;
+        try {
+          d = global.miyaWorldbookMatcher.explainEntry(e, {
+            roleId: liveRoleId,
+            roleIds: liveRoleIds,
+            contextText: '',
+            promptContext: 'online'
+          });
+        } catch (eDiag) { return; }
+        if (d && !d.injected) {
+          reasons.push({
+            name: String(e.name || e.comment || e.id || '未命名'),
+            detail: String(d.detail || d.reasonLabel || d.reason || '未命中')
+          });
+          if (d.reason === 'reach_mismatch') reachBlocked += 1;
+        }
+      });
+      /* 线下口径预测：常驻 / 无关键词条目不依赖上下文，预测即准确；
+         带关键词条目因缺上下文只作参考，文案里注明「以快照为准」。 */
+      var offlinePredicted = 0;
+      var wp = global.miyaWorldbookPrompt;
+      if (wp && typeof wp.buildWorldbookPrompt === 'function') {
+        try {
+          var offRes = wp.buildWorldbookPrompt({
+            roleId: liveRoleId,
+            roleIds: liveRoleIds,
+            contextText: '',
+            scopeMode: 'appointment',
+            promptContext: 'offline',
+            skipChronicleProfile: true
+          });
+          offlinePredicted = offRes && Array.isArray(offRes.matched) ? offRes.matched.length : 0;
+        } catch (eOff) { offlinePredicted = 0; }
+      }
+      liveWbZero = {
+        enabled: enabledRows.length,
+        reasons: reasons,
+        reachBlocked: reachBlocked,
+        offlinePredicted: offlinePredicted
+      };
+    }
     return {
       fromSnapshot: false,
       snapshotAt: 0,
@@ -1007,6 +1073,7 @@
       worldbookEmptyMatched: pm.worldbook_empty_matched || 0,
       worldbookDropped: pm.worldbook_dropped || 0,
       worldbookConsidered: pm.worldbook_considered || 0,
+      worldbookLiveZero: liveWbZero,
       entries: entries,
       totalInStore: totalInStore,
       roleIds: Array.isArray(wb.roleIds) ? wb.roleIds : [],
@@ -1207,7 +1274,27 @@
             ? '（候选 ' + esc(formatNum(wbConsideredN)) + ' 条' +
               (wbCutParts.length ? '，' + wbCutParts.join('，') : '') + '）'
             : '') + '</p>'
-        : '<p class="mi-ctx-inject">库内共 ' + esc(formatNum(snapshot.totalInStore)) + ' 条，当前上下文未命中世界书。</p>');
+        : '<p class="mi-ctx-inject">库内共 ' + esc(formatNum(snapshot.totalInStore)) + ' 条' +
+          (snapshot.worldbookLiveZero && Number(snapshot.worldbookLiveZero.enabled) > 0
+            ? '（启用 ' + esc(formatNum(snapshot.worldbookLiveZero.enabled)) + ' 条）'
+            : '') +
+          '，当前线上口径未命中世界书。</p>' +
+          renderWbZeroHints(snapshot.worldbookLiveZero));
+
+    function renderWbZeroHints(lz) {
+      if (!lz) return '';
+      var parts = [];
+      (Array.isArray(lz.reasons) ? lz.reasons : []).forEach(function (r) {
+        if (r && r.detail) parts.push(esc(String(r.name || '未命名')) + '：' + esc(String(r.detail)));
+      });
+      if (Number(lz.offlinePredicted) > 0) {
+        parts.push('按线下口径预测将命中 ' + esc(formatNum(Number(lz.offlinePredicted))) +
+          ' 条 —— 仅线下词条不计入线上预测；发送一条线下消息后以快照为准' +
+          (lz.reachBlocked > 0 ? '（' + esc(formatNum(Number(lz.reachBlocked))) + ' 条因生效范围被线上口径排除）' : '') + '。');
+      }
+      if (!parts.length) return '';
+      return '<p class="mi-ctx-inject mi-ctx-inject--hint">' + parts.join('<br>') + '</p>';
+    }
 
     return '<div class="mi-ctx-detail-pop' + (open ? ' is-open' : '') + '" data-mq-set-ctx-pop aria-hidden="' + (open ? 'false' : 'true') + '">' +
       '<div class="mi-ctx-detail-pop__sheet" role="region" aria-label="Token 来源明细">' +
@@ -1295,6 +1382,7 @@
         '<p class="mi-ctx-stat__sub">≈ ' + esc(formatNum(snapshot.estimatedTokens)) + ' token · ' + esc(injectNote) + timeNote + '</p>' +
         '<p class="mi-ctx-stat__note">' + (open ? '再次点击收起明细' : '点击查看 Token 来源分区') + '</p>' +
         '<p class="mi-ctx-stat__note mi-ctx-stat__note--ver">代码指纹：store v' + esc(fp.storeV || '?') +
+          ' / 世界书 st' + esc(fp.wbStV || '?') + '·prompt' + esc(fp.wbPromptV || '?') +
           ' / ' + esc(fp.swBuild || '?') + (fp.swControlled ? ' · SW 受控' : ' · SW 未受控') + '</p>' +
       '</button>' +
       renderContextUsageDetailPop(snapshot, open) +
@@ -1307,11 +1395,22 @@
       ③ 页面是否已被 Service Worker 接管。 */
   function readCodeVersionFingerprint() {
     var storeV = '';
+    var wbStV = '';
+    var wbPromptV = '';
     try {
       var scripts = document.querySelectorAll('script[src]');
       for (var i = 0; i < scripts.length; i++) {
-        var m = /miya-chat-store\.js\?v=(\d+)/.exec(scripts[i].getAttribute('src') || '');
-        if (m) { storeV = m[1]; break; }
+        var src = scripts[i].getAttribute('src') || '';
+        var m = /miya-chat-store\.js\?v=(\d+)/.exec(src);
+        if (m && !storeV) { storeV = m[1]; }
+        /* 【V8】世界书模块的 ?v= 一并亮出来。此前指纹只看 chat-store，
+           而「命中数异常」的病灶往往在世界书三件套（st / prompt / matcher）
+           —— 浏览器若跑着旧副本，面板上旧数字新数字根本对不上号，
+           没有这一项就还得靠猜「是不是缓存」。 */
+        var mWbSt = /miya-worldbook-st\.js\?v=(\d+)/.exec(src);
+        if (mWbSt && !wbStV) { wbStV = mWbSt[1]; }
+        var mWbPrompt = /miya-worldbook-prompt\.js\?v=(\d+)/.exec(src);
+        if (mWbPrompt && !wbPromptV) { wbPromptV = mWbPrompt[1]; }
       }
     } catch (eFp) {}
     var swBuild = '';
@@ -1323,7 +1422,7 @@
     try {
       controlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
     } catch (eSw) {}
-    return { storeV: storeV, swBuild: swBuild, swControlled: controlled };
+    return { storeV: storeV, wbStV: wbStV, wbPromptV: wbPromptV, swBuild: swBuild, swControlled: controlled };
   }
 
   function isContextUsageDetailOpen() {

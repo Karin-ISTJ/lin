@@ -547,6 +547,54 @@ console.log('\n\u3010F\u3011\u5e38\u9a7b\u8bcd\u6761\u8c41\u514d\u540c\u7ec4\u4e
      has(rf6, 'C1') && has(rf6, 'C2') && has(rf6, 'C3'), 'matched=' + ids(rf6));
 })();
 
+/* ──────────────────────────────────────────────────
+ * G. 口径透明：「线上预测 0 命中」是语义，不是故障 —— 但必须把话说出来
+ *
+ * 背景（用户误读链，v7 实况）：宿主聊天挂着线下约会，启用的常驻条目是
+ * 「仅线下」。模型高级的实时预测分支走线上口径（buildApiMessages 固定
+ * promptContext='online'）→ 仅线下词条被正确排除 → 面板显示 0。
+ * 用户拿这个 0 去对比旧包「线下生成快照的 2 条」，得出「新包把世界书改坏
+ * 了」。实际匹配层没有任何问题 —— 缺的是面板把口径与原因说出来。
+ *
+ * 守卫两层：
+ *   ① 语义本身（线上不含仅线下）不许被「顺手修好」改坏；
+ *   ② 面板必须采集原因（explainEntry）并补报线下口径预测。
+ * ────────────────────────────────────────────────── */
+(function () {
+  console.log('\n\u3010G\u3011\u53e3\u5f84\u900f\u660e\uff1a\u7ebf\u4e0a\u9884\u6d4b 0 \u547d\u4e2d\u65f6\u8bf4\u660e\u539f\u56e0\u4e0e\u7ebf\u4e0b\u53e3\u5f84');
+  const matcher = s.miyaWorldbookMatcher;
+  const gEnt = mk('V1', 'middle', { constant: true, globalReach: 'offline' });
+  const gOn = build([gEnt], CTX, { promptContext: 'online' });
+  const gOff = build([gEnt], CTX, { promptContext: 'offline', scopeMode: 'appointment' });
+  ck('G1 \u4ec5\u7ebf\u4e0b\u5e38\u9a7b\uff1a\u7ebf\u4e0a\u53e3\u5f84 0 / \u7ebf\u4e0b\u53e3\u5f84 1\uff08\u8bed\u4e49\u4fdd\u6301\uff09',
+     gOn.matched.length === 0 && gOff.matched.length === 1,
+     'online=' + gOn.matched.length + ' offline=' + gOff.matched.length);
+
+  const gDiag = matcher && typeof matcher.explainEntry === 'function'
+    ? matcher.explainEntry(gEnt, { roleId: 'r1', roleIds: ['r1'], contextText: CTX, promptContext: 'online' })
+    : null;
+  ck('G2 explainEntry \u7ed9\u51fa\u4eba\u7c7b\u53ef\u8bfb\u539f\u56e0\uff08reach_mismatch \u4e14\u542b\u300c\u4ec5\u7ebf\u4e0b\u300d\uff09',
+     !!gDiag && gDiag.injected === false && gDiag.reason === 'reach_mismatch' &&
+     String(gDiag.detail || '').indexOf('\u4ec5\u7ebf\u4e0b') >= 0,
+     gDiag ? gDiag.reason + '\uff5c' + gDiag.detail : 'explainEntry \u4e0d\u53ef\u7528');
+
+  const cs2 = read('js1/miya-chat-contact-settings.js');
+  ck('G3 \u9762\u677f 0 \u547d\u4e2d\u65f6\u91c7\u96c6\u539f\u56e0\u4e0e\u7ebf\u4e0b\u9884\u6d4b\uff08worldbookLiveZero\uff09',
+     cs2.indexOf('worldbookLiveZero') >= 0 &&
+     cs2.indexOf('offlinePredicted') >= 0 &&
+     cs2.indexOf('explainEntry') >= 0,
+     '\u7f3a\u5c11\u91c7\u96c6\u70b9');
+  ck('G4 \u6e32\u67d3\u5c42\u628a\u539f\u56e0\u4e0e\u7ebf\u4e0b\u53e3\u5f84\u8bf4\u51fa\u6765',
+     cs2.indexOf('\u6309\u7ebf\u4e0b\u53e3\u5f84\u9884\u6d4b\u5c06\u547d\u4e2d') >= 0 &&
+     cs2.indexOf('\u4ec5\u7ebf\u4e0b\u8bcd\u6761\u4e0d\u8ba1\u5165\u7ebf\u4e0a\u9884\u6d4b') >= 0 &&
+     cs2.indexOf('\u5f53\u524d\u7ebf\u4e0a\u53e3\u5f84\u672a\u547d\u4e2d\u4e16\u754c\u4e66') >= 0,
+     '\u7f3a\u6e32\u67d3\u6587\u6848');
+  ck('G5 \u4ee3\u7801\u6307\u7eb9\u5305\u542b\u4e16\u754c\u4e66\u6a21\u5757\u7248\u672c\uff08st/prompt \u7684 ?v=\uff09',
+     cs2.indexOf('miya-worldbook-st') >= 0 && cs2.indexOf('wbStV') >= 0 &&
+     cs2.indexOf('wbPromptV') >= 0,
+     '\u6307\u7eb9\u4ecd\u662f\u65e7\u4e09\u9879');
+})();
+
 console.log('\n' + '\u2550'.repeat(58));
 console.log('\u901a\u8fc7 ' + pass + ' / \u5171 ' + (pass + fail));
 if (fail) console.log('\u5931\u8d25 ' + fail + ' \u9879');
