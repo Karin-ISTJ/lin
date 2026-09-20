@@ -1,11 +1,11 @@
-var CACHE = 'miya-v255-karin';
+var CACHE = 'miya-v256-karin';
 /*
  * 版本哨兵：SW 侧的构建号。
  * index.html 里有同值的 <meta name="miya-sw-build" content="sw-3">，
  * app.js 会在收到 SW 广播时比对两者：SW 比页面新 → 自动刷新一次页面。
  * 只增不减：每次改动 sw.js / 任何需要立刻生效的资源策略时 bump 尾号。
  */
-var BUILD = 'sw-12';
+var BUILD = 'sw-13';
 var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './js1/app.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */
 var STATIC_LIVE = /\.(?:html|css|js|webmanifest|json)$|\/$|miya-icon(?:-\d+)?\.png/;

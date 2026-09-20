@@ -259,14 +259,37 @@
      而主聊天链路上没有任何 UI 消费 dropped，用户只看到「命中 2 条」，
      无从判断是被裁了还是压根没匹配上。
 
-     现在：没配置就不裁剪，把「要不要限流」的决定权交还使用者；
-     真要限流，走 tokenBudget / budget 显式传入（ST 调试台即走此路）。 */
-  var DEFAULT_BUDGET = Infinity;
+     现在：默认值回到用户明确要求的 99999。真要限流，走 tokenBudget / budget
+     显式传入（ST 调试台即走此路）；想不改代码就调，写 global.miyaWorldbookTokenBudget。
+
+     【为什么不是 Infinity】曾经一度被我擅自换成 Infinity，理由是「等价于不设
+     上限，比 99999 更强」。但用户要的是 99999 这个具体数字，而且 Infinity 会让
+     「预算」这个概念在面板上失去可读的锚点。已按用户要求改回 99999 —— 对任何
+     现实规模的世界书而言这都是事实上不裁剪的量级。 */
+  var DEFAULT_BUDGET = 99999;
 
   function resolveWorldbookBudget(cfg) {
     var c = cfg && typeof cfg === 'object' ? cfg : {};
+    /* ① 调用方显式传入，优先级最高 */
     if (c.tokenBudget != null && Number(c.tokenBudget) > 0) return Number(c.tokenBudget);
     if (c.budget != null && Number(c.budget) > 0) return Number(c.budget);
+    /* ② 全局可调入口：设置页/调试台可写 miyaWorldbookTokenBudget 覆盖默认值。
+          这样「想改预算」不必再改源码，也不会像 2048 那样成为又一个隐形上限。
+          ⚠️ 必须用 IIFE 形参 global（即 window），不要用 `typeof global !== 'undefined'`
+          另找 —— 在 vm 沙箱里 `global` 会被解析成宿主 Node 的真全局，与浏览器里
+          window===global 的语义不一致，导致配置项读不到。三个来源都探一遍。 */
+    var cands = [global];
+    try { if (typeof globalThis !== 'undefined') cands.push(globalThis); } catch (e1) {}
+    try { if (typeof window !== 'undefined' && window !== global) cands.push(window); } catch (e2) {}
+    for (var i = 0; i < cands.length; i++) {
+      var cg = cands[i];
+      try {
+        if (cg && cg.miyaWorldbookTokenBudget != null && Number(cg.miyaWorldbookTokenBudget) > 0) {
+          return Number(cg.miyaWorldbookTokenBudget);
+        }
+      } catch (eRead) { /* 单个来源读失败不影响其它来源 */ }
+    }
+    /* ③ 默认 99999（用户明确要求的值） */
     return DEFAULT_BUDGET;
   }
 
@@ -297,16 +320,39 @@
       return entry && entry.id && !excludeSet[String(entry.id)];
     }
     var matchPool = entries;
-    /* scopeMode === 'appointment'（线下会话）曾在此处把「未绑定角色的条目」
-       整段滤出匹配池 —— 与 matcher 的判据正面冲突：
-         · matcher.roleMatches()：未绑定角色 = 通用条目，对任何会话放行；
-         · 诊断台 runDiag()：走 matcher，同样判「会注入」；
-         · 线上链路（无 scopeMode）：matchPool = 全量，未绑定角色的词条正常命中。
-       三处都放行的词条，唯独线下被这道过滤静默排除 —— 用户在世界书诊断里
-       看到「会注入」，线下生成后「模型高级」却显示「世界书未命中」，
-       两套判据各说各话。绑定角色与否的裁决权本就属于 matcher
-       （绑定了其它角色 → roleMatches 拒绝；globalReach=online → 仅线上），
-       prompt 层不应再加一道更严的暗门。故删除此过滤，线下与线上同权。 */
+    /* 【W10 修复】线下（scopeMode==='appointment'）的匹配池过滤 —— 收窄到正确的边界。
+       ------------------------------------------------------------------
+       最初这里写的是「只保留 boundRoleIds 非空的词条」：
+
+           matchPool = entries.filter(function (entry) {
+             var roles = Array.isArray(entry && entry.boundRoleIds) ? entry.boundRoleIds : [];
+             return roles.length > 0;      // ← 把「全局设定类」词条整类也剔除了
+           });
+
+       这条过滤的**初衷是对的**（局部词条必须绑角色），但**范围下错了**：
+       世界观 / 地点 / 物品 / 组织这类词条本来就不绑任何角色（它们绑定的是
+       "世界"，不是"某个人"），却被一并剔除 → 线下候选恒为 0 →
+       「模型高级」显示「世界书未命中」。
+
+       中间还走过一版「整条删掉」的修法，但那又把**局部词条必须绑角**这条
+       底线一起放开了：未绑角的 local 词条会开始注入，而线上链路
+       （miya-chat-engine.js 的 collectBoundLocalBindingsForRoleIds /
+       listBindableLocalWorldbookEntries 两处都有 `if (!bound.length) return`）
+       和世界书面板都不认它，等于制造出「线下注入、线上不注入、面板不认」
+       的新不一致。
+
+       所以正确边界是：
+         · scope !== 'local'（全局词条）→ 一律留在池内，是否生效交给
+           matcher.matchEntry 按 globalReach 裁决；
+         · scope === 'local'（局部词条）→ 仍必须绑定了角色才进池。
+       这样既修好全局词条被吞，也不放宽局部词条的既有语义。 */
+    if (scopeMode === 'appointment') {
+      matchPool = entries.filter(function (entry) {
+        if (!entry) return false;
+        if (String(entry.scope) !== 'local') return true;
+        return Array.isArray(entry.boundRoleIds) && entry.boundRoleIds.length > 0;
+      });
+    }
     var roleIds = Array.isArray(cfg.roleIds)
       ? cfg.roleIds.map(function (x) { return String(x || '').trim(); }).filter(Boolean)
       : [];
@@ -315,13 +361,53 @@
     if (!roleId && roleIds.length) roleId = roleIds[0];
     var contextText = String(cfg.contextText || '');
 
-    /* 「全软件层」= globalReach 为 all 的全局词条。
-       注意：all 只表示「线上线下都生效」，**不等于无条件注入**。
-       带关键词的 all 词条仍须关键词命中；只有无关键词（或 constant）的
-       才天然常驻。此处拆成两组分别处理，避免关键词未命中的词条被强行注入。 */
-    var allReachRows = matcher && typeof matcher.collectUniversalGlobalEntries === 'function'
-      ? matcher.collectUniversalGlobalEntries(entries).filter(notExcluded)
-      : [];
+    /* 「全软件层」= 当前场景下生效的全局词条。
+       ------------------------------------------------------------------
+       ⚠️【W10 修复】上一版（v9）删掉了 matchPool 里按 boundRoleIds 的过滤，
+       方向是对的，但**只删了一半** —— 本处仍只调 collectUniversalGlobalEntries，
+       而它的判据是 `getEntryGlobalReach(entry) === 'all'`，**严格相等**。
+       偏偏 normalizeGlobalReach 给 global 词条的默认值是：
+
+           return normalizeScope(scope) === 'local' ? 'all' : 'online_offline';
+
+       于是在 v9 之后，一个「全局 + 从未手动改过生效范围」的词条（reach 落成
+       'online_offline'）虽然终于进了 matchPool，却**又在这一层被漏掉**：
+       它既不在 allReachRows（严格 === 'all' 不收），
+       又因为 universalRows 只从 allReachRows 里取，导致「无关键词的全局
+       常驻词条」也拿不到常驻资格。
+
+       表现就是用户看到的：v9 之后世界书**仍是**「未命中」，且
+       「全局 + 常驻」这类最该无条件注入的词条反而不注入。
+
+       正确做法与群聊链路（miya-chat-group.js listOnlineGlobalWorldbookEntries）
+       完全一致：**两段合并**——
+         ① collectUniversalGlobalEntries：reach==='all'，线上线下通吃；
+         ② collectReachGlobalEntries(entries, promptContext)：其余 reach 中
+            符合当前场景的（offline / online / online_offline）。
+       缺了②，等于把「按生效范围筛选」这件事整个跳过。
+
+       进入本层 ≠ 无条件注入：带关键词的词条仍须关键词命中，
+       只有无关键词或 constant 的才天然常驻（见下方 universalRows 拆组）。 */
+    var allReachRows = [];
+    if (matcher) {
+      var reachSeen = Object.create(null);
+      var pushReachRow = function (entry) {
+        if (!entry || !entry.id) return;
+        var key = String(entry.id);
+        if (reachSeen[key]) return;
+        reachSeen[key] = true;
+        allReachRows.push(entry);
+      };
+      if (typeof matcher.collectUniversalGlobalEntries === 'function') {
+        matcher.collectUniversalGlobalEntries(entries).filter(notExcluded).forEach(pushReachRow);
+      }
+      if (typeof matcher.collectReachGlobalEntries === 'function') {
+        matcher.collectReachGlobalEntries(entries, promptContext).filter(notExcluded).forEach(pushReachRow);
+      }
+      /* promptContext 为空（预览/调试）时 collectReachGlobalEntries 按设计返回 []，
+         此时至少保住 reach==='all' 的旧行为，不因本次改动而回退。 */
+    }
+    allReachRows = allReachRows.filter(notExcluded);
     /* ⚠️ 判据必须与 matcher 完全一致，禁止各写一份。
        历史教训：这里曾手写
            var k = Array.isArray(entry.key) && entry.key.length ? entry.key : (entry.keywords || []);

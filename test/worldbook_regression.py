@@ -54,7 +54,10 @@ function read(p) { return fs.readFileSync(path.join(ROOT, p), 'utf8'); }
 
 function makeSandbox() {
   const s = { console, Date, Math, JSON, setTimeout: () => 0, clearTimeout: () => {}, Promise };
-  s.window = s; s.globalThis = s;
+  /* s.global 必须指向沙箱自身：浏览器里 window === globalThis === global，
+     模块内读 global.miyaWorldbookTokenBudget 必须与测试写入的是同一个对象，
+     否则「全局覆盖钩子」这类配置项在测试里永远看不到。 */
+  s.window = s; s.globalThis = s; s.global = s;
   s.localStorage = {
     _d: {}, getItem(k) { return this._d[k] || null; }, setItem(k, v) { this._d[k] = String(v); },
     removeItem(k) { delete this._d[k]; }, key() { return null; },
@@ -345,9 +348,25 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
   ck('\u672a\u914d\u7f6e\u9884\u7b97\u65f6\u65e0\u4efb\u4f55\u4e22\u5f03',
      (r1.budget && r1.budget.dropped ? r1.budget.dropped.length : 0) === 0,
      'dropped=' + (r1.budget && r1.budget.dropped ? r1.budget.dropped.length : 'n/a'));
-  ck('\u672a\u914d\u7f6e\u9884\u7b97\u65f6 budgetTokens \u4e3a null\uff08\u4ee3\u8868\u4e0d\u4e0a\u9650\uff09',
-     r1.budget && r1.budget.budgetTokens === null,
+  ck('\u672a\u914d\u7f6e\u9884\u7b97\u65f6 budgetTokens \u4e3a 99999\uff08\u7528\u6237\u6307\u5b9a\u7684\u9ed8\u8ba4\u4e0a\u9650\uff09',
+     r1.budget && Number(r1.budget.budgetTokens) === 99999,
      'budgetTokens=' + (r1.budget ? r1.budget.budgetTokens : 'n/a'));
+
+  /* E1b/E1c：全局覆盖钩子 miyaWorldbookTokenBudget。
+     注意写的是沙箱对象 s（= 浏览器里的 window），不是宿主 Node 的 global。 */
+  {
+    const prev = s.miyaWorldbookTokenBudget;
+    s.miyaWorldbookTokenBudget = 777;
+    const rHook = build(big, CTX);
+    ck('\u5168\u5c40\u94a9\u5b50 miyaWorldbookTokenBudget \u80fd\u8986\u76d6\u9ed8\u8ba4\u9884\u7b97',
+       rHook.budget && Number(rHook.budget.budgetTokens) === 777,
+       'budgetTokens=' + (rHook.budget ? rHook.budget.budgetTokens : 'n/a'));
+    const rExp = build(big, CTX, { tokenBudget: 12345 });
+    ck('\u663e\u5f0f\u4f20\u53c2\u4f18\u5148\u7ea7\u9ad8\u4e8e\u5168\u5c40\u94a9\u5b50',
+       rExp.budget && Number(rExp.budget.budgetTokens) === 12345,
+       'budgetTokens=' + (rExp.budget ? rExp.budget.budgetTokens : 'n/a'));
+    s.miyaWorldbookTokenBudget = prev;
+  }
 
   /* E2：显式传预算 —— 裁剪必须照旧生效 */
   const r2 = build(big, CTX, { tokenBudget: 2048 });
@@ -625,6 +644,87 @@ console.log('\n\u3010F\u3011\u5e38\u9a7b\u8bcd\u6761\u8c41\u514d\u540c\u7ec4\u4e
   ck('H4 \u7ebf\u4e0b back \u9884\u8bbe\u515c\u5e95\u4e5f\u4fdd\u7559\u6807\u8bb0',
      ap.indexOf('stTaggerBack') >= 0,
      '\u515c\u5e95\u5206\u652f\u4ecd\u4e22\u6807\u8bb0');
+})();
+
+/* ==================================================================
+ * I. 「世界书仍未命中」根因回归 —— 全局词条的生效范围必须被正确消费
+ *
+ * 病史：v9 删掉了 matchPool 里按 boundRoleIds 的过滤（方向正确），但只改了
+ * 一半 —— allReachRows 仍只调 collectUniversalGlobalEntries，其判据是
+ * getEntryGlobalReach(entry) === 'all' 严格相等，而 normalizeGlobalReach
+ * 给 global 词条的默认值是 'online_offline'。于是「全局 + 未手动改过生效
+ * 范围」的词条在 v9 之后依然落不进本就该收它的层：
+ *   · 带关键词的全局词条 → 线下 0 命中
+ *   · 无关键词的全局常驻词条 → 连常驻资格都拿不到
+ * 表现即用户在「模型高级」里看到的「世界书未命中」。
+ * ================================================================== */
+console.log('\n\u3010I\u3011\u5168\u5c40\u8bcd\u6761\u751f\u6548\u8303\u56f4\u5fc5\u987b\u88ab\u6b63\u786e\u6d88\u8d39\uff08\u6839\u56e0\u56de\u5f52\uff09');
+(function () {
+  const K = 'contact_karin';
+  const CTX_OFF = '\u6211\u4eec\u7ea6\u5728\u90a3\u5bb6\u5496\u5561\u9986\u89c1\u9762\u3002';
+
+  function runOne(entry, promptContext) {
+    const list = [Object.assign({
+      id: 'x1', name: 'T', enabled: true, position: 'front',
+      key: ['\u5496\u5561'], content: '\u6b63\u6587'
+    }, entry)];
+    return build(list, CTX_OFF, {
+      scopeMode: 'appointment', promptContext, roleId: K, roleIds: [K]
+    });
+  }
+
+  /* I1：全局 + 不绑角 + 默认 reach（online_offline）+ 关键词 → 线下必须命中。
+     这正是 v9 漏掉的那一类。 */
+  ck('I1 \u5168\u5c40\u8bcd\u6761\uff08\u9ed8\u8ba4 reach\uff09\u7ebf\u4e0b\u547d\u4e2d',
+     runOne({ scope: 'global' }, 'offline').matched.length === 1,
+     '\u7ebf\u4e0b=' + runOne({ scope: 'global' }, 'offline').matched.length);
+  ck('I2 \u5168\u5c40\u8bcd\u6761\uff08\u9ed8\u8ba4 reach\uff09\u7ebf\u4e0a\u547d\u4e2d',
+     runOne({ scope: 'global' }, 'online').matched.length === 1,
+     '\u7ebf\u4e0a=' + runOne({ scope: 'global' }, 'online').matched.length);
+
+  /* I3/I4：仅线下 —— 线下命中、线上不命中（生效范围语义不得被放宽） */
+  ck('I3 \u300c\u4ec5\u7ebf\u4e0b\u300d\u7ebf\u4e0b\u547d\u4e2d',
+     runOne({ scope: 'global', globalReach: 'offline' }, 'offline').matched.length === 1,
+     '\u7ebf\u4e0b=' + runOne({ scope: 'global', globalReach: 'offline' }, 'offline').matched.length);
+  ck('I4 \u300c\u4ec5\u7ebf\u4e0b\u300d\u7ebf\u4e0a\u4e0d\u547d\u4e2d',
+     runOne({ scope: 'global', globalReach: 'offline' }, 'online').matched.length === 0,
+     '\u7ebf\u4e0a=' + runOne({ scope: 'global', globalReach: 'offline' }, 'online').matched.length);
+
+  /* I5/I6：仅线上 —— 反向对称 */
+  ck('I5 \u300c\u4ec5\u7ebf\u4e0a\u300d\u7ebf\u4e0b\u4e0d\u547d\u4e2d',
+     runOne({ scope: 'global', globalReach: 'online' }, 'offline').matched.length === 0,
+     '\u7ebf\u4e0b=' + runOne({ scope: 'global', globalReach: 'online' }, 'offline').matched.length);
+  ck('I6 \u300c\u4ec5\u7ebf\u4e0a\u300d\u7ebf\u4e0a\u547d\u4e2d',
+     runOne({ scope: 'global', globalReach: 'online' }, 'online').matched.length === 1,
+     '\u7ebf\u4e0a=' + runOne({ scope: 'global', globalReach: 'online' }, 'online').matched.length);
+
+  /* I7：全局常驻（无关键词）+ 默认 reach → 线下也必须命中。
+     v9 之后这类词条连常驻资格都没有。 */
+  ck('I7 \u5168\u5c40\u5e38\u9a7b\uff08\u9ed8\u8ba4 reach\uff09\u7ebf\u4e0b\u547d\u4e2d',
+     runOne({ scope: 'global', constant: true, key: [] }, 'offline').matched.length === 1,
+     '\u7ebf\u4e0b=' + runOne({ scope: 'global', constant: true, key: [] }, 'offline').matched.length);
+
+  /* I8：局部词条未绑角 —— 仍应被拒（语义不得因本次修复而放宽） */
+  ck('I8 \u5c40\u90e8\u8bcd\u6761\u672a\u7ed1\u89d2\u4ecd\u4e0d\u6ce8\u5165',
+     runOne({ scope: 'local' }, 'offline').matched.length === 0,
+     '\u7ebf\u4e0b=' + runOne({ scope: 'local' }, 'offline').matched.length);
+
+  /* I9：局部词条绑角 —— 线下照常命中 */
+  ck('I9 \u5c40\u90e8\u8bcd\u6761\u7ed1\u89d2\u540e\u7ebf\u4e0b\u547d\u4e2d',
+     runOne({ scope: 'local', boundRoleIds: [K] }, 'offline').matched.length === 1,
+     '\u7ebf\u4e0b=' + runOne({ scope: 'local', boundRoleIds: [K] }, 'offline').matched.length);
+
+  /* I10/I11：源码守卫 —— 这两处任缺其一，本缺陷都会复发 */
+  {
+    const src = read('js2/miya-worldbook-prompt.js');
+    ck('I10 prompt \u5c42\u540c\u65f6\u6536\u5f55 collectUniversal + collectReach',
+       src.indexOf('collectUniversalGlobalEntries') >= 0 &&
+       src.indexOf('collectReachGlobalEntries') >= 0,
+       '\u7f3a collectReachGlobalEntries\uff0c\u9ed8\u8ba4 reach \u7684\u5168\u5c40\u8bcd\u6761\u4f1a\u6f0f\u6389');
+    ck('I11 \u7ebf\u4e0b\u4e0d\u518d\u6309 boundRoleIds \u6574\u7c7b\u5254\u9664\u8bcd\u6761',
+       !/if \(scopeMode === 'appointment'\) \{\s*matchPool = entries\.filter\(function \(entry\) \{\s*var roles = Array\.isArray\(entry && entry\.boundRoleIds\)/.test(src),
+       '\u65e7\u7684\u7ed1\u89d2\u8fc7\u6ee4\u53c8\u56de\u6765\u4e86');
+  }
 })();
 
 console.log('\n' + '\u2550'.repeat(58));
