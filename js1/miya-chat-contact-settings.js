@@ -1784,16 +1784,18 @@
       ) +
 
       /*
-       * ── 以下三个分区原属于「桌面设置 App」───────────────────────
+       * ── 以下两个分区原属于「桌面设置 App」───────────────────────
        *
        * 桌面设置已被删除，这些是它原本承载、必须有个新家的功能。
        * 放在页面最下方而不是塞进上面任意一个 zone：
        * 它们的性质是「全局维护」而非「这个角色的聊天偏好」，
        * 混进对话表现或外观里会让人以为改的只影响当前角色。
+       *
+       * 【已移除】原第三项「存储用量」。按需求整体去掉该功能，
+       * 引擎模块 js2/miya-storage-usage.js 与全部入口一并删除。
        */
       renderSubNavBar('notify', '通知与提示音', '系统通知开关、测试与来消息提示音', 'notify') +
       renderSubNavBar('backup', '备份与恢复', '导出数据、完整导出与导入', 'backup') +
-      renderSubNavBar('storage', '存储用量', '本机数据占用概览', 'storage') +
 
       /* 聊天默认值：未单独设置过的联系人统一用这里的配置。
          原先挂在桌面设置主页的 nav 上，主页一删它就没地方去了 ——
@@ -2223,7 +2225,7 @@
      * 控件读成空值 / 关闭 / 默认值并真实落库 —— 实测会清空备注与语音 ID、
      * 关掉免打扰 / 天气感知 / 时间感知 / 主动发消息、清空世界书排序。
      * 所以子视图内点顶栏保存一律转为保存当前子视图：
-     *   · api-chat / api-voice → 走 saveSubViewForm，与子视图内「保存」按钮同链路
+     *   · api-chat / api-voice → 走 saveSubViewForm（这两个页面的**唯一**保存入口）
      *   · 其余子视图没有可存表单，提示即可，绝不触碰根级配置
      */
     if (state.subView) {
@@ -2400,7 +2402,6 @@
     'api-chat': '对话 API',
     'api-voice': '语音合成',
     'backup': '备份与恢复',
-    'storage': '存储用量',
     'notify': '通知与提示音',
     'chat-defaults': '聊天默认值'
   };
@@ -2515,7 +2516,6 @@
     if (key === 'api-chat') return renderApiChatSub();
     if (key === 'api-voice') return renderApiVoiceSub();
     if (key === 'backup') return renderBackupSub();
-    if (key === 'storage') return renderStorageSub();
     if (key === 'notify') return renderNotifySub();
     if (key === 'chat-defaults') return renderChatDefaultsSub();
     return '<div class="mi-empty-hint">该设置页不存在</div>';
@@ -2709,10 +2709,7 @@
           '<button type="button" class="ins-toggle' + (cfg.fallbackEnabled ? ' is-on' : '') + '" id="mq-api-fallback" role="switch" aria-checked="' + (cfg.fallbackEnabled ? 'true' : 'false') + '"></button>' +
         '</div>' +
       '</div>' +
-
-      '<div class="mi-btn-row mi-set-subview__actions">' +
-        '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-sub-save="api-chat">保存</button>' +
-      '</div>'
+      '<p class="st-form-hint">改完点右上角「保存」生效。</p>'
     );
   }
 
@@ -2826,10 +2823,6 @@
           typeof global.miyaChatSettingsPanel.mountDefaultsInto === 'function') {
         global.miyaChatSettingsPanel.mountDefaultsInto(host);
       }
-      return;
-    }
-    if (key === 'storage') {
-      refreshStorageSub();
       return;
     }
     if (key === 'notify') {
@@ -3254,9 +3247,7 @@
         '<textarea class="ins-text-input ins-text-input--area" id="mq-voice-prompt" rows="3" placeholder="合成前附加到台词前，留空则不附加">' + esc(tts.prompt || '') + '</textarea>' +
         '<p class="st-form-hint">音调调低更沉稳自然，调高更年轻清亮；改动后已合成的语音会自动重新生成</p>' +
       '</div>' +
-      '<div class="mi-btn-row mi-set-subview__actions">' +
-        '<button type="button" class="st-action-btn st-action-btn--primary" data-mq-set-sub-save="api-voice">保存</button>' +
-      '</div>'
+      '<p class="st-form-hint">改完点右上角「保存」生效。</p>'
     );
   }
 
@@ -3302,29 +3293,6 @@
       '</div>' +
       '<input type="file" class="ins-file" data-mq-set-backup-file accept=".zip,.json,application/zip,application/json" multiple hidden>' +
       '<p class="st-form-hint">导入会覆盖同名数据，建议先导出一次留底。</p>'
-    );
-  }
-
-  function renderStorageSub() {
-    /*
-     * 只做用量统计，**不提供清空全部数据**。
-     * 原先那个一键 clear() 就摆在面板底部，离谱的地方在于：
-     * 旁边写的是「用量统计」，用户的注意力在「看看占了多少」，
-     * 结果底下是个全清按钮。已按需求删除该功能。
-     */
-    return subShell('存储用量', '本机数据按模块的占用概览。',
-      '<div class="st-storage-head">' +
-        '<p class="ins-vault-note" data-mq-set-storage-quota>正在扫描…</p>' +
-        '<button type="button" class="st-foot-btn" data-mq-set-storage-refresh>重新扫描</button>' +
-      '</div>' +
-      '<div class="st-form-card">' +
-        '<div class="ins-meter-list" data-mq-set-storage-groups><p class="mi-empty-hint">正在计算…</p></div>' +
-      '</div>' +
-      '<div class="ins-storage-images" data-mq-set-storage-images></div>' +
-      '<div class="mi-btn-row" data-mq-set-storage-img-actions hidden>' +
-        '<button type="button" class="st-action-btn" data-mq-set-storage-img-compress>一键压缩图片</button>' +
-        '<button type="button" class="st-action-btn" data-mq-set-storage-img-clear>清空聊天图片</button>' +
-      '</div>'
     );
   }
 
@@ -3493,124 +3461,6 @@
      */
     state.subView = null;
     render({ skipContextUsage: true });
-  }
-
-  /* 原先这里有一个只服务 storage 的 scheduleStorageSubRefresh。
-     现在三种「延后填充」（api-chat / chat-defaults / storage）统一走
-     scheduleSubViewHydrate + applySubViewHydrate，单独这一个已无调用点，
-     留着只会让人以为 storage 走的是另一套逻辑。 */
-
-  /* 图片清理动作：点击时按需收集（不缓存 blob 引用），操作完成后刷新统计 */
-  function storageImgActionsBusy(busy) {
-    if (!pageEl) return;
-    pageEl.querySelectorAll('[data-mq-set-storage-img-compress],[data-mq-set-storage-img-clear]').forEach(function (b) {
-      b.disabled = !!busy;
-    });
-  }
-
-  function withStorageImages(label, run) {
-    var su = global.miyaStorageUsage;
-    if (!su || typeof su.collectChatMediaImages !== 'function') return;
-    storageImgActionsBusy(true);
-    su.collectChatMediaImages().then(function (list) {
-      /* 注意：collectChatMediaImages 返回的是 { items, totalBytes, count }，
-         没有 length 字段 —— 用 list.count 判断，别写 list.length */
-      if (!list || !list.count) { toast('没有可处理的聊天图片'); return null; }
-      return run(su, list);
-    }).catch(function () {
-      toast(label + '失败');
-    }).then(function () {
-      storageImgActionsBusy(false);
-      refreshStorageSub();
-    });
-  }
-
-  function compressStorageImages() {
-    withStorageImages('压缩', function (su, list) {
-      toast('正在压缩 ' + list.count + ' 张图片…');
-      return su.compressAllChatImages(list.items).then(function (res) {
-        toast('已压缩 ' + ((res && res.ok) || 0) + ' 张，节省 ' + su.formatBytes((res && res.saved) || 0));
-      });
-    });
-  }
-
-  function clearStorageImages() {
-    withStorageImages('清空', function (su, list) {
-      return dialog({
-        mode: 'confirm',
-        title: '清空聊天图片',
-        message: '将删除全部 ' + list.count + ' 张聊天图片（聊天记录本身不受影响），不可恢复。是否继续？',
-        confirmText: '清空',
-        cancelText: '取消'
-      }).then(function (ok) {
-        if (!ok) return null;
-        return su.deleteAllChatImages(list.items).then(function (res) {
-          toast('已删除 ' + ((res && res.ok) || 0) + ' 张图片');
-        });
-      });
-    });
-  }
-
-  function refreshStorageSub() {
-    if (!pageEl || state.subView !== 'storage') return;
-    var su = global.miyaStorageUsage;
-    if (!su) return;
-    /*
-     * collect(true) 是异步的，耗时期间任何一次重绘（后台上下文统计、
-     * store 更新触发的 scheduleRender）都会把子视图 DOM 整个换掉。
-     * 所以所有节点引用都在回调里**重新查询**，绝不使用进入函数时的
-     * 旧引用 —— 旧引用会把扫描结果写进已成孤儿的节点，表现就是
-     * 「点了重新扫描没反应」。图片分支同理（它还有第二层异步）。
-     */
-    su.collect(true).then(function (ctx) {
-      if (!pageEl || state.subView !== 'storage') return;
-      var groupsEl = pageEl.querySelector('[data-mq-set-storage-groups]');
-      var quotaEl = pageEl.querySelector('[data-mq-set-storage-quota]');
-      var imagesEl = pageEl.querySelector('[data-mq-set-storage-images]');
-      if (!groupsEl) return;
-      var rows = (su.CATALOG || []).map(function (c) {
-        var b = (ctx.groupLs && ctx.groupLs[c.id]) || 0;
-        var pct = ctx.stableTotal > 0 ? Math.round(b / ctx.stableTotal * 100) : 0;
-        return '<div class="ins-meter-row">' +
-          '<div class="ins-meter-label"><span>' + esc(c.title) + '</span><span>' + esc(su.formatBytes(b)) + '</span></div>' +
-          '<div class="ins-meter-bar"><div class="ins-meter-fill" style="width:' + pct + '%"></div></div>' +
-        '</div>';
-      }).join('');
-      groupsEl.innerHTML = rows || '<p class="mi-empty-hint">暂无数据</p>';
-      if (quotaEl) {
-        quotaEl.textContent = ctx.quota > 0
-          ? '小手机本地数据合计 ' + su.formatBytes(ctx.stableTotal) + ' / ' + su.formatBytes(ctx.quota)
-          : '小手机本地数据合计 ' + su.formatBytes(ctx.stableTotal);
-      }
-      if (!imagesEl || typeof su.collectChatMediaImages !== 'function') return;
-      su.collectChatMediaImages().then(function (list) {
-        if (!pageEl || state.subView !== 'storage') return;
-        /* 第二层异步：同样重新查询（第一次查询后仍可能发生重绘） */
-        var imagesEl2 = pageEl.querySelector('[data-mq-set-storage-images]');
-        var actionsEl = pageEl.querySelector('[data-mq-set-storage-img-actions]');
-        if (!imagesEl2) return;
-        if (!list || !list.count) {
-          imagesEl2.innerHTML = '<p class="mi-empty-hint">聊天里还没有本地图片</p>';
-          if (actionsEl) actionsEl.hidden = true;
-          return;
-        }
-        /* 只显示数量与占用；图片清单在点压缩/清空时按需重新收集，
-           不在这里长期持有 blob 引用（几百张图会把内存吃满）。 */
-        imagesEl2.innerHTML = '<p class="ins-field-label ins-field-label--section">聊天图片（' + list.count + ' 张，约 ' + esc(su.formatBytes(list.totalBytes)) + '）</p>' +
-          '<p class="st-form-hint">压缩：转为 JPG（最长边 1280），聊天记录不受影响。清空：删除全部图片，不可恢复。</p>';
-        if (actionsEl) actionsEl.hidden = false;
-      }).catch(function () {
-        if (state.subView !== 'storage' || !pageEl) return;
-        var imagesEl2 = pageEl.querySelector('[data-mq-set-storage-images]');
-        var el = pageEl.querySelector('[data-mq-set-storage-img-actions]');
-        if (imagesEl2) imagesEl2.innerHTML = '';
-        if (el) el.hidden = true;
-      });
-    }).catch(function () {
-      if (!pageEl || state.subView !== 'storage') return;
-      var groupsEl = pageEl.querySelector('[data-mq-set-storage-groups]');
-      if (groupsEl) groupsEl.innerHTML = '<p class="mi-empty-hint">统计失败</p>';
-    });
   }
 
   function render(opts) {
@@ -3807,7 +3657,9 @@
       var subNav = e.target.closest('[data-mq-set-sub]');
       if (subNav) { openSubView(subNav.getAttribute('data-mq-set-sub')); return; }
 
-      /* 子视图内的保存：把表单读出来写进统一配置层 */
+      /* 子视图内的保存入口已移除（对话 API / 语音合成只保留顶栏保存）。
+         这里保留一行兼容处理：若旧缓存页面里还残留该按钮，点了仍能存，
+         而不是掉进「有控件、没事件」的静默失效 —— 那是本项目踩过的坑。 */
       var subSave = e.target.closest('[data-mq-set-sub-save]');
       if (subSave) { saveSubViewForm(subSave.getAttribute('data-mq-set-sub-save')); return; }
 
@@ -3825,10 +3677,6 @@
       }
       if (e.target.closest('#mq-api-fetch')) { fetchChatModels('main'); return; }
       if (e.target.closest('#mq-api2-fetch')) { fetchChatModels('fallback'); return; }
-
-      if (e.target.closest('[data-mq-set-storage-refresh]')) { refreshStorageSub(); return; }
-      if (e.target.closest('[data-mq-set-storage-img-compress]')) { compressStorageImages(); return; }
-      if (e.target.closest('[data-mq-set-storage-img-clear]')) { clearStorageImages(); return; }
 
       var bkExport = e.target.closest('[data-mq-set-backup-export]');
       if (bkExport) {

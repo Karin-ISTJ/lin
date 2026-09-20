@@ -105,8 +105,8 @@ async def enter(pg):
     await pg.wait_for_timeout(600)
     await wait_ready(pg)
     await pg.click('[data-mq-set-sub="api-chat"]')
-    await pg.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
-                               state="attached", timeout=15000)
+    # 子视图底部保存键已移除，改等表单主体出现（接口预设下拉是稳定的锚点）
+    await pg.wait_for_selector('#mq-api-preset-pick', state="attached", timeout=15000)
     await pg.wait_for_timeout(1200)
 
 
@@ -117,7 +117,15 @@ async def back(pg):
 
 
 async def save(pg):
-    await pg.click('[data-mq-set-sub-save="api-chat"]')
+    """保存子视图表单。
+
+    子视图底部那个「保存」（[data-mq-set-sub-save]）已按需求删除，
+    现在 api-chat / api-voice 的**唯一**保存入口是顶栏「保存」：
+    saveForm() 在 state.subView 为 api-chat / api-voice 时会转走
+    saveSubViewForm(state.subView)，与旧按钮**同一条落库链路**。
+    """
+    await pg.evaluate(
+        "() => { var b=document.querySelector('#mq-set-page [data-mq-set-save]'); if (b) b.click(); }")
     await pg.wait_for_timeout(1400)
 
 

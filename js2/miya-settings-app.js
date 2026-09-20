@@ -138,7 +138,7 @@
 
   /* ── 以下整段已删除 ────────────────────────────────────────
    *
-   * 「系统偏好写入 / 通知通道 / 接口预设数组读写 / 存储用量代理 /
+   * 「系统偏好写入 / 通知通道 / 接口预设数组读写 /
    *  URL 归一 / 模型缓存 / 模型下拉填充 / API 表单读写 /
    *  MINIMAX 表单 / 表单同步 / 各面板 render* 」
    *
@@ -146,8 +146,10 @@
    * 它们依赖的 DOM（#miya-st-panel-chat 等）已随设置 App 一起删除。
    * 对应能力已分别迁入：
    *   js2/miya-api-config.js       系统偏好 · 通知通道 · 预设 · 模型缓存 · URL 归一
-   *   js2/miya-storage-usage.js    存储用量采集与清理
    *   js1/miya-chat-contact-settings.js  各子视图的表单渲染
+   *
+   * 【已移除】原「存储用量代理」及其引擎 js2/miya-storage-usage.js
+   * 按需求整体删除，不再有承接方。
    */
 
   function ensureApiPresetsReady() {
@@ -174,8 +176,10 @@
            这里不再映射到任何子视图。旧代码若仍以该 id 调用，会落到下面的
            废弃告警分支，不会静默什么都没发生。 */
         'miya-st-panel-chat-defaults': 'chat-defaults',
-        'miya-st-panel-msg-sound': 'notify',
-        'miya-st-panel-storage': 'storage'
+        'miya-st-panel-msg-sound': 'notify'
+        /* 【已移除】'miya-st-panel-storage': 'storage'
+           存储用量功能整体删除，该 id 不再映射 —— 与 imagegen 同理，
+           落到废弃告警分支而不是静默失败，便于外部调用方尽早发现。 */
       };
       var sub = map[panelId];
       if (sub && global.miyaChatContactSettings) {

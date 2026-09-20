@@ -57,7 +57,6 @@ SUBS = [
     ("api-chat",      "对话 API",     10),
     ("api-voice",     "语音合成",      6),
     ("backup",        "备份与恢复",    3),
-    ("storage",       "存储用量",      1),
     ("notify",        "通知与提示音",  8),
     ("chat-defaults", "聊天默认值",    5),
 ]

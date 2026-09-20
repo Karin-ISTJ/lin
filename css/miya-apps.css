@@ -488,8 +488,9 @@ body.miya-app-open .phone {
   margin-bottom: 8px;
 }
 
-.ins-atelier-panel-desc,
-.ins-vault-note {
+/* 【已移除】.ins-vault-note —— 随「存储用量」面板删除，已无使用方。
+   .ins-atelier-panel-desc 仍在使用（美化 App），故保留本条。 */
+.ins-atelier-panel-desc {
   font-size: 12px;
   line-height: 1.55;
   color: var(--ins-ink-dim);
@@ -1462,8 +1463,6 @@ body.miya-app-open .phone {
   max-width: 420px;
 }
 
-.ins-meter-list { margin-top: 16px; }
-
 .ins-field-label--section {
   font-size: 13px;
   letter-spacing: 0.06em;
@@ -1587,31 +1586,6 @@ body.miya-app-open .phone {
   cursor: pointer;
 }
 
-.ins-meter-row {
-  margin-bottom: 14px;
-}
-
-.ins-meter-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 6px;
-}
-
-.ins-meter-bar {
-  height: 4px;
-  background: rgba(0, 0, 0, 0.08);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.ins-meter-bar i {
-  display: block;
-  height: 100%;
-  width: 40%;
-  background: linear-gradient(90deg, #333333, #111111);
-  border-radius: 2px;
-}
 
 /* ── 共用控件 ── */
 .ins-chip-row {

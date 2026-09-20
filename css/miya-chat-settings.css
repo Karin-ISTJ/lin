@@ -3306,7 +3306,7 @@
 
 /* ── 聊天设置 · 页内子视图 ─────────────────────────────────────
  *
- * API 表单、备份、存储用量这些「独立一页」的内容，
+ * API 表单、备份这些「独立一页」的内容，
  * 用「一段说明 + 卡片堆叠」的骨架，保证翻进去的观感一致。
  *
  * 这里**不再定义** .mi-set-subview__head / __back / __title ——
@@ -3333,16 +3333,8 @@
   margin: 0 0 12px;
 }
 
-.mi-set-subview__actions {
-  display: flex;
-  gap: 10px;
-  padding: 6px 0 calc(20px + env(safe-area-inset-bottom));
-}
-.mi-set-subview__actions .st-action-btn { flex: 1; }
-
 /* 卡片**内部**的操作行（如「接口预设」里的导出 / 导入）。
-   与上面的 __actions 区分开：那是整页页脚的保存按钮，带底部安全区内边距；
-   这里跟在卡片说明文字后面，不该再撑出一截空白，也不能占满整行。 */
+   跟在卡片说明文字后面，不该再撑出一截空白，也不能占满整行。 */
 .mi-set-preset-actions {
   margin-top: 12px;
 }

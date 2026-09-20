@@ -1525,3 +1525,49 @@
 .miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-count {
   color: #bbb;
 }
+
+/* ------------------------------------------------------------------
+ * 绑定联系人 · 失效绑定的清理入口
+ *
+ * 「已失效」卡片以前只能靠「点一下取消勾选」来移除 —— 隐式、难发现，
+ * 且同一个孤立 ID 常被多条词条绑着，逐条打开太费事。
+ * 这里给一个显式的批量清理按钮：只在真有失效绑定时出现。
+ * ------------------------------------------------------------------ */
+.miya-worldbook-app .miya-wb-roles-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.miya-worldbook-app .miya-wb-roles-head .ins-field-label {
+  margin: 0;
+}
+
+.miya-worldbook-app .ins-wb-orphan-purge {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #b4543f;
+  background: rgba(180, 84, 63, 0.08);
+  border: 1px solid rgba(180, 84, 63, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.miya-worldbook-app .ins-wb-orphan-purge:hover {
+  background: rgba(180, 84, 63, 0.16);
+  border-color: rgba(180, 84, 63, 0.55);
+}
+
+.miya-worldbook-app .ins-wb-orphan-purge:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.miya-worldbook-app .ins-wb-orphan-purge[hidden] {
+  display: none;
+}

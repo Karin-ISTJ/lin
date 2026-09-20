@@ -125,10 +125,78 @@
     return Array.from(String(name || '').trim() || '?')[0] || '?';
   }
 
+  /* 「清理失效绑定」按钮的显隐与文案。
+     平时完全隐藏 —— 没有失效绑定时不该占位置、更不该诱导用户去点一个
+     什么都不会发生的按钮。只有真的存在才出现，并把数量写进文案，
+     让用户点之前就知道会影响几条。 */
+  function syncOrphanPurgeUi(count) {
+    var btn = $('miya-wb-orphan-purge');
+    if (!btn) return;
+    if (!count) {
+      btn.hidden = true;
+      btn.textContent = '清理失效绑定';
+      return;
+    }
+    btn.hidden = false;
+    btn.textContent = '清理失效绑定（' + count + '）';
+    btn.title = '把所有词条中指向已删除联系人的绑定一次性移除';
+  }
+
+  function purgeOrphanBindings() {
+    var btn = $('miya-wb-orphan-purge');
+    if (!store || typeof store.purgeOrphanBindings !== 'function') return;
+    /* 先确认：这是**跨词条**的批量写操作，且不可撤销。
+       用户点之前必须知道「会动到别的词条」。 */
+    var keys = (typeof store.orphanRoleKeys === 'function') ? store.orphanRoleKeys() : [];
+    if (!keys.length) { toast('没有失效绑定'); return; }
+    var okGo = window.confirm(
+      '将移除所有词条中指向已删除联系人的绑定：\n\n  ' + keys.join('\n  ') +
+      '\n\n此操作不可撤销，确定继续？');
+    if (!okGo) return;
+    if (btn) btn.disabled = true;
+    store.purgeOrphanBindings().then(function (r) {
+      var n = (r && r.entries) || 0;
+      var b = (r && r.bindings) || 0;
+      /* 清完之后，当前编辑器里那份「原始绑定快照」可能还含已删的 ID。
+         必须把它同步掉，否则用户接着点保存，collectRoleIdsSafe 会把
+         刚清掉的 ID 又当成「原本就绑着」写回去 —— 白清一场。 */
+      editingBoundRoleIds = (editingBoundRoleIds || []).filter(function (id) {
+        return keys.indexOf(String(id)) < 0;
+      });
+      if (editingId) {
+        var cur = store.getEntry(editingId);
+        if (cur) {
+          var rolesHost = $('miya-wb-roles-host');
+          if (rolesHost) rolesHost.innerHTML = renderRolePicker(cur.boundRoleIds || []);
+        }
+      } else {
+        /* 新建态：面板上的候选卡直接重绘，孤儿卡应已消失 */
+        var scBtn = $('miya-worldbook-app').querySelector('[data-wb-scope].is-active');
+        var sc = scBtn ? scBtn.getAttribute('data-wb-scope') : 'global';
+        var wrap = $('miya-wb-roles-wrap');
+        if (wrap && sc === 'local') {
+          var host = $('miya-wb-roles-host');
+          if (host) host.innerHTML = renderRolePicker(collectRoleIdsSafe());
+        }
+      }
+      toast(n ? '已清理 ' + b + ' 处失效绑定，涉及 ' + n + ' 条词条' : '没有需要清理的失效绑定');
+      renderList();
+      if (btn) btn.disabled = false;
+    }).catch(function () {
+      toast('清理失败，请重试');
+      if (btn) btn.disabled = false;
+    });
+  }
+
   function renderRolePicker(selectedIds) {
     var picked = Array.isArray(selectedIds) ? selectedIds.map(String) : [];
     var set = new Set(picked);
     var rows = store.resolveAvailableRoles ? store.resolveAvailableRoles() : [];
+    /* 失效绑定计数：用于决定「清理失效绑定」按钮显不显示、显示什么。
+       这里直接数 rows 里的 orphan —— 与面板看到的是同一份数据，
+       不会出现「按钮说有 3 个、面板上只看到 2 张卡」这种自相矛盾。 */
+    var orphanCount = rows.filter(function (r) { return r && r.source === 'orphan'; }).length;
+    syncOrphanPurgeUi(orphanCount);
     if (!rows.length) {
       return '<p class="ins-wb-role-empty">请先在「联系人」建档；不选任何角色则为全局生效。</p>';
     }
@@ -927,6 +995,8 @@
     $('miya-wb-editor-back').addEventListener('click', closeEditor);
     $('miya-wb-save').addEventListener('click', saveEditor);
     $('miya-wb-delete').addEventListener('click', deleteEditing);
+    var purgeBtn = $('miya-wb-orphan-purge');
+    if (purgeBtn) purgeBtn.addEventListener('click', purgeOrphanBindings);
 
     app.querySelectorAll('[data-wb-filter]').forEach(function (btn) {
       btn.addEventListener('click', function () {

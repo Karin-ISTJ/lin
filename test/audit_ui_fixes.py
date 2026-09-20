@@ -3,8 +3,9 @@
 """
 UI 遗留项修复验证：
 【1】语音合成模型下拉：内置清单可选、切换保存落盘、清单外值保值
-【2】存储图片区：空态/有图态统计与按钮、一键清空真实生效
-【3】多选 JSON 备份：toast 提示只导入第一个
+【2】多选 JSON 备份：toast 提示只导入第一个
+
+注：原「存储图片区」场景已随聊天设置的存储用量功能下线一并移除。
 """
 import asyncio, json
 from playwright.async_api import async_playwright
@@ -106,9 +107,11 @@ async def main():
               str(r1.get("options")))
 
         await pg.select_option("#mq-voice-model", "speech-02-hd")
+        # 子视图底部保存键已删除：api-voice 现在唯一的保存入口是顶栏「保存」，
+        # saveForm() 会自动转走 saveSubViewForm('api-voice')。
         await pg.evaluate("""
         () => new Promise(res => {
-          document.querySelector('[data-mq-set-sub-save="api-voice"]').click();
+          document.querySelector('#mq-set-page [data-mq-set-save]').click();
           setTimeout(res, 500);
         })
         """)
@@ -133,88 +136,9 @@ async def main():
               "speech-99-custom" in r3["values"] and r3["value"] == "speech-99-custom",
               f"selected={r3['value']}")
 
-        # ========== 场景 2：存储图片区 ==========
-        print("\n【2】存储图片区统计与清理")
-        await open_sub(pg, "storage")
-        empty = await pg.evaluate("""
-        () => {
-          var img = document.querySelector('[data-mq-set-storage-images]');
-          var act = document.querySelector('[data-mq-set-storage-img-actions]');
-          return { text: img ? img.textContent.trim() : null, actionsHidden: act ? act.hidden : null };
-        }
-        """)
-        check("空态文案 + 按钮区隐藏",
-              empty.get("text") == "聊天里还没有本地图片" and empty.get("actionsHidden") is True,
-              str(empty))
-
-        # 造一张被消息引用的图片：走 store 的正式路径（blob 落 IDB + 消息入 meta），
-        # 不能用 IDB 直写 —— collectMessageImageBlobKeys 读的是 store 的内存 meta 快照。
-        await pg.evaluate("""
-        async () => {
-          await window.miyaChatStore.init();
-          var canvas = document.createElement('canvas');
-          canvas.width = 64; canvas.height = 64;
-          var c = canvas.getContext('2d');
-          c.fillStyle = '#88a'; c.fillRect(0, 0, 64, 64);
-          var blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-          var blobId = await window.miyaChatStore.storeMediaBlob(blob, 'chat');
-          await window.miyaChatStore.addMessage('chat_e2e', {
-            id: 'm_img_ui2', type: 'image', sender: 'me',
-            imageDataKey: blobId, createdAt: Date.now(), updatedAt: Date.now()
-          });
-          return blobId;
-        }
-        """)
-        await pg.evaluate("() => { document.querySelector('[data-mq-set-storage-refresh]').click(); }")
-        await pg.wait_for_timeout(1500)
-        withimg = await pg.evaluate("""
-        () => {
-          var img = document.querySelector('[data-mq-set-storage-images]');
-          var act = document.querySelector('[data-mq-set-storage-img-actions]');
-          return { text: img ? img.textContent.trim() : null, actionsHidden: act ? act.hidden : null };
-        }
-        """)
-        check("有图态：显示张数/占用 + 按钮区出现",
-              "聊天图片（1 张" in (withimg.get("text") or "") and withimg.get("actionsHidden") is False,
-              str(withimg))
-
-        # 一键清空（确认框 stub 放行——清空流程只有一次确认）
-        await pg.evaluate("""
-        () => {
-          if (window.miyaDialog) {
-            window.miyaDialog.confirm = function(){ return Promise.resolve(true); };
-          }
-          document.querySelector('[data-mq-set-storage-img-clear]').click();
-        }
-        """)
-        await pg.wait_for_timeout(1500)
-        cleared = await pg.evaluate("""
-        async () => {
-          var keys = await new Promise((resolve) => {
-            var req = indexedDB.open('miya-chat-media', 1);
-            req.onsuccess = () => {
-              var db = req.result;
-              if (!db.objectStoreNames.contains('blobs')) { resolve([]); return; }
-              var tx = db.transaction('blobs', 'readonly');
-              var rq = tx.objectStore('blobs').getAllKeys();
-              rq.onsuccess = () => resolve(rq.result || []);
-              rq.onerror = () => resolve([]);
-            };
-          });
-          var img = document.querySelector('[data-mq-set-storage-images]');
-          var act = document.querySelector('[data-mq-set-storage-img-actions]');
-          return { keysLeft: keys, text: img ? img.textContent.trim() : null,
-                   actionsHidden: act ? act.hidden : null };
-        }
-        """)
-        check("清空后 IDB 图片记录删除", len(cleared.get("keysLeft") or []) == 0,
-              str(cleared.get("keysLeft")))
-        check("清空后回到空态 + 按钮区隐藏",
-              cleared.get("text") == "聊天里还没有本地图片" and cleared.get("actionsHidden") is True,
-              str(cleared.get("text")))
-
-        # ========== 场景 3：多选 JSON 提示 ==========
-        print("\n【3】多选 JSON 备份导入提示")
+        # ========== 场景 2：多选 JSON 提示 ==========
+        # （原「存储图片区统计与清理」场景已随存储用量功能下线而移除）
+        print("\n【2】多选 JSON 备份导入提示")
         r3b = await pg.evaluate("""
         async () => {
           window.__toasts = [];

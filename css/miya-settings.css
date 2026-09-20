@@ -1290,14 +1290,6 @@
   transform: scale(0.98);
 }
 
-.miya-settings-app .st-storage-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
 .miya-settings-app .st-foot-btn {
   padding: 8px 14px;
   border-radius: 12px;
@@ -1307,40 +1299,6 @@
   font-size: 12px;
   color: var(--st-text-secondary);
   cursor: pointer;
-}
-
-.miya-settings-app .ins-meter-row {
-  margin-bottom: 14px;
-}
-
-.miya-settings-app .ins-meter-label {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: var(--st-text-secondary);
-  margin-bottom: 6px;
-}
-
-.miya-settings-app .ins-meter-bar {
-  height: 4px;
-  background: var(--st-border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.miya-settings-app .ins-meter-bar i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--st-accent), #5AC8FA);
-  border-radius: 2px;
-}
-
-.miya-settings-app .ins-vault-note {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: var(--st-text-tertiary);
-  line-height: 1.5;
 }
 
 .miya-settings-app .ins-chip {

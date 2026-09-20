@@ -288,7 +288,9 @@ async def main():
                拉回聊天设置，与现行的 App 化改造相悖。 */
             ['miya-st-panel-imagegen', null],
             ['miya-st-panel-msg-sound', '通知与提示音'],
-            ['miya-st-panel-storage', '存储用量']
+            /* 存储用量功能已整体删除：老 id 同样落到废弃告警分支，
+               期望值与 imagegen 一致 —— 不跳转、不报错。 */
+            ['miya-st-panel-storage', null]
           ];
           for (var i = 0; i < cases.length; i++) {
             window.miyaSettingsApp.open(cases[i][0]);
@@ -321,8 +323,8 @@ async def main():
               r6.get("miya-st-panel-imagegen") is None, str(r6.get("miya-st-panel-imagegen")))
         check("老面板名 'miya-st-panel-msg-sound' → 通知与提示音",
               r6.get("miya-st-panel-msg-sound") == "通知与提示音", str(r6.get("miya-st-panel-msg-sound")))
-        check("老面板名 'miya-st-panel-storage' → 存储用量",
-              r6.get("miya-st-panel-storage") == "存储用量", str(r6.get("miya-st-panel-storage")))
+        check("老面板名 'miya-st-panel-storage' → 不跳转（存储用量已整体删除）",
+              r6.get("miya-st-panel-storage") is None, str(r6.get("miya-st-panel-storage")))
 
         print("\n【7】桌面「生图」图标保留，且能独立打开生图 App")
         r7 = await pg.evaluate("""

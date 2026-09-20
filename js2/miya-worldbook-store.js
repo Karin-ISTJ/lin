@@ -574,6 +574,67 @@
       .map(function (id) { return map[id]; });
   }
 
+  /* 失效绑定的键集合（联系人档案里查不到的那些 ID）。
+     口径与 resolveAvailableRoles 保持一致：凡是不在「档案候选」里的绑定
+     都算失效。这样 purge 与面板显示永远说的是同一件事。 */
+  function orphanRoleKeys() {
+    var alive = Object.create(null);
+    var cs = global.miyaContactsStore;
+    if (cs && typeof cs.resolveRolesForWorldbook === 'function') {
+      try {
+        cs.resolveRolesForWorldbook().forEach(function (row) {
+          var k = String((row && row.roleId) || '').trim();
+          if (k) alive[k] = true;
+        });
+      } catch (eAlive) {}
+    }
+    var out = [];
+    var seen = Object.create(null);
+    listEntries().forEach(function (e) {
+      (e.boundRoleIds || []).forEach(function (id) {
+        var k = String(id || '').trim();
+        if (!k || seen[k] || alive[k]) return;
+        seen[k] = true;
+        out.push(k);
+      });
+    });
+    return out;
+  }
+
+  /* 一次清掉**所有词条**里的失效绑定。
+     为什么需要它：同一个孤立 ID 常被多条词条绑着，逐条打开去取消太费事；
+     而且面板上那三张卡逐张点掉后，用户并不确定「是不是真的清干净了」。
+     返回受影响条目数，便于 UI 给出确切反馈。 */
+  function purgeOrphanBindings() {
+    var victims = Object.create(null);
+    orphanRoleKeys().forEach(function (k) { victims[k] = true; });
+    if (!Object.keys(victims).length) return Promise.resolve({ entries: 0, bindings: 0 });
+    var st = readState();
+    var touched = 0;
+    var removed = 0;
+    st.entries.forEach(function (e) {
+      var roles = Array.isArray(e && e.boundRoleIds) ? e.boundRoleIds : null;
+      if (!roles || !roles.length) return;
+      var kept = roles.filter(function (id) {
+        var k = String(id || '').trim();
+        if (k && victims[k]) { removed++; return false; }
+        return true;
+      });
+      if (kept.length !== roles.length) { e.boundRoleIds = kept; touched++; }
+    });
+    if (!touched) return Promise.resolve({ entries: 0, bindings: 0 });
+    return persist(st).then(function () {
+      /* 绑角数是惰性缓存的，绑定变了必须失效，否则列表上的角标会停在旧值 */
+      try {
+        if (global.miyaContactsStore &&
+            typeof global.miyaContactsStore.invalidateWbCountMap === 'function') {
+          global.miyaContactsStore.invalidateWbCountMap();
+        }
+      } catch (eInv) {}
+      return { entries: touched, bindings: removed };
+    });
+  }
+
   global.miyaWorldbookStore = {
     STORE_KEY: STORE_KEY,
     DEFAULT_GROUP_ID: DEFAULT_GROUP_ID,
@@ -588,6 +649,8 @@
     getState: readState,
     listGroups: listGroups,
     listEntries: listEntries,
+    orphanRoleKeys: orphanRoleKeys,
+    purgeOrphanBindings: purgeOrphanBindings,
     /* —— 分组视图接口（UI 唯一入口，未分组被封装在其内部）—— */
     listRealGroups: listRealGroups,
     listVisibleGroups: listVisibleGroups,

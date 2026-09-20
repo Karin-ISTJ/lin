@@ -145,8 +145,8 @@ async def enter(pg):
     await pg.wait_for_timeout(600)
     await wait_ready(pg)
     await pg.click('[data-mq-set-sub="api-chat"]')
-    await pg.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
-                               state="attached", timeout=15000)
+    # 子视图底部保存键已移除，改等表单主体出现（接口预设下拉是稳定的锚点）
+    await pg.wait_for_selector('#mq-api-preset-pick', state="attached", timeout=15000)
     await pg.wait_for_timeout(1200)
 
 
@@ -157,7 +157,14 @@ async def back(pg):
 
 
 async def save(pg):
-    await pg.click('[data-mq-set-sub-save="api-chat"]')
+    """保存子视图表单 —— 走顶栏「保存」。
+
+    子视图底部那个「保存」（[data-mq-set-sub-save]）已按需求删除；
+    api-chat / api-voice 现在唯一的保存入口是顶栏，
+    saveForm() 会自动转走 saveSubViewForm()，落库链路不变。
+    """
+    await pg.evaluate(
+        "() => { var b=document.querySelector('#mq-set-page [data-mq-set-save]'); if (b) b.click(); }")
     await pg.wait_for_timeout(1400)
 
 
@@ -182,7 +189,9 @@ async def make_presets(pg):
       var p = document.getElementById('mq-set-page');
       function set(id, v){ var e = p.querySelector('#'+id); if (e) e.value = v; }
       set('mq-api-base', c.ab); set('mq-api-key', c.ak);
-      p.querySelector('[data-mq-set-sub-save="api-chat"]').click();
+      /* 子视图底部保存键已删除 —— 改点顶栏「保存」，
+         saveForm() 在 api-chat 子视图内会转走 saveSubViewForm()。 */
+      p.querySelector('[data-mq-set-save]').click();
       await new Promise(function(r){ setTimeout(r, 600); });
       set('mq-api-preset-name', '线路A');
       p.querySelector('#mq-api-preset-save').click();
@@ -309,8 +318,8 @@ async def main():
         await pg2.wait_for_timeout(900)
         await wait_ready(pg2)
         await pg2.click('[data-mq-set-sub="api-chat"]')
-        await pg2.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
-                                    state="attached", timeout=15000)
+        # 子视图底部保存键已移除，改等表单主体出现
+        await pg2.wait_for_selector('#mq-api-preset-pick', state="attached", timeout=15000)
         await pg2.wait_for_timeout(1600)
         f6 = await pg2.evaluate("""
         (function(){
@@ -338,8 +347,9 @@ async def main():
             "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
         check("保存前下拉有选中项", pick_before == "线路B", str(pick_before))
 
-        # ★ 关键：点的是**顶部导航栏**那个「保存」（data-mq-set-save），
-        #   不是子视图表单底部那个（data-mq-set-sub-save）。
+        # ★ 关键：点的是**顶部导航栏**那个「保存」（data-mq-set-save）。
+        #   子视图表单底部那个（data-mq-set-sub-save）已按需求删除，
+        #   顶栏现在是 api-chat / api-voice 的唯一保存入口。
         #   它会走 saveForm() → scheduleRender({fromStore:true}) → render()，
         #   而 render() 的子视图分支只换 innerHTML、不做 hydrate。
         await pg.evaluate(
@@ -365,7 +375,7 @@ async def main():
         check("★ 返回重进后列表依然完整", opts_re == ["", "线路A", "线路B"], str(opts_re))
 
         # ══════════════════════════════════════════════════════════
-        print("\n【7】子视图表单底部「保存」同样不得清空预设列表")
+        print("\n【7】子视图内保存（顶栏）同样不得清空预设列表")
         pick7 = await pg.evaluate(
             "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
         if pick7 != "线路B":
@@ -374,7 +384,7 @@ async def main():
         await save(pg)
         opts7 = await pg.evaluate(
             "() => Array.from(document.querySelectorAll('#mq-api-preset-pick option')).map(o=>o.value)")
-        check("★ 点子视图「保存」后列表仍在", opts7 == ["", "线路A", "线路B"], str(opts7))
+        check("★ 子视图内点顶栏「保存」后列表仍在", opts7 == ["", "线路A", "线路B"], str(opts7))
         pick7b = await pg.evaluate(
             "() => { var e=document.querySelector('#mq-api-preset-pick'); return e?e.value:null; }")
         check("★ 选中项仍是线路B", pick7b == "线路B", str(pick7b))
@@ -395,8 +405,8 @@ async def main():
         })()""")
         await wait_ready(pg)
         await pg.click('[data-mq-set-sub="api-chat"]')
-        await pg.wait_for_selector('[data-mq-set-sub-save="api-chat"]',
-                                   state="attached", timeout=15000)
+        # 子视图底部保存键已移除，改等表单主体出现
+        await pg.wait_for_selector('#mq-api-preset-pick', state="attached", timeout=15000)
         # ★ 0ms 同步采样：不等任何异步 hydrate。
         # 若渲染时没带上缓存选项，此刻下拉必然只有占位项
         # （ensureReady 走 IndexedDB 是宏任务，不可能已完成）。

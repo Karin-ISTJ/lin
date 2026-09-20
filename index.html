@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-15">
+  <meta name="miya-sw-build" content="sw-18">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=52" type="image/png">
@@ -32,11 +32,11 @@
   <link rel="stylesheet" href="css/miya-desk-wg-2x2.css?v=10">
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=5">
   <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=4">
-  <link rel="stylesheet" href="css/miya-apps.css?v=49">
+  <link rel="stylesheet" href="css/miya-apps.css?v=50">
   <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=28">
   <link rel="stylesheet" href="css/miya-vault.css?v=5">
-  <link rel="stylesheet" href="css/miya-settings.css?v=35">
-  <link rel="stylesheet" href="css/miya-worldbook.css?v=13">
+  <link rel="stylesheet" href="css/miya-settings.css?v=36">
+  <link rel="stylesheet" href="css/miya-worldbook.css?v=14">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=2">
   <link rel="stylesheet" href="css/miya-contacts.css?v=6">
   <link rel="stylesheet" href="css/miya-chat.css?v=62">
@@ -44,7 +44,7 @@
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=5">
   <link rel="stylesheet" href="css/miya-chat-ins.css?v=52">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=1">
-  <link rel="stylesheet" href="css/miya-chat-settings.css?v=49">
+  <link rel="stylesheet" href="css/miya-chat-settings.css?v=51">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=10">
   <link rel="stylesheet" href="css/miya-offline-card.css?v=5">
@@ -590,7 +590,7 @@
 
     它原先承载的 6 个面板（对话/语音 API、聊天默认值、提示音、占用统计、
     通知预览、备份与恢复）全部并入「联系人聊天设置」页的子视图，
-    数据层则拆成了 js2/miya-api-config.js / miya-backup.js / miya-storage-usage.js，
+    数据层则拆成了 js2/miya-api-config.js / miya-backup.js，
     生图面板独立成 js2/miya-imagegen-app.js 的全屏页。
 
     「我的」页齿轮入口同批删除（见 js1/miya-chat-app.js 的 buildMineMenuHtml）。
@@ -800,7 +800,18 @@
               </div>
             </div>
             <div id="miya-wb-roles-wrap" hidden>
-              <p class="ins-field-label">绑定联系人</p>
+              <div class="miya-wb-roles-head">
+                <p class="ins-field-label">绑定联系人</p>
+                <!-- 「一键清理失效绑定」：只在真的存在失效绑定时才显示。
+                     为什么需要显式按钮：失效绑定以前只有「点一下取消勾选」这条
+                     隐式路径 —— 用户面对一张标着「已失效」的卡，心理预期是
+                     **删掉**它，不是切换选中态。而且同一个孤立 ID 往往被多条
+                     词条绑着，逐条打开去取消太费事。
+                     这个按钮一次清掉全部词条里的失效绑定。 -->
+                <button type="button" class="ins-wb-orphan-purge" id="miya-wb-orphan-purge" hidden>
+                  清理失效绑定
+                </button>
+              </div>
               <div id="miya-wb-roles-host"></div>
             </div>
             <label class="ins-field-label" for="miya-wb-field-group">所属分卷</label>
@@ -3395,7 +3406,6 @@
   <script defer src="js2/miya-storage.js?v=17"></script>
   <script defer src="js2/miya-toast.js?v=1"></script>
   <script defer src="js2/miya-api-config.js?v=101"></script>
-  <script defer src="js2/miya-storage-usage.js?v=3"></script>
   <script defer src="js2/miya-backup.js?v=4"></script>
   <script defer src="js2/miya-perf.js?v=3"></script>
   <script defer src="js2/miya-token.js?v=1"></script>
@@ -3413,7 +3423,7 @@
   <script defer src="js2/miya-image-gen-dict.js?v=1"></script>
   <script defer src="js2/miya-image-gen.js?v=15"></script>
   <script defer src="js2/miya-imagegen-app.js?v=1"></script>
-  <script defer src="js2/miya-settings-app.js?v=99"></script>
+  <script defer src="js2/miya-settings-app.js?v=100"></script>
   <script defer src="js1/miya-contacts-store.js?v=3"></script>
   <script defer src="js1/miya-contacts-relationship-store.js?v=2"></script>
   <script defer src="js2/miya-gbk-decode.js?v=1"></script>
@@ -3422,10 +3432,10 @@
   <script defer src="js2/miya-tavern-card-import.js?v=5"></script>
   <script defer src="js1/miya-contacts-app.js?v=12"></script>
   <script defer src="js2/miya-worldbook-st.js?v=12"></script>
-  <script defer src="js2/miya-worldbook-store.js?v=18"></script>
+  <script defer src="js2/miya-worldbook-store.js?v=19"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=8"></script>
   <script defer src="js2/miya-worldbook-prompt.js?v=20"></script>
-  <script defer src="js2/miya-worldbook-app.js?v=31"></script>
+  <script defer src="js2/miya-worldbook-app.js?v=32"></script>
   <script defer src="js1/miya-chat-global-settings.js?v=8"></script>
   <script defer src="js1/miya-chat-store.js?v=69"></script>
   <script defer src="js1/miya-chat-dynamic-avatar.js?v=4"></script>
@@ -3475,7 +3485,7 @@
   <script defer src="js1/miya-chat-app-beautify-source-ref.js?v=4"></script>
   <script defer src="js1/miya-chat-app-beautify.js?v=6"></script>
   <script defer src="js1/miya-chat-me.js?v=28"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=92"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=94"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=4"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=2"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=4"></script>
