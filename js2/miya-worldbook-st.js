@@ -450,13 +450,35 @@
 
 
   /**
-   * 同名 group：默认只保留 groupWeight 最高的一条；groupOverride 可并列保留
+   * 同名 group：默认只保留 groupWeight 最高的一条；groupOverride 可并列保留。
+   *
+   * 【常驻豁免】constant === true 的词条**不参与分组互斥**，一律保留。
+   *
+   * 为什么必须豁免：
+   *   group 是 ST 世界书的字段，同组语义是「同一场景的互斥变体，只挑一条」——
+   *   这是 ST 的正当玩法。但 Miya 的「常驻」（constant）表达的是**无条件注入**：
+   *   用户把它设成常驻，意思就是「这条一定得在」。两套语义冲突时，常驻优先。
+   *
+   *   历史问题：一批从 ST 导入的常驻词条恰好共享同一个 group（ST 里很常见），
+   *   于是被这里按 groupWeight 压成一条，其余静默消失 —— 用户在世界书页
+   *   明明全部启用，实际注入却只剩一条，且**没有任何提示**。
+   *   更隐蔽的是：若用户后来把某条通过「强制绑定」注入，那条会因为绕过
+   *   本函数而出现，让人误以为「必须绑定才生效」，把根因彻底带偏。
+   *
+   * 返回值改为 { entries, dropped }：被互斥挤掉的条目要记账，
+   * 否则「命中数比预期少」永远只能靠猜。
    */
   function applyGroupScoring(entries) {
     var list = entries || [];
     var groups = {};
     var free = [];
     list.forEach(function (e) {
+      if (!e) return;
+      /* 常驻豁免：不分组、不参与互斥 */
+      if (e.constant === true) {
+        free.push(e);
+        return;
+      }
       var g = String((e && e.group) || '').trim();
       if (!g) {
         free.push(e);
@@ -466,20 +488,22 @@
       groups[g].push(e);
     });
     var winners = free.slice();
+    var dropped = [];
     Object.keys(groups).forEach(function (g) {
       var arr = groups[g].slice().sort(function (a, b) {
         var aw = Number(a.groupWeight) || 100;
         var bw = Number(b.groupWeight) || 100;
         if (bw !== aw) return bw - aw;
-        return (Number(b.order) || 0) - (Number(a.order) || 0);
+        return (Number(a.order) || 0) - (Number(b.order) || 0);
       });
       var top = arr[0];
       winners.push(top);
       arr.slice(1).forEach(function (e) {
         if (e.groupOverride) winners.push(e);
+        else dropped.push({ id: e.id, name: e.name, group: g });
       });
     });
-    return winners;
+    return { entries: winners, dropped: dropped };
   }
 
   /**
@@ -611,9 +635,15 @@
       return true;
     });
 
-    /* 2) 同组互斥（groupWeight / groupOverride） */
-    var filtered = applyGroupScoring(survived);
+    /* 2) 同组互斥（groupWeight / groupOverride）
+       常驻词条豁免互斥（见 applyGroupScoring 注释）。
+       被互斥挤掉的条目记进 groupDropped，最后与预算丢弃合并上报 ——
+       以前这里是个静默的黑洞：丢了不记账，用户只能靠猜。 */
+    var groupRes = applyGroupScoring(survived);
+    var filtered = groupRes.entries;
+    var groupDropped = groupRes.dropped || [];
     debug.afterGroup = filtered.length;
+    debug.groupRejected = groupDropped.length;
 
     /* 3) token 预算
        ---------------------------------------------------------------
@@ -627,7 +657,13 @@
 
     return {
       selected: bud.entries,
-      dropped: bud.dropped,
+      /* 分组互斥丢弃 + 预算丢弃，统一上报。
+         两类原因都在 dropped 里带 kind 字段，面板可据此分别措辞。 */
+      dropped: groupDropped.map(function (d) {
+        return { id: d.id, name: d.name, group: d.group, kind: 'group' };
+      }).concat((bud.dropped || []).map(function (d) {
+        return { id: d.id, name: d.name, tokens: d.tokens, kind: 'budget' };
+      })),
       usedTokens: bud.usedTokens,
       budgetTokens: bud.budgetTokens,
       debug: debug
@@ -640,7 +676,9 @@
   function runPipeline(entries, input) {
     input = input || {};
     var act = activateEntries(entries, input);
-    var filtered = applyGroupScoring(act.activated || []);
+    var groupRes = applyGroupScoring(act.activated || []);
+    var filtered = groupRes.entries;
+    var groupDropped = groupRes.dropped || [];
     /* 未配置预算 → 不裁剪，理由见 applyStDecoration 内注释 */
     var budget = input.tokenBudget != null ? input.tokenBudget : input.budget;
     var bud = applyTokenBudget(filtered, budget, input);
@@ -648,7 +686,11 @@
     return {
       activated: act.activated,
       selected: bud.entries,
-      dropped: bud.dropped,
+      dropped: groupDropped.map(function (d) {
+        return { id: d.id, name: d.name, group: d.group, kind: 'group' };
+      }).concat((bud.dropped || []).map(function (d) {
+        return { id: d.id, name: d.name, tokens: d.tokens, kind: 'budget' };
+      })),
       usedTokens: bud.usedTokens,
       budgetTokens: bud.budgetTokens,
       buckets: buckets,

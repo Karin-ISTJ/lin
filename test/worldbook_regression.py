@@ -473,6 +473,80 @@ console.log('\n\u3010E\u3011token \u9884\u7b97\uff1a\u672a\u914d\u7f6e\u4e0d\u5f
   })();
 })();
 
+/* ──────────────────────────────────────────────────
+ * F. 常驻词条必须豁免「同名 group 互斥」
+ *
+ * 缺陷现象：一批从 ST 导入的常驻词条（constant:true）恰好共享同一个
+ *           group 字符串，世界书页显示全部启用，实际注入却只剩一条，
+ *           且没有任何提示。用户以为「必须去约会里额外绑定才生效」，
+ *           其实绑定只是绕过了本函数，把根因彻底带偏。
+ *
+ * 根因：applyGroupScoring 按 entry.group 同名归并，只留 groupWeight
+ *       最高的一条。group 是 ST 字段（同场景互斥变体），与 Miya 的
+ *       常驻语义（无条件注入）冲突时应以常驻优先。
+ *
+ * 本节点同时锁住：非常驻词条的互斥行为**必须保留**（那是 ST 的正当语义），
+ *               防止修完变成「互斥彻底失效」。
+ * ────────────────────────────────────────────────── */
+console.log('\n\u3010F\u3011\u5e38\u9a7b\u8bcd\u6761\u8c41\u514d\u540c\u7ec4\u4e92\u65a5');
+(function () {
+  const ON = { scopeMode: 'appointment', promptContext: 'offline' };
+
+  /* F1：3 条常驻 + 同一个 group → 必须全部保留 */
+  const constSameGroup = [
+    mk('C1', 'middle', { key: [], constant: true, group: 'scene' }),
+    mk('C2', 'middle', { key: [], constant: true, group: 'scene' }),
+    mk('C3', 'middle', { key: [], constant: true, group: 'scene' }),
+  ];
+  const rf1 = build(constSameGroup, CTX, ON);
+  ck('F1 \u5e38\u9a7b\u8bcd\u6761\u540c\u7ec4\u4e0d\u4e92\u65a5\uff083 \u6761\u5168\u4fdd\u7559\uff09',
+     has(rf1, 'C1') && has(rf1, 'C2') && has(rf1, 'C3'),
+     'matched=' + ids(rf1));
+
+  /* F2：常驻与非常驻混组 → 常驻全保留，非常驻按互斥取一 */
+  const mixed = [
+    mk('M1', 'middle', { key: ['\u82f9\u679c'], group: 'mix' }),
+    mk('M2', 'middle', { key: ['\u82f9\u679c'], group: 'mix' }),
+    mk('M3', 'middle', { key: [], constant: true, group: 'mix' }),
+  ];
+  const rf2 = build(mixed, '\u82f9\u679c', ON);
+  ck('F2 \u6df7\u7ec4\u4e2d\u5e38\u9a7b\u4fdd\u7559\u3001\u975e\u5e38\u9a7b\u4e92\u65a5',
+     has(rf2, 'M3') && (has(rf2, 'M1') || has(rf2, 'M2')) &&
+     !(has(rf2, 'M1') && has(rf2, 'M2')),
+     'matched=' + ids(rf2));
+
+  /* F3：非常驻同组互斥行为必须保留（防修过头） */
+  const keyedSameGroup = [
+    mk('K1', 'middle', { key: ['\u82f9\u679c'], group: 'sc' }),
+    mk('K2', 'middle', { key: ['\u82f9\u679c'], group: 'sc' }),
+    mk('K3', 'middle', { key: ['\u82f9\u679c'], group: 'sc' }),
+  ];
+  const rf3 = build(keyedSameGroup, '\u82f9\u679c', ON);
+  ck('F3 \u975e\u5e38\u9a7b\u540c\u7ec4\u4ecd\u4e92\u65a5\uff08ST \u8bed\u4e49\u4fdd\u7559\uff09',
+     rf3.matched.filter(e => ['K1', 'K2', 'K3'].indexOf(e.id) >= 0).length === 1,
+     'matched=' + ids(rf3));
+
+  /* F4：互斥丢弃必须记账（kind='group'）—— 曾经静默 */
+  const dropped = (rf3.budget && rf3.budget.dropped) || [];
+  const groupKind = dropped.filter(d => d && d.kind === 'group');
+  ck('F4 \u4e92\u65a5\u4e22\u5f03\u5df2\u8bb0\u8d26\uff08kind=group\uff09',
+     groupKind.length === 2, 'dropped=' + JSON.stringify(groupKind.map(d => d.name)));
+
+  /* F5：groupOverride 仍可并列保留 */
+  const ovr = [
+    mk('O1', 'middle', { key: ['\u82f9\u679c'], group: 'ov', groupWeight: 200 }),
+    mk('O2', 'middle', { key: ['\u82f9\u679c'], group: 'ov', groupOverride: true }),
+  ];
+  const rf5 = build(ovr, '\u82f9\u679c', ON);
+  ck('F5 groupOverride \u4ecd\u53ef\u5e76\u5217\u4fdd\u7559',
+     has(rf5, 'O1') && has(rf5, 'O2'), 'matched=' + ids(rf5));
+
+  /* F6：线上对照 —— 常驻豁免在线上同样生效，不存在线上线下分叉 */
+  const rf6 = build(constSameGroup, CTX, { promptContext: 'online' });
+  ck('F6 \u7ebf\u4e0a\u5bf9\u7167\uff1a\u5e38\u9a7b\u540c\u6837\u8c41\u514d\u4e92\u65a5',
+     has(rf6, 'C1') && has(rf6, 'C2') && has(rf6, 'C3'), 'matched=' + ids(rf6));
+})();
+
 console.log('\n' + '\u2550'.repeat(58));
 console.log('\u901a\u8fc7 ' + pass + ' / \u5171 ' + (pass + fail));
 if (fail) console.log('\u5931\u8d25 ' + fail + ' \u9879');
