@@ -3537,52 +3537,6 @@
    就地展开的色盘，调色时预览始终可见 —— 系统弹窗会把预览整个盖住，
    根本没法边看边调。 */
 
-/* ── 一键套整组：横向滚动的色盘胶囊 ── */
-.mi-bt-presets {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 2px 0 8px;
-  /* 横向滚动在 iOS 上需要显式声明，否则会被当成纵向滚动链 */
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.mi-bt-presets::-webkit-scrollbar { display: none; }
-
-.mi-bt-preset {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  border: 1px solid var(--mi-line, rgba(0, 0, 0, 0.1));
-  border-radius: 10px;
-  background: var(--mi-card, #fff);
-  cursor: pointer;
-  transition: border-color .15s, transform .12s;
-}
-.mi-bt-preset:active { transform: scale(0.96); }
-
-/* 四格代表色条。用 grid 而非 flex 是为了让四格等宽，
-   颜色深浅差异大时也不会看起来一边宽一边窄。 */
-.mi-bt-preset__bar {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  width: 52px;
-  height: 13px;
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-.mi-bt-preset__bar i { display: block; }
-
-.mi-bt-preset__name {
-  font-size: 10px;
-  line-height: 1;
-  color: var(--mi-ink);
-  white-space: nowrap;
-}
 
 /* ── 内嵌取色面板 ── */
 .mi-bt-picker {
@@ -3658,71 +3612,68 @@
   transition: transform .12s;
 }
 .mi-bt-sw:active { transform: scale(0.9); }
-.mi-bt-sw--basic { border-radius: 50%; }
 
-/* ── 自定义区（默认收起） ── */
-.mi-bt-custom {
-  margin-top: 12px;
-  border-top: 1px dashed var(--mi-line, rgba(0, 0, 0, 0.1));
-  padding-top: 10px;
-}
-.mi-bt-custom__toggle {
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 11px;
-  color: var(--mi-accent, #2f7bd6);
+/* ── 自定义调色：HSL 三滑块 ──
+   取代原来的「展开 → 弹系统取色窗」两步流程。
+   三条滑块就地调，拖动时预览实时变色，所见即所得。
+   轨道背景由 JS 按当前 H/S/L 动态写 inline style：
+   · 色相条是固定彩虹；
+   · 饱和度条从同色相的灰渐到全饱和；
+   · 明度条从黑经当前色到白。
+   另两个分量变了渐变就得跟着变，拖起来才有「在调这个色」的手感。 */
+.mi-bt-hsl {
+  height: 22px;
+  border-radius: 6px;
+  /* 色相条默认彩虹；饱和度/明度条的渐变由 JS 覆盖 */
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
   cursor: pointer;
+  touch-action: none;
 }
-.mi-bt-custom__toggle::after {
-  content: ' ▾';
-  font-size: 9px;
+.mi-bt-hsl::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
-.mi-bt-custom__toggle[aria-expanded="true"]::after { content: ' ▴'; }
+.mi-bt-hsl::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.mi-bt-hsl::-moz-range-track {
+  background: transparent;
+}
 
-.mi-bt-custom__body[hidden] { display: none; }
-.mi-bt-custom__row {
+/* 底部当前色回显：小色块 + hex 文本 */
+.mi-bt-custom__cur {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
-.mi-bt-custom__row > span:first-child {
-  flex: 0 0 46px;
+.mi-bt-custom__chip {
+  flex-shrink: 0;
+  width: 28px;
+  height: 20px;
+  border-radius: 5px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+.mi-bt-custom__cur code {
   font-size: 11px;
-  color: var(--mi-sub);
-}
-.mi-bt-custom__color {
-  width: 44px;
-  height: 28px;
-  padding: 2px;
-  border: 1px solid var(--mi-line-strong, rgba(0, 0, 0, 0.14));
-  border-radius: 7px;
-  background: transparent;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.mi-bt-custom__color::-webkit-color-swatch-wrapper { padding: 0; }
-.mi-bt-custom__color::-webkit-color-swatch { border: none; border-radius: 4px; }
-.mi-bt-custom__color::-moz-color-swatch { border: none; border-radius: 4px; }
-
-.mi-bt-custom__hex {
-  flex: 1;
-  min-width: 0;
   font-variant-numeric: tabular-nums;
-}
-.mi-bt-custom__note {
-  margin: 6px 0 0;
-  font-size: 10px;
-  line-height: 1.5;
   color: var(--mi-sub);
-}
-.mi-bt-custom__note code {
-  padding: 1px 3px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.06);
-  font-size: 10px;
 }
 
 .mi-bt-picker__foot {

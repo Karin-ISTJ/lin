@@ -131,12 +131,8 @@
       shades: ['#ffffff', '#f7f2ef', '#efe5db', '#e5ddd2', '#f0e3da', '#eed4c3', '#dbd1c8', '#b2a696'] }
   ];
 
-  /* 内嵌取色盘的常用色（黑白灰 + 六个纯色），排在内置色盘之前。
-     原生 <input type=color> 的默认色板就是这批，保留下来便于手调中性色。 */
-  var BASIC_COLORS = [
-    '#000000', '#444444', '#888888', '#bbbbbb', '#e6e6e6', '#ffffff',
-    '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'
-  ];
+  /* 自定义调色滑块的初始 HSL（白色）。编辑区为空 / 项未指定时用这个起笔。 */
+  var HSL_INIT = { h: 0, s: 0, l: 100 };
 
   /* ── 小工具 ─────────────────────────────────────────────── */
 
@@ -199,6 +195,44 @@
     var la = luminance(a), lb = luminance(b);
     var hi = Math.max(la, lb), lo = Math.min(la, lb);
     return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /* hex → HSL（h: 0-360, s/l: 0-100）。
+     自定义调色的三条滑块全靠它：每次拖动把当前色反解成 HSL、
+     改掉一个分量、再转回去 —— 另外两个分量才不会跳。 */
+  function hexToHsl(hex) {
+    var c = hexToRgb(hex);
+    if (!c) return null;
+    var r = c.r / 255, g = c.g / 255, b = c.b / 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    var h = 0, s = 0, l = (mx + mn) / 2;
+    if (mx !== mn) {
+      var d = mx - mn;
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return {
+      h: Math.round(h * 360),
+      s: Math.round(s * 100),
+      l: Math.round(l * 100)
+    };
+  }
+
+  /* HSL → hex。h 超界自动回卷（360 → 0），s/l 夹取到 0-100。 */
+  function hslToHex(h, s, l) {
+    h = ((Number(h) || 0) % 360 + 360) % 360;
+    s = Math.min(100, Math.max(0, Number(s) || 0)) / 100;
+    l = Math.min(100, Math.max(0, Number(l) || 0)) / 100;
+    function f(n) {
+      var k = (n + h / 30) % 12;
+      var a = s * Math.min(l, 1 - l);
+      var v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(v * 255);
+    }
+    return rgbToHex(f(0), f(8), f(4));
   }
 
   /* 给一个背景色挑可读的文字色。
@@ -676,7 +710,7 @@
     });
     H.push('</div>');
 
-    /* 取色区：内置色盘的散色 + 常用中性/纯色 */
+    /* 取色区：内置色盘的散色 */
     H.push('<div class="mi-bt-picker__label">取色</div>');
     H.push('<div class="mi-bt-swatches">');
     var seen = {};
@@ -688,31 +722,39 @@
           ' style="background:' + esc(s) + '" title="' + esc(s) + '"></button>');
       });
     });
-    BASIC_COLORS.forEach(function (s) {
-      if (seen[s]) return;
-      seen[s] = 1;
-      H.push('<button type="button" class="mi-bt-sw mi-bt-sw--basic" data-mq-bt-swatch="' + esc(s) + '"' +
-        ' style="background:' + esc(s) + '" title="' + esc(s) + '"></button>');
-    });
     H.push('</div>');
 
-    /* 自定义：默认收起，展开才有原生取色器 + 手填 hex。
-       保留它是刻意的 —— 色盘是加速入口，不是唯一出路。 */
+    /* 自定义：三条滑块（色相 / 饱和度 / 明度），就地调，不弹系统取色窗。
+       系统那个窗是全屏的，把预览整个盖住 —— 这里拖动时预览实时跟着变。
+       底部只回显当前 hex，不再给输入框：三个滑块能调出任何颜色，
+       「抄一个现成色值」的场景由散色块与 hex 回显覆盖足够。 */
     H.push('<div class="mi-bt-custom">');
-    H.push('<button type="button" class="mi-bt-custom__toggle" data-mq-bt-custom-toggle' +
-      ' aria-expanded="false">自定义</button>');
-    H.push('<div class="mi-bt-custom__body" data-mq-bt-custom-body hidden>');
-    H.push('<label class="mi-bt-custom__row">');
-    H.push('<span>取色器</span>');
-    H.push('<input type="color" class="mi-bt-custom__color" data-mq-bt-custom-color="' + key + '"' +
-      ' value="' + esc((COLOR_DEFAULTS()[key]) || '#ffffff') + '">');
-    H.push('</label>');
-    H.push('<label class="mi-bt-custom__row">');
-    H.push('<span>色值</span>');
-    H.push('<input type="text" class="ins-text-input mi-bt-custom__hex" data-mq-bt-custom-hex="' + key + '"' +
-      ' placeholder="#rrggbb" maxlength="7" spellcheck="false" autocapitalize="off" autocomplete="off">');
-    H.push('</label>');
-    H.push('<p class="mi-bt-custom__note">填 <code>#rrggbb</code> 或 <code>#rgb</code>，回车生效。</p>');
+    H.push('<div class="mi-bt-picker__label">自定义</div>');
+
+    H.push('<div class="mi-bt-slide" data-mq-bt-hsl="' + key + '">');
+    H.push('<label class="ins-field-label" for="mq-bt-hsl-h-' + key + '">色相' +
+      ' <span class="mi-bt-slide__val" data-mq-bt-hsl-val="h">0</span></label>');
+    H.push('<input type="range" class="ins-range mi-bt-hsl mi-bt-hsl--h" id="mq-bt-hsl-h-' + key + '"' +
+      ' data-mq-bt-hsl-ch="h" min="0" max="360" step="1" value="0">');
+    H.push('</div>');
+
+    H.push('<div class="mi-bt-slide">');
+    H.push('<label class="ins-field-label" for="mq-bt-hsl-s-' + key + '">饱和度' +
+      ' <span class="mi-bt-slide__val" data-mq-bt-hsl-val="s">0%</span></label>');
+    H.push('<input type="range" class="ins-range mi-bt-hsl mi-bt-hsl--s" id="mq-bt-hsl-s-' + key + '"' +
+      ' data-mq-bt-hsl-ch="s" min="0" max="100" step="1" value="0">');
+    H.push('</div>');
+
+    H.push('<div class="mi-bt-slide">');
+    H.push('<label class="ins-field-label" for="mq-bt-hsl-l-' + key + '">明度' +
+      ' <span class="mi-bt-slide__val" data-mq-bt-hsl-val="l">100%</span></label>');
+    H.push('<input type="range" class="ins-range mi-bt-hsl mi-bt-hsl--l" id="mq-bt-hsl-l-' + key + '"' +
+      ' data-mq-bt-hsl-ch="l" min="0" max="100" step="1" value="100">');
+    H.push('</div>');
+
+    H.push('<div class="mi-bt-custom__cur">');
+    H.push('<span class="mi-bt-custom__chip" data-mq-bt-hsl-chip></span>');
+    H.push('<code data-mq-bt-hsl-hex>#ffffff</code>');
     H.push('</div>');
     H.push('</div>');
 
@@ -723,12 +765,6 @@
 
     H.push('</div>');
     return H.join('');
-  }
-
-  /* 取色器里的「默认」——用于恢复默认按钮。抽成函数是为了让 colorHtml 与
-     pickerHtml 共用同一份，避免两处写死的默认色值漂移。 */
-  function COLOR_DEFAULTS() {
-    return DEFAULTS;
   }
 
   /**
@@ -757,27 +793,10 @@
 
     H.push('<div class="mi-bt-body" data-mq-bt-body' + (openState ? '' : ' hidden') + '>');
 
-    /* 颜色组 */
+    /* 颜色组。套整组的色盘入口放在每个取色面板内部（展开色块才见），
+       不再在组顶平铺一排 —— 那排把面板顶得很长，多数时候用不上。 */
     H.push('<div class="mi-bt-group">');
     H.push('<span class="mi-bt-group__label">颜色</span>');
-
-    /* 一键套整组：横向排列的色盘胶囊。放最上面是因为它是最常用入口 ——
-       多数人想要的只是「整体换个色」，而不是逐个调六个参数。 */
-    H.push('<div class="mi-bt-presets">');
-    PALETTES.forEach(function (p) {
-      H.push('<button type="button" class="mi-bt-preset" data-mq-bt-preset="' + p.id + '"' +
-        ' title="套用「' + esc(p.name) + '」色盘">');
-      H.push('<span class="mi-bt-preset__bar" aria-hidden="true">');
-      [0, Math.floor(p.shades.length / 3), Math.floor(p.shades.length * 2 / 3), p.shades.length - 1]
-        .forEach(function (i) {
-          H.push('<i style="background:' + esc(p.shades[i]) + '"></i>');
-        });
-      H.push('</span>');
-      H.push('<span class="mi-bt-preset__name">' + esc(p.name) + '</span>');
-      H.push('</button>');
-    });
-    H.push('</div>');
-
     H.push('<div class="mi-bt-grid">');
     COLOR_ITEMS.forEach(function (it) { H.push(colorHtml(it.key, it.label)); });
     H.push('</div>');
@@ -1122,10 +1141,10 @@
       return;
     }
 
-    /* ── 一键套整组色盘 ── */
-    var palBtn = e.target.closest('[data-mq-bt-preset]');
+    /* ── 一键套整组色盘（内嵌在取色面板里的胶囊行）── */
+    var palBtn = e.target.closest('[data-mq-bt-pal]');
     if (palBtn) {
-      var pal = findPalette(palBtn.getAttribute('data-mq-bt-preset'));
+      var pal = findPalette(palBtn.getAttribute('data-mq-bt-pal'));
       if (!pal) return;
       var col = paletteToParams(pal);
       if (!col) return;
@@ -1133,10 +1152,11 @@
          套色盘不该顺手改掉人家调好的圆角。 */
       var cur = readParams(panel);
       applyParamsToPanel(panel, Object.assign({}, cur, col));
+      /* 不收面板：连续点几套色盘对比预览，正是「边看边调」的用法 */
+      COLOR_ITEMS.forEach(function (it) { syncHslSliders(panel, it.key); });
       refreshPreviewOnly(panel, root);
       setMeta(panel, '色盘「' + pal.name + '」');
-      setHint(panel, '已套用「' + pal.name + '」色盘（仅颜色）。点「应用到编辑区」→ 再点右上角「保存」生效。');
-      closeAllPickers(panel);
+      setHint(panel, '已套用「' + pal.name + '」色盘（仅颜色）。可再点别的色盘对比，满意后点「应用到编辑区」→ 再点右上角「保存」生效。');
       return;
     }
 
@@ -1158,22 +1178,10 @@
       var swKey = pickerKeyOf(sw);
       if (!swKey) return;
       setColorValue(panel, swKey, sw.getAttribute('data-mq-bt-swatch'));
+      syncHslSliders(panel, swKey);
       refreshPreviewOnly(panel, root);
       setMeta(panel, '待应用');
       setHint(panel, '颜色已改，预览实时更新。点「应用到编辑区」→ 再点右上角「保存」生效。');
-      return;
-    }
-
-    /* ── 展开 / 收起「自定义」区 ── */
-    var ct = e.target.closest('[data-mq-bt-custom-toggle]');
-    if (ct) {
-      var body = ct.parentNode.querySelector('[data-mq-bt-custom-body]');
-      if (body) {
-        var nowOpen = body.hasAttribute('hidden');
-        if (nowOpen) body.removeAttribute('hidden');
-        else body.setAttribute('hidden', '');
-        ct.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
-      }
       return;
     }
 
@@ -1182,6 +1190,7 @@
     if (clr) {
       var clrKey = clr.getAttribute('data-mq-bt-clear');
       setColorValue(panel, clrKey, DEFAULTS[clrKey] || '');
+      syncHslSliders(panel, clrKey);
       refreshPreviewOnly(panel, root);
       setMeta(panel, '待应用');
       setHint(panel, '已恢复该项默认色。');
@@ -1224,13 +1233,8 @@
       btn.classList.add('is-open');
       btn.setAttribute('aria-expanded', 'true');
     }
-    /* 打开时把「自定义」的色值与 hex 输入框对齐到当前值 */
-    var cur = readParams(panel)[key];
-    var hexInput = box.querySelector('[data-mq-bt-custom-hex]');
-    var colorInput = box.querySelector('[data-mq-bt-custom-color]');
-    var hasVal = isHex(cur);
-    if (hexInput) hexInput.value = hasVal ? cur : '';
-    if (colorInput) colorInput.value = hasVal ? cur : '#ffffff';
+    /* 打开时把三条 HSL 滑块对齐到当前色值（空的用白色起笔） */
+    syncHslSliders(panel, key);
   }
 
   /* 写入某个颜色字段。同步三处：隐藏的原生 input（数据源）、
@@ -1256,10 +1260,12 @@
 
     var box = panel.querySelector('[data-mq-bt-picker="' + key + '"]');
     if (box) {
-      var hi = box.querySelector('[data-mq-bt-custom-hex]');
-      var ci = box.querySelector('[data-mq-bt-custom-color]');
-      if (hi) hi.value = v;
-      if (ci) ci.value = v === '' ? '#ffffff' : v;
+      /* 回显当前色值（HSL 滑块区底部的小色块 + hex） */
+      var chip = box.querySelector('[data-mq-bt-hsl-chip]');
+      var hexEl2 = box.querySelector('[data-mq-bt-hsl-hex]');
+      var show2 = v === '' ? '#ffffff' : v;
+      if (chip) chip.style.background = show2;
+      if (hexEl2) hexEl2.textContent = show2;
     }
     return true;
   }
@@ -1270,30 +1276,16 @@
     var panel = root.querySelector('[data-mq-bt-panel]');
     if (!panel) return;
 
-    /* 取色面板里的「自定义」区：原生取色器拖动时就实时刷预览。
-       这是唯一「拖动中也要刷」的地方 —— 颜色拖动的代价远小于滑块
-       （不涉及布局重排），而且用户就是要看着预览挑色。 */
-    var custColor = e.target.closest('[data-mq-bt-custom-color]');
-    if (custColor) {
-      var ck = custColor.getAttribute('data-mq-bt-custom-color');
-      setColorValue(panel, ck, custColor.value);
-      refreshPreviewOnly(panel, root);
+    /* 自定义调色的 HSL 滑块：拖动中就实时刷预览。
+       颜色变化不触发布局重排，代价远小于形状滑块，
+       而且「边看边调」在这里就是全部意义。 */
+    var hslEl = e.target.closest('[data-mq-bt-hsl-ch]');
+    if (hslEl) {
+      var hk = pickerKeyOf(hslEl);
+      if (!hk) return;
+      applyHslFromSliders(panel, hk, root);
       setMeta(panel, '待应用');
       setHint(panel, '取色中，预览实时更新（编辑区未改动）。');
-      return;
-    }
-
-    /* 手填 hex：只在凑够完整色值时才动，避免输入过程中的半截值乱跳 */
-    var custHex = e.target.closest('[data-mq-bt-custom-hex]');
-    if (custHex) {
-      var hk = custHex.getAttribute('data-mq-bt-custom-hex');
-      var hv = String(custHex.value || '').trim();
-      if (isHex(hv)) {
-        setColorValue(panel, hk, hv);
-        refreshPreviewOnly(panel, root);
-        setMeta(panel, '待应用');
-        setHint(panel, '色值已生效，预览实时更新（编辑区未改动）。');
-      }
       return;
     }
 
@@ -1317,14 +1309,12 @@
     var panel = root.querySelector('[data-mq-bt-panel]');
     if (!panel) return;
 
-    /* 自定义区松手：预览已经实时刷过了，这里只给个收尾提示 */
-    var custColor = e.target.closest('[data-mq-bt-custom-color]');
-    if (custColor) {
+    /* HSL 滑块松手：预览已经实时刷过了，这里只给收尾提示 */
+    var hslEl = e.target.closest('[data-mq-bt-hsl-ch]');
+    if (hslEl) {
       setHint(panel, '颜色已定。点「应用到编辑区」→ 再点右上角「保存」生效。');
       return;
     }
-    var custHex = e.target.closest('[data-mq-bt-custom-hex]');
-    if (custHex) return;
 
     var el = e.target.closest('[data-mq-bt]');
     if (!el) return;
@@ -1335,6 +1325,85 @@
          但落库仍然只由顶栏「保存」触发。 */
       livePreview(panel, root);
     }
+  }
+
+  /* ── HSL 滑块区 ─────────────────────────────────────────── */
+
+  /* 从三条滑块读 HSL → hex → 写入颜色字段，并同步滑块渐变与回显 */
+  function applyHslFromSliders(panel, key, root) {
+    var box = panel.querySelector('[data-mq-bt-picker="' + key + '"]');
+    if (!box) return;
+    var h = box.querySelector('[data-mq-bt-hsl-ch="h"]');
+    var s = box.querySelector('[data-mq-bt-hsl-ch="s"]');
+    var l = box.querySelector('[data-mq-bt-hsl-ch="l"]');
+    if (!h || !s || !l) return;
+
+    var hex = hslToHex(h.value, s.value, l.value);
+    setColorValue(panel, key, hex);
+    updateHslTracks(panel, key);
+    refreshPreviewOnly(panel, root);
+  }
+
+  /* 把三条滑块与回显对齐到某个颜色字段当前的值。
+   * 空串（未指定）时用白色起笔 —— 与色块占位一致，拖一下就有颜色。 */
+  function syncHslSliders(panel, key) {
+    var box = panel.querySelector('[data-mq-bt-picker="' + key + '"]');
+    if (!box) return;
+    var cur = readParams(panel)[key];
+    var hsl = isHex(cur) ? hexToHsl(cur) : HSL_INIT;
+    if (!hsl) hsl = HSL_INIT;
+
+    var h = box.querySelector('[data-mq-bt-hsl-ch="h"]');
+    var s = box.querySelector('[data-mq-bt-hsl-ch="s"]');
+    var l = box.querySelector('[data-mq-bt-hsl-ch="l"]');
+    if (h) h.value = hsl.h;
+    if (s) s.value = hsl.s;
+    if (l) l.value = hsl.l;
+    refreshHslLabels(box, hsl);
+    updateHslTracks(panel, key);
+  }
+
+  function refreshHslLabels(box, hsl) {
+    var vh = box.querySelector('[data-mq-bt-hsl-val="h"]');
+    var vs = box.querySelector('[data-mq-bt-hsl-val="s"]');
+    var vl = box.querySelector('[data-mq-bt-hsl-val="l"]');
+    if (vh) vh.textContent = String(hsl.h);
+    if (vs) vs.textContent = hsl.s + '%';
+    if (vl) vl.textContent = hsl.l + '%';
+  }
+
+  /* 更新滑块的渐变背景 + 底部色值回显。
+   * H 条是固定彩虹；S 条从「同色相的灰」到「同色相全饱和」；
+   * L 条从黑经当前色到白。渐变跟着另两个分量走，拖起来才有「在调这个色」的感觉。 */
+  function updateHslTracks(panel, key) {
+    var box = panel.querySelector('[data-mq-bt-picker="' + key + '"]');
+    if (!box) return;
+    var h = box.querySelector('[data-mq-bt-hsl-ch="h"]');
+    var s = box.querySelector('[data-mq-bt-hsl-ch="s"]');
+    var l = box.querySelector('[data-mq-bt-hsl-ch="l"]');
+    if (!h || !s || !l) return;
+
+    var H = h.value, S = s.value, L = l.value;
+    var sTrack = box.querySelector('.mi-bt-hsl--s');
+    var lTrack = box.querySelector('.mi-bt-hsl--l');
+    if (sTrack) {
+      sTrack.style.background = 'linear-gradient(to right,' +
+        ' hsl(' + H + ', 0%, ' + L + '%),' +
+        ' hsl(' + H + ', 100%, ' + L + '%))';
+    }
+    if (lTrack) {
+      lTrack.style.background = 'linear-gradient(to right,' +
+        ' hsl(' + H + ', ' + S + '%, 0%),' +
+        ' hsl(' + H + ', ' + S + '%, 50%),' +
+        ' hsl(' + H + ', ' + S + '%, 100%))';
+    }
+
+    var hex = hslToHex(H, S, L);
+    var chip = box.querySelector('[data-mq-bt-hsl-chip]');
+    var hexEl = box.querySelector('[data-mq-bt-hsl-hex]');
+    if (chip) chip.style.background = hex;
+    if (hexEl) hexEl.textContent = hex;
+    refreshHslLabels(box, { h: Number(H), s: Number(S), l: Number(L) });
   }
 
   /* 松手预览。若编辑区已有非生成物 CSS，不自动覆盖 ——
@@ -1456,7 +1525,7 @@
     BADGE_SLIDERS: BADGE_SLIDERS,
     TOTAL_ITEMS: TOTAL_ITEMS,
     PALETTES: PALETTES,
-    BASIC_COLORS: BASIC_COLORS,
+    HSL_INIT: HSL_INIT,
     normalizeParams: normalizeParams,
     compileCss: compileCss,
     parseCss: parseCss,
@@ -1468,6 +1537,8 @@
     /* 颜色计算 */
     hexToRgb: hexToRgb,
     rgbToHex: rgbToHex,
+    hexToHsl: hexToHsl,
+    hslToHex: hslToHex,
     luminance: luminance,
     contrast: contrast,
     pickFg: pickFg,
@@ -1480,6 +1551,8 @@
     setColorValue: setColorValue,
     closeAllPickers: closeAllPickers,
     togglePicker: togglePicker,
+    syncHslSliders: syncHslSliders,
+    updateHslTracks: updateHslTracks,
     refreshPreviewOnly: refreshPreviewOnly,
     previewOnly: previewOnly,
     bindTunerRoot: bindTunerRoot,

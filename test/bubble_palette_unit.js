@@ -65,8 +65,31 @@ check('色盘 id 不重复', (function () {
   T.PALETTES.forEach(function (p) { if (seen[p.id]) dup = true; seen[p.id] = 1; });
   return !dup;
 })());
-check('常用色都是合法 hex', T.BASIC_COLORS.every(function (s) { return T.isHex(s); }),
-      String(T.BASIC_COLORS.length) + ' 个');
+check('hslToHex 红', T.hslToHex(0, 100, 50) === '#ff0000', T.hslToHex(0, 100, 50));
+check('hslToHex 白', T.hslToHex(123, 0, 100) === '#ffffff');
+check('hslToHex 黑', T.hslToHex(123, 100, 0) === '#000000');
+check('hexToHsl 白', (function () { var q = T.hexToHsl('#ffffff'); return q.h === 0 && q.s === 0 && q.l === 100; })());
+/* 整数滑块有固有 ±1 量化：#efefef → (0,0,94) → #f0f0f0，肉眼不可辨。
+   用户真正在意的性质：在任意滑块位上来回（hex→HSL→hex→HSL→hex），
+   颜色每通道漂移 ≤ 2 —— 拖一下再拖回来不会跳色。
+   跳过奇异点：l=0/l=100 时饱和度无定义，s=0 时色相无定义。 */
+check('HSL 往返不跳色（滑块网格采样）', (function () {
+  for (var h = 0; h < 360; h += 30) {
+    for (var s = 20; s <= 100; s += 20) {
+      for (var l = 10; l <= 90; l += 10) {
+        var c1 = T.hexToRgb(T.hslToHex(h, s, l));
+        var q = T.hexToHsl(T.rgbToHex(c1.r, c1.g, c1.b));
+        var c2 = T.hexToRgb(T.hslToHex(q.h, q.s, q.l));
+        if (Math.abs(c1.r - c2.r) > 2 || Math.abs(c1.g - c2.g) > 2 || Math.abs(c1.b - c2.b) > 2) return false;
+      }
+    }
+  }
+  return true;
+})());
+check('灰区色相无定义是正常行为', (function () {
+  var q = T.hexToHsl(T.hslToHex(210, 0, 50));
+  return q.s === 0 && q.l === 50; /* 色相丢失，但明度饱和度不丢 */
+})());
 
 console.log('\n【3】paletteToParams 分配约束');
 T.PALETTES.forEach(function (p) {
@@ -91,6 +114,15 @@ var root = dom.window.document.getElementById('wrap');
 root.innerHTML = T.buildPanelHtml('');
 var panel = root.querySelector('[data-mq-bt-panel]');
 
+check('面板顶部胶囊行已删', panel.querySelectorAll('[data-mq-bt-preset]').length === 0);
+check('每个颜色项都有取色器（共 6 项）', panel.querySelectorAll('[data-mq-bt-picker]').length === 6);
+check('取色面板内色盘行保留', (function () {
+  var pickers = panel.querySelectorAll('[data-mq-bt-picker]');
+  return Array.prototype.every.call(pickers, function (pk) {
+    return pk.querySelectorAll('[data-mq-bt-pal]').length === 6;
+  });
+})());
+
 var p0 = T.readParams(panel);
 check('未动过的描边色读回空串', p0.borderColor === '', JSON.stringify(p0.borderColor));
 check('未动过的聊天背景读回空串', p0.chatBg === '', JSON.stringify(p0.chatBg));
@@ -108,6 +140,25 @@ check('恢复默认后回到空串', p2.borderColor === '', JSON.stringify(p2.bo
 
 /* 非法 hex 应被拒绝 */
 check('setColorValue 拒绝非法值', T.setColorValue(panel, 'meBg', 'not-a-color') === false);
+
+/* HSL 滑块联动 */
+(function () {
+  var box = panel.querySelector('[data-mq-bt-picker="meBg"]');
+  check('取色面板带 HSL 滑块组', !!box && !!box.querySelector('[data-mq-bt-hsl-ch="h"]') &&
+        !!box.querySelector('[data-mq-bt-hsl-ch="s"]') && !!box.querySelector('[data-mq-bt-hsl-ch="l"]'));
+  check('不再渲染系统取色器入口', !box.querySelector('[data-mq-bt-custom-color]') &&
+        !box.querySelector('[data-mq-bt-custom-hex]'));
+  T.syncHslSliders(panel, 'meBg');
+  var hh = Number(box.querySelector('[data-mq-bt-hsl-ch="h"]').value);
+  var ss = Number(box.querySelector('[data-mq-bt-hsl-ch="s"]').value);
+  var ll = Number(box.querySelector('[data-mq-bt-hsl-ch="l"]').value);
+  var back = T.hslToHex(hh, ss, ll);
+  var cur = T.readParams(panel).meBg;
+  var a = T.hexToRgb(back), b = T.hexToRgb(cur);
+  check('滑块反解回原色（±2 通道容差）',
+        !!a && !!b && Math.abs(a.r - b.r) <= 2 && Math.abs(a.g - b.g) <= 2 && Math.abs(a.b - b.b) <= 2,
+        back + ' vs ' + cur);
+})();
 
 /* 套色盘不应动形状 */
 var before = T.readParams(panel);
