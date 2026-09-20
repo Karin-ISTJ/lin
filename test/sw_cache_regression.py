@@ -98,19 +98,30 @@ def make_site_copy(dst):
         'test', 'docs', '.git', 'node_modules', '__pycache__'))
     if os.environ.get('SW_BASELINE') == '1':
         # A/B 对照：把原包里的 sw.js 换回来（逻辑修复前的旧缓存机制）
+        swapped = False
         for cand in glob_zip_paths():
             with zipfile.ZipFile(cand) as z:
                 with z.open('sw.js') as f:
                     with open(os.path.join(dst, 'sw.js'), 'wb') as out:
                         out.write(f.read())
+            swapped = True
             break
+        if not swapped:
+            # 静默跳过会让「基线对照」变成「跑当前代码」—— 于是 A/B 差异
+            # 消失、报告一片绿色，读者却以为验证过旧机制。宁可炸掉。
+            raise SystemExit(
+                'SW_BASELINE=1 但找不到基线包（期望 /root/uploads/*karinn-fixed-v7.2-fixes.zip）。\n'
+                '基线对照无法成立 —— 请放入基线 zip，或去掉 SW_BASELINE 跑常规模式。')
 
 
 def glob_zip_paths():
     # 在 /root/uploads 下找原包 zip（沙箱里上传文件带数字前缀）
-    for name in sorted(os.listdir('/root/uploads')):
+    uploads = '/root/uploads'
+    if not os.path.isdir(uploads):
+        return
+    for name in sorted(os.listdir(uploads)):
         if name.endswith('karinn-fixed-v7.2-fixes.zip'):
-            yield os.path.join('/root/uploads', name)
+            yield os.path.join(uploads, name)
 
 
 PROBE_HTML_SNIPPET = """
@@ -187,7 +198,19 @@ async def main():
         v = await wait_probe(page)
         check('A1 首次在线访问 probe=v1（基线）', 'v1' in v, repr(v))
 
-        await page.evaluate("() => navigator.serviceWorker.ready.then(r => !!r.active)")
+        # 等 SW 激活。
+        # ⚠️ 必须带超时：navigator.serviceWorker.ready 在「注册从未发生」时
+        # **永不 settle**（不是 reject，是永远 pending）。而 app.js 只在
+        # location.hostname === 'localhost' 时才注册 SW —— 一旦有人把 BASE
+        # 写成 127.0.0.1（等价来源、但不是 'localhost' 字面量），
+        # 这里就会无声挂死，整个测试卡住而不报错。宁可超时后明确失败。
+        try:
+            await asyncio.wait_for(
+                page.evaluate("() => navigator.serviceWorker.ready.then(r => !!r.active)"),
+                timeout=20)
+        except asyncio.TimeoutError:
+            check('A1b SW 在 20s 内激活（未激活则后续全部无意义）', False,
+                  "serviceWorker.ready 超时：确认 BASE 用的是 'localhost' 而非 127.0.0.1")
         # 重开一次让 SW 接管导航，同时让副本进缓存
         r = await goto_online(page, base_a)
         ctrl = await page.evaluate("() => !!navigator.serviceWorker.controller")
@@ -252,7 +275,18 @@ async def main():
         s1 = await load_seq()
         check('C1 build 相同不刷新', s1 == s0 + 1, '%d → %d（meta=%s）' % (s0, s1, meta_build))
 
-        await dispatch_build('sw-9')          # 新于页面 → reload 一次
+        # ── 「新/旧于页面」的 build 值必须**推导**，不能硬编码 ──────────
+        # 这里以前写死 dispatch_build('sw-9') 配注释「新于页面 → reload」，
+        # 在包版本 sw-3 时成立；包推进到 sw-14 之后，sw-9 < sw-14，
+        # 哨兵**正确地**拒绝刷新，C2 于是永久失败 —— 断言测的是过期常量，
+        # 不是代码行为。C4 的 'sw-1' 同理（一旦包退到 sw-1 附近就会翻车）。
+        # 按 meta 的数值推导出「一定更新」与「一定更旧」两个哨兵值。
+        m_num = re.search(r'(\d+)\s*$', meta_build or '')
+        meta_num = int(m_num.group(1)) if m_num else 0
+        newer_build = 'sw-%d' % (meta_num + 1)          # 严格新于页面 → 应 reload
+        older_build = 'sw-%d' % max(0, meta_num - 1)    # 严格旧于页面 → 不 reload
+
+        await dispatch_build(newer_build)     # 新于页面 → reload 一次
         await page.wait_for_timeout(1200)
         s2 = await load_seq()
         # reload 会重建文档并重新执行上面 load_seq 的调用（s2 已含新文档的 +1）
@@ -265,7 +299,7 @@ async def main():
         else:
             check('C2★ SW 新于页面 → 自动 reload（app.js 监听到 build>meta）', ok_c2, 'nav=%r' % nav_type)
 
-        await dispatch_build('sw-9')          # 重复广播 → 不再 reload
+        await dispatch_build(newer_build)     # 重复广播 → 不再 reload
         await page.wait_for_timeout(900)
         nav_type2 = await page.evaluate("() => (performance.getEntriesByType('navigation')[0]||{}).type")
         await page.wait_for_timeout(200)
@@ -273,14 +307,14 @@ async def main():
         check('C3 重复广播不再刷新（sessionStorage 防环）', reloaded_flag == '1', 'flag=%r nav2=%r' % (reloaded_flag, nav_type2))
 
         await page.evaluate("() => sessionStorage.removeItem('miya-sw-build-reloaded')")
-        await dispatch_build('sw-1')           # 旧于页面 → 不 reload
+        await dispatch_build(older_build)      # 旧于页面 → 不 reload
         await page.wait_for_timeout(900)
         nav_type3 = await page.evaluate("() => (performance.getEntriesByType('navigation')[0]||{}).type")
         check('C4 SW 旧于页面不刷新（防离线被旧 SW 踢回旧缓存页）', nav_type3 in ('reload', 'navigate'), 'nav=%r' % nav_type3)
         # C4 强化：不应发生新的 reload —— 上面 dispatch 后等了 900ms，若发生 reload nav_type 会刷新为新的 reload 条目；
         # 用时间戳判断：dispatch 前后 navigation entry 的 startTime 不变
         ts1 = await page.evaluate("() => performance.getEntriesByType('navigation')[0].startTime")
-        await dispatch_build('sw-1')
+        await dispatch_build(older_build)
         await page.wait_for_timeout(700)
         ts2 = await page.evaluate("() => performance.getEntriesByType('navigation')[0].startTime")
         check('C4b 旧 build 广播后页面未导航', abs(ts1 - ts2) < 1e-6, '%s vs %s' % (ts1, ts2))
@@ -350,7 +384,15 @@ async def main():
         write_probe(os.path.join(site_b, 'probe.js'), 1)
 
         await goto_online(page2, base_b)                    # v1 · 浏览器入口
-        await page2.evaluate("() => navigator.serviceWorker.ready.then(r => !!r.active)")
+        # 同样带超时 —— 理由见场景 A 的注释（ready 在未注册时永不 settle）
+        try:
+            await asyncio.wait_for(
+                page2.evaluate("() => navigator.serviceWorker.ready.then(r => !!r.active)"),
+                timeout=20)
+        except asyncio.TimeoutError:
+            check('B0 SW 在 20s 内激活（场景 B 前置）', False,
+                  "serviceWorker.ready 超时：确认 BASE_B 用的是 'localhost' 而非 127.0.0.1")
+
         r = await goto_online(page2, base_b)
         check('B1 v1 在线（浏览器入口，SW 受控）', 'v1' in r and await page2.evaluate("() => !!navigator.serviceWorker.controller"), repr(r))
 

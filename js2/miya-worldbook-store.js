@@ -516,15 +516,58 @@
         };
       });
     }
+    /*
+     * 补出「联系人列表里已经没有、但词条仍绑着」的 ID。
+     *
+     * ⚠️【W12 修复】这段以前无条件补一张 `roleName: id` 的 custom 卡：
+     *
+     *     listEntries().forEach(function (e) {
+     *       (e.boundRoleIds || []).forEach(function (id) {
+     *         if (!map[id]) map[id] = { roleId: id, roleName: id, source: 'custom', avatar: '' };
+     *       });
+     *     });
+     *
+     * 于是**已删除联系人留下的孤立 ID**（ct_mtxj2rfh_a1ek7s 这类）会赫然
+     * 出现在「绑定联系人」面板上，名字就是那串裸 ID —— 用户看到的正是
+     * 「绑定联系人下面多出三个英文串」。
+     *
+     * 不能一概不补：那样用户就**没有任何入口去取消**这条已经失效的绑定
+     * （面板上没这张卡，勾不掉），孤儿绑定会永久留在词条里。
+     *
+     * 所以策略是「保留、但说实话」：
+     *   · 原始联系人还健在        → 名字用真实姓名（上面那个循环已处理）
+     *   · 联系人已删 / 查不到      → 仍然补卡，但名字写成可读的提示，
+     *                              而不是把内部 ID 直接甩给用户。
+     * 同时把它标记为 `source: 'orphan'`，排序时沉到最后，
+     * 并让渲染层据此加一个「已失效」的样式标签。
+     */
     listEntries().forEach(function (e) {
       (e.boundRoleIds || []).forEach(function (id) {
-        if (!map[id]) map[id] = { roleId: id, roleName: id, source: 'custom', avatar: '' };
+        var key = String(id || '').trim();
+        if (!key || map[key]) return;
+        map[key] = {
+          roleId: key,
+          /* 名字不再是裸 ID：给出"这是什么"的说明，用户才知道该不该取消。
+             ID 本身放在括号里，需要排查时仍看得到。 */
+          roleName: '已失效的角色绑定',
+          roleNameHint: key,
+          source: 'orphan',
+          avatar: ''
+        };
       });
     });
     return Object.keys(map)
       .sort(function (a, b) {
-        var sa = map[a].source === 'contacts' ? 0 : 1;
-        var sb = map[b].source === 'contacts' ? 0 : 1;
+        /* 三档排序：真实联系人 → 自定义 → 已失效孤儿绑定。
+           孤儿必须沉到最后 —— 它们是历史残留，不该挡在常用角色前面。 */
+        var rank = function (row) {
+          if (!row) return 2;
+          if (row.source === 'contacts') return 0;
+          if (row.source === 'orphan') return 2;
+          return 1;
+        };
+        var sa = rank(map[a]);
+        var sb = rank(map[b]);
         if (sa !== sb) return sa - sb;
         return String(map[a].roleName).localeCompare(String(map[b].roleName), 'zh');
       })

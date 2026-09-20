@@ -189,6 +189,49 @@
 
     var chars = (Array.isArray(state && state.characters) ? state.characters : [])
       .map(function (row) { return normalizeCharacter(row, groupsById); });
+
+    /* 【W12 修复】丢掉「无名占位行」。
+       ------------------------------------------------------------------
+       症状：世界书「绑定联系人」面板底部多出几张卡片，名字显示成
+             ct_mtxj2rfh_a1ek7s 这类**裸 ID**，头像处是一个字母占位符。
+
+       成因：normalizeCharacter 对 characterId 做了「缺省回落到 id」的处理：
+
+             characterId: String((raw && raw.characterId) || id).trim() || id
+
+       而 resolveRolesForWorldbook 把 [characterId, id] 两个都推成角色卡：
+
+             [c.characterId, c.id].forEach(function (rid) { ...push... });
+
+       所以一条 **name 为空** 的残留行，会以「与自身 id 同值的 characterId」
+       身份被推出来，卡片名走 `row.roleName || row.roleId` 兜底 → 显示裸 ID。
+
+       这些行不可能由正常写入路径产生 —— upsertCharacter 明确拒绝空名
+       （`if (!next.name) return Promise.resolve({ error: '请填写姓名' })`）。
+       它们来自旧版本数据、导入残留、或外部直接改写 localStorage。
+
+       处理原则：**在读的边界上过滤，而不是在写的时候删数据。**
+       把「名字为空且没有任何实义内容」的行判为占位垃圾，不进入内存视图。
+       这样既不破坏用户真实数据（万一只是名字字段丢了、persona 还在，
+       下面会保留），又能立即让面板干净。
+
+       ⚠️ 必须保留「有 persona / 有 greetings / 有头像」的无名行 ——
+       它们可能是用户真实档案但名字字段损坏，直接丢掉等于删用户的角色。 */
+    chars = chars.filter(function (c) {
+      if (!c) return false;
+      var name = String(c.name || '').trim();
+      if (name) return true;
+      /* 无名：只有在完全空壳时才丢弃 */
+      var hasPersona = String(c.persona || '').trim().length > 0;
+      var hasGreetings = Array.isArray(c.greetings) && c.greetings.length > 0;
+      var hasAvatar = String(c.avatar || '').trim().length > 0;
+      var hasProfile = String(c.gender || '').trim() || String(c.age || '').trim() ||
+        String(c.birthday || '').trim();
+      if (hasPersona || hasGreetings || hasAvatar || hasProfile) return true;
+      /* 完全空壳 —— 不是有效联系人 */
+      return false;
+    });
+
     chars.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
     return { version: 1, groups: groups, characters: chars };
   }
@@ -234,7 +277,20 @@
       ? global.miyaReadLsJsonKey(STORE_KEY, { groups: [], characters: [] })
       : Promise.resolve({ groups: [], characters: [] })
     ).then(function (v) {
-      _cache = normalizeState(v && typeof v === 'object' ? v : { groups: [], characters: [] });
+      var raw = v && typeof v === 'object' ? v : { groups: [], characters: [] };
+      var rawCount = Array.isArray(raw.characters) ? raw.characters.length : 0;
+      _cache = normalizeState(raw);
+      /* 【W12 自愈】磁盘上若存在「无名空壳行」，读时过滤只解决了内存视图，
+         脏数据仍在 localStorage 里，每次加载都要再过滤一遍、且会持续出现在
+         其它直接读 raw 的地方。这里做一次**一次性落盘清理**：
+         只有当确实滤掉了东西（数量变少）才写回，避免无谓的写放大。
+         写回的内容是 normalizeState 的结果 —— 与下次启动读到的完全一致，
+         不存在二次漂移。 */
+      if (rawCount > _cache.characters.length) {
+        try {
+          persist(_cache).catch(function () {});
+        } catch (eHeal) { /* 自愈失败不影响本次读取 */ }
+      }
       return _cache;
     }).catch(function () {
       _cache = normalizeState({ groups: [], characters: [] });
@@ -354,22 +410,87 @@
     return out;
   }
 
+  /*
+   * 供世界书「绑定联系人」面板使用的角色列表。
+   *
+   * ⚠️【W12 修复】旧实现把 characterId 和 id **各推一张卡**：
+   *
+   *     [c.characterId, c.id].forEach(function (rid) { ...push... });
+   *
+   * 后果有两个，都是实打实的用户困扰：
+   *
+   *  ① 同一个角色在面板里出现两次，用户不知道点哪张才对。
+   *     两张卡的 roleId 不同（一个是 characterId，一个是记录 id），
+   *     存进 boundRoleIds 的值也就不同 —— 而下游比较绑定关系时两侧
+   *     都得靠别名展开才能对上，白白引入一层脆弱依赖。
+   *
+   *  ② 对 characterId 缺省的行，normalizeCharacter 会让它回落到 id，
+   *     于是两个值相同、去重后只剩一张卡，卡名走 `roleName || roleId`
+   *     兜底 —— 名字为空的历史残留行就显示成 ct_mtxj2rfh_a1ek7s 这样的裸 ID。
+   *
+   * 现在改为**一个角色只出一张卡**，prioritize 记录 id（c.id）：
+   * 它是稳定主键，且世界书面板、编辑器、删除逻辑都认它。
+   * characterId 不再单独成卡 —— 它作为「别名」由 matcher.expandRoleAliases
+   * 在比较绑定关系时统一展开，面板不需要让用户去选。
+   */
   function resolveRolesForWorldbook() {
     var out = [];
     var seen = {};
-    listCharacters().forEach(function (c) {
-      [c.characterId, c.id].forEach(function (rid) {
-        rid = String(rid || '').trim();
-        if (!rid || seen[rid]) return;
-        seen[rid] = true;
+    var chars = listCharacters();
+
+    /* 已被现有词条绑定的 ID 集合。
+       用途：某个角色的 characterId 若**已经被用户绑过**，就不能简单地把
+       它的卡片拿掉 —— 那会让用户在面板上找不到自己已选中的项，误以为
+       绑定丢了。（旧数据里 characterId 和 id 都可能被绑过。） */
+    var boundSet = {};
+    try {
+      var wbStore = global.miyaWorldbookStore;
+      if (wbStore && typeof wbStore.listEntries === 'function') {
+        (wbStore.listEntries() || []).forEach(function (e) {
+          (Array.isArray(e && e.boundRoleIds) ? e.boundRoleIds : []).forEach(function (bid) {
+            var k = String(bid || '').trim();
+            if (k) boundSet[k] = true;
+          });
+        });
+      }
+    } catch (eBound) { /* 取不到就不做兼容保留，退回「只出 id 卡」 */ }
+
+    chars.forEach(function (c) {
+      if (!c) return;
+      var name = String(c.name || '').trim();
+      /* 没有名字的行不进面板 —— 用户无法识别，选中它等于埋雷。
+         （normalizeState 已在读边界滤掉纯空壳；这里再挡一道，
+         应付「有 persona 但名字损坏」的行，避免它们以裸 ID 面貌出现。） */
+      if (!name) return;
+
+      var id = String(c.id || '').trim();
+      var charId = String(c.characterId || '').trim();
+
+      /* 主卡：记录 id（稳定主键，世界书面板/编辑器/删除逻辑都认它） */
+      if (id && !seen[id]) {
+        seen[id] = true;
         out.push({
-          roleId: rid,
-          roleName: c.name || rid,
+          roleId: id,
+          roleName: name,
           source: 'contacts',
           groupId: c.groupId,
           avatar: c.avatar || ''
         });
-      });
+      }
+
+      /* 兼容卡：characterId 与 id 不同、且**确实被绑过**时，补一张。
+         这只是为了不破坏既有绑定，不是鼓励用户去选它 ——
+         绑定关系比较时两侧都会展开别名，选哪个都能对上。 */
+      if (charId && charId !== id && !seen[charId] && boundSet[charId]) {
+        seen[charId] = true;
+        out.push({
+          roleId: charId,
+          roleName: name + '（档案 ID）',
+          source: 'contacts',
+          groupId: c.groupId,
+          avatar: c.avatar || ''
+        });
+      }
     });
     return out;
   }

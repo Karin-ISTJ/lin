@@ -136,18 +136,31 @@
       '<div class="ins-wb-role-grid">' +
       rows.map(function (row) {
         var on = set.has(String(row.roleId));
+        var isOrphan = row.source === 'orphan';
         var portrait = row.avatar
           ? '<span class="ins-wb-role-portrait"><img src="' + esc(row.avatar) + '" alt=""></span>'
           : '<span class="ins-wb-role-portrait ins-wb-role-portrait--mono">' + esc(roleMonogram(row.roleName)) + '</span>';
-        var tag = row.source === 'contacts' ? '<span class="ins-wb-role-tag">档案</span>' : '';
+        /* 标签：档案 / 已失效。
+           「已失效」= 该绑定指向的联系人已被删除，只剩一个孤立 ID。
+           以前这类卡会把裸 ID 当名字显示（ct_mtxj2rfh_a1ek7s），用户
+           既看不懂也无法判断该不该取消。现在给出人话标签 + 小字 ID。 */
+        var tag = isOrphan
+          ? '<span class="ins-wb-role-tag ins-wb-role-tag--orphan">已失效</span>'
+          : (row.source === 'contacts' ? '<span class="ins-wb-role-tag">档案</span>' : '');
+        var hint = isOrphan && row.roleNameHint
+          ? '<span class="ins-wb-role-card-hint" title="' + esc(row.roleNameHint) + '">' +
+            esc(row.roleNameHint) + '</span>'
+          : '';
         return (
           '<button type="button" class="ins-wb-role-card' + (on ? ' is-selected' : '') +
+          (isOrphan ? ' is-orphan' : '') +
           '" data-role-id="' + esc(row.roleId) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
           '<span class="ins-wb-role-mark" aria-hidden="true"></span>' +
           portrait +
           '<span class="ins-wb-role-card-body">' +
           '<span class="ins-wb-role-card-name">' + esc(row.roleName || row.roleId) + '</span>' +
           tag +
+          hint +
           '</span></button>'
         );
       }).join('') +
@@ -164,6 +177,29 @@
       if (v) set.add(v);
     });
     return Array.from(set);
+  }
+
+  /* 打开编辑器时该词条**原本**绑定的角色 ID。
+     用途：区分「用户这次主动勾上的脏 ID」与「本来就绑着的脏 ID」。
+     后者不能拦 —— 它已存在于数据里，拦掉等于用户一保存就静默丢绑定。 */
+  var editingBoundRoleIds = [];
+
+  function collectRoleIdsSafe() {
+    var picked = collectRoleIds();
+    var allowed = {};
+    (editingBoundRoleIds || []).forEach(function (id) { allowed[String(id)] = true; });
+    var rows = store.resolveAvailableRoles ? store.resolveAvailableRoles() : [];
+    var orphanSet = {};
+    rows.forEach(function (r) {
+      if (r && r.source === 'orphan') orphanSet[String(r.roleId)] = true;
+    });
+    /* 不新增「失效绑定」：orphan 卡只在**原本就绑着**时才允许保留。
+       这样用户在面板上误点一张已失效的卡，不会被写进词条；
+       而历史遗留的绑定仍能被看见、也仍能被取消（取消后不再放行）。 */
+    return picked.filter(function (id) {
+      if (!orphanSet[id]) return true;
+      return !!allowed[id];
+    });
   }
 
   function roleHintLabel(entry) {
@@ -368,6 +404,17 @@
       name: ''
     };
     editingId = isNew ? null : data.id;
+    /* 记录「打开这一刻」的绑定快照。
+       为什么需要它：resolveAvailableRoles 会把词条绑过的、但联系人档案里
+       查不到的 ID 作为「已失效」卡片列出来（见 miya-worldbook-store）。
+       如果保存时无脑把这些卡片一起收走，用户光是打开看一下再保存，
+       就会把历史遗留绑定静默写回去；反过来，如果一律拦掉，
+       用户就没法保住、更没法取消这些绑定。
+       所以判据只能是「本来就有」：开编辑器时快照，保存时放行快照内的、
+       拦掉这次新勾上的。新建条目走 data.boundRoleIds=[] 的空快照。 */
+    editingBoundRoleIds = Array.isArray(data.boundRoleIds)
+      ? data.boundRoleIds.map(function (v) { return String(v).trim(); }).filter(Boolean)
+      : [];
     $('miya-wb-editor-title').textContent = isNew ? '新建片段' : '编辑片段';
     $('miya-wb-field-name').value = data.name || '';
     var primary = (data.key && data.key.length) ? data.key : (data.keywords || []);
@@ -456,7 +503,7 @@
   function readEditorPayload() {
     var scopeBtn = $('miya-worldbook-app').querySelector('[data-wb-scope].is-active');
     var scope = scopeBtn ? scopeBtn.getAttribute('data-wb-scope') : 'global';
-    var roles = scope === 'local' ? collectRoleIds() : [];
+    var roles = scope === 'local' ? collectRoleIdsSafe() : [];
     var matcher = global.miyaWorldbookMatcher;
     var keysRaw = $('miya-wb-field-keys').value || '';
     var keywords = matcher && typeof matcher.splitKeywordString === 'function'
@@ -541,6 +588,9 @@
 
   function closeEditor() {
     editingId = null;
+    /* 与 openEditor 的快照对称清空：残留的上一条绑定快照会让
+       collectRoleIdsSafe() 在下一轮误放行 orphan ID。 */
+    editingBoundRoleIds = [];
     var app = $('miya-worldbook-app');
     if (app) app.classList.remove('has-editor');
     var editor = $('miya-wb-editor');
@@ -1073,7 +1123,10 @@
         var wrap = $('miya-wb-diag');
         if (!wrap) return;
         wrap.open = true;
-        fillDiagRoles(collectRoleIds());
+        /* 与保存口径一致：用 collectRoleIdsSafe()。
+           若这里用原始 DOM 选择，诊断台会拿「一个保存时根本不会写入的角色」
+           去跑匹配，给出的结论与真实结果对不上 —— 面板骗人比面板不说话更糟。 */
+        fillDiagRoles(collectRoleIdsSafe());
         /* 必须先展开再滚动 —— 折叠状态下 offsetTop 不准 */
         var sc = document.querySelector('.ins-wb-editor-scroll');
         if (sc) {
@@ -1091,7 +1144,7 @@
     if (diagWrap) {
       diagWrap.addEventListener('toggle', function () {
         if (!diagWrap.open) return;
-        var roles = collectRoleIds();
+        var roles = collectRoleIdsSafe();
         fillDiagRoles(roles);
       });
     }

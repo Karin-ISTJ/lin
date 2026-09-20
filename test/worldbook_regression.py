@@ -729,6 +729,63 @@ console.log('\n\u3010I\u3011\u5168\u5c40\u8bcd\u6761\u751f\u6548\u8303\u56f4\u5f
        !/if \(scopeMode === 'appointment'\) \{\s*matchPool = entries\.filter\(function \(entry\) \{\s*var roles = Array\.isArray\(entry && entry\.boundRoleIds\)/.test(src),
        '\u65e7\u7684\u7ed1\u89d2\u8fc7\u6ee4\u53c8\u56de\u6765\u4e86');
   }
+
+  /* J：孤立联系人绑定 —— 面板底部「多出英文串」的根因回归。
+     三层各守一道：
+       L1 数据层  normalizeState 必须清掉无名空壳行
+       L2 展示层  候选角色里不许出现裸英文 ID
+       L3 保存层  新勾的 orphan 不许写回，原有的 orphan 不许静默丢
+     任一层缺失，用户看到的要么是英文串，要么更糟——静默丢绑定。 */
+  {
+    const app = read('js2/miya-worldbook-app.js');
+    const cstore = read('js1/miya-contacts-store.js');
+    const wstore = read('js2/miya-worldbook-store.js');
+
+    /* J1：数据层有无名空壳过滤 */
+    ck('J1 contacts-store \u5728\u5f52\u4e00\u5316\u65f6\u8fc7\u6ee4\u65e0\u540d\u7a7a\u58f3',
+       /hasPersona\s*\|\|\s*hasGreetings\s*\|\|\s*hasAvatar\s*\|\|\s*hasProfile/.test(cstore),
+       '\u672a\u8fc7\u6ee4\u65e0\u540d\u7a7a\u58f3\uff0c\u5df2\u5220\u8054\u7cfb\u4eba\u7684\u6b8b\u7559\u4f1a\u6cc4\u5230\u9762\u677f');
+
+    /* J2：自愈落盘 —— 只在行数减少时触发 */
+    ck('J2 \u8bfb\u53d6\u540e\u884c\u6570\u53d8\u5c11\u4f1a\u628a\u6cbb\u6108\u7ed3\u679c\u843d\u76d8\u4e00\u6b21',
+       /rawCount\s*>\s*_cache\.characters\.length/.test(cstore),
+       '\u6ca1\u6709\u81ea\u6108\u843d\u76d8\uff0c\u810f\u6570\u636e\u6bcf\u6b21\u8fdb\u9875\u90fd\u8981\u91cd\u7b97');
+
+    /* J3：展示层不再用裸 ID 当角色名。
+       必须剔除注释行再判 —— 修复说明里**故意**引用了旧的错误写法
+       （`roleName: id, source: 'custom'`）作对照，直接全文搜会被注释误判。 */
+    const wstoreCode = wstore
+      .split('\n')
+      .filter(function (ln) { return !/^\s*(\/\*|\*|\/\/)/.test(ln); })
+      .join('\n');
+    ck('J3 \u5b64\u7acb\u7ed1\u5b9a\u4e0d\u518d\u4ee5\u88f8 ID \u4f5c\u4e3a\u89d2\u8272\u540d',
+       !/roleName:\s*id,\s*source:\s*'custom'/.test(wstoreCode) &&
+       /\u5df2\u5931\u6548\u7684\u89d2\u8272\u7ed1\u5b9a/.test(wstoreCode),
+       '\u9762\u677f\u53c8\u4f1a\u663e\u793a ct_mtxj* \u8fd9\u7c7b\u82f1\u6587\u4e32');
+
+    /* J4：孤立项仍列出（否则用户无从取消） */
+    ck('J4 \u5b64\u7acb\u7ed1\u5b9a\u4ecd\u4fdd\u7559\u4e3a\u53ef\u53d6\u6d88\u7684\u6761\u76ee',
+       /source:\s*'orphan'/.test(wstore) && /roleNameHint/.test(wstore),
+       '\u4e0d\u5217\u51fa\u5c31\u65e0\u6cd5\u53d6\u6d88\uff0c\u5b64\u513f\u7ed1\u5b9a\u4f1a\u6c38\u4e45\u7559\u5728\u8bcd\u6761\u91cc');
+
+    /* J5/J6：保存层快照语义 —— 开编辑器时记，关时清 */
+    ck('J5 \u7f16\u8f91\u5668\u6253\u5f00\u65f6\u8bb0\u5f55\u7ed1\u5b9a\u5feb\u7167',
+       /editingBoundRoleIds\s*=\s*Array\.isArray\(data\.boundRoleIds\)/.test(app),
+       '\u65e0\u5feb\u7167\u5219 collectRoleIdsSafe \u4f1a\u8bef\u6740\u5df2\u6709\u5b64\u513f\u7ed1\u5b9a');
+    ck('J6 \u7f16\u8f91\u5668\u5173\u95ed\u65f6\u6e05\u7a7a\u5feb\u7167',
+       /editingBoundRoleIds\s*=\s*\[\]/.test(app),
+       '\u6b8b\u7559\u5feb\u7167\u4f1a\u8ba9\u4e0b\u4e00\u8f6e\u8bef\u653e\u884c\u810f ID');
+
+    /* J7：保存路径必须走 safe 版 */
+    ck('J7 \u4fdd\u5b58\u8def\u5f84\u4f7f\u7528 collectRoleIdsSafe \u800c\u975e\u88f8\u6536\u96c6',
+       /var roles = scope === 'local' \? collectRoleIdsSafe\(\) : \[\];/.test(app),
+       '\u65b0\u52fe\u7684\u5b64\u513f ID \u4f1a\u88ab\u5199\u56de\u8bcd\u6761');
+
+    /* J8：诊断台与保存口径一致 */
+    ck('J8 \u8bca\u65ad\u9762\u677f\u540c\u6837\u8d70 safe \u7248\uff08\u53e3\u5f84\u4e0e\u4fdd\u5b58\u4e00\u81f4\uff09',
+       !/fillDiagRoles\(collectRoleIds\(\)\)/.test(app),
+       '\u8bca\u65ad\u53f0\u62ff\u4e0d\u4f1a\u5199\u5165\u7684\u89d2\u8272\u53bb\u8dd1\u5339\u914d\uff0c\u7ed3\u8bba\u4f1a\u9a97\u4eba');
+  }
 })();
 
 console.log('\n' + '\u2550'.repeat(58));
