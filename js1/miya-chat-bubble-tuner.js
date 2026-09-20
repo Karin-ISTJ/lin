@@ -102,6 +102,42 @@
   /* 反解统计用的总项数：颜色 6 + 形状 6 + 角标 5（含 URL 与镜像 2 个非滑块项） */
   var TOTAL_ITEMS = COLOR_ITEMS.length + SLIDER_ITEMS.length + BADGE_SLIDERS.length + 2;
 
+  /* ── 内置色盘 ──────────────────────────────────────────────
+   *
+   * 色值来源：用户提供的色卡图（948×1265 JPEG），逐块取**中心 6px 方形区域
+   * 的逐通道中位数**。取中心是刻意的 —— 色块边缘带一层内阴影，取边缘会把
+   * 阴影混进来；取中位数而非均值，则单个噪点不会带偏结果。色块内部是纯平
+   * 色（横切验证过，同一个值连续跨 70+ 像素），所以 JPEG 压缩对结果无影响。
+   *
+   * 每组按「浅 → 深」排好，shades[0] 最浅、shades[shades.length-1] 最深。
+   * 一键套用时按位置分配：最浅做聊天背景、次浅做对方气泡、最深做我方气泡 ——
+   * 这样双方气泡都能从背景上跳出来。文字色不写死，由 pickFg 按对比度算。
+   *
+   * 命名说明：「草木」「暖沙」两组在原图里没有名称标签（标题行被裁切），
+   * 这两个名字是后起的，仅作展示用。
+   */
+  var PALETTES = [
+    { id: 'sakura',   name: '早樱',     tag: '#f6a9bd',
+      shades: ['#f7dbc5', '#f0bcc8', '#f5bfcc', '#efb9d3', '#f8b0be', '#f6a9bd', '#f3a9a8', '#e692a9'] },
+    { id: 'skyblue',  name: '水天色',   tag: '#1d78ad',
+      shades: ['#d5ecf2', '#c4fffd', '#96c8e1', '#88c8d2', '#6a97b4', '#29a6c4', '#1d78ad', '#1675b5'] },
+    { id: 'snow',     name: '眠雪',     tag: '#8595a2',
+      shades: ['#d5dedd', '#d6dde5', '#d6d5da', '#c5cdd8', '#acb5b4', '#8595a2', '#74818a', '#9fabbb'] },
+    { id: 'honey',    name: '蜂蜜蛋糕', tag: '#fcbb19',
+      shades: ['#fffec6', '#fef2dc', '#fee4a7', '#ffd366', '#f8ca2c', '#fcbb19', '#e1b167', '#dca838'] },
+    { id: 'herb',     name: '草木',     tag: '#748b79',
+      shades: ['#d3eada', '#cfe7cf', '#c7e9ce', '#addfd3', '#6f8b7c', '#748b79', '#70878d', '#526b68'] },
+    { id: 'sand',     name: '暖沙',     tag: '#b2a696',
+      shades: ['#ffffff', '#f7f2ef', '#efe5db', '#e5ddd2', '#f0e3da', '#eed4c3', '#dbd1c8', '#b2a696'] }
+  ];
+
+  /* 内嵌取色盘的常用色（黑白灰 + 六个纯色），排在内置色盘之前。
+     原生 <input type=color> 的默认色板就是这批，保留下来便于手调中性色。 */
+  var BASIC_COLORS = [
+    '#000000', '#444444', '#888888', '#bbbbbb', '#e6e6e6', '#ffffff',
+    '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'
+  ];
+
   /* ── 小工具 ─────────────────────────────────────────────── */
 
   function fmtNum(v) {
@@ -123,6 +159,142 @@
      面板外的输入（手改 CSS）可能带 rgb()/var()，那些不给回填到取色器。 */
   function isHex(v) {
     return /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
+  }
+
+  /* ── 颜色计算 ─────────────────────────────────────────────
+     全部走 sRGB 相对亮度（WCAG 定义），不做 gamma 之外的近似 ——
+     这套算法的目的只有一个：决定配深字还是浅字，以及挑代表色。 */
+
+  function hexToRgb(h) {
+    var s = String(h || '').trim().replace(/^#/, '');
+    if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    if (s.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    return {
+      r: parseInt(s.slice(0, 2), 16),
+      g: parseInt(s.slice(2, 4), 16),
+      b: parseInt(s.slice(4, 6), 16)
+    };
+  }
+
+  function rgbToHex(r, g, b) {
+    function p(n) {
+      var v = Math.max(0, Math.min(255, Math.round(n))).toString(16);
+      return v.length === 1 ? '0' + v : v;
+    }
+    return '#' + p(r) + p(g) + p(b);
+  }
+
+  /* WCAG 相对亮度。人眼对绿最敏感、蓝最迟钝，系数即由此而来。 */
+  function luminance(h) {
+    var c = hexToRgb(h);
+    if (!c) return 1;
+    function ch(v) {
+      v = v / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  }
+
+  function contrast(a, b) {
+    var la = luminance(a), lb = luminance(b);
+    var hi = Math.max(la, lb), lo = Math.min(la, lb);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /* 给一个背景色挑可读的文字色。
+     候选不止纯黑纯白 —— 用背景自身压暗/提亮出的「同色系深/浅」往往更柔和，
+     跟整体色调更协调。三个候选里选对比度最高的。 */
+  function pickFg(bg) {
+    var c = hexToRgb(bg);
+    if (!c) return '#262626';
+    var cands = [
+      rgbToHex(c.r * 0.22, c.g * 0.22, c.b * 0.22),   /* 同色系压暗 */
+      '#ffffff',
+      '#1f1f1f'
+    ];
+    var best = cands[0], bestRatio = -1;
+    cands.forEach(function (cc) {
+      var r = contrast(bg, cc);
+      if (r > bestRatio) { bestRatio = r; best = cc; }
+    });
+    return best;
+  }
+
+  /* 挑「代表色」：一组里饱和度最高的那个，用于色盘胶囊上的小圆点。
+     饱和度用 max-min（HSV 口径），比 HSL 的 S 更直观。 */
+  function mostVivid(shades) {
+    var best = shades[0], bestSat = -1;
+    (shades || []).forEach(function (h) {
+      var c = hexToRgb(h);
+      if (!c) return;
+      var mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b);
+      var sat = mx === 0 ? 0 : (mx - mn) / mx;
+      /* 亮度太低的不用（近黑没有色相可言），太高的也排除 */
+      var lum = luminance(h);
+      var score = sat * (lum > 0.08 && lum < 0.92 ? 1 : 0.35);
+      if (score > bestSat) { bestSat = score; best = h; }
+    });
+    return best;
+  }
+
+  /* 一套色盘 → 六个颜色参数。
+     位置的选法：shades 已按浅→深排序，但「最深」往往是近黑/酒红那类，
+     拿来做气泡会显脏。所以取「亮度落在甜区、且饱和度高」的那个做我方气泡。 */
+  function paletteToParams(pal) {
+    var sh = (pal && pal.shades) || [];
+    if (!sh.length) return null;
+
+    var sorted = sh.slice().sort(function (a, b) { return luminance(a) - luminance(b); });
+    var lightest = sorted[0];
+    var darkest = sorted[sorted.length - 1];
+
+    /* 我方气泡：在「不太亮也不太暗」的区间里挑最鲜艳的 */
+    var mid = sh.filter(function (h) {
+      var l = luminance(h);
+      return l > 0.12 && l < 0.72;
+    });
+    if (!mid.length) mid = sh;
+    var meBg = mostVivid(mid);
+    var meLum = luminance(meBg);
+
+    /* 对方气泡：取亮度明显高于我方的候选里较鲜艳的，气泡层次才拉得开。
+       没有更亮的就退回最浅那个。 */
+    var lighter = sh.filter(function (h) {
+      var l = luminance(h);
+      return l > meLum + 0.06 && l < 0.93;
+    });
+    var themBg = lighter.length ? mostVivid(lighter) : lightest;
+    var themLum = luminance(themBg);
+
+    /* 聊天背景：要当底衬，必须比**两个气泡都亮**，且跟较浅那个气泡留出
+       可感知的差距（对比 ≥ 1.08，约等于 8% 亮度差）。
+       只挑「比气泡亮」的候选，一个都没有时才退回白色 ——
+       绝不能像早期实现那样取最深的色当背景，那会让深色气泡糊在深底上。 */
+    var brighter = sh.filter(function (h) {
+      return luminance(h) > themLum + 0.02;
+    });
+    var chatBg = '';
+    var minLum = Math.max(meLum, themLum);
+    brighter.forEach(function (h) {
+      if (luminance(h) <= minLum) return;
+      if (contrast(h, themBg) < 1.08) return;
+      /* 满足条件的里取最浅的：留给气泡最大的对比余量 */
+      if (!chatBg || luminance(h) > luminance(chatBg)) chatBg = h;
+    });
+    if (!chatBg) chatBg = '#ffffff';
+
+    /* 描边：我方气泡压暗一点，让它有轮廓但不抢戏 */
+    var mc = hexToRgb(meBg);
+    var borderColor = rgbToHex(mc.r * 0.82, mc.g * 0.82, mc.b * 0.82);
+
+    return {
+      meBg: meBg,
+      meFg: pickFg(meBg),
+      themBg: themBg,
+      themFg: pickFg(themBg),
+      borderColor: borderColor,
+      chatBg: chatBg
+    };
   }
 
   /* 夹取到 SPEC 范围；非数字则退回默认值 */
@@ -461,15 +633,102 @@
     /* 描边色与聊天背景的「空」是有语义的（不额外指定），但取色器没法显示空。
        这两项多给一个 hex 读数，用户能看出当前到底是不是「未指定」。 */
     var optional = (key === 'borderColor' || key === 'chatBg');
-    return '<label class="mi-bt-color' + (optional ? ' mi-bt-color--opt' : '') + '">' +
+    return '<div class="mi-bt-color' + (optional ? ' mi-bt-color--opt' : '') + '">' +
+      '<button type="button" class="mi-bt-color__swatch" data-mq-bt-pick="' + key + '"' +
+        ' aria-label="' + esc(label) + '" aria-expanded="false"' +
+        ' style="--mq-bt-c:' + esc(DEFAULTS[key] || '#ffffff') + '">' +
+        '<span class="mi-bt-color__chip" data-mq-bt-chip="' + key + '"></span>' +
+      '</button>' +
       '<span class="mi-bt-color__name">' + esc(label) + '</span>' +
       (optional
         ? '<span class="mi-bt-color__hex" data-mq-bt-hex="' + key + '">默认</span>'
         : '') +
+      /* 保留一个隐藏的原生 input：readParams / applyParamsToPanel / syncFromCss
+         全都在它身上读写，留着它们就不用改；同时它也是「自定义」路径的入口。 */
       '<input type="color" class="mi-bt-color__input" data-mq-bt="' + key + '"' +
         ' value="' + esc(DEFAULTS[key] || '#ffffff') + '"' +
-        ' title="' + esc(label) + '">' +
-    '</label>';
+        ' title="' + esc(label) + '" tabindex="-1" aria-hidden="true">' +
+    '</div>';
+  }
+
+  /* 内嵌色盘面板。点某个颜色项时展开在它下面，**不弹系统对话框** ——
+     原生 input[type=color] 在手机上是个全屏弹窗，把预览整个盖住，
+     根本没法「边看边调」。这里是整个改动的起因。 */
+  function pickerHtml(key) {
+    var H = [];
+    H.push('<div class="mi-bt-picker" data-mq-bt-picker="' + key + '" hidden>');
+
+    /* 内置色盘：横向可滚的胶囊行，点一下整套换色 */
+    H.push('<div class="mi-bt-picker__label">色盘</div>');
+    H.push('<div class="mi-bt-palettes">');
+    PALETTES.forEach(function (p) {
+      H.push('<button type="button" class="mi-bt-pal" data-mq-bt-pal="' + p.id + '"' +
+        ' title="' + esc(p.name) + '">');
+      H.push('<span class="mi-bt-pal__dots">');
+      /* 只画 4 个代表色，够辨识即可，多了在小屏上糊成一团 */
+      [0, Math.floor(p.shades.length / 3), Math.floor(p.shades.length * 2 / 3), p.shades.length - 1]
+        .forEach(function (i) {
+          H.push('<i style="background:' + esc(p.shades[i]) + '"></i>');
+        });
+      H.push('</span>');
+      H.push('<span class="mi-bt-pal__name">' + esc(p.name) + '</span>');
+      H.push('</button>');
+    });
+    H.push('</div>');
+
+    /* 取色区：内置色盘的散色 + 常用中性/纯色 */
+    H.push('<div class="mi-bt-picker__label">取色</div>');
+    H.push('<div class="mi-bt-swatches">');
+    var seen = {};
+    PALETTES.forEach(function (p) {
+      p.shades.forEach(function (s) {
+        if (seen[s]) return;
+        seen[s] = 1;
+        H.push('<button type="button" class="mi-bt-sw" data-mq-bt-swatch="' + esc(s) + '"' +
+          ' style="background:' + esc(s) + '" title="' + esc(s) + '"></button>');
+      });
+    });
+    BASIC_COLORS.forEach(function (s) {
+      if (seen[s]) return;
+      seen[s] = 1;
+      H.push('<button type="button" class="mi-bt-sw mi-bt-sw--basic" data-mq-bt-swatch="' + esc(s) + '"' +
+        ' style="background:' + esc(s) + '" title="' + esc(s) + '"></button>');
+    });
+    H.push('</div>');
+
+    /* 自定义：默认收起，展开才有原生取色器 + 手填 hex。
+       保留它是刻意的 —— 色盘是加速入口，不是唯一出路。 */
+    H.push('<div class="mi-bt-custom">');
+    H.push('<button type="button" class="mi-bt-custom__toggle" data-mq-bt-custom-toggle' +
+      ' aria-expanded="false">自定义</button>');
+    H.push('<div class="mi-bt-custom__body" data-mq-bt-custom-body hidden>');
+    H.push('<label class="mi-bt-custom__row">');
+    H.push('<span>取色器</span>');
+    H.push('<input type="color" class="mi-bt-custom__color" data-mq-bt-custom-color="' + key + '"' +
+      ' value="' + esc((COLOR_DEFAULTS()[key]) || '#ffffff') + '">');
+    H.push('</label>');
+    H.push('<label class="mi-bt-custom__row">');
+    H.push('<span>色值</span>');
+    H.push('<input type="text" class="ins-text-input mi-bt-custom__hex" data-mq-bt-custom-hex="' + key + '"' +
+      ' placeholder="#rrggbb" maxlength="7" spellcheck="false" autocapitalize="off" autocomplete="off">');
+    H.push('</label>');
+    H.push('<p class="mi-bt-custom__note">填 <code>#rrggbb</code> 或 <code>#rgb</code>，回车生效。</p>');
+    H.push('</div>');
+    H.push('</div>');
+
+    H.push('<div class="mi-bt-picker__foot">');
+    H.push('<button type="button" class="mi-pill mi-pill--ghost mi-bt-picker__clear" data-mq-bt-clear="' + key + '">恢复默认</button>');
+    H.push('<button type="button" class="mi-pill mi-bt-picker__done" data-mq-bt-picker-done>收起</button>');
+    H.push('</div>');
+
+    H.push('</div>');
+    return H.join('');
+  }
+
+  /* 取色器里的「默认」——用于恢复默认按钮。抽成函数是为了让 colorHtml 与
+     pickerHtml 共用同一份，避免两处写死的默认色值漂移。 */
+  function COLOR_DEFAULTS() {
+    return DEFAULTS;
   }
 
   /**
@@ -501,10 +760,31 @@
     /* 颜色组 */
     H.push('<div class="mi-bt-group">');
     H.push('<span class="mi-bt-group__label">颜色</span>');
+
+    /* 一键套整组：横向排列的色盘胶囊。放最上面是因为它是最常用入口 ——
+       多数人想要的只是「整体换个色」，而不是逐个调六个参数。 */
+    H.push('<div class="mi-bt-presets">');
+    PALETTES.forEach(function (p) {
+      H.push('<button type="button" class="mi-bt-preset" data-mq-bt-preset="' + p.id + '"' +
+        ' title="套用「' + esc(p.name) + '」色盘">');
+      H.push('<span class="mi-bt-preset__bar" aria-hidden="true">');
+      [0, Math.floor(p.shades.length / 3), Math.floor(p.shades.length * 2 / 3), p.shades.length - 1]
+        .forEach(function (i) {
+          H.push('<i style="background:' + esc(p.shades[i]) + '"></i>');
+        });
+      H.push('</span>');
+      H.push('<span class="mi-bt-preset__name">' + esc(p.name) + '</span>');
+      H.push('</button>');
+    });
+    H.push('</div>');
+
     H.push('<div class="mi-bt-grid">');
     COLOR_ITEMS.forEach(function (it) { H.push(colorHtml(it.key, it.label)); });
     H.push('</div>');
-    H.push('<p class="mi-bt-note">描边色与聊天背景留空/白色即为「不额外指定」，沿用主题默认。</p>');
+    /* 取色面板全部预渲染 + hidden，点开时才显示。预渲染而不是按需插入：
+       插入会改变面板高度导致页面跳动，预渲染只切换 hidden，位置稳定。 */
+    COLOR_ITEMS.forEach(function (it) { H.push(pickerHtml(it.key)); });
+    H.push('<p class="mi-bt-note">点色块就地取色，预览实时变化；描边色与聊天背景可留空，即沿用主题默认。</p>');
     H.push('</div>');
 
     /* 形状组 */
@@ -565,8 +845,12 @@
       if (!(key in p)) return;
       var v = p[key];
       if (el.type === 'color') {
-        /* 取色器不接受空串。空 = 不指定，用白色占位（用户不动它就不会被写进 CSS） */
+        /* 取色器不接受空串。空 = 不指定，用白色占位（用户不动它就不会被写进 CSS）。
+           同时按「是否为空」维护 touched 标记，readParams 靠它区分
+           「没动过的白色占位」与「用户真的选了白色」。 */
         el.value = isHex(v) ? v : '#ffffff';
+        if (!isHex(v)) el.removeAttribute('data-mq-bt-touched');
+        else el.dataset.mqBtTouched = '1';
       } else if (el.type === 'range') {
         el.value = fmtNum(v);
       } else {
@@ -589,9 +873,18 @@
       var key = el.getAttribute('data-mq-bt');
       if (!(key in DEFAULTS)) return;
       if (el.type === 'color') {
-        /* 取色器返回小写 #rrggbb。约定：等于默认色的白/灰也照实写入，
-           不做「等于默认就当空」的猜测 —— 那样用户真想要白色会写不进去。 */
-        out[key] = String(el.value || '').toLowerCase();
+        var v = String(el.value || '').toLowerCase();
+        /* 可选色（描边 / 聊天背景）的默认值是空串，语义是「不额外指定」。
+           但 <input type=color> 装不下空串，未动过时它显示的是白色占位 ——
+           直接读就会把「没动过」误读成「用户选了白色」，编译出一段
+           border-color:#ffffff / background-color:#ffffff，
+           把主题原本的淡描边和背景色盖掉。用户什么都没碰却改变了外观。
+           判据：值是白色 且 该项确实没被主动设置过（看 dataset 标记）。 */
+        if (DEFAULTS[key] === '' && v === '#ffffff' && el.dataset.mqBtTouched !== '1') {
+          out[key] = '';
+        } else {
+          out[key] = v;
+        }
       } else if (el.type === 'range') {
         out[key] = parseFloat(el.value);
       } else {
@@ -603,7 +896,8 @@
     return normalizeParams(out);
   }
 
-  /* 刷新所有数值标签（label 里的 span） */
+  /* 刷新所有数值标签（label 里的 span）+ 色块预览 + hex 读数。
+     三处都从隐藏的原生 input 取值，保证单一数据源。 */
   function refreshLabels(panel) {
     if (!panel) return;
     panel.querySelectorAll('[data-mq-bt-val]').forEach(function (span) {
@@ -613,15 +907,22 @@
       var sp = SPEC[key] || { unit: '' };
       span.textContent = fmtNum(el.value) + sp.unit;
     });
-    /* 可选色（描边/聊天背景）的 hex 读数：默认值是空串，
-       用户没动过时显示「默认」，动过之后显示真实色值。 */
-    panel.querySelectorAll('[data-mq-bt-hex]').forEach(function (span) {
-      var key = span.getAttribute('data-mq-bt-hex');
+
+    /* 色块 + hex 读数。空串是有语义的「不指定」：色块显示白色占位，
+       可选色旁边写「默认」，用户能一眼看出自己到底动没动过。 */
+    COLOR_ITEMS.forEach(function (it) {
+      var key = it.key;
       var el = panel.querySelector('[data-mq-bt="' + key + '"]');
       if (!el) return;
       var v = String(el.value || '').toLowerCase();
       var untouched = !DEFAULTS[key] && v === '#ffffff';
-      span.textContent = untouched ? '默认' : v;
+      var show = untouched ? '#ffffff' : v;
+
+      var pick = panel.querySelector('[data-mq-bt-pick="' + key + '"]');
+      if (pick) pick.style.setProperty('--mq-bt-c', show);
+
+      var hexEl = panel.querySelector('[data-mq-bt-hex="' + key + '"]');
+      if (hexEl) hexEl.textContent = untouched ? '默认' : v.toUpperCase();
     });
   }
 
@@ -817,8 +1118,150 @@
       applyParamsToPanel(panel, DEFAULTS);
       setMeta(panel, '已重置');
       setHint(panel, '已重置为默认参数。点「应用到编辑区」写入。');
+      closeAllPickers(panel);
       return;
     }
+
+    /* ── 一键套整组色盘 ── */
+    var palBtn = e.target.closest('[data-mq-bt-preset]');
+    if (palBtn) {
+      var pal = findPalette(palBtn.getAttribute('data-mq-bt-preset'));
+      if (!pal) return;
+      var col = paletteToParams(pal);
+      if (!col) return;
+      /* 只覆盖 6 个颜色，形状与角标保持用户当前设置 ——
+         套色盘不该顺手改掉人家调好的圆角。 */
+      var cur = readParams(panel);
+      applyParamsToPanel(panel, Object.assign({}, cur, col));
+      refreshPreviewOnly(panel, root);
+      setMeta(panel, '色盘「' + pal.name + '」');
+      setHint(panel, '已套用「' + pal.name + '」色盘（仅颜色）。点「应用到编辑区」→ 再点右上角「保存」生效。');
+      closeAllPickers(panel);
+      return;
+    }
+
+    /* ── 打开 / 关闭某个颜色的取色面板 ── */
+    var pickBtn = e.target.closest('[data-mq-bt-pick]');
+    if (pickBtn) {
+      var pk = pickBtn.getAttribute('data-mq-bt-pick');
+      togglePicker(panel, pk);
+      return;
+    }
+    if (e.target.closest('[data-mq-bt-picker-done]')) {
+      closeAllPickers(panel);
+      return;
+    }
+
+    /* ── 取色：内置色盘里的散色 ── */
+    var sw = e.target.closest('[data-mq-bt-swatch]');
+    if (sw) {
+      var swKey = pickerKeyOf(sw);
+      if (!swKey) return;
+      setColorValue(panel, swKey, sw.getAttribute('data-mq-bt-swatch'));
+      refreshPreviewOnly(panel, root);
+      setMeta(panel, '待应用');
+      setHint(panel, '颜色已改，预览实时更新。点「应用到编辑区」→ 再点右上角「保存」生效。');
+      return;
+    }
+
+    /* ── 展开 / 收起「自定义」区 ── */
+    var ct = e.target.closest('[data-mq-bt-custom-toggle]');
+    if (ct) {
+      var body = ct.parentNode.querySelector('[data-mq-bt-custom-body]');
+      if (body) {
+        var nowOpen = body.hasAttribute('hidden');
+        if (nowOpen) body.removeAttribute('hidden');
+        else body.setAttribute('hidden', '');
+        ct.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
+      }
+      return;
+    }
+
+    /* ── 恢复该项默认色 ── */
+    var clr = e.target.closest('[data-mq-bt-clear]');
+    if (clr) {
+      var clrKey = clr.getAttribute('data-mq-bt-clear');
+      setColorValue(panel, clrKey, DEFAULTS[clrKey] || '');
+      refreshPreviewOnly(panel, root);
+      setMeta(panel, '待应用');
+      setHint(panel, '已恢复该项默认色。');
+      return;
+    }
+  }
+
+  function findPalette(id) {
+    for (var i = 0; i < PALETTES.length; i++) {
+      if (PALETTES[i].id === id) return PALETTES[i];
+    }
+    return null;
+  }
+
+  /* 从当前点击的元素往上找到它所属的取色面板，取出对应的颜色字段名 */
+  function pickerKeyOf(el) {
+    var box = el.closest('[data-mq-bt-picker]');
+    return box ? box.getAttribute('data-mq-bt-picker') : '';
+  }
+
+  function closeAllPickers(panel) {
+    panel.querySelectorAll('[data-mq-bt-picker]').forEach(function (p) {
+      p.setAttribute('hidden', '');
+    });
+    panel.querySelectorAll('[data-mq-bt-pick]').forEach(function (b) {
+      b.classList.remove('is-open');
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  /* 同一时刻只开一个取色面板：手机上开两个会互相挤，而且用户也没那个需求 */
+  function togglePicker(panel, key) {
+    var box = panel.querySelector('[data-mq-bt-picker="' + key + '"]');
+    var btn = panel.querySelector('[data-mq-bt-pick="' + key + '"]');
+    var wasOpen = box && !box.hasAttribute('hidden');
+    closeAllPickers(panel);
+    if (!box || wasOpen) return;
+    box.removeAttribute('hidden');
+    if (btn) {
+      btn.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    /* 打开时把「自定义」的色值与 hex 输入框对齐到当前值 */
+    var cur = readParams(panel)[key];
+    var hexInput = box.querySelector('[data-mq-bt-custom-hex]');
+    var colorInput = box.querySelector('[data-mq-bt-custom-color]');
+    var hasVal = isHex(cur);
+    if (hexInput) hexInput.value = hasVal ? cur : '';
+    if (colorInput) colorInput.value = hasVal ? cur : '#ffffff';
+  }
+
+  /* 写入某个颜色字段。同步三处：隐藏的原生 input（数据源）、
+     色块预览、以及可选的 hex 读数。空串有语义，必须原样保留。 */
+  function setColorValue(panel, key, value) {
+    var v = String(value || '').trim();
+    if (v !== '' && !isHex(v)) return false;
+
+    var native = panel.querySelector('[data-mq-bt][data-mq-bt="' + key + '"]');
+    if (native) {
+      native.value = v === '' ? '#ffffff' : v;
+      /* 标记「用户主动设过」。空串 = 显式恢复默认，所以清掉标记；
+         有值 = 真的选了颜色，打上标记，readParams 才会认这个白色。 */
+      if (v === '') native.removeAttribute('data-mq-bt-touched');
+      else native.dataset.mqBtTouched = '1';
+    }
+
+    var pick = panel.querySelector('[data-mq-bt-pick="' + key + '"]');
+    if (pick) pick.style.setProperty('--mq-bt-c', v === '' ? '#ffffff' : v);
+
+    var hexEl = panel.querySelector('[data-mq-bt-hex="' + key + '"]');
+    if (hexEl) hexEl.textContent = v === '' ? '默认' : v.toUpperCase();
+
+    var box = panel.querySelector('[data-mq-bt-picker="' + key + '"]');
+    if (box) {
+      var hi = box.querySelector('[data-mq-bt-custom-hex]');
+      var ci = box.querySelector('[data-mq-bt-custom-color]');
+      if (hi) hi.value = v;
+      if (ci) ci.value = v === '' ? '#ffffff' : v;
+    }
+    return true;
   }
 
   /* 滑块拖动中只更新数值标签，松手（change）才刷预览 ——
@@ -826,6 +1269,34 @@
   function onInput(root, e) {
     var panel = root.querySelector('[data-mq-bt-panel]');
     if (!panel) return;
+
+    /* 取色面板里的「自定义」区：原生取色器拖动时就实时刷预览。
+       这是唯一「拖动中也要刷」的地方 —— 颜色拖动的代价远小于滑块
+       （不涉及布局重排），而且用户就是要看着预览挑色。 */
+    var custColor = e.target.closest('[data-mq-bt-custom-color]');
+    if (custColor) {
+      var ck = custColor.getAttribute('data-mq-bt-custom-color');
+      setColorValue(panel, ck, custColor.value);
+      refreshPreviewOnly(panel, root);
+      setMeta(panel, '待应用');
+      setHint(panel, '取色中，预览实时更新（编辑区未改动）。');
+      return;
+    }
+
+    /* 手填 hex：只在凑够完整色值时才动，避免输入过程中的半截值乱跳 */
+    var custHex = e.target.closest('[data-mq-bt-custom-hex]');
+    if (custHex) {
+      var hk = custHex.getAttribute('data-mq-bt-custom-hex');
+      var hv = String(custHex.value || '').trim();
+      if (isHex(hv)) {
+        setColorValue(panel, hk, hv);
+        refreshPreviewOnly(panel, root);
+        setMeta(panel, '待应用');
+        setHint(panel, '色值已生效，预览实时更新（编辑区未改动）。');
+      }
+      return;
+    }
+
     var el = e.target.closest('[data-mq-bt]');
     if (!el) return;
     if (el.type === 'range') {
@@ -845,6 +1316,16 @@
   function onChange(root, e) {
     var panel = root.querySelector('[data-mq-bt-panel]');
     if (!panel) return;
+
+    /* 自定义区松手：预览已经实时刷过了，这里只给个收尾提示 */
+    var custColor = e.target.closest('[data-mq-bt-custom-color]');
+    if (custColor) {
+      setHint(panel, '颜色已定。点「应用到编辑区」→ 再点右上角「保存」生效。');
+      return;
+    }
+    var custHex = e.target.closest('[data-mq-bt-custom-hex]');
+    if (custHex) return;
+
     var el = e.target.closest('[data-mq-bt]');
     if (!el) return;
     if (el.type === 'range' || el.type === 'color') {
@@ -868,6 +1349,68 @@
     }
     writeCss(root, compileCss(readParams(panel)));
     setHint(panel, '预览已更新（尚未保存）。点右上角「保存」才对当前聊天生效。');
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     只刷预览、不写编辑区
+     ══════════════════════════════════════════════════════════
+
+     这是「边看边调」的关键。取色、套色盘这类操作过程性很强 ——
+     用户会连点好几个色块，每个都写一次编辑区的话：
+       ① 下面那个 CSS 文本框会疯狂抖动，行数在变、滚动位置在跳；
+       ② 编辑区原本的手写内容会被反复覆盖，撤销都救不回来。
+     所以调色阶段只把 CSS 打到**预览房间**上，编辑区一个字都不动，
+     等用户点「应用到编辑区」才落笔。
+
+     实现上绕开 beautify 的 hydrateCssPreview（那个是「编辑区 → 预览」方向的），
+     直接往预览的 <style> 里写。作用域仍按 scopeCssForPreview 的规则来，
+     优先复用 beautify 导出的同名方法，没有才退回本地替换 ——
+     这样预览与真实的作用域关系不会漂移。 */
+  function previewOnly(root, css) {
+    var b = beatify();
+    var scoped = css;
+    if (b && typeof b.scopeCssForPreview === 'function') {
+      try { scoped = b.scopeCssForPreview(css); } catch (e) { /* 退回本地替换 */ }
+    }
+    if (scoped === css) {
+      /* 本地兜底：与 beautify 的 scopeCssForPreview 保持同样的规则 */
+      scoped = css.replace(/#qq-room-([\w-]+)/g, '#mq-bf-preview-$1')
+                   .replace(/#qq-room\b/g, '#mq-bf-preview-room');
+    }
+    /* 复用 beautify 的预览样式元素（id 是它定义的常量值）。
+       自己另建一个 style 会出现两份预览样式叠加，后写的未必赢。 */
+    var el = document.getElementById('mq-beautify-preview-style');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'mq-beautify-preview-style';
+      document.body.appendChild(el);
+    }
+    el.textContent = scoped;
+
+    /* 关键一步：给预览房间加上 .mq-has-custom-css。
+     *
+     * 为什么不加就不生效 —— 预览侧有一批默认样式挂在这个选择器下：
+     *   #mq-bf-preview-room:not(.mq-has-custom-css) .qq-room__row--me .qq-room__bubble
+     * 它的权重是 (2,2,1)，而我们编译产物是
+     *   #mq-bf-preview-room .qq-room__row--me .qq-room__bubble   → (1,2,1)
+     * 权重比人家低，加 !important 又违反本模块的硬约束②，
+     * 于是我方气泡的底色会被默认样式稳稳压住 —— 现象就是「对方气泡变了色、
+     * 我方气泡纹丝不动」。
+     *
+     * 正解与 hydrateCssPreview 一致：把这个类加上，那批 :not() 规则整体失效，
+     * 预览回落到 miya-chat.css 的裸 .qq-room__bubble，我们的规则就赢了。
+     * 注意这个类由 beautify 管，正常路径下它会自己加/删；我们这里只在
+     * 「编辑区还没写、但预览要显示调色结果」的空档期接管一下。 */
+    var room = (root || document).querySelector('[data-mq-bf-css-preview]');
+    if (room) room.classList.add('mq-has-custom-css');
+    return true;
+  }
+
+  /* 面板当前参数 → 只刷预览 */
+  function refreshPreviewOnly(panel, root) {
+    var css = compileCss(readParams(panel));
+    previewOnly(root, css);
+    return css;
   }
 
   /**
@@ -912,6 +1455,8 @@
     SLIDER_ITEMS: SLIDER_ITEMS,
     BADGE_SLIDERS: BADGE_SLIDERS,
     TOTAL_ITEMS: TOTAL_ITEMS,
+    PALETTES: PALETTES,
+    BASIC_COLORS: BASIC_COLORS,
     normalizeParams: normalizeParams,
     compileCss: compileCss,
     parseCss: parseCss,
@@ -920,10 +1465,23 @@
     isHex: isHex,
     fmtNum: fmtNum,
     esc: esc,
+    /* 颜色计算 */
+    hexToRgb: hexToRgb,
+    rgbToHex: rgbToHex,
+    luminance: luminance,
+    contrast: contrast,
+    pickFg: pickFg,
+    mostVivid: mostVivid,
+    paletteToParams: paletteToParams,
     /* 面板 */
     buildPanelHtml: buildPanelHtml,
     applyParamsToPanel: applyParamsToPanel,
     readParams: readParams,
+    setColorValue: setColorValue,
+    closeAllPickers: closeAllPickers,
+    togglePicker: togglePicker,
+    refreshPreviewOnly: refreshPreviewOnly,
+    previewOnly: previewOnly,
     bindTunerRoot: bindTunerRoot,
     syncFromCss: syncFromCss,
     syncFromTextarea: syncFromTextarea,

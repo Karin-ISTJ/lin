@@ -1009,6 +1009,10 @@
     clearAppliedBeautifyForChat: clearAppliedBeautifyForChat,
     hydrateCssPreview: hydrateCssPreview,
     clearPreviewCss: clearPreviewCss,
+    /* 导出给气泡调试器用：它在调色阶段要「只刷预览、不写编辑区」，
+       必须用同一套作用域规则，否则预览与真实的作用域关系会漂移。 */
+    scopeCssForPreview: scopeCssForPreview,
+    scopeCssForRoom: scopeCssForRoom,
     toast: toast
   };
 

@@ -3428,6 +3428,36 @@
   cursor: pointer;
 }
 
+/* 色块按钮：点它展开内嵌取色面板。
+   颜色用 CSS 变量 --mq-bt-c 传进来，JS 只改变量、不直接改 background，
+   这样样式规则集中在这里，将来换外观不用动 js。 */
+.mi-bt-color__swatch {
+  flex-shrink: 0;
+  width: 34px;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid var(--mi-line-strong, rgba(0, 0, 0, 0.14));
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.mi-bt-color__swatch.is-open {
+  border-color: var(--mi-accent, #2f7bd6);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mi-accent, #2f7bd6) 22%, transparent);
+}
+.mi-bt-color__chip {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--mq-bt-c, #ffffff);
+  /* 浅色块在白底上会看不见边界，补一圈极淡的内描边 */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
 .mi-bt-color__name {
   flex: 1;
   min-width: 0;
@@ -3438,28 +3468,16 @@
   white-space: nowrap;
 }
 
-/* 项目里首个 input[type=color]，需要清掉 webkit 默认的内边距与圆角，
-   否则色块会缩在控件里显得很小。 */
+/* 原生取色器现在只作为「自定义」路径的入口，藏在取色面板里。
+   这里保留完整样式规则，因为它在自定义区仍然可见可用。 */
 .mi-bt-color__input {
-  flex-shrink: 0;
-  width: 34px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid var(--mi-line-strong, rgba(0, 0, 0, 0.14));
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
   -webkit-appearance: none;
   appearance: none;
-}
-.mi-bt-color__input::-webkit-color-swatch-wrapper { padding: 2px; }
-.mi-bt-color__input::-webkit-color-swatch {
-  border: none;
-  border-radius: 5px;
-}
-.mi-bt-color__input::-moz-color-swatch {
-  border: none;
-  border-radius: 5px;
 }
 
 /* ── 滑块行 ── */
@@ -3510,4 +3528,206 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   色盘与内嵌取色器
+   ══════════════════════════════════════════════════════════════
+   设计意图：把原来「点色块 → 弹系统全屏取色窗」的流程换成
+   就地展开的色盘，调色时预览始终可见 —— 系统弹窗会把预览整个盖住，
+   根本没法边看边调。 */
+
+/* ── 一键套整组：横向滚动的色盘胶囊 ── */
+.mi-bt-presets {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 8px;
+  /* 横向滚动在 iOS 上需要显式声明，否则会被当成纵向滚动链 */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mi-bt-presets::-webkit-scrollbar { display: none; }
+
+.mi-bt-preset {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--mi-line, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+  background: var(--mi-card, #fff);
+  cursor: pointer;
+  transition: border-color .15s, transform .12s;
+}
+.mi-bt-preset:active { transform: scale(0.96); }
+
+/* 四格代表色条。用 grid 而非 flex 是为了让四格等宽，
+   颜色深浅差异大时也不会看起来一边宽一边窄。 */
+.mi-bt-preset__bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 52px;
+  height: 13px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.mi-bt-preset__bar i { display: block; }
+
+.mi-bt-preset__name {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--mi-ink);
+  white-space: nowrap;
+}
+
+/* ── 内嵌取色面板 ── */
+.mi-bt-picker {
+  margin: 2px 0 8px;
+  padding: 10px;
+  border: 1px solid var(--mi-line, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mi-card, #fff) 92%, #000 2%);
+}
+.mi-bt-picker[hidden] { display: none; }
+
+.mi-bt-picker__label {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--mi-sub);
+}
+.mi-bt-picker__label:not(:first-child) { margin-top: 12px; }
+
+.mi-bt-palettes {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.mi-bt-palettes::-webkit-scrollbar { display: none; }
+
+.mi-bt-pal {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 5px;
+  border: 1px solid var(--mi-line, rgba(0, 0, 0, 0.1));
+  border-radius: 8px;
+  background: var(--mi-card, #fff);
+  cursor: pointer;
+}
+.mi-bt-pal__dots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 40px;
+  height: 10px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mi-bt-pal__dots i { display: block; }
+.mi-bt-pal__name {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--mi-sub);
+  white-space: nowrap;
+}
+
+/* 散色网格。auto-fill + 固定 min 宽度，一行能放几个放几个，
+   不写死列数 —— 小屏与平板都能自适应。 */
+.mi-bt-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 6px;
+}
+.mi-bt-sw {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 7px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: transform .12s;
+}
+.mi-bt-sw:active { transform: scale(0.9); }
+.mi-bt-sw--basic { border-radius: 50%; }
+
+/* ── 自定义区（默认收起） ── */
+.mi-bt-custom {
+  margin-top: 12px;
+  border-top: 1px dashed var(--mi-line, rgba(0, 0, 0, 0.1));
+  padding-top: 10px;
+}
+.mi-bt-custom__toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--mi-accent, #2f7bd6);
+  cursor: pointer;
+}
+.mi-bt-custom__toggle::after {
+  content: ' ▾';
+  font-size: 9px;
+}
+.mi-bt-custom__toggle[aria-expanded="true"]::after { content: ' ▴'; }
+
+.mi-bt-custom__body[hidden] { display: none; }
+.mi-bt-custom__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mi-bt-custom__row > span:first-child {
+  flex: 0 0 46px;
+  font-size: 11px;
+  color: var(--mi-sub);
+}
+.mi-bt-custom__color {
+  width: 44px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--mi-line-strong, rgba(0, 0, 0, 0.14));
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.mi-bt-custom__color::-webkit-color-swatch-wrapper { padding: 0; }
+.mi-bt-custom__color::-webkit-color-swatch { border: none; border-radius: 4px; }
+.mi-bt-custom__color::-moz-color-swatch { border: none; border-radius: 4px; }
+
+.mi-bt-custom__hex {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.mi-bt-custom__note {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--mi-sub);
+}
+.mi-bt-custom__note code {
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 10px;
+}
+
+.mi-bt-picker__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
 }
