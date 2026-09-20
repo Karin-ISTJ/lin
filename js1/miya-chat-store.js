@@ -3315,6 +3315,24 @@
             if (mm && typeof mm.removeAllForContact === 'function') mm.removeAllForContact(key);
         });
 
+        /*
+         * 行程轨迹：enabled 是「一个存储键下的 id→bool map」，
+         * 不是按 contactId 分桶的独立桶，所以要删的是 map 里的那一个子键。
+         *
+         * 历史上这里没有它 —— 行程从来不知道联系人被删了。
+         * 后果是 enabled 里留下孤儿 id，而「N 已选」的计数
+         * 与「先勾选角色才能开自动生成」的守卫都依赖
+         * getEnabledContactIds().length：孤儿让标题数字偏大，
+         * 也让守卫误以为「已经选过角色」而放行。
+         *
+         * setEnabled(key, false) 内部就是 delete enabled[key] + 落盘，
+         * 语义正好，不必为清理单独加 API。
+         */
+        safe('itinerary', function () {
+            var its = global.miyaItineraryStore;
+            if (its && typeof its.setEnabled === 'function') its.setEnabled(key, false);
+        });
+
         /* 相册：分组里 contactIds 会残留指向已删角色的孤儿 id */
         safe('album', function () {
             var al = global.MiyaChatAlbum;

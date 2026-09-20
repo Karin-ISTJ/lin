@@ -33,16 +33,72 @@
     return false;
   }
 
+  /* 取「当前真实存在的联系人 id」集合。拿不到联系人时返回 null ——
+     这个 null 很关键：**不能**把「拿不到」当成「一个都没有」，
+     否则 store 未就绪时会把 enabled 里的正常条目全当孤儿删光。 */
+  function aliveContactIds() {
+    var cs = global.miyaChatStore;
+    if (!cs || typeof cs.getContacts !== 'function') return null;
+    var list = null;
+    try { list = cs.getContacts(); } catch (e) { return null; }
+    if (!Array.isArray(list) || !list.length) return null;
+    var set = Object.create(null);
+    list.forEach(function (c) { if (c && c.id) set[String(c.id)] = true; });
+    return Object.keys(set).length ? set : null;
+  }
+
+  /* 清掉 enabled 里「联系人已不存在」的孤儿 key。
+
+    为什么会有孤儿：联系人被删时没有任何广播通知行程
+     （purgeContactScopedData 的清理清单里原先没接 itinerary），
+
+     而 setEnabled 只在**显式取消勾选**时 delete，所以那条 key 会一直留着。
+
+     危害有两个（都不显眼）：
+       1. `N 已选` 用 getEnabledContactIds().length 计数，把孤儿也数进去
+          → 标题比实际勾选数偏大（用户看到「1 已选」却一个都没勾）；
+       2. 「先勾选角色才能开自动生成」的守卫靠同一个 length 判空，
+          孤儿让它误以为「已经选了」，于是守不住。
+
+     这里只负责删 key 并返回「是否有改动」，落盘交给调用方（沿用
+     dropLegacyFailCooldown 的 `if (fix(cache)) saveRaw();` 模式）。 */
+  function pruneOrphanEnabled(obj) {
+    if (disableOrphanPrune) return false;   // 测试用开关，见下方注释
+    if (!obj || typeof obj !== 'object' || !obj.enabled || typeof obj.enabled !== 'object') return false;
+    var alive = aliveContactIds();
+    if (!alive) return false;            // 联系人未就绪 → 一个都不动
+    var changed = false;
+    Object.keys(obj.enabled).forEach(function (id) {
+      if (!alive[id]) { delete obj.enabled[id]; changed = true; }
+    });
+    return changed;
+  }
+
+  /* 供回归测试单独验证「计数过滤」这条防线用的开关。
+
+     为什么需要它：孤儿清理和计数过滤是**两道独立防线**。
+     清理一旦跑过，孤儿就从存储里没了，于是「把过滤删掉」也不会让任何断言变红 ——
+     测试会误以为过滤被覆盖了，其实根本没有（这是反证暴露出来的盲区）。
+     把清理临时关掉，才能逼孤儿留在 enabled 里，真正压到过滤那一段代码。
+
+     正常运行时恒为 false，只有测试会通过 setDisableOrphanPrune(true) 打开。 */
+  var disableOrphanPrune = false;
+
   function loadRaw() {
     if (cache) return cache;
     if (typeof global.miyaSyncReadJsonKey === 'function') {
       var mem = global.miyaSyncReadJsonKey(STORAGE_KEY);
       if (mem && typeof mem === 'object') {
         cache = mem;
-        if (dropLegacyFailCooldown(cache)) saveRaw();
+        /* 脏数据懒修正：先抹历史字段，再清 enabled 里的孤儿 id。
+           注意顺序 —— pruneOrphanEnabled 需要 cache.enabled 已是对象，
+           所以它放在下面补默认值之后（见下方 store 分支的同样处理）。 */
+        var fixedMem = dropLegacyFailCooldown(cache);
         if (!cache.settings || typeof cache.settings !== 'object') cache.settings = { autoGenerate: false };
         if (!cache.enabled || typeof cache.enabled !== 'object') cache.enabled = {};
         if (!cache.schedules || typeof cache.schedules !== 'object') cache.schedules = {};
+        if (pruneOrphanEnabled(cache)) fixedMem = true;
+        if (fixedMem) saveRaw();
         return cache;
       }
     }
@@ -59,10 +115,12 @@
     if (!cache || typeof cache !== 'object') {
       cache = { settings: { autoGenerate: false }, enabled: {}, schedules: {} };
     }
-    if (dropLegacyFailCooldown(cache)) saveRaw();
+    var fixedLs = dropLegacyFailCooldown(cache);
     if (!cache.settings || typeof cache.settings !== 'object') cache.settings = { autoGenerate: false };
     if (!cache.enabled || typeof cache.enabled !== 'object') cache.enabled = {};
     if (!cache.schedules || typeof cache.schedules !== 'object') cache.schedules = {};
+    if (pruneOrphanEnabled(cache)) fixedLs = true;
+    if (fixedLs) saveRaw();
     return cache;
   }
 
@@ -308,9 +366,22 @@
   }
 
   function getEnabledContactIds() {
-    return Object.keys(loadRaw().enabled).filter(function (id) {
+    var ids = Object.keys(loadRaw().enabled).filter(function (id) {
       return loadRaw().enabled[id];
     });
+    /* 只返回**真实存在**的联系人 id。
+
+       为什么必须在这里过滤：enabled 里可能残留孤儿 key（联系人已删），
+       而调用方拿这个函数**当计数用** —— `N 已选` 的标题、
+       以及「先勾选角色才能开自动生成」的守卫。
+       不过滤的话标题会偏大、守卫会误放行。
+
+       同时这也让「N 已选」和「NN TRACKING」口径一致：
+       后者本来就是在真实联系人列表上过滤的（见 renderRoster），
+       两者此前走不同数据源，才会出现「1 已选 / 00 TRACKING」这种自相矛盾。 */
+    var alive = aliveContactIds();
+    if (!alive) return ids;              // 联系人未就绪 → 不判孤儿
+    return ids.filter(function (id) { return !!alive[id]; });
   }
 
   /* 已被作废（旧口径）的行程 id。作用只有一个：让「作废」这件事**只发生一次**。
@@ -523,6 +594,8 @@
     setAutoGenerate: setAutoGenerate,
     isEnabled: isEnabled,
     setEnabled: setEnabled,
+    pruneOrphanEnabled: pruneOrphanEnabled,
+    setDisableOrphanPrune: function (on) { disableOrphanPrune = !!on; },
     getEnabledContactIds: getEnabledContactIds,
     getSchedule: getSchedule,
     saveSchedule: saveSchedule,
@@ -542,9 +615,14 @@
       whenReady: function () {
         return global.miyaReadLsJsonKey(STORAGE_KEY, { settings: { autoGenerate: false }, enabled: {}, schedules: {} }).then(function (v) {
           cache = v && typeof v === 'object' ? v : { settings: { autoGenerate: false }, enabled: {}, schedules: {} };
+          /* 异步水合这条路径此前连 dropLegacyFailCooldown 都没有 —— 是个漏网点：
+             如果首读走的是这里，懒修正就完全没跑过。现在把两项都补齐。 */
+          var fixedAsync = dropLegacyFailCooldown(cache);
           if (!cache.settings || typeof cache.settings !== 'object') cache.settings = { autoGenerate: false };
           if (!cache.enabled || typeof cache.enabled !== 'object') cache.enabled = {};
           if (!cache.schedules || typeof cache.schedules !== 'object') cache.schedules = {};
+          if (pruneOrphanEnabled(cache)) fixedAsync = true;
+          if (fixedAsync) saveRaw();
           if (global.__miyaKvMem) global.__miyaKvMem[STORAGE_KEY] = cache;
         });
       }
