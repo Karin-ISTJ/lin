@@ -185,7 +185,76 @@
             });
             if (Array.isArray(b.matched)) matched = matched.concat(b.matched);
         });
-        return { frontLayers: front, layers: layers, backLayers: back, inChatItems: inChat, matched: matched };
+        /* meta 也必须合并 —— 以前这里只拼了层文本，把每个 bundle 的 meta 全丢了。
+           单人线下拿 wbBundle.meta 一切正常，多角色（castContacts > 1）拿到的是
+           undefined：世界书命中数 / 候选数 / 注入字符数全部归零，
+           下游「模型高级」面板对多人约会的世界书统计就永远是一片空白。
+           字符数不按各 bundle 的 injectedChars 相加（同一条目被两个角色同时
+           命中时会重复计数），而是按去重后的层文本重算，与实际发送内容一致。 */
+        var mergedMeta = null;
+        var metas = [];
+        (bundles || []).forEach(function (b) {
+            if (b && b.meta && typeof b.meta === 'object') metas.push(b.meta);
+        });
+        if (metas.length === 1) {
+            mergedMeta = Object.assign({}, metas[0]);
+        } else if (metas.length > 1) {
+            mergedMeta = {
+                matched: matched.length,
+                chars: sumLayerCharsLocal(front) + sumLayerCharsLocal(layers) + sumLayerCharsLocal(back),
+                injectedChars:
+                    sumLayerCharsLocal(front) + sumLayerCharsLocal(layers) + sumLayerCharsLocal(back),
+                matchedContentChars: 0,
+                emptyMatched: 0,
+                roleIds: [],
+                budgetDropped: [],
+                budgetDroppedCount: 0,
+                consideredCount: 0,
+                matchedSummary: []
+            };
+            var seenRoleId = Object.create(null);
+            var seenSummary = Object.create(null);
+            metas.forEach(function (m) {
+                mergedMeta.matchedContentChars += Number(m.matchedContentChars) || 0;
+                mergedMeta.emptyMatched += Number(m.emptyMatched) || 0;
+                (Array.isArray(m.roleIds) ? m.roleIds : []).forEach(function (rid) {
+                    var key = String(rid || '');
+                    if (key && !seenRoleId[key]) {
+                        seenRoleId[key] = true;
+                        mergedMeta.roleIds.push(key);
+                    }
+                });
+                mergedMeta.budgetDroppedCount += Number(m.budgetDroppedCount) || 0;
+                mergedMeta.consideredCount += Number(m.consideredCount) || 0;
+                (Array.isArray(m.budgetDropped) ? m.budgetDropped : []).forEach(function (d) {
+                    if (d) mergedMeta.budgetDropped.push(d);
+                });
+                (Array.isArray(m.matchedSummary) ? m.matchedSummary : []).forEach(function (s) {
+                    var key = String((s && s.name) || '');
+                    if (key && !seenSummary[key]) {
+                        seenSummary[key] = true;
+                        mergedMeta.matchedSummary.push(s);
+                    }
+                });
+            });
+        }
+        return {
+            frontLayers: front,
+            layers: layers,
+            backLayers: back,
+            inChatItems: inChat,
+            matched: matched,
+            meta: mergedMeta
+        };
+    }
+
+    function sumLayerCharsLocal(layers) {
+        if (!Array.isArray(layers)) return 0;
+        var n = 0;
+        layers.forEach(function (t) {
+            n += String(t || '').length;
+        });
+        return n;
     }
 
     function appendLayerListLocal(parts, layers) {
@@ -1249,7 +1318,12 @@
             session: sess,
             preset: preset,
             htmlMode: !!htmlMode,
-            debug: debugResult
+            debug: debugResult,
+            /* 世界书统计随 built 透出（与线上 miya-chat-engine 的 built.worldbookMeta
+               同名同构）：runAppointmentCompletion 收尾要拿它拼「本轮真实发送」的
+               快照写进宿主 chat 行 —— 缺了这份 meta，快照里的世界书
+               命中数/候选数/注入字符数就全是 0，等于白写。 */
+            worldbookMeta: (wbBundle && wbBundle.meta) || null
         };
     }
 
@@ -2114,6 +2188,73 @@
         return { scope: scope, owner: 'self' };
     }
 
+    /* 线下生成收尾：把「本轮真实发送」的 prompt 来源分布快照写进宿主 chat 行。
+     *
+     * 解决什么：线下（约会/离线会话）走的是本引擎的独立 fetch 链路，
+     * 消息落在 MiyaAppointmentStore 自己的 session 里，主 chat store 的
+     * chat.lastPromptBreakdown 一次都不会被碰 —— 于是「聊天设置 → 模型高级」
+     * 读到的永远是**上一次走线上引擎**的旧快照：时间、字数、token、世界书
+     * 命中数全部纹丝不动，看起来像「世界书修复没生效」，其实是面板在回看
+     * 几小时前的线上数据。把快照补写进来，面板才是在描述「刚才那次线下生成」。
+     *
+     * 写入目标：宿主 chatId（与设置面板 state.chatId 同一行），字段与线上
+     * sendChat 的 chatPatch 完全同名同构（lastPromptBreakdown / lastTokenUsage），
+     * 面板无需感知两条链路的差异。快照多带一个 source: 'offline'，
+     * 面板据此标注「（线下）」，避免用户把两条链路的数据混为一谈。
+     *
+     * 失败必须静默：快照是观测性数据，任何异常都不允许影响线下生成主流程。
+     */
+    function writeOfflinePromptSnapshot(chatId, built, fullRaw, replyMsg) {
+        try {
+            var st = global.miyaChatStore;
+            var engRef = eng();
+            if (!st || typeof st.updateChat !== 'function') return;
+            if (!engRef || typeof engRef.buildPromptSourceBreakdown !== 'function') return;
+            var bd = engRef.buildPromptSourceBreakdown(
+                built && Array.isArray(built.messages) ? built.messages : [],
+                (built && built.worldbookMeta) || null
+            );
+            if (!bd) return;
+            bd.replyMsgId = replyMsg && replyMsg.id ? String(replyMsg.id) : '';
+            bd.isGroupReply = false;
+            /* 线下标记：设置页靠它区分「上次发送」是线上还是线下，
+               不带这个字段，用户就会把线下快照的世界书命中误读成线上行为。 */
+            bd.source = 'offline';
+            /* 用量与线上 buildLocalTokenUsage 同构：本地按字符粗算，
+               API 返回 usage 时如实记录在 completion.data 里（此处沿用本地口径，
+               与线上本地兜底一致，避免两条链路数字口径打架）。 */
+            var promptChars =
+                typeof engRef.countMessagesChars === 'function'
+                    ? engRef.countMessagesChars(built && built.messages)
+                    : 0;
+            var completionChars = String(fullRaw || '').length;
+            var totalChars = promptChars + completionChars;
+            var patch = {
+                lastPromptBreakdown: bd,
+                lastTokenUsage: {
+                    prompt_chars: promptChars,
+                    completion_chars: completionChars,
+                    total_chars: totalChars,
+                    prompt_tokens: promptChars,
+                    completion_tokens: completionChars,
+                    total_tokens: totalChars,
+                    updatedAt: Date.now(),
+                    source: 'local_chars'
+                }
+            };
+            st.updateChat(chatId, patch)
+                .then(function () {
+                    /* 设置页若开着（线下界面与设置页同屏切换的场景）立即刷新；
+                       关着也无妨，下次打开设置页本来就会重新读取。 */
+                    var extras = global.miyaChatRoomExtras;
+                    if (extras && typeof extras.patchTokenUsageInSettings === 'function') {
+                        extras.patchTokenUsageInSettings(chatId);
+                    }
+                })
+                .catch(function () {});
+        } catch (eSnap) {}
+    }
+
     function runAppointmentCompletion(chatId, sessionId, handlers) {
         handlers = handlers && typeof handlers === 'object' ? handlers : {};
         var aps = apStore();
@@ -2433,6 +2574,11 @@
                     }
                 }
                 if (!msg) msg = aps.addMessage(chatId, sessionId, msgFields);
+                /* 快照写入放在「msg 落库之后、其余收尾之前」：
+                   新增与重答（updateMessage）两条路径在此汇合，一次覆盖。
+                   注意 built.messages 是经过插件（记忆表）改写后的最终发送数组，
+                   快照描述的就是这次真实发往 API 的内容。 */
+                writeOfflinePromptSnapshot(chatId, built, fullRaw, msg);
                 var chatRow = st.findChat(chatId);
                 var preset = aps.resolvePresetForContact(chatRow && chatRow.contactId);
                 var sessAfter = aps.getSession(chatId, sessionId);

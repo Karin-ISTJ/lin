@@ -1651,6 +1651,12 @@
             worldbookInSystem: raw.worldbookInSystem !== false,
             replyMsgId: String(raw.replyMsgId || '').slice(0, 60),
             isGroupReply: !!raw.isGroupReply,
+            /* 快照来源（'offline' = 线下引擎写入，空 = 线上主引擎）。
+               老教训重演一遍就要命：跨层字段（引擎产出 → store 白名单 →
+               设置页读取）必须三层同步，这份白名单漏收一个字段，
+               引擎写得多认真也会在 updateChat 的 normalize 一层被静默丢掉，
+               面板永远读到 undefined。 */
+            source: String(raw.source || '').slice(0, 20),
             updatedAt: Number.isFinite(at) && at > 0 ? at : 0
         };
     }

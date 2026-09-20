@@ -911,6 +911,10 @@
     return {
       fromSnapshot: true,
       snapshotAt: Number(snapshot.updatedAt) || 0,
+      /* 快照来源（'offline' = 线下引擎写入）：线上/线下共用这一个面板，
+         不标注来源的话，「上次发送」的数据到底是哪条链路产的，
+         观测世界书命中时无从分辨 —— 又会把两条链路的问题互相张冠李戴。 */
+      snapshotSource: String(snapshot.source || ''),
       estimatedTokens: totalTokens,
       totalChars: totalChars,
       systemChars: 0,
@@ -1214,6 +1218,7 @@
           '<section class="mi-ctx-detail__section">' +
             '<h4 class="mi-ctx-detail__heading">' + (snapshot.fromSnapshot
               ? '刚生成那次 · Prompt 注入' +
+                (snapshot.snapshotSource === 'offline' ? '（线下）' : '') +
                 (snapshot.snapshotAt ? '（' + esc(formatCtxTime(snapshot.snapshotAt)) + '）' : '')
               : '下次请求 · Prompt 注入（' + esc(formatNum(snapshot.messageCount || 0)) + ' 条 message）') + '</h4>' +
             '<p class="mi-ctx-detail__hint">' + (snapshot.fromSnapshot
@@ -1272,7 +1277,7 @@
       ? '世界书命中 ' + formatNum(snapshot.worldbookCount) + ' 条'
       : '世界书未命中';
     var timeNote = snapshot.fromSnapshot && snapshot.snapshotAt
-      ? ' · ' + formatCtxTime(snapshot.snapshotAt)
+      ? ' · ' + (snapshot.snapshotSource === 'offline' ? '线下 ' : '') + formatCtxTime(snapshot.snapshotAt)
       : ' · 预估';
     /* 版本指纹直接亮在面板上：「时间/字数/token 全都不变」的排障里，
        最费解的分岔是「浏览器还在跑旧代码」还是「数据真的没变」。
@@ -1282,7 +1287,9 @@
     return '<div class="mi-ctx-panel" data-mq-set-ctx-panel>' +
       '<button type="button" class="mi-ctx-stats mi-ctx-stats--clickable" data-mq-set-ctx-toggle aria-expanded="' + (open ? 'true' : 'false') + '">' +
         '<div class="mi-ctx-stat mi-ctx-stat--main">' +
-          '<span class="mi-ctx-stat__label">' + (snapshot.fromSnapshot ? '上次发送' : 'Prompt 注入') + '</span>' +
+          '<span class="mi-ctx-stat__label">' + (snapshot.fromSnapshot
+            ? '上次发送' + (snapshot.snapshotSource === 'offline' ? '（线下）' : '')
+            : 'Prompt 注入') + '</span>' +
           '<strong class="mi-ctx-stat__val">' + esc(formatNum(snapshot.totalChars)) + '<span class="mi-ctx-stat__unit"> 字</span></strong>' +
         '</div>' +
         '<p class="mi-ctx-stat__sub">≈ ' + esc(formatNum(snapshot.estimatedTokens)) + ' token · ' + esc(injectNote) + timeNote + '</p>' +
