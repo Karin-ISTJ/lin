@@ -32,10 +32,42 @@
     }
   }
 
+  /*
+   * 确保主题类落在 #miya-chat-app 上。
+   *
+   * 早先这里是「拿不到元素就 return」—— 但 init() 只在 DOMContentLoaded
+   * 跑一次，那一刻 #miya-chat-app 若尚未就位（脚本拆分、延迟挂载、
+   * 缓存导致执行顺序变化都会造成），类就【永久】加不上。
+   * 后果不只是"主题没生效"：列表头像的 48×48 尺寸约束原先挂在
+   * `.theme-soft` 下，类一缺，<img> 就没有尺寸，整页会被一张照片撑爆。
+   *
+   * 所以拿不到元素时要重试，而不是静默放弃。
+   */
+  var ensureTimer = 0;
+  var ensureTries = 0;
+
   function applyClasses(theme) {
     var app = getApp();
-    if (!app) return;
-    app.classList.remove('theme-soft', 'theme-ins');
+    if (!app) {
+      /* 元素未就位：轮询几次直到它出现（挂载完成即停） */
+      if (ensureTimer || ensureTries > 40) return;
+      ensureTimer = global.setTimeout(function () {
+        ensureTimer = 0;
+        ensureTries += 1;
+        applyClasses(theme);
+      }, 50);
+      return;
+    }
+    ensureTries = 0;
+    /*
+     * 直接 add，不要在 add 之前 remove 同一个类。
+     *
+     * 原来写成「先 remove('theme-soft','theme-ins') 再 add(...)」，
+     * 于是中途存在一个「两个类都不在」的瞬间。如果浏览器恰好在这一帧
+     * 重算样式（重排 / 触发动画 / 别处的 rAF），列表头像会短暂失去
+     * 48×48 约束 —— 大图会瞬间把布局撑开，且不保证能恢复。
+     * 本文件是唯一会写这两个类的地方，没有需要"先摘掉再戴"的场景。
+     */
     app.classList.add('theme-soft', 'theme-ins');
     app.setAttribute('data-chat-ui', theme);
   }

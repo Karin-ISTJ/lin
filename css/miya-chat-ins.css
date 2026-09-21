@@ -416,10 +416,49 @@
   contain-intrinsic-size: auto 72px;
 }
 
-.soft-thread__ava-wrap,
-.theme-soft .qq-chat-item .soft-thread__ava-wrap {
+/*
+ * ⚠️ 这里给「尺寸」是安全件，不是装饰 —— 不能只挂在主题类下。
+ *
+ * 背景（用户反馈的「整页被一张照片撑爆」）：
+ *   聊天列表 / 联系人的头像是 <img>，它的 48×48 约束原先只写在
+ *   `.theme-soft .qq-chat-item__ava` 里。而 `theme-soft` 有两个来源，
+ *   都可能失效：
+ *     · index.html 静态写在 class 上（正常）；
+ *     · js1/miya-chat-ui-theme.js 的 applyClasses() 会先 remove 再 add，
+ *       中途有一个「类不存在」的瞬间；且它在 getApp() 拿不到
+ *       #miya-chat-app 时直接 return，不重试 —— 类就永久缺失。
+ *   类一缺，<img> 就没有任何尺寸约束，浏览器按图片原始尺寸铺开，
+ *   于是整页被顶爆（表现为「点日记/聊天进去，满屏一张照片」）。
+ *
+ *   对照：群聊头像的 wrapper 是 .qq-chat-item__ava-wrap--group，
+ *   无条件给了 52×52，所以群聊从不出现这个问题 —— 差异就在这里。
+ *
+ * 所以 wrapper 必须自己定尺寸（和群聊那条对齐），头像再撑满 wrapper。
+ * 这样即使主题类缺失，布局也不会被撑破。
+ *
+ * ⚠️ 注意 --group 例外：群聊 wrapper 里装的是「2×2 头像堆叠」，
+ *    需要 52×52 而不是 48×48。下面的 :not(.qq-chat-item__ava-wrap--group)
+ *    就是为了不把群聊的尺寸压掉（群聊那条规则在 miya-chat-group.css 里，
+ *    同样是无条件生效的，两者必须共存而不能互相覆盖）。
+ */
+.soft-thread__ava-wrap:not(.qq-chat-item__ava-wrap--group),
+.theme-soft .qq-chat-item .soft-thread__ava-wrap:not(.qq-chat-item__ava-wrap--group) {
   position: relative;
   flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+
+/* 单聊头像统一撑满 wrapper，不依赖主题类给出尺寸。
+   --group 例外：群聊头像是绝对定位的堆叠小图，交给 miya-chat-group.css 管。 */
+.soft-thread__ava-wrap:not(.qq-chat-item__ava-wrap--group) > img,
+.soft-thread__ava-wrap:not(.qq-chat-item__ava-wrap--group) > .soft-thread__ava {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .theme-soft .qq-chat-item--pinned {
