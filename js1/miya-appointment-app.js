@@ -247,6 +247,101 @@
         }, 2200);
     }
 
+    /*
+     * 手机端诊断面板：把异常信息直接画在屏幕上。
+     *
+     * 为什么需要它：这个导入异常只在用户的真实设备上复现，而手机浏览器
+     * 大多没有开发者工具 —— 让用户「按 F12 看控制台」等于让他做不可能的事。
+     * 所以这里把要看的几样东西（失败步骤、错误栈、相关状态、出错时的会话形状）
+     * 直接铺在页面上，用户截一张图就把全部信息带过来了。
+     *
+     * 面板刻意做成：
+     *   · 覆盖全屏、高对比度 —— 手机小屏上也看得清；
+     *   · 内容可全选 —— 万一截图不清楚，用户也能长按复制成文字发过来；
+     *   · 带关闭按钮 —— 不能让它把 App 卡成砖，用户看完点掉即可继续用。
+     */
+    function showImportDiagnostics(title, lines) {
+        try {
+            var old = document.getElementById('xw-import-diag');
+            if (old && old.parentNode) old.parentNode.removeChild(old);
+
+            var box = document.createElement('div');
+            box.id = 'xw-import-diag';
+            box.setAttribute(
+                'style',
+                [
+                    'position:fixed',
+                    'inset:0',
+                    'z-index:2147483647',
+                    'background:#0b0b0d',
+                    'color:#e8e8ea',
+                    'font:12px/1.55 ui-monospace,Menlo,Consolas,monospace',
+                    'padding:14px',
+                    'padding-top:52px',
+                    'overflow:auto',
+                    '-webkit-overflow-scrolling:touch',
+                    'white-space:pre-wrap',
+                    'word-break:break-word',
+                    'user-select:text',
+                    '-webkit-user-select:text'
+                ].join(';')
+            );
+
+            var bar = document.createElement('div');
+            bar.setAttribute(
+                'style',
+                [
+                    'position:fixed',
+                    'top:0',
+                    'left:0',
+                    'right:0',
+                    'height:44px',
+                    'background:#17171b',
+                    'border-bottom:1px solid #2c2c33',
+                    'display:flex',
+                    'align-items:center',
+                    'justify-content:space-between',
+                    'padding:0 14px'
+                ].join(';')
+            );
+
+            var label = document.createElement('strong');
+            label.textContent = title || '导入诊断';
+            label.setAttribute('style', 'color:#7fd4a8;font-size:13px');
+            bar.appendChild(label);
+
+            var closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.textContent = '关闭 ✕';
+            closeBtn.setAttribute(
+                'style',
+                [
+                    'background:#2f2f38',
+                    'color:#fff',
+                    'border:0',
+                    'border-radius:6px',
+                    'padding:7px 12px',
+                    'font-size:13px',
+                    'font-family:inherit'
+                ].join(';')
+            );
+            closeBtn.addEventListener('click', function () {
+                if (box.parentNode) box.parentNode.removeChild(box);
+            });
+            bar.appendChild(closeBtn);
+
+            box.appendChild(bar);
+
+            var body = document.createElement('div');
+            body.textContent = (lines || []).join('\n');
+            box.appendChild(body);
+
+            document.body.appendChild(box);
+        } catch (e) {
+            /* 诊断面板本身出问题不能影响主流程 */
+        }
+    }
+
     function formatTs(ts) {
         try {
             return new Date(ts || Date.now()).toLocaleString('zh-CN', { hour12: false });
@@ -5635,36 +5730,45 @@ function renderWriter() {
             failAt = '';
         } catch (eRender) {
             /*
-             * 把「哪一步炸的」完整暴露出来，而不是只吞一个对象。
-             * 用户反馈 DevTools 截图就能直接定位，不必再来一轮猜字段。
+             * 诊断信息同时输出到两处：
+             *   · console —— 电脑端 / 有开发者工具时最方便；
+             *   · 屏幕面板 —— 手机浏览器没有控制台，这是唯一能看到的途径。
+             * 用户的设备是手机，所以屏幕面板是主路径，必须给全。
              */
+            var diagUi = JSON.stringify({
+                chatId: ui.chatId, sessionId: sess.id,
+                prev: { sessionId: prevSessionId, view: prevView }
+            });
+            var diagSess = JSON.stringify({
+                id: sess.id,
+                title: sess.title,
+                msgCount: (sess.messages || []).length,
+                cast: (sess.cast || []).length,
+                summaryList: (sess.summaryList || []).length,
+                statusLog: (sess.statusLog || []).length
+            });
+            var diagFloors = JSON.stringify(((sess.messages || []).slice(0, 8)).map(function (m, i) {
+                return {
+                    i: i,
+                    role: m && m.role,
+                    len: m && String(m.content || '').length,
+                    hasThinking: !!(m && m.thinking),
+                    swipeCount: (m && m.swipes ? m.swipes.length : 0)
+                };
+            }));
+            var diagStack = String((eRender && (eRender.stack || eRender.message)) || eRender || '');
+            var diagName = String((eRender && eRender.name) || '');
+
             try {
                 console.error('[import] 渲染阶段异常，回滚本次导入');
                 console.error('  失败步骤:', failAt || '(未知)');
-                console.error('  错误:', eRender && (eRender.stack || eRender.message || eRender));
-                console.error('  名称:', eRender && eRender.name);
-                console.error('  ui  :', JSON.stringify({
-                    chatId: ui.chatId, sessionId: sess.id,
-                    prev: { sessionId: prevSessionId, view: prevView }
-                }));
-                console.error('  会话:', JSON.stringify({
-                    id: sess.id,
-                    title: sess.title,
-                    msgCount: (sess.messages || []).length,
-                    cast: (sess.cast || []).length,
-                    summaryList: (sess.summaryList || []).length,
-                    statusLog: (sess.statusLog || []).length
-                }));
-                console.error('  楼层概览:', JSON.stringify(((sess.messages || []).slice(0, 6)).map(function (m, i) {
-                    return {
-                        i: i,
-                        role: m && m.role,
-                        len: m && String(m.content || '').length,
-                        hasThinking: !!(m && m.thinking),
-                        swipeCount: (m && m.swipes ? m.swipes.length : 0)
-                    };
-                })));
+                console.error('  错误:', diagStack);
+                console.error('  名称:', diagName);
+                console.error('  ui  :', diagUi);
+                console.error('  会话:', diagSess);
+                console.error('  楼层概览:', diagFloors);
             } catch (eLog) { /* 日志本身不能把回滚带崩 */ }
+
             /*
              * 回滚顺序：先把界面指回原处（render 可能处于半完成状态），
              * 再摘记录。反过来的话，render 又一次读到已摘除的 session
@@ -5681,6 +5785,32 @@ function renderWriter() {
             }
             try { render(); } catch (eAgain) { console.error(eAgain); }
             toast('导入失败：写入后界面刷新出错，已撤销本次导入');
+
+            /*
+             * 把面板留在最后弹 —— 上面的 render() 会重建 DOM，
+             * 先弹的面板会被那次重建连带清掉。必须在所有重绘之后才画。
+             */
+            showImportDiagnostics('导入异常诊断（截图发我即可）', [
+                '失败步骤 : ' + (failAt || '(未知)'),
+                '错误名称 : ' + (diagName || '(无)'),
+                '错误信息 : ' + diagStack,
+                '',
+                '--- 界面状态 ---',
+                diagUi,
+                '',
+                '--- 被写入的会话 ---',
+                diagSess,
+                '',
+                '--- 前 8 层 ---',
+                diagFloors,
+                '',
+                '--- 运行环境 ---',
+                'UA: ' + String(navigator.userAgent || ''),
+                'URL: ' + String(location.href || ''),
+                '时间: ' + new Date().toISOString(),
+                '',
+                '注：本次导入已被撤销，卷宗列表没有被改动。'
+            ]);
             return false;
         }
 
@@ -5717,6 +5847,24 @@ function renderWriter() {
                 } catch (e) {
                     console.error('[import] 未预期的异常', e);
                     toast('导入失败：处理时遇到意外错误，请重试（若反复出现可反馈此文件）');
+                    /*
+                     * 这里也弹面板：手机上没有控制台，
+                     * 而这条路径恰恰是「什么都没兜住」的意外，
+                     * 更需要把现场原样带出来。
+                     */
+                    showImportDiagnostics('导入异常诊断（截图发我即可）', [
+                        '失败位置 : 未预期的外层异常',
+                        '错误名称 : ' + String((e && e.name) || '(无)'),
+                        '错误信息 : ' + String((e && (e.stack || e.message)) || e || ''),
+                        '',
+                        '文件名 : ' + String((file && file.name) || ''),
+                        '文件大小: ' + String((file && file.size) || 0) + ' 字节',
+                        '',
+                        '--- 运行环境 ---',
+                        'UA: ' + String(navigator.userAgent || ''),
+                        'URL: ' + String(location.href || ''),
+                        '时间: ' + new Date().toISOString()
+                    ]);
                 }
             };
             reader.onerror = function () {
