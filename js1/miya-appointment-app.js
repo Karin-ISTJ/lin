@@ -3220,6 +3220,47 @@ function renderWriter() {
         closeApp();
     }
 
+    /*
+     * 记住「上次进的是哪个聊天」。
+     *
+     * 背景：openApp 每次打开都会把 ui.chatId / ui.sessionId 清空（那是必要的——
+     * 避免上一场的滚动立场和群名残留），但 enterDirectOffline 在 chatId 为空时
+     * 会退回到「第一个联系人的第一个聊天」。于是多开几个聊天之后，
+     * 每次重进都跳回最开始那个，而不是你最后一次待的地方。
+     *
+     * 这里把 chatId + sessionId 落盘（IndexedDB KV，和 store 的其它记录同一个库），
+     * 打开时优先恢复。只存两个字符串，不碰任何业务数据。
+     */
+    var LAST_ENTRY_KEY = 'miya_offline_last_entry_v1';
+    var lastEntryCache = null;   /* { chatId, sessionId } | null，避免重复读库 */
+
+    function rememberLastOfflineEntry() {
+        var cid = String(ui.chatId || '').trim();
+        if (!cid) return;
+        var st = apStore();
+        if (!st || typeof st.idbPutRecord !== 'function') return;
+        var payload = { chatId: cid, sessionId: String(ui.sessionId || '').trim(), at: Date.now() };
+        lastEntryCache = payload;
+        try {
+            var r = st.idbPutRecord(LAST_ENTRY_KEY, payload);
+            /* 写库是异步的，失败也不该影响关窗动作 */
+            if (r && typeof r.catch === 'function') r.catch(function () {});
+        } catch (e) { /* 存储不可用则静默降级为「不记忆」 */ }
+    }
+
+    function readLastOfflineEntry() {
+        if (lastEntryCache) return Promise.resolve(lastEntryCache);
+        var st = apStore();
+        if (!st || typeof st.idbGetRecord !== 'function') return Promise.resolve(null);
+        var r;
+        try { r = st.idbGetRecord(LAST_ENTRY_KEY); } catch (e) { return Promise.resolve(null); }
+        if (!r || typeof r.then !== 'function') return Promise.resolve(null);
+        return r.then(function (rec) {
+            lastEntryCache = rec && rec.chatId ? rec : null;
+            return lastEntryCache;
+        }).catch(function () { return null; });
+    }
+
     function enterDirectOffline() {
         var st = chatStore();
         if (!st) {
@@ -3231,6 +3272,24 @@ function renderWriter() {
             openId = String(global.miyaChatRoom.getOpenChatId() || '').trim();
         }
         var chat = openId ? st.findChat(openId) : null;
+
+        /*
+         * 第二优先级：上次离开时待的那个聊天。
+         *
+         * 这个函数在 openApp 的 hydrate 链里被调用，此时读库已经可用。
+         * 之所以不把它提到最前面：从某个聊天点「线下」进来时，
+         * 用户当下的意图明确就是那个聊天，聊天室的开着的 id 必须优先。
+         * 记忆只在「聊天室没开着任何聊天」（即直接从桌面/入口进来）时兜底。
+         */
+        if (!chat) {
+            var remembered = lastEntryCache;
+            if (remembered && remembered.chatId) {
+                var rememberedChat = st.findChat(remembered.chatId);
+                /* 聊天可能已被删除，命中不了就继续往下走兜底 */
+                if (rememberedChat) chat = rememberedChat;
+            }
+        }
+
         if (!chat) {
             var contacts = st.getContacts('all');
             var fallback = contacts && contacts.length ? contacts[0] : null;
@@ -3335,6 +3394,12 @@ function renderWriter() {
         render();
         /* 楼层高时直接落到最新楼层，不用手动滑到底。 */
         scrollToLatestOnEnter();
+        /*
+         * 落定之后立刻记下「现在待在哪个聊天」。
+         * 放在这里而不是只放 closeApp：用户可能直接刷新页面或关掉浏览器，
+         * closeApp 不一定会被调用；而每次成功进聊天都记一次，抗意外退出。
+         */
+        rememberLastOfflineEntry();
     }
 
     function startPickedCast() {
@@ -4870,16 +4935,24 @@ function renderWriter() {
 
     /*
      * 范围批量切换隐藏：楼层号即用户在界面上看到的席号。
-     * 编号口径必须与 renderStoryLines 完全一致（跳过 deleted 后按序 i+1），
-     * 否则删过楼之后输入的范围就会和界面显示的对不上。
+     * 编号口径必须与 renderStoryLines 完全一致，否则输入的范围会与界面显示对不上。
+     *
+     * ⚠️ 这里曾经只跳过 `deleted`，而 renderStoryLines 的过滤条件是
+     *    `m && !m.deleted && String(m.content||'').trim()`——它还额外剔除了**内容为空**的消息
+     *    （软删残留、生成中断留下的空壳）。
+     *    两边口径不一致时，空内容消息会在本函数里白占一个楼层号，
+     *    于是「填 1-39 只隐藏到第 36 层」这种错位就出现了：
+     *    界面可见 39 层，而这边第 38/39 层指向的其实是真实内容的第 35/36 层。
+     *    现在改成与渲染逐字相同的过滤条件，并在过滤后的数组上按序编号，
+     *    保证「看到的层号 = 操作的层号」。
      */
     function floorNumbersOf(sess) {
         var map = {};
-        var msgs = (sess && sess.messages) || [];
+        var msgs = ((sess && sess.messages) || []).filter(function (m) {
+            return m && !m.deleted && String(m.content || '').trim();
+        });
         for (var i = 0; i < msgs.length; i++) {
-            var m = msgs[i];
-            if (!m || m.deleted) continue;
-            map[i + 1] = m;
+            map[i + 1] = msgs[i];
         }
         return map;
     }
@@ -5562,6 +5635,13 @@ function renderWriter() {
                 return global.MiyaOfflineBeautify.whenPresetsReady();
             });
         }
+        /*
+         * 在选场次之前先把「上次待在哪个聊天」读进缓存。
+         * enterDirectOffline 是同步函数，它读的是 lastEntryCache；
+         * 不在这里预热的话，首次打开（缓存为空）会退回「第一个聊天」。
+         * 读库失败不影响主流程 —— readLastOfflineEntry 自己会吞异常并返回 null。
+         */
+        hydrate = hydrate.then(function () { return readLastOfflineEntry(); });
         /* 封存记录以本地落盘为准；勿每次进入都从线上镜像自动重建。
          * 手动删除会同步清掉线上镜像；「从线上记忆恢复」仅用于本地丢失且镜像仍在的情况。 */
         var entry = ctx && ctx.cast && ctx.cast.length
@@ -5584,6 +5664,8 @@ function renderWriter() {
     }
 
     function closeApp() {
+        /* 关窗前先把「待在哪个聊天」落盘，供下次 openApp 恢复。 */
+        rememberLastOfflineEntry();
         syncSessionOnLeave();
         /* 关掉线下时停掉入场锚定与滚动立场，避免残留到下次打开。 */
         resetScrollUiState();

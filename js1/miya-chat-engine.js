@@ -5297,6 +5297,39 @@
                                             /* 余额不足时仍展示转账，但不记账 */
                                         });
                                 }
+                                /* 单聊红包：角色发红包 → 从角色钱包预扣托管，落库后安排用户自动领取 */
+                                if (
+                                    !options.callMode &&
+                                    chatRow &&
+                                    chatRow.type !== 'group' &&
+                                    contactRow &&
+                                    payload.type === 'red_packet' &&
+                                    payload.singleRedPacket &&
+                                    global.MiyaChatSingleRedPacket &&
+                                    typeof global.MiyaChatSingleRedPacket.holdOutgoing === 'function'
+                                ) {
+                                    var srpModEngine = global.MiyaChatSingleRedPacket;
+                                    var srpCtxEngine = {
+                                        chat: chatRow,
+                                        contact: contactRow,
+                                        profile: built.profile,
+                                        isGroup: false
+                                    };
+                                    holdXfer = holdXfer.then(function () {
+                                        return srpModEngine
+                                            .holdOutgoing(payload.singleRedPacket, srpCtxEngine)
+                                            .then(function (held) {
+                                                payload.singleRedPacket = Object.assign(
+                                                    {},
+                                                    payload.singleRedPacket,
+                                                    { walletHeld: !!held }
+                                                );
+                                            })
+                                            .catch(function () {
+                                                /* 余额不足时仍展示红包，但不托管、不自动领取 */
+                                            });
+                                    });
+                                }
                                 if (
                                     !options.callMode &&
                                     chatRow &&
@@ -5355,6 +5388,26 @@
                                         if (!firstMsgId) firstMsgId = msg.id;
                                         lastMsgId = msg.id;
                                         acc.push(msg);
+                                        /* 角色发的单聊红包：等全部气泡显示后安排用户领取 */
+                                        if (
+                                            msg &&
+                                            msg.type === 'red_packet' &&
+                                            msg.singleRedPacket &&
+                                            global.MiyaChatSingleRedPacket &&
+                                            typeof global.MiyaChatSingleRedPacket.scheduleAutoClaims === 'function'
+                                        ) {
+                                            global.MiyaChatSingleRedPacket.scheduleAutoClaims(
+                                                store,
+                                                chatId,
+                                                msg.id,
+                                                {
+                                                    chat: chatRow,
+                                                    contact: contactRow,
+                                                    profile: built.profile,
+                                                    isGroup: false
+                                                }
+                                            );
+                                        }
                                         return appendNarrationAfterBubble(acc, unitIndex);
                                     });
                                 });

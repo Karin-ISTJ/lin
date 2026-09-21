@@ -346,6 +346,23 @@
                 note: stripTimelinePrefixForDisplay(String(out.redPacket.note))
             });
         }
+        /* 单聊红包载荷：净化祝福语与目标名，保留 shares 等结构化字段 */
+        if (out.singleRedPacket && typeof out.singleRedPacket === 'object') {
+            out.singleRedPacket = Object.assign({}, out.singleRedPacket);
+            if (out.singleRedPacket.note != null) {
+                out.singleRedPacket.note = stripTimelinePrefixForDisplay(String(out.singleRedPacket.note));
+            }
+            if (out.singleRedPacket.targetName != null) {
+                out.singleRedPacket.targetName = stripTimelinePrefixForDisplay(
+                    String(out.singleRedPacket.targetName)
+                );
+            }
+            if (out.singleRedPacket.senderName != null) {
+                out.singleRedPacket.senderName = stripTimelinePrefixForDisplay(
+                    String(out.singleRedPacket.senderName)
+                );
+            }
+        }
         if (out.takeoutOrder && typeof out.takeoutOrder === 'object') {
             out.takeoutOrder = Object.assign({}, out.takeoutOrder);
             if (out.takeoutOrder.shop != null) {

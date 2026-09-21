@@ -15,6 +15,7 @@
   var roomPinBottomUntil = 0;
   var roomOpenGen = 0;
   var grpRpOpening = {};
+  var srpOpening = {};
   var roomChatPanes = {};
   var groupRenderGen = 0;
   var groupPendingPrepend = {};
@@ -358,7 +359,7 @@
     closeMsgMenu();
   }
 
-  var PLUS_TOOL_KEYS = ['transfer', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'memory', 'backup'];
+  var PLUS_TOOL_KEYS = ['transfer', 'redPacket', 'takeout', 'gift', 'location', 'call', 'clock', 'narration', 'thinking', 'memory', 'backup'];
   var GROUP_TOOL_KEYS = ['image', 'redo', 'mic', 'emoji', 'groupRedPacket'];
   var TOOL_KEYS = ['image', 'redo', 'mic', 'emoji'].concat(PLUS_TOOL_KEYS);
   var AI_STAR_SVG =
@@ -395,6 +396,13 @@
       '</svg>',
     emoji: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
     transfer: '<svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+    redPacket:
+      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      '<path d="M4 4h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+      '<path d="M4 4c2.4 2.8 5.2 4.2 8 4.2S17.6 6.8 20 4" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+      '<circle cx="12" cy="14" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+      '<path d="M12 11.4v1.6M12 15v1.6M9.4 14h1.6M13 14h1.6" stroke="currentColor" stroke-width="1.2"/>' +
+      '</svg>',
     takeout: '<svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>',
     gift: '<svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>',
     location: '<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
@@ -425,6 +433,7 @@
     mask: '触发回复',
     emoji: '表情',
     transfer: '转账',
+    redPacket: '红包',
     takeout: '点外卖',
     gift: '送礼',
     location: '位置',
@@ -1823,6 +1832,12 @@
       if (m.groupRedPacket.note) grpPrev += ' · ' + m.groupRedPacket.note;
       return '[红包] ' + grpPrev;
     }
+    if (m.type === 'red_packet' && m.singleRedPacket) {
+      var srpPrevMode = m.singleRedPacket.mode === 'lucky' ? '拼手气' : m.singleRedPacket.mode === 'exclusive' ? '专属' : '普通';
+      var srpPrev = srpPrevMode + ' ¥' + m.singleRedPacket.totalAmount;
+      if (m.singleRedPacket.note) srpPrev += ' · ' + m.singleRedPacket.note;
+      return '[红包] ' + srpPrev;
+    }
     if (m.type === 'love_poem' && m.lovePoem) {
       var lpPrev = String(m.lovePoem.style || '情诗').trim();
       var lpTitle = String(m.lovePoem.title || '').trim();
@@ -2896,6 +2911,13 @@
         ? grpRp.renderCard(displayMsg, esc, formatMoney, grpCtx)
         : '';
     }
+    else if (payload.kind === 'red_packet') {
+      var srpUi = global.MiyaChatSingleRedPacket;
+      var srpCtx = opts.ctx || getChatContext(previewChatId);
+      body = srpUi && typeof srpUi.renderCard === 'function'
+        ? srpUi.renderCard(payload.msg || displayMsg, esc, formatMoney, srpCtx)
+        : '';
+    }
     else if (payload.kind === 'couple_space_invite' && displayMsg.coupleSpaceInvite) {
       body = renderCoupleSpaceInviteCard(displayMsg);
     }
@@ -2999,6 +3021,22 @@
         sysTimeRp +
       '</div>';
     }
+    if (isSys && global.MiyaChatSingleRedPacket && typeof global.MiyaChatSingleRedPacket.isSingleRedPacketSystem === 'function' &&
+        global.MiyaChatSingleRedPacket.isSingleRedPacketSystem(m)) {
+      var srpSysMod = global.MiyaChatSingleRedPacket;
+      var srpSysText =
+        srpSysMod && typeof srpSysMod.formatSystemForDisplay === 'function'
+          ? srpSysMod.formatSystemForDisplay(m)
+          : String(m.content || '');
+      var sysTimeSrp = state.showTimestamps && m.createdAt
+        ? '<time class="qq-room__msg-time qq-room__msg-time--sys">' + esc(formatMsgTime(m.createdAt)) + '</time>'
+        : '';
+      return '<div class="qq-room__sys qq-room__sys--srp" data-msg-id="' + esc(m.id) + '">' +
+        '<span class="qq-room__sys-rp-icon" aria-hidden="true">開</span>' +
+        esc(srpSysText) +
+        sysTimeSrp +
+      '</div>';
+    }
     if (isSys) {
       var fmt = global.MiyaChatOnlineFormat;
       if (fmt && typeof fmt.isRoomInvisibleMessage === 'function' && fmt.isRoomInvisibleMessage(m)) return '';
@@ -3022,18 +3060,21 @@
     var isHtmlMsg = m.type === 'html' || m.renderAsHtml || body.indexOf('qq-room__html-panel') >= 0;
     var isTakeoutCard = body.indexOf('qq-card-to') >= 0;
     var isGrpRpCard = body.indexOf('grp-rp-card') >= 0;
+    var isSrpCard = body.indexOf('srp-card') >= 0;
     var isCard =
       !isGrpRpCard &&
+      !isSrpCard &&
       (isHtmlMsg ||
         body.indexOf('qq-card') >= 0 ||
         body.indexOf('qq-card-img') >= 0 ||
         body.indexOf('qq-card-sticker') >= 0);
     if (isCard) cls += ' qq-room__row--card';
     if (isGrpRpCard) cls += ' qq-room__row--grp-rp';
+    if (isSrpCard) cls += ' qq-room__row--srp';
     if (isHtmlMsg) cls += ' qq-room__row--html';
     if (isTakeoutCard) cls += ' qq-room__row--takeout';
     var bubbleWrap;
-    if (isGrpRpCard) {
+    if (isGrpRpCard || isSrpCard) {
       bubbleWrap = body;
     } else {
       var bubbleInner = isCard ? body : '<div class="qq-room__bubble">' + body + '</div>';
@@ -3045,7 +3086,7 @@
       }
       bubbleWrap = '<div class="' + bubbleWrapCls + '">' + bubbleInner + '</div>';
     }
-    var transAttach = isCard && !isMe && !isHtmlMsg && !isGrpRpCard ? renderTranslateAttach(m) : '';
+    var transAttach = isCard && !isMe && !isHtmlMsg && !isGrpRpCard && !isSrpCard ? renderTranslateAttach(m) : '';
     var timeHtml = state.showTimestamps && m.createdAt
       ? '<time class="qq-room__msg-time">' + esc(formatMsgTime(m.createdAt)) + '</time>'
       : '';
@@ -4541,6 +4582,151 @@
     openOverlay(grpRp.buildDetailHtml(Object.assign({}, msg, { groupRedPacket: grp }), ctx, esc));
   }
 
+  /* ── 单聊红包 ── */
+
+  function openSingleRedPacketSheet() {
+    /* 单聊专属：不受 isGroupRoom 拦截（这是与群红包的关键差异） */
+    if (isGroupRoom()) {
+      toast('群聊请使用群红包');
+      return;
+    }
+    var srp = global.MiyaChatSingleRedPacket;
+    if (!srp || typeof srp.buildSendSheetHtml !== 'function') {
+      toast('红包模块未加载');
+      return;
+    }
+    var ctx = getChatContext(state.chatId);
+    if (!ctx || !ctx.profile) {
+      toast('请先选择面具');
+      return;
+    }
+    var walletApi = global.MiyaChatWallet;
+    closeToolbarPanel();
+    openOverlay(srp.buildSendSheetHtml(ctx, esc, walletApi && walletApi.formatDisplay));
+    var ov = $('qq-room-overlay');
+    if (ov && typeof srp.bindSendSheet === 'function') {
+      srp.bindSendSheet(ov, store, state.chatId, ctx, function (res) {
+        if (!res) return;
+        if (res.error) {
+          var msg = walletApi && walletApi.walletErrorMessage
+            ? walletApi.walletErrorMessage(res.error)
+            : '发送失败';
+          toast(msg);
+          return;
+        }
+        closeOverlay();
+        if (res.msg) {
+          appendBubbleEl(res.msg, { stickBottom: true, instant: true });
+          scrollRoomToBottom($('qq-room-scroll'), true);
+          scheduleRefreshLists();
+        }
+      });
+    }
+  }
+
+  function dismissSingleRedPacketOpenLayers() {
+    document.querySelectorAll('[data-srp-open-layer]').forEach(function (el) {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
+
+  function showSingleRedPacketOpenOverlay(amount, note, senderName) {
+    var srp = global.MiyaChatSingleRedPacket;
+    if (!srp || typeof srp.buildOpenOverlayHtml !== 'function') return;
+    dismissSingleRedPacketOpenLayers();
+    var layer = document.createElement('div');
+    layer.innerHTML = srp.buildOpenOverlayHtml(amount, note, senderName);
+    var root = layer.firstElementChild;
+    if (!root) return;
+    document.body.appendChild(root);
+    function closeLayer() {
+      if (root.parentNode) root.parentNode.removeChild(root);
+    }
+    var closeBtn = root.querySelector('[data-srp-open-close]');
+    if (closeBtn) closeBtn.addEventListener('click', closeLayer);
+    root.addEventListener('click', function (e) {
+      if (e.target === root) closeLayer();
+    });
+  }
+
+  /**
+   * 点击红包封面：直接打开详情页，并自动完成领取。
+   *
+   * 交互约定（对齐微信）：点封面不再弹「开红包」二次确认，
+   * 而是直接进入详情页；详情页上方展示本次领到的金额。
+   * 领取成功后重渲染详情页，让金额与提示同步为最新状态。
+   */
+  function resolveSingleRedPacketOpen(msgId, triggerBtn) {
+    var srp = global.MiyaChatSingleRedPacket;
+    if (!srp || !store || !state.chatId) return;
+    var openKey = String(state.chatId) + ':' + String(msgId);
+    var msg = store.findMessage(state.chatId, msgId);
+    if (!msg) return;
+    var ctx = getChatContext(state.chatId);
+    var pkt =
+      typeof srp.resolveMessagePacket === 'function'
+        ? srp.resolveMessagePacket(msg)
+        : srp.normalizeSingleRedPacket(msg.singleRedPacket);
+    if (!pkt) return;
+
+    /* 先按当前状态打开详情页，避免等待网络/存储造成点击无反馈 */
+    var showDetail = function (curPkt, highlightAmt) {
+      var node = srp.buildDetailHtml(
+        Object.assign({}, msg, { singleRedPacket: curPkt || pkt }),
+        ctx,
+        esc
+      );
+      if (highlightAmt > 0 && typeof srp.decorateJustClaimed === 'function') {
+        node = srp.decorateJustClaimed(node, highlightAmt);
+      }
+      openOverlay(node);
+    };
+
+    var myName = (ctx && ctx.profile && ctx.profile.name) || '用户';
+    var eligible =
+      typeof srp.canClaimTo === 'function'
+        ? srp.canClaimTo(pkt, myName, ctx)
+        : srp.canClaim(pkt, myName);
+    var claimable = pkt.status === 'active' && !srp.isExpired(pkt) && eligible;
+
+    if (!claimable) {
+      showDetail(pkt, 0);
+      return;
+    }
+
+    showDetail(pkt, 0);
+    if (srpOpening[openKey]) return;
+    srpOpening[openKey] = true;
+    if (triggerBtn) {
+      triggerBtn.classList.add('is-claiming');
+      triggerBtn.disabled = true;
+    }
+    srp.claimPacket(store, state.chatId, msgId, myName, ctx)
+      .then(function (result) {
+        var got = result && result.amount > 0 ? result.amount : 0;
+        /* 用领取后的最新载荷重渲染详情页，把金额与提示刷新出来 */
+        var fresh = store.findMessage(state.chatId, msgId);
+        var freshPkt =
+          fresh && typeof srp.resolveMessagePacket === 'function'
+            ? srp.resolveMessagePacket(fresh)
+            : (result && result.packet) || pkt;
+        showDetail(freshPkt, got);
+        patchMessageBubble(msgId);
+        scheduleRefreshLists();
+      })
+      .catch(function () {
+        toast('领取失败');
+        showDetail(pkt, 0);
+      })
+      .finally(function () {
+        delete srpOpening[openKey];
+        if (triggerBtn) {
+          triggerBtn.disabled = false;
+          triggerBtn.classList.remove('is-claiming');
+        }
+      });
+  }
+
   function openTransferSheet() {
     var ctx = getChatContext(state.chatId);
     var balHint = '';
@@ -4686,6 +4872,7 @@
     else if (key === 'redo' || key === 'camera') toolRegenerate();
     else if (key === 'emoji') toolEmoji();
     else if (key === 'groupRedPacket') openGroupRedPacketSheet();
+    else if (key === 'redPacket') openSingleRedPacketSheet();
     else if (key === 'transfer') openTransferSheet();
     else if (key === 'takeout') openTakeoutSheet();
     else if (key === 'gift') openGiftSheet();
@@ -5715,6 +5902,14 @@
         e.stopPropagation();
         if (grpRpBtn.disabled || grpRpBtn.classList.contains('is-claiming')) return;
         resolveGroupRedPacketOpen(grpRpBtn.getAttribute('data-grp-rp-open'), grpRpBtn);
+        return;
+      }
+      var srpBtn = t.closest('[data-srp-open]');
+      if (srpBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (srpBtn.disabled || srpBtn.classList.contains('is-claiming')) return;
+        resolveSingleRedPacketOpen(srpBtn.getAttribute('data-srp-open'), srpBtn);
         return;
       }
       var voicePlayBtn = t.closest('[data-mq-voice-play]');

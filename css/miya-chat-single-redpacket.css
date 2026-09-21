@@ -1,0 +1,514 @@
+/* 单聊红包 · 卡面即封面素材
+ *
+ * 卡片不叠加任何文字、底栏或按钮：素材本身已印有「招财进宝」与「開」。
+ * 详情页严格对齐参考图（顶部红弧 → 标题 → 祝福语 → 大金额 → 已存入零钱）。
+ */
+
+/* ── 卡片：就是封面图本身 ── */
+.srp-card {
+  position: relative;
+  display: block;
+  width: min(228px, 66vw);
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 22px rgba(150, 92, 72, 0.16), 0 1px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.srp-card:active:not(.srp-card--done) {
+  transform: scale(0.986);
+}
+
+.srp-card.is-ready {
+  box-shadow: 0 8px 28px rgba(196, 96, 68, 0.24), 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 封面：素材实际 640×707，按同比例留位，确保底部「開」金钮完整 */
+.srp-card__cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 640 / 707;
+  background-image: url('../img/redpacket/banner.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+/* 已领完 / 已过期：整体降饱和并轻微调亮，状态靠观感表达，不画字 */
+.srp-card--done {
+  box-shadow: 0 4px 16px rgba(150, 92, 72, 0.10), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.srp-card--done .srp-card__cover {
+  filter: saturate(0.42) brightness(1.06) contrast(0.97);
+}
+
+.srp-card--expired .srp-card__cover {
+  filter: saturate(0.22) brightness(1.04) contrast(0.96);
+}
+
+/* 可领取时「開」金钮上的柔光呼吸（质心实测 49.5% / 77.2%） */
+.srp-card__glow {
+  position: absolute;
+  left: 49.5%;
+  top: 77.2%;
+  width: 30%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 226, 160, 0.55) 0%, rgba(255, 200, 110, 0) 68%);
+  opacity: 0;
+}
+
+.srp-card.is-ready .srp-card__glow {
+  opacity: 1;
+  animation: srp-breathe 1.9s ease-in-out infinite;
+}
+
+@keyframes srp-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.16);
+  }
+}
+
+/* ── 聊天行：红包不套气泡 ── */
+.qq-room__row--srp .qq-room__bubble-stack {
+  background: transparent;
+  box-shadow: none;
+}
+
+.qq-room__row--srp .qq-room__bubble-title-row {
+  background: transparent;
+}
+
+.qq-room__row--srp .srp-card {
+  margin: 2px 0;
+}
+
+/* ── 发送面板 ── */
+.srp-sheet__panel {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+.srp-sheet__head {
+  padding: 4px 18px 6px;
+  text-align: center;
+}
+
+.srp-sheet__kicker {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--soft-ink-3, #c9b6a6);
+}
+
+.srp-sheet__title {
+  margin: 3px 0 0;
+  font-family: var(--soft-serif, Georgia, serif);
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--soft-ink, #7a6e64);
+}
+
+.srp-sheet__bal {
+  margin: 0 18px 4px;
+  text-align: center;
+}
+
+.srp-sheet__modes {
+  display: flex;
+  gap: 6px;
+  padding: 8px 18px 4px;
+}
+
+.srp-mode {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--soft-line, rgba(0, 0, 0, 0.06));
+  border-radius: 999px;
+  background: var(--soft-surface, #fff);
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--soft-ink-2, #9a8f86);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.srp-mode.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #d9705a 0%, #c05a45 100%);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(192, 90, 69, 0.24);
+}
+
+.srp-sheet__body {
+  padding: 10px 18px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.srp-field {
+  display: block;
+}
+
+.srp-field[hidden] {
+  display: none;
+}
+
+.srp-field__label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--soft-ink-3, #c9b6a6);
+}
+
+.srp-field__input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.srp-field__prefix {
+  font-size: 15px;
+  color: var(--soft-ink-2, #9a8f86);
+}
+
+.srp-field__input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--soft-line, rgba(0, 0, 0, 0.06));
+  border-radius: 12px;
+  background: var(--soft-bg-3, #fafafa);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--soft-ink, #7a6e64);
+  outline: none;
+}
+
+.srp-field__input:focus {
+  border-color: var(--soft-gold, #c9b896);
+  background: #fff;
+}
+
+.srp-field__target {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--soft-gold-soft, rgba(201, 184, 150, 0.28));
+  font-size: 13.5px;
+  color: var(--soft-ink, #7a6e64);
+}
+
+.srp-sheet__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 4px;
+}
+
+.srp-sheet__send {
+  padding: 13px 0;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #d9705a 0%, #c05a45 100%);
+  color: #fff;
+  font-size: 14.5px;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(192, 90, 69, 0.26);
+}
+
+.srp-sheet__send:active {
+  transform: scale(0.99);
+  box-shadow: 0 2px 8px rgba(192, 90, 69, 0.22);
+}
+
+/* ── 领取弹层：对齐参考图的正式版式（白底 + 顶部红弧） ── */
+.srp-open {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 20, 16, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.srp-open__panel {
+  position: relative;
+  width: min(320px, 86vw);
+  padding: 30px 24px 24px;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: linear-gradient(180deg, #fffdfa 0%, #fdf8f1 100%);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  animation: srp-pop 0.32s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+@keyframes srp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 顶部红色弧形横幅（对应参考图顶部红弧）
+ * 弧顶溢出面板上方被裁掉；左右严格 0 溢出，上方两角沿用面板圆角，
+ * 避免直线裁切边与面板圆角弧线错位、造成顶角露缝。
+ */
+.srp-open__arc {
+  position: absolute;
+  left: 0;
+  top: -104px;
+  width: 100%;
+  height: 190px;
+  border-radius: 20px 20px 50% 50% / 20px 20px 100% 100%;
+  background: linear-gradient(170deg, #f14b35 0%, #e04229 100%);
+  box-shadow: inset 0 0 0 1px rgba(224, 182, 106, 0.38);
+}
+
+.srp-open__seal {
+  position: relative;
+  margin: 20px 0 16px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-family: var(--soft-serif, Georgia, serif);
+  font-size: 25px;
+  color: #a98a4e;
+  background: #fffaf0;
+  border: 1px solid rgba(214, 168, 92, 0.55);
+  box-shadow: 0 4px 14px rgba(150, 110, 40, 0.14);
+}
+
+.srp-open__title {
+  position: relative;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  color: #2f2b28;
+  letter-spacing: 0.02em;
+}
+
+.srp-open__note {
+  position: relative;
+  margin: 7px 0 0;
+  font-size: 13px;
+  color: #9c948c;
+}
+
+.srp-open__amt {
+  position: relative;
+  margin: 16px 0 0;
+  font-family: var(--soft-serif, Georgia, serif);
+  font-size: 46px;
+  line-height: 1;
+  font-weight: 500;
+  color: #c9a35c;
+}
+
+.srp-open__amt small {
+  font-size: 15px;
+  margin-left: 5px;
+  color: #c9a35c;
+}
+
+.srp-open__hint {
+  position: relative;
+  margin: 18px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #c99a4a;
+}
+
+.srp-open__close {
+  position: relative;
+  margin-top: 22px;
+  padding: 10px 30px;
+  border: 1px solid rgba(214, 168, 92, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #b98f45;
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ── 详情页（发出的红包 / 已存入零钱） ── */
+/* ── 详情页：严格对齐参考图 ──
+ * 关键几何：红弧「顶边贴平、底边向下鼓出」，且左右各溢出面板 -8%，
+ * 这样弧的两端会被面板圆角裁掉，不会在顶角露出底色（此前的「不对称」根因）。
+ * 面板内所有内容统一居中。
+ */
+.srp-detail__panel {
+  position: relative;
+  padding: 0 0 calc(14px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  text-align: center;
+}
+
+/* 顶部红弧：顶边通栏铺满面板（左右两角也是红色），底边向下鼓出成饱满的弧形。
+ * 实测参考图：中轴处弧底约在面板高的 11%，弧底带一圈金色描边。
+ *
+ * 关键：弧宽必须严格 100%，并把上方两角设成与面板一致的圆角半径。
+ * 若用「超宽 + overflow 裁切」，直线裁切边与面板圆角弧线不重合，
+ * 顶角会露出约 4~5px 的底色缝隙（此前「不对称」的根因）。
+ */
+.srp-detail__arc {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  height: 104px;
+  border-radius: 22px 22px 50% 50% / 22px 22px 100% 100%;
+  background: linear-gradient(170deg, #f14b35 0%, #e04229 100%);
+  box-shadow: inset 0 0 0 1px rgba(224, 182, 106, 0.38);
+}
+
+/* 刚领取成功的徽标：叠在红弧下沿中央，作为即时到账反馈 */
+.srp-detail__claimed {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: max-content;
+  margin: -13px auto 0;
+  padding: 6px 15px 6px 13px;
+  border-radius: 999px;
+  background: #fffaf2;
+  border: 1px solid rgba(224, 182, 106, 0.5);
+  box-shadow: 0 3px 12px rgba(150, 92, 72, 0.14);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #c08f42;
+  letter-spacing: 0.01em;
+}
+
+.srp-detail__claimed-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #4caf76;
+}
+
+/* 内容区：统一居中，横向留白一致 */
+.srp-detail__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 28px 10px;
+  text-align: center;
+}
+
+/* 有「已领取」徽标时，标题与徽标之间留出呼吸感 */
+.srp-detail__claimed + .srp-detail__body {
+  padding-top: 20px;
+}
+
+.srp-detail__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #2f2b28;
+  letter-spacing: 0.01em;
+}
+
+.srp-detail__note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #a89c92;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* 大金额：金色衬线，右下角小「元」 */
+.srp-detail__sum {
+  margin: 18px 0 0;
+  font-family: var(--soft-serif, Georgia, "Songti SC", serif);
+  font-size: 44px;
+  font-weight: 500;
+  line-height: 1;
+  color: #d3ac66;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.srp-detail__sum small {
+  font-size: 14px;
+  font-weight: 400;
+  color: #d3ac66;
+  margin-left: 5px;
+  vertical-align: 0.42em;
+}
+
+/* 已存入零钱提示：图标与文字同行居中 */
+/* 提示行：纯文字，不再带前置图标（图标口径易被误读为「收益」入口） */
+.srp-detail__hint {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #c9a35c;
+  text-align: center;
+}
+
+/* 面板内底部按钮：收缩到内容宽度并水平居中（配合内容区统一居中）
+ *
+ * 居中细节：从 .qq-sheet__cancel 继承来的 letter-spacing 会在「最后一个字之后」
+ * 也补一份字距，导致文字块整体右溢，两字按钮肉眼可见偏右（实测质心右偏 +0.50px）。
+ * 两字按钮本就不需要额外字距，这里直接清零，让字形重心回到中轴：
+ * 清零后几何偏差 -0.38px、加权质心偏差 -0.12px（均已到亚像素级，不可辨）。 */
+.srp-detail__panel .qq-sheet__cancel {
+  display: block;
+  width: max-content;
+  min-width: 128px;
+  margin: 24px auto 0;
+  padding-left: 14px;
+  padding-right: 14px;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+/* ── 系统消息 ── */
+.qq-room__sys--srp {
+  font-size: 11.5px;
+  color: var(--soft-ink-3, #c9b6a6);
+  text-align: center;
+  padding: 4px 0;
+}

@@ -2055,6 +2055,37 @@
                 if (shortContent) out.content = shortContent;
             }
         }
+        /* 单聊红包：独立字段 singleRedPacket（m.redPacket 已被转账占用，禁止复用） */
+        var srpRaw =
+            raw && raw.singleRedPacket && typeof raw.singleRedPacket === 'object'
+                ? raw.singleRedPacket
+                : null;
+        var srp = null;
+        var srpMod = global.MiyaChatSingleRedPacket;
+        if (srpRaw && srpMod && typeof srpMod.normalizeSingleRedPacket === 'function') {
+            srp = srpMod.normalizeSingleRedPacket(srpRaw);
+        } else if (srpRaw) {
+            srp = srpRaw;
+        }
+        if (!srp && type === 'red_packet') {
+            /* 老消息 / 字段丢失：从 content 兜底恢复 */
+            if (srpMod && typeof srpMod.resolveMessagePacket === 'function') {
+                srp = srpMod.resolveMessagePacket({ type: type, content: content });
+            }
+        }
+        if (srp) {
+            out.singleRedPacket = srp;
+            out.type = 'red_packet';
+        } else {
+            out.singleRedPacket = null;
+        }
+        if (out.type === 'red_packet' && out.singleRedPacket) {
+            var srpModShort = global.MiyaChatSingleRedPacket;
+            if (srpModShort && typeof srpModShort.buildMessageContent === 'function') {
+                var srpContent = srpModShort.buildMessageContent(out.singleRedPacket);
+                if (srpContent) out.content = srpContent;
+            }
+        }
         if (raw && raw.groupRedPacketRef && typeof raw.groupRedPacketRef === 'object') {
             out.groupRedPacketRef = raw.groupRedPacketRef;
         }
@@ -4803,6 +4834,8 @@
                     entry.type === 'takeout' ||
                     entry.type === 'gift' ||
                     entry.type === 'group_red_packet' ||
+                    entry.type === 'red_packet' ||
+                    (entry.singleRedPacket && typeof entry.singleRedPacket === 'object') ||
                     entry.type === 'love_poem' ||
                     entry.type === 'match_record' ||
                     (entry.matchRecord && typeof entry.matchRecord === 'object') ||

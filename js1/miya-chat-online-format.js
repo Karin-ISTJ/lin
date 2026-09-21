@@ -12,6 +12,10 @@
     var RE_TAKEOUT = /^外卖[-－—]\s*(.+)$/;
     var RE_GIFT = /^送礼[-－—]\s*(.+)$/;
     var RE_GROUP_RED_PACKET = /^红包[-－—](拼手气|专属)[-－—](.+)$/;
+    /** 单聊红包：红包-金额｜祝福语 / 红包-金额-份数｜祝福语。
+     *  必须排在 RE_GROUP_RED_PACKET 之后：后者第二段固定为「拼手气|专属」，
+     *  与本正则的 [\d.]+ 字符集不重叠，两条互斥、可安全共存。 */
+    var RE_SINGLE_RED_PACKET = /^红包[-－—]([\d.]+)(?:[-－—](\d+))?[-－—]?(.+)$/;
     var RE_LOVE_POEM = /^情诗[-－—]\s*(.+)$/;
     /** 赛事记录卡片：单行承载全部字段，用 ｜ 分隔 */
     var RE_MATCH_RECORD = /^赛事记录[-－—]\s*(.+)$/;
@@ -1979,6 +1983,8 @@
         formatExampleBody = formatExampleBody.concat([
             '位置-滨海市｜海晏区星澜路18号一层103室',
             '转账-52｜一点心意',
+            '红包-20｜恭喜发财',
+            '红包-66-5｜新年快乐',
             '外卖-喜茶｜多肉葡萄×1、烤黑糖波波×1｜46｜送到公司前台',
             '送礼-丝绒玫瑰礼盒｜1｜今天也想让你开心一下',
             '赛事记录-跑步｜咪运会｜单人赛｜最后一百米反超，全场都在喊他的名字｜1.林晚.冠军奖杯.冲刺时反超了半个身位 / 2.周叙.亚军徽章.前三棒一直很稳｜发令枪响的瞬间所有人都冲了出去 / 最后一棒交接时接力棒差点脱手｜林晚.下次想试试四百米 / 周叙.腿现在还抖'
@@ -2430,6 +2436,20 @@
             }
         }
 
+        var srpLine = raw.match(RE_SINGLE_RED_PACKET);
+        if (srpLine) {
+            var srpMod = global.MiyaChatSingleRedPacket;
+            var srpFields =
+                srpMod && typeof srpMod.buildFromLine === 'function' ? srpMod.buildFromLine(raw) : null;
+            if (srpFields) {
+                if (pending) {
+                    srpFields.quoteRef = buildQuoteRefFromPending(pending);
+                    pending = null;
+                }
+                return { fields: srpFields, pendingQuote: null };
+            }
+        }
+
         var tf = { type: 'text', content: stripOrphanMarkdownEmphasis(raw) };
         if (pending) {
             tf.quoteRef = buildQuoteRefFromPending(pending);
@@ -2791,6 +2811,17 @@
         if (m.type === 'transfer' && m.redPacket) return { kind: 'transfer', msg: m };
         if (m.type === 'takeout' && m.takeoutOrder) return { kind: 'takeout', msg: m };
         if (m.type === 'gift' && m.giftParcel) return { kind: 'gift', msg: m };
+        /* 单聊红包：必须在群红包嗅探之前判定，避免被群红包 resolve 抢走 */
+        var srpDisplay = global.MiyaChatSingleRedPacket;
+        if (srpDisplay && typeof srpDisplay.resolveMessagePacket === 'function') {
+            var srpResolved = srpDisplay.resolveMessagePacket(m);
+            if (srpResolved) {
+                return {
+                    kind: 'red_packet',
+                    msg: Object.assign({}, m, { type: 'red_packet', singleRedPacket: srpResolved })
+                };
+            }
+        }
         var grpRpDisplay = global.MiyaChatGroupRedPacket;
         if (grpRpDisplay && typeof grpRpDisplay.resolveMessageGroupRedPacket === 'function') {
             var grpResolved = grpRpDisplay.resolveMessageGroupRedPacket(m);
@@ -3326,6 +3357,16 @@
             else if (lines.length) lines.push('[红包]');
             return lines.length ? lines.join('\n') : '[红包]';
         }
+        if (m.type === 'red_packet' && m.singleRedPacket) {
+            var srpApiMod = global.MiyaChatSingleRedPacket;
+            var srpApiLine =
+                srpApiMod && typeof srpApiMod.buildMessageContent === 'function'
+                    ? srpApiMod.buildMessageContent(m.singleRedPacket)
+                    : trim(m.content);
+            if (srpApiLine) lines.push(srpApiLine);
+            else if (lines.length) lines.push('[红包]');
+            return lines.length ? lines.join('\n') : '[红包]';
+        }
         if (m.type === 'love_poem' || isLovePoemMessage(m)) {
             var lpResolved = resolveLovePoemFromMessage(m);
             var poemApi = formatLovePoemForApi(lpResolved);
@@ -3446,6 +3487,28 @@
                 if (stLbl) body += '｜' + stLbl;
             } else {
                 body = '[转账]';
+            }
+        } else if (payload.kind === 'red_packet') {
+            var srpBodyMod = global.MiyaChatSingleRedPacket;
+            var srpBodyPkt =
+                srpBodyMod && typeof srpBodyMod.resolveMessagePacket === 'function'
+                    ? srpBodyMod.resolveMessagePacket(m)
+                    : m.singleRedPacket;
+            if (srpBodyPkt) {
+                var srpModeCn =
+                    srpBodyPkt.mode === 'lucky'
+                        ? '拼手气'
+                        : srpBodyPkt.mode === 'exclusive'
+                          ? '专属'
+                          : '普通';
+                body =
+                    '[红包] ' +
+                    srpModeCn +
+                    ' ¥' +
+                    srpBodyPkt.totalAmount +
+                    (srpBodyPkt.note ? '｜' + srpBodyPkt.note : '');
+            } else {
+                body = '[红包]';
             }
         } else if (payload.kind === 'takeout') {
             var takeoutSrc = payload.msg || m;
