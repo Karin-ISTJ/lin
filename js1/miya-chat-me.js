@@ -1031,7 +1031,7 @@
         '<span class="mi-dress-hub__num">III.</span>' +
         '<span class="mi-dress-hub__body">' +
           '<strong>气泡美化</strong>' +
-          '<span>我方 / 对方气泡配色 · 圆角 · 内边距</span>' +
+          '<span>我方 / 对方气泡配色 · 圆角 · 宽度</span>' +
         '</span>' +
         '<span class="mi-dress-hub__arrow">→</span>' +
       '</button>' +

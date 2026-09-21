@@ -22,23 +22,19 @@
     themH: 0, themS: 0, themL: 96,
     meH: 0, meS: 0, meL: 94,
     radius: 14,       /* 统一圆角 px（尖角固定 3px） */
-    maxWidth: 72,     /* 消息行最大宽度 % */
-    padX: 12,         /* 内边距·横向 px */
-    padY: 8           /* 内边距·纵向 px */
+    maxWidth: 72      /* 消息行最大宽度 % */
   };
 
   var LIMITS = {
     themH: [0, 360], themS: [0, 100], themL: [10, 100],
     meH: [0, 360], meS: [0, 100], meL: [10, 100],
     radius: [0, 28],
-    maxWidth: [40, 100],
-    padX: [4, 32],
-    padY: [2, 28]
+    maxWidth: [40, 100]
   };
 
   var UNITS = {
     themS: '%', themL: '%', meS: '%', meL: '%',
-    radius: 'px', maxWidth: '%', padX: 'px', padY: 'px'
+    radius: 'px', maxWidth: '%'
   };
 
   var DARK_TEXT_THRESHOLD = 45; /* 亮度低于此值 → 白字 */
@@ -90,9 +86,7 @@
       meS: clampKey(raw.meS, 'meS', d.meS),
       meL: clampKey(raw.meL, 'meL', d.meL),
       radius: clampKey(raw.radius, 'radius', d.radius),
-      maxWidth: clampKey(raw.maxWidth, 'maxWidth', d.maxWidth),
-      padX: clampKey(raw.padX, 'padX', d.padX),
-      padY: clampKey(raw.padY, 'padY', d.padY)
+      maxWidth: clampKey(raw.maxWidth, 'maxWidth', d.maxWidth)
     };
   }
 
@@ -168,7 +162,6 @@
       '  background: ' + hslOf(st, 'them') + ';',
       '  border: none;',
       '  border-radius: ' + st.radius + 'px ' + st.radius + 'px ' + st.radius + 'px 3px;',
-      '  padding: ' + st.padY + 'px ' + st.padX + 'px;',
       '  color: ' + textColorFor(st.themL) + ';',
       '}',
       '',
@@ -177,7 +170,6 @@
       '  background: ' + hslOf(st, 'me') + ';',
       '  border: none;',
       '  border-radius: ' + st.radius + 'px ' + st.radius + 'px 3px ' + st.radius + 'px;',
-      '  padding: ' + st.padY + 'px ' + st.padX + 'px;',
       '  color: ' + textColorFor(st.meL) + ';',
       '}'
     ].join('\n');
@@ -257,12 +249,9 @@
     var css = buildCss(st, '#qq-room');
     return '<div class="mi-bf-wrap mi-bf-wrap--mib" data-mib-root>' +
       '<p class="mi-me-lead">调整聊天气泡的颜色与形状，单聊群聊全局生效；聊天背景请在「壁纸管理 / 聊天背景」中设置</p>' +
-      '<div class="mi-bf-block">' +
-        '<div class="mi-bf-block__head">' +
-          '<span class="mi-bf-block__label">启用气泡美化</span>' +
-          '<button type="button" class="mib-switch' + (st.enabled ? ' is-on' : '') + '" data-mib-toggle role="switch" aria-checked="' + (st.enabled ? 'true' : 'false') + '" aria-label="启用气泡美化"><span class="mib-switch__knob"></span></button>' +
-        '</div>' +
-        '<p class="mi-bf-preview-hint">关闭后恢复默认气泡；预览始终展示当前滑条参数的效果</p>' +
+      '<div class="mib-switch-row">' +
+        '<span class="mib-switch-row__label">启用气泡美化</span>' +
+        '<button type="button" class="mib-switch' + (st.enabled ? ' is-on' : '') + '" data-mib-toggle role="switch" aria-checked="' + (st.enabled ? 'true' : 'false') + '" aria-label="启用气泡美化"><span class="mib-switch__knob"></span></button>' +
       '</div>' +
       '<div class="mi-bf-block mi-bf-block--preview">' +
         '<span class="mi-bf-block__label">实时预览</span>' +
@@ -278,8 +267,6 @@
         '<span class="mi-bf-block__label">尺寸</span>' +
         rangeRow('圆角', 'radius', st.radius) +
         rangeRow('最大宽度', 'maxWidth', st.maxWidth) +
-        rangeRow('内边距·横向', 'padX', st.padX) +
-        rangeRow('内边距·纵向', 'padY', st.padY) +
       '</div>' +
       '<div class="mi-btn-row">' +
         '<button type="button" class="mi-pill mi-pill--dark" data-mib-apply>应用气泡</button>' +

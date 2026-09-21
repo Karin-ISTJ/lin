@@ -3,7 +3,23 @@
  * 依赖 miya-chat-settings.css 的 mi-bf-block / mi-input / mi-pill 体系，仅做增量样式
  */
 
-/* ── 启用开关 ── */
+/* ── 启用开关：一行式矮卡片，不套 mi-bf-block（省掉标题下 margin 造成的不对称留白） ── */
+.mib-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: var(--mi-white, #fff);
+  border: 1px solid var(--mi-line, rgba(0, 0, 0, 0.07));
+}
+.mib-switch-row__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mi-sub, rgba(0, 0, 0, 0.55));
+  letter-spacing: 0.04em;
+}
 .mib-switch {
   position: relative;
   width: 44px;
@@ -80,6 +96,8 @@
   word-break: break-word;
   box-shadow: none;
   transition: none;
+  /* 生成 CSS 不再输出 padding，这里对齐真实房间的紧凑内边距 */
+  padding: 8px 12px;
 }
 
 /* ── HSL 颜色组 ── */
