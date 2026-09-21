@@ -30,47 +30,68 @@
     };
   }
 
-  /** 默认五表，贴近记忆增强常用结构 */
+  /*
+   * 默认六表。
+   *
+   * ── note 为什么写成「思考…应…」而不是「记录…」──
+   * 参考 SillyTavern 记忆增强插件的成熟预设后得出的结论：
+   * note 不是给用户看的字段说明，而是**每轮注入给 AI 的行动指令**。
+   *
+   * 旧写法「记录角色外貌、性格、职业等稳定信息」只回答了"这是什么"，
+   * 没回答"我什么时候该看它、看完做什么"。实测后果就是模型面对
+   * 五六张表无从下手，索性一张都不写 —— 表格长期空着。
+   *
+   * 新写法一律用「思考本轮…应…」句式，把 note 变成一句自检指令，
+   * 模型每轮扫到这个清单就知道该核对哪张表、该产出什么动作。
+   */
   function defaultTables() {
     return [
       {
         id: 't_time',
         name: '时空',
-        note: '记录当前时间、天气、地点与在场人物，保持时空连贯。',
+        note: '当前场景的时空快照，**恒定保持一行**；场景发生切换时用 updateRow 覆盖第 0 行，不要新增行。',
         enabled: true,
-        columns: ['月日', '天气气候', '地点', '参与人'],
+        columns: ['日期', '时间', '地点', '天气', '此地角色'],
         rows: []
       },
       {
         id: 't_char',
         name: '角色特征',
-        note: '记录角色外貌、性格、职业等稳定信息，禁止捏造未知。',
+        note: '角色天生或不易改变的特征；思考本轮出场的角色，他应当作出什么反应。',
         enabled: true,
-        columns: ['角色', '身体特征', '性格', '职业', '爱好', '住所', '重要信息'],
+        columns: ['角色名', '身体特征', '性格', '职业', '爱好', '喜欢的事物', '住所', '其他重要信息'],
         rows: []
       },
       {
         id: 't_social',
         name: '社交关系',
-        note: '记录角色之间及与用户的关系与态度（勿写用户对角色的态度行）。',
+        note: '思考本轮若有角色与<user>互动，他对<user>的态度应有何变化（勿写<user>对角色的态度）。',
         enabled: true,
-        columns: ['角色', '关系', '态度', '好感/亲密度'],
+        columns: ['角色名', '对<user>关系', '对<user>态度', '对<user>好感'],
+        rows: []
+      },
+      {
+        id: 't_task',
+        name: '任务约定',
+        note: '思考本轮是否有人交代了任务、或双方定下了约定（含时间地点），以及旧约定是否已到期完成。',
+        enabled: true,
+        columns: ['角色', '任务/约定', '地点', '持续时间', '状态'],
         rows: []
       },
       {
         id: 't_event',
         name: '重要事件',
-        note: '只记录对后续剧情有影响的事件。',
+        note: '记录<user>或角色经历的重要事件；思考本轮是否发生了对后续剧情有影响、值得留档的事。',
         enabled: true,
-        columns: ['相关角色', '事件简述', '时间', '地点', '情绪'],
+        columns: ['相关角色', '事件简述', '日期', '地点', '情绪'],
         rows: []
       },
       {
         id: 't_item',
         name: '重要物品',
-        note: '记录关键物品归属与意义。',
+        note: '对某人贵重或有特殊纪念意义的物品；思考本轮是否有物品易主、首次出现或失去。',
         enabled: true,
-        columns: ['相关角色', '物品', '描述', '重要性'],
+        columns: ['拥有人', '物品名', '物品描述', '重要原因'],
         rows: []
       }
     ];
@@ -348,19 +369,20 @@
    *   { sheets:[...] }          插件列表导出
    *   { tables:[...] }          本项目自己的导出
    *   { data:[...] }            data 直接是数组
-   *   { data:{ sheets:[...] } } data 是个对象壳（real case，早期漏判过）
+   *   { data:{ sheets:[...] } } data 是个对象壳
    *   { preset:{...} }          预设壳
+   *   { sheet_xxx:{...}, ... }  ★「以 uid 为键」的字典形态
    *
-   * ── 曾经的坑 ──
-   * 旧实现里 data 分支写的是 `Array.isArray(node.data)`，
-   * 于是 {data:{sheets:[...]}} 这种「data 是对象不是数组」的形态
-   * 在第 0 层就落到 return []。现在改成「是对象就继续往里剥」，
-   * 顺带把 preset 也统一进同一条路径。
+   * ── 最后那种是踩过的坑 ──
+   * ST 插件的 _table_data.json 顶层就是 { "sheet_ab12":{sheet对象}, ...,
+   * "mate":{type:"chatSheets"} }，既不是数组也没有 sheets 字段。
+   * 旧实现碰到它就 return []，用户拿自己导出的文件来导入直接报 no_sheets。
+   * 现在多一条兜底：**对象的值里如果成片地长得像 sheet，就当字典收下**。
    */
   function extractStSheets(input) {
     var node = input;
-    /* 最多剥 4 层：足够覆盖现实里的包装深度，又能防畸形数据自引用绕死 */
-    for (var depth = 0; depth < 5; depth++) {
+    /* 最多剥 5 层：足够覆盖现实里的包装深度，又能防畸形数据自引用绕死 */
+    for (var depth = 0; depth < 6; depth++) {
       if (!node || typeof node !== 'object') return [];
       if (Array.isArray(node)) return node;
       if (Array.isArray(node.sheets)) return node.sheets;
@@ -368,6 +390,17 @@
       /* data / preset 是「壳」，对象或数组都继续往下剥 */
       if (node.data && typeof node.data === 'object') { node = node.data; continue; }
       if (node.preset && typeof node.preset === 'object') { node = node.preset; continue; }
+
+      /*
+       * 兜底：字典形态 { uid: sheet }。
+       * 判据用 looksLikeStSheet 逐值筛，而不是「所有值」——
+       * 因为真实文件里混着 "mate" 这类元信息项（type:"chatSheets"），
+       * 它长得不像 sheet，正好被自然过滤掉。
+       */
+      var vals = Object.keys(node).map(function (k) { return node[k]; });
+      var sheetVals = vals.filter(looksLikeStSheet);
+      if (sheetVals.length) return sheetVals;
+
       return [];
     }
     return [];
@@ -498,6 +531,106 @@
   /** 重置为默认空表：行清空，溯源一并清空（表结构保留） */
   function resetChat(chatId) {
     return setChatTables(chatId, defaultTables(), {});
+  }
+
+  /**
+   * 把所有会话的表结构升级到最新默认表。
+   *
+   * ── 为什么需要它 ──
+   * defaultTables() 只对「还没有表的会话」生效（getChatTables 读不到桶时
+   * 才回落到默认表）。老会话早就把旧结构的表落在存储里了，改了默认表
+   * 它们也纹丝不动 —— 用户升级后打开老聊天，看到的还是旧的 5 张表。
+   *
+   * ── 迁移策略：按 id 对齐，数据尽量带走 ──
+   *   1) 先按默认表的 id 找老表：
+   *        · 找到同名同 id 的  → 保留其行数据，用新列名/新说明覆盖
+   *        · 老表 id 是 t_task 之类没匹配上的 → 也按 name 再找一次
+   *   2) 老表里有、新默认表没有的 → **原样保留**（用户自己加的表不能丢）
+   *   3) 新默认表有、老表没有的   → 以空表补上
+   *
+   * 行数据按列名对齐：老列若在新列里存在，值搬过去；否则丢弃。
+   * 这样「月日→日期」这种改名会丢数据，但不会把值塞到错误的列里 ——
+   * 宁缺勿错，错列的记忆比丢失的记忆更危险。
+   *
+   * @param {boolean} [dropRows=false] true = 只换表头，行全部清空（彻底重来）
+   * @returns {Promise<{chats:number, added:number, kept:number}>}
+   */
+  function upgradeAllChats(dropRows) {
+    var all = loadAll();
+    var defaults = defaultTables().map(normalizeTable);
+    var chats = 0, added = 0, kept = 0;
+
+    Object.keys(all.chats || {}).forEach(function (chatId) {
+      var pack = all.chats[chatId];
+      var oldTables = (pack && Array.isArray(pack.tables)) ? pack.tables.map(normalizeTable) : [];
+      if (!oldTables.length) { chats++; return; }
+
+      /* 用过的老表 id，避免重复匹配 */
+      var used = {};
+      var merged = [];
+
+      defaults.forEach(function (def) {
+        /* 先按 id 找，找不到再按表名找（老版本可能 id 不同但名字一样） */
+        var old = null;
+        for (var i = 0; i < oldTables.length; i++) {
+          if (used[i]) continue;
+          if (oldTables[i].id === def.id) { old = oldTables[i]; used[i] = 1; break; }
+        }
+        if (!old) {
+          for (var j = 0; j < oldTables.length; j++) {
+            if (used[j]) continue;
+            if (String(oldTables[j].name) === String(def.name)) { old = oldTables[j]; used[j] = 1; break; }
+          }
+        }
+
+        if (!old) { merged.push(def); added++; return; }
+
+        /* 找到老表：换表头，行数据按列名对齐搬过来 */
+        var rows = [];
+        if (!dropRows) {
+          var idxMap = {};   /* 新列下标 -> 老列下标 */
+          def.columns.forEach(function (c, ni) {
+            var oi = old.columns.indexOf(c);
+            if (oi >= 0) idxMap[ni] = oi;
+          });
+          rows = (old.rows || []).map(function (r) {
+            var out = def.columns.map(function () { return ''; });
+            Object.keys(idxMap).forEach(function (ni) {
+              var v = r[idxMap[ni]];
+              out[Number(ni)] = v == null ? '' : String(v);
+            });
+            return out;
+          }).filter(function (r) {
+            return r.some(function (c) { return String(c || '').trim() !== ''; });
+          });
+        }
+        merged.push({
+          id: def.id,
+          name: def.name,
+          note: def.note,
+          enabled: old.enabled !== false,
+          columns: def.columns,
+          rows: rows
+        });
+        kept++;
+      });
+
+      /* 保留用户自建的、默认表里没有的表（原样，含它们的行） */
+      oldTables.forEach(function (t, i) {
+        if (!used[i]) merged.push(t);
+      });
+
+      all.chats[chatId] = {
+        tables: merged,
+        rowSource: dropRows ? {} : (pack.rowSource || {}),
+        updatedAt: Date.now()
+      };
+      chats++;
+    });
+
+    return saveAll(all).then(function () {
+      return { chats: chats, added: added, kept: kept };
+    });
   }
 
   /**
@@ -798,6 +931,7 @@
     removeRowsBySource: removeRowsBySource,
     ensureChat: ensureChat,
     resetChat: resetChat,
+    upgradeAllChats: upgradeAllChats,
     dropChat: dropChat,
     listChatIds: listChatIds,
     exportChat: exportChat,

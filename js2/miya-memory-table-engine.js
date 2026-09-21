@@ -154,21 +154,23 @@
     var lines = [];
     lines.push('');
     lines.push('');
-    lines.push('【记忆表写入规则】');
+    lines.push('【记忆表写入规则 —— 每轮必须执行】');
     lines.push('');
-    lines.push('一、本轮剧情产生需要长期记住的信息时，在回复**末尾**追加：');
+    lines.push('一、**收尾自检**（最容易漏的一步，务必执行）：');
+    lines.push('  写完正文后，逐张核对下表「思考」栏；任一表有变化，就在回复最末尾追加：');
     lines.push('<tableEdit><!-- 函数调用 --></tableEdit>');
+    lines.push('  ⚠ 这段**必须写在正文闭合标签之后**，不要因为正文写完了就停下。');
+    lines.push('  ⚠ 没有变化时**不要**输出 tableEdit；有变化时**绝不能省略**。');
     lines.push('');
-    lines.push('二、各表职责 —— 对号入座，不要混写：');
+    lines.push('二、逐表自检清单 —— 挨个问自己，对号入座：');
     (tables || []).forEach(function (t, i) {
       if (!t || t.enabled === false) return;
       var cols = (t.columns || []).map(function (c) {
         return sanitizeLabel(c);
       }).join('/');
       lines.push(
-        '  ' + i + ' ' + sanitizeLabel(t.name || '表') +
-        '  列：' + cols +
-        (t.note ? '  用途：' + sanitizeLabel(t.note) : '')
+        '  [' + i + '] ' + sanitizeLabel(t.name || '表') + '  （列：' + cols + '）' +
+        (t.note ? '\n      → ' + sanitizeLabel(t.note) : '')
       );
     });
     lines.push('');
@@ -176,6 +178,7 @@
     lines.push('  · 同一实体**已存在**行 → 用 updateRow 改那一行，不要新增。');
     lines.push('  · 确实没有对应行 → 才用 insertRow。');
     lines.push('  · 信息已过时无效 → 用 deleteRow 删掉，或 updateRow 覆盖。');
+    lines.push('  · 标着「保持一行」的表（如时空）永远只 updateRow 第 0 行，**绝不 insertRow**。');
     lines.push('  · 行数有上限，频繁 insertRow 会把早期设定挤出表格、等于遗忘。');
     lines.push('');
     lines.push('四、记什么、不记什么：');
@@ -192,7 +195,11 @@
     lines.push('  · 函数调用必须包在 <!-- --> 里。');
     lines.push('  · 单元格内**不要使用英文逗号**（会破坏列结构），需要并列时用 / 分隔。');
     lines.push('  · 单元格内不要换行、不要用引号；值是纯文本，不写 JSON 嵌套。');
-    lines.push('  · 禁止捏造原文未出现的设定；禁止把用户对角色的态度写进社交表。');
+    lines.push('  · 禁止捏造原文未出现的设定；禁止把<user>对角色的态度写进社交表。');
+    lines.push('');
+    lines.push('六、正确范例（注意 tableEdit 在正文**之后**）：');
+    lines.push('  <content>她推开门，雨还在下。</content>');
+    lines.push('  <tableEdit><!-- updateRow(0, 0, {4:"小雨"}) --><!-- insertRow(5, {0:"小雨", 1:"钢笔", 2:"母亲遗物", 3:"纪念"}) --></tableEdit>');
     return lines.join('\n');
   }
 
