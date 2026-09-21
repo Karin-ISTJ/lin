@@ -22,11 +22,14 @@
   gap: 5px;
 }
 /* 底板与真实桌面同一组变量：颜色 --miya-icon-plate-c（着色模块写入），
-   透明度 --miya-icon-plate-a（沿用 :root 现值，永不改动） */
+   透明度 --miya-icon-plate-a（沿用 :root 现值，永不改动）。
+   尺寸/圆角 --mit-plate-w / --mit-plate-r：面板打开时由模块按真实图标
+   实测值写入预览容器（58px/17px 为自定义桌面网格的默认实测值），
+   保证预览底板与真实桌面同尺寸 —— 半透明底板的观感才一致 */
 .mit-preview-plate {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: var(--mit-plate-w, 58px);
+  height: var(--mit-plate-w, 58px);
+  border-radius: var(--mit-plate-r, 17px);
   display: flex;
   align-items: center;
   justify-content: center;

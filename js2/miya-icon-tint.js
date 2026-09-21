@@ -22,6 +22,7 @@
   var UNITS = { h: '', s: '%', l: '%' };
 
   var stateCache = null;
+  var userTouched = false;
 
   function esc(s) {
     return String(s || '')
@@ -106,6 +107,7 @@
   }
 
   function saveState(patch) {
+    userTouched = true;
     var next = normalizeState(Object.assign({}, getState(), patch || {}));
     stateCache = next;
     writeStorage(next);
@@ -146,6 +148,31 @@
       root.style.removeProperty('--miya-icon-plate-c');
     }
     return st;
+  }
+
+  /**
+   * 异步水合：localStorage 里只存 IDB 占位符时，miyaSyncReadJsonKey 会返回 null，
+   * 启动时 stateCache 落到默认值 → 刷新后着色"消失"。
+   * 这里用 miyaReadLsJsonKey 从 IndexedDB 读回权威状态并重新应用。
+   * userTouched 防护：用户已交互则不覆盖内存中的新状态。
+   */
+  function tintScore(st) { return st.enabled ? 100 : 0; }
+
+  function hydrateFromIdb() {
+    if (typeof global.miyaReadLsJsonKey !== 'function') return Promise.resolve(getState());
+    return global.miyaReadLsJsonKey(STORAGE_KEY, null).then(function (v) {
+      if (userTouched) return getState();
+      if (!v || typeof v !== 'object') return getState();
+      var next = normalizeState(v);
+      var cur = getState();
+      if (tintScore(next) >= tintScore(cur) && JSON.stringify(next) !== JSON.stringify(cur)) {
+        stateCache = next;
+        apply(next);
+      }
+      return getState();
+    }).catch(function () {
+      return getState();
+    });
   }
 
   /* ── 面板 ── */
@@ -229,7 +256,31 @@
     }
     /* 变量定义在预览容器上：预览始终跟随滑条（与开关无关），
        且不会触碰 html 根上的同名变量 —— 真实桌面只受 apply() 控制 */
-    el.textContent = '.mit-preview-desk { --miya-icon-plate-c: ' + rgbTriple(st) + '; }';
+    var rules = ['.mit-preview-desk { --miya-icon-plate-c: ' + rgbTriple(st) + ';'];
+
+    /* 对齐真实桌面环境，消除"预览与实际观感不一致"：
+       ① 半透明底板透出的背景 —— 同步真实壁纸；
+       ② 底板尺寸与圆角 —— 读取真实图标实测值。 */
+    var wall = document.querySelector('.phone__wall');
+    if (wall) {
+      var wcs = getComputedStyle(wall);
+      var wallBg = wcs.backgroundImage;
+      if (wallBg && wallBg !== 'none') {
+        rules.push('background-image: ' + wallBg + '; background-size: cover; background-position: center;');
+      } else if (wcs.backgroundColor && wcs.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+        /* 无自定义壁纸：用墙面实际底色（默认纯白）替换预览台的米色渐变，
+           否则默认状态下预览明显偏黄 —— 「预览与实际颜色不一样」的另一半根源 */
+        rules.push('background: ' + wcs.backgroundColor + ';');
+      }
+    }
+    var sample = document.querySelector('.desk-custom__grid .ic__box[data-i], .desk-custom__grid .ic__box.glass, .ic__box[data-i], .ic__box.glass');
+    if (sample) {
+      var cs = getComputedStyle(sample);
+      if (cs.width) rules.push('--mit-plate-w: ' + cs.width + ';');
+      if (cs.borderRadius) rules.push('--mit-plate-r: ' + cs.borderRadius + ';');
+    }
+    rules.push('}');
+    el.textContent = rules.join(' ');
   }
 
   function copyText(text) {
@@ -345,6 +396,7 @@
 
   function init() {
     apply(getState());
+    hydrateFromIdb();
   }
 
   global.MiyaIconTint = {

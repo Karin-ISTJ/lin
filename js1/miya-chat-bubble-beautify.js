@@ -40,6 +40,7 @@
   var DARK_TEXT_THRESHOLD = 45; /* 亮度低于此值 → 白字 */
 
   var stateCache = null;
+  var userTouched = false;
 
   function esc(s) {
     return String(s || '')
@@ -130,6 +131,7 @@
   }
 
   function saveState(patch) {
+    userTouched = true;
     var next = normalizeState(Object.assign({}, getState(), patch || {}));
     stateCache = next;
     writeStorage(next);
@@ -186,6 +188,32 @@
     el.textContent = st.enabled ? buildCss(st, '#qq-room') : '';
     document.body.appendChild(el); /* append 对已存在节点是「移动」，保证始终最后注入、级联最优先 */
     return st;
+  }
+
+  /**
+   * 异步水合：localStorage 只存 IDB 占位符时，miyaSyncReadJsonKey 返回 null，
+   * 启动 stateCache 落到默认值 → 刷新后气泡配置"消失"。
+   * 用 miyaReadLsJsonKey 从 IndexedDB 读回权威状态并重新注入。
+   * 评分比较：开启状态优先；开关相同则恢复保存过的滑条参数。
+   * userTouched 防护：用户已交互则不覆盖内存中的新状态。
+   */
+  function bubbleScore(st) { return st.enabled ? 100 : 0; }
+
+  function hydrateFromIdb() {
+    if (typeof global.miyaReadLsJsonKey !== 'function') return Promise.resolve(getState());
+    return global.miyaReadLsJsonKey(STORAGE_KEY, null).then(function (v) {
+      if (userTouched) return getState();
+      if (!v || typeof v !== 'object') return getState();
+      var next = normalizeState(v);
+      var cur = getState();
+      if (bubbleScore(next) >= bubbleScore(cur) && JSON.stringify(next) !== JSON.stringify(cur)) {
+        stateCache = next;
+        apply(next);
+      }
+      return getState();
+    }).catch(function () {
+      return getState();
+    });
   }
 
   /* ── 面板 UI ── */
@@ -428,6 +456,7 @@
 
   function init() {
     apply(getState());
+    hydrateFromIdb();
   }
 
   global.MiyaChatBubbleBeautify = {
