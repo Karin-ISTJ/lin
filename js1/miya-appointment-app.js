@@ -5354,39 +5354,72 @@ function renderWriter() {
     }
 
     /**
-     * 解析 ST 的 JSONL 聊天文件。
+     * 解析 ST 的 JSONL 聊天文件（详细版）。
+     *
+     * ⚠️ 与旧实现的三个关键差别 —— 这三个都是「报错却留下一条
+     *    打不开的记录」的成因，改的时候不能退回去：
+     *
+     * 1) 【不再要求 ≥2 行】
+     *    旧判据 `rows.length < 2 → null` 把「元信息 + 1 条消息」这种
+     *    完全合法的最小分支文件判成了「不是 jsonl」。ST 切分支时
+     *    确实可能只剩一楼，用户看到的就是「明明是这个软件导出的，
+     *    却说格式不正确」。现在只要「能解析出 JSON 行」并且
+     *    「其中有带 mes 的消息行」就算数。
+     *
+     * 2) 【元信息行不再限定必须是第一行】
+     *    旧实现只把 rows[0] 当元信息候选；文件被工具重排、
+     *    或前面混进了空行/注释行时会误判。现在扫描全部行，
+     *    取第一个「不带 mes 也不带 swipes」的对象当元信息。
+     *
+     * 3) 【区分「不是 jsonl」与「是 jsonl 但没楼层」】
+     *    旧实现两种情况都回 null，调用方只能给同一句笼统话术。
+     *    现在回 reason，由 runImportText 翻成不同的人话。
      *
      * @param {string} text 文件全文
-     * @returns {{title:string, messages:Array}|null}
-     *          不是 JSONL（解析不出 ≥2 行）时返回 null，由调用方回退旧逻辑。
+     * @returns {{ok:boolean, reason:string, title:string, messages:Array, rowCount:number}}
+     *          reason ∈ 'no_message' | 'not_jsonl' | 'no_message_rows' | 'no_valid_row'
      */
-    function parseStJsonl(text) {
+    function parseStJsonlDetailed(text) {
+        var empty = { ok: false, reason: 'not_jsonl', title: '', messages: [], rowCount: 0 };
         var raw = String(text || '');
-        if (!raw.trim()) return null;
+        if (!raw.trim()) return empty;
 
         var lines = raw.split(/\r?\n/);
         var rows = [];
         lines.forEach(function (line) {
-            var s = String(line || '').trim();
+            /*
+             * 剥 BOM：ST 导出有时带 U+FEFF，会让第一行 JSON.parse 直接失败。
+             * 早先这行被静默跳过后，「元信息行缺失」的连锁反应就是整个文件被否。
+             */
+            var s = String(line || '').replace(/^\uFEFF/, '').trim();
             if (!s) return;
-            /* 以 { 开头基本就是 JSON 对象行；其它情况容忍但尝试解析 */
             try {
                 var o = JSON.parse(s);
                 if (o && typeof o === 'object' && !Array.isArray(o)) rows.push(o);
             } catch (e) { /* 跳过解析失败的行（文件头 BOM、尾空行等） */ }
         });
 
-        /* 至少要有一行元信息 + 一行消息才认；否则不是 JSONL，交回旧逻辑 */
-        if (rows.length < 2) return null;
+        /* 一行合法 JSON 都没有 → 根本不是 jsonl，交给调用方走别的分支 */
+        if (!rows.length) return { ok: false, reason: 'not_jsonl', title: '', messages: [], rowCount: 0 };
 
-        /* 元信息行 = 没有 mes 字段的那行（ST 的第 0 行） */
+        /*
+         * 元信息行 = 既没有 mes 也没有 swipes 的那一行（ST 的第 0 行）。
+         *
+         * 为什么两个字段都排：某些 ST 版本的消息行只有 swipes 没有 mes
+         * （用户手动清空过正文），只排 mes 会把这种消息行误当成元信息，
+         * 于是「唯一一条消息」被吃掉，导入结果变成 0 条。
+         */
         var meta = null;
         var msgRows = [];
         rows.forEach(function (o) {
-            if (meta === null && !('mes' in o)) { meta = o; return; }
-            if ('mes' in o || 'swipes' in o) msgRows.push(o);
+            var hasMes = 'mes' in o;
+            var hasSwipes = 'swipes' in o;
+            if (meta === null && !hasMes && !hasSwipes) { meta = o; return; }
+            if (hasMes || hasSwipes) msgRows.push(o);
         });
-        if (!msgRows.length) return null;
+        if (!msgRows.length) {
+            return { ok: false, reason: 'no_message_rows', title: '', messages: [], rowCount: rows.length };
+        }
 
         var messages = [];
         msgRows.forEach(function (o) {
@@ -5425,13 +5458,152 @@ function renderWriter() {
             messages.push(msg);
         });
 
-        if (!messages.length) return null;
+        /*
+         * 到了这里说明「文件确实是 ST jsonl」（有元信息行、有消息行），
+         * 只是过滤掉空白占位后一条都不剩 —— 这是「空聊天」，
+         * 必须与「不是这个格式」区分开，用户才知道该去 ST 里找原因。
+         */
+        if (!messages.length) {
+            return { ok: false, reason: 'no_message', title: '', messages: [], rowCount: rows.length };
+        }
 
         /* 标题：优先 ST 的 character_name；'unused' 是未绑定角色的占位，视为无效 */
         var cn = meta && meta.character_name != null ? String(meta.character_name).trim() : '';
         if (!cn || cn === 'unused') cn = '';
 
-        return { title: cn, messages: messages };
+        return { ok: true, reason: '', title: cn, messages: messages, rowCount: rows.length };
+    }
+
+    /**
+     * 解析 ST 的 JSONL 聊天文件（兼容旧签名）。
+     *
+     * @param {string} text 文件全文
+     * @returns {{title:string, messages:Array}|null}
+     *          不是 JSONL 或没有可用楼层时返回 null。
+     */
+    function parseStJsonl(text) {
+        var d = parseStJsonlDetailed(text);
+        return d.ok ? { title: d.title, messages: d.messages } : null;
+    }
+
+    /**
+     * 导入结果的统一收口。
+     *
+     * 为什么要有这个枚举：早先三种完全不同的失败（文件是空的、
+     * 一行 JSON 都解析不出来、解析出来但一条有效消息都没有）
+     * 全都塌缩成同一句「导入失败：文件格式不正确」。用户拿着这句话
+     * 只能反复换文件试，永远不知道该改什么 —— 而这三者的处置方式
+     * 其实是完全不同的：空文件重选一个；不是 jsonl 就换格式；
+     * 解析出空消息则多半是 ST 把楼层裁掉了，得去 ST 里确认。
+     */
+    var IMPORT_FAIL = {
+        EMPTY_FILE: '文件是空的，请重新选择聊天记录文件',
+        NOT_JSONL: '这个文件不是 SillyTavern 的聊天记录格式（.jsonl）',
+        NO_MESSAGE: '文件能打开，但里面没有找到任何楼层 —— 可能是空聊天或导出时被裁掉了',
+        BAD_JSON: 'JSON 文件解析失败，可能已损坏',
+        NO_CHAT: '请先进入一个聊天再导入',
+        EMPTY_MESSAGES: '解析出 0 条楼层，未导入（原文件可能是空聊天）',
+        STORE_REJECT: '导入被拒绝：没有可用的聊天记录（0 条楼层）'
+    };
+
+    /**
+     * 把一段文件文本导入当前聊天。
+     *
+     * 抽成独立函数（而不是塞在 FileReader 回调里）的原因：
+     *   ① 自动化测试能直接喂可控文本，不必绕 <input type=file>；
+     *   ② 解析、校验、入库三者顺序一目了然 —— 见下面「先校验后入库」。
+     *
+     * @param {string} text     文件全文
+     * @param {string} fileName 原始文件名（用于回退分支与默认标题）
+     * @returns {boolean} 是否导入成功
+     */
+    function runImportText(text, fileName) {
+        var raw = String(text == null ? '' : text);
+        var name = String(fileName || '');
+        var baseName = name.replace(/\.[^.]+$/, '');
+
+        /* ① 空文件：最先挡住，别让它走到后面的解析再报一句笼统的错 */
+        if (!raw.trim()) {
+            toast('导入失败：' + IMPORT_FAIL.EMPTY_FILE);
+            return false;
+        }
+        /* 没有目标聊天就没地方挂 —— 早先会走到 importSession 拿 null 才失败 */
+        if (!ui.chatId) {
+            toast('导入失败：' + IMPORT_FAIL.NO_CHAT);
+            return false;
+        }
+
+        var payload = null;
+        var stPack = null;
+        var stMeta = null;
+
+        /*
+         * 先试 ST 的 JSONL —— 放在最前面，且不看扩展名。
+         * 理由：① 用户手上文件的扩展名可能是 .jsonl / .bin / 甚至 .txt，
+         *         按名字分流反而漏；② 判据「能解析出 ≥2 行 JSON 且带 mes」
+         *         足够严，普通 .json / 【第N层】文本都不会误判。
+         * 认不出来就原样往下走旧逻辑，既有行为一点不动。
+         */
+        try {
+            stMeta = parseStJsonlDetailed(raw);
+        } catch (eP) {
+            stMeta = { ok: false, reason: 'not_jsonl', messages: [] };
+        }
+
+        if (stMeta && stMeta.ok) {
+            stPack = { title: stMeta.title, messages: stMeta.messages };
+            payload = {
+                session: { title: stPack.title || baseName },
+                messages: stPack.messages
+            };
+        } else if (/\.json$/i.test(name)) {
+            /* ② 显式 .json：解析失败要报「文件损坏」，而不是笼统的格式不对 */
+            try {
+                payload = JSON.parse(raw);
+            } catch (eJ) {
+                console.error(eJ);
+                toast('导入失败：' + IMPORT_FAIL.BAD_JSON);
+                return false;
+            }
+        } else {
+            /*
+             * ③ 既不是 ST jsonl，也不是 .json —— 说明文件里一行合法 JSON 都没有。
+             *    这里不再自作多情地按【第N层】文本硬切：
+             *    早先它会在「明明不是这个格式」的输入上切出 msgs = []，
+             *    然后把这空数组推进 store，先污染再报错。现在直接判否。
+             */
+            toast('导入失败：' + IMPORT_FAIL.NOT_JSONL);
+            return false;
+        }
+
+        /* ④ 入库前先做「非空」校验 —— 顺序是本次修复的关键 */
+        var msgs = payload && Array.isArray(payload.messages) ? payload.messages : null;
+        if (!msgs) {
+            toast('导入失败：' + IMPORT_FAIL.NOT_JSONL);
+            return false;
+        }
+        if (!msgs.length) {
+            toast('导入失败：' + (stMeta && stMeta.reason === 'no_message'
+                ? IMPORT_FAIL.NO_MESSAGE
+                : IMPORT_FAIL.EMPTY_MESSAGES));
+            return false;
+        }
+
+        /* ⑤ 校验过了才碰存储 */
+        var sess = apStore().importSession(ui.chatId, payload);
+        if (!sess) {
+            toast('导入失败：' + IMPORT_FAIL.STORE_REJECT);
+            return false;
+        }
+
+        ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
+        resetScrollUiState();
+        render();
+        scrollToLatestOnEnter();
+        toast(stPack
+            ? ('已导入 ' + msgs.length + ' 条聊天记录')
+            : '聊天已导入');
+        return true;
     }
 
     function importOfflineChat() {
@@ -5441,41 +5613,31 @@ function renderWriter() {
          * bin，用户很可能就按显示的名字去找文件，多列一个不吃亏。
          */
         input.accept = '.json,.jsonl,.txt,.bin';
-        input.addEventListener('change', function () { var file = input.files && input.files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function () {
-            try {
-                var text = String(reader.result || ''), payload;
-                var baseName = file.name.replace(/\.[^.]+$/, '');
-
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function () {
                 /*
-                 * 先试 ST 的 JSONL —— 放在最前面，且不看扩展名。
-                 * 理由：① 用户手上文件的扩展名可能是 .jsonl / .bin / 甚至 .txt，
-                 *         按名字分流反而漏；② 判据「能解析出 ≥2 行 JSON 且带 mes」
-                 *         足够严，普通 .json / 【第N层】文本都不会误判。
-                 * 认不出来就原样往下走旧逻辑，既有行为一点不动。
+                 * 不在这里包 try/catch 兜底成「文件格式不正确」——
+                 * runImportText 内部已按失败原因分别给话术。
+                 * 留一层 try 只为防「渲染期异常」把整页搞崩，
+                 * 这种情况才用笼统话术（此时确实说不清是文件的问题）。
                  */
-                var stPack = parseStJsonl(text);
-                if (stPack) {
-                    payload = {
-                        session: { title: stPack.title || baseName },
-                        messages: stPack.messages
-                    };
-                } else if (/\.json$/i.test(file.name)) {
-                    payload = JSON.parse(text);
-                } else {
-                    var lines = text.split(/\r?\n/), msgs = [], role = 'assistant', buf = [];
-                    lines.forEach(function (line) { var hit = line.match(/^【第\s*\d+\s*层】\s*(.*)$/); if (hit) { if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); buf = []; role = /我/.test(hit[1]) ? 'user' : /系统/.test(hit[1]) ? 'system' : 'assistant'; return; } if (/^#\s*/.test(line)) return; buf.push(line); });
-                    if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() });
-                    payload = { session: { title: baseName }, messages: msgs };
+                try {
+                    runImportText(String(reader.result || ''), file.name);
+                } catch (e) {
+                    console.error(e);
+                    toast('导入失败：文件处理时出错，请重试');
                 }
-
-                var sess = apStore().importSession(ui.chatId, payload); if (!sess) throw new Error('invalid');
-                ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
-                resetScrollUiState();
-                render();
-                scrollToLatestOnEnter();
-                toast(stPack ? ('已导入 ' + stPack.messages.length + ' 条聊天记录') : '聊天已导入');
-            } catch (e) { console.error(e); toast('导入失败：文件格式不正确'); }
-        }; reader.readAsText(file); }); input.click();
+            };
+            reader.onerror = function () {
+                console.error(reader.error);
+                toast('导入失败：文件读取失败，请重新选择');
+            };
+            reader.readAsText(file);
+        });
+        input.click();
     }
 
     /*
@@ -6145,8 +6307,36 @@ function renderWriter() {
         __testParseStJsonl: function (text) {
             return parseStJsonl(text);
         },
+        /*
+         * 同上的详细版：连失败原因一起回，便于测试断言
+         * 「是哪种失败」而不只是「失败了」。
+         */
+        __testParseStJsonlDetailed: function (text) {
+            return parseStJsonlDetailed(text);
+        },
         __testStripBlocks: function (raw) {
             return stripAllBlocks(raw);
+        },
+        /*
+         * 测试专用后门：走完整的「文件文本 → 解析 → 入库 → 渲染」导入链路。
+         *
+         * 为什么必须留这个口子：真正的 importOfflineChat 依赖
+         * <input type=file> + FileReader，自动化里只能投真实文件，
+         * 没法「给一段可控文本、断言解析与报错」，而这恰恰是
+         * 「报错却留下一条打不开的记录」这类问题的观察点。
+         *
+         * 这里直接复用同一个 runImportText 函数（importOfflineChat 内部
+         * 也只调它），因此测试跑的和用户点的是同一条代码路径。
+         */
+        __testRunImport: function (chatId, text, fileName) {
+            if (chatId) ui.chatId = String(chatId);
+            runImportText(text, fileName || 'test.jsonl');
+        },
+        __testUi: function () {
+            return { chatId: ui.chatId, sessionId: ui.sessionId, view: ui.view, status: ui.status };
+        },
+        __testStoryHasContent: function () {
+            return storyHasContent();
         }
     };
 })(window);

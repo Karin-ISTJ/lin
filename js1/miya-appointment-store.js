@@ -2184,11 +2184,41 @@
             save({ force: true });
             return branch;
         },
+        /**
+         * 导入一份聊天记录，建成一个线下场次。
+         *
+         * ⚠️ 这里必须拒绝「空 messages」，这条判据是修
+         *    「导入报格式不正确、却留下一个点不进去的记录」的关键。
+         *
+         * 早先只判 `Array.isArray(messages)`，于是 `messages: []`
+         * 照样能 unshift 进桶、并把 activeSessionId 指向它。随之而来的是
+         * 一组自相矛盾的表现：
+         *   · getSessions()   —— 用 countLiveMessages > 0 过滤，**看不见**这个空壳
+         *   · getActiveSession —— 不看消息数，**看得见**这个空壳
+         *   · storyHasContent() —— 判假，于是点进去落到「选择开场白」页
+         * 用户体感正是：列表里/状态里像是多了那么一个，点却点不进去。
+         *
+         * 三个入口对「空会话是否合法」的判断本来就不一致；这里从源头收口：
+         * 空会话一律不入库，三个入口的分歧也就不存在了。
+         * （startNewSession 是唯一的例外 —— 它就是要建一个空场次等用户开写，
+         *   所以那边保留 filter 逻辑，不受本判据影响。）
+         */
         importSession: function (chatId, payload) {
             if (!payload || typeof payload !== 'object') return null;
             var source = payload.session && typeof payload.session === 'object' ? payload.session : payload;
             var messages = Array.isArray(payload.messages) ? payload.messages : source.messages;
             if (!Array.isArray(messages)) return null;
+            /*
+             * 判「有没有活着的行」而不是 `messages.length`：
+             * 直接传进来的数组未必经过 normalizeSession，可能混着
+             * null / 空 content / deleted 占位。用最终会被展示的口径判，
+             * 才不会出现「通过了校验、入库后列表里却还是看不见」的二次落空。
+             */
+            var normalized = messages.map(normalizeMessage).filter(Boolean);
+            var live = normalized.filter(function (m) {
+                return !m.deleted && String(m.content || '').trim();
+            });
+            if (!live.length) return null;
             var sess = normalizeSession(Object.assign({}, source, {
                 id: uid('sess'), chatId: chatId || source.chatId,
                 createdAt: Date.now(), messages: messages
