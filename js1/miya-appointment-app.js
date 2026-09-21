@@ -1619,6 +1619,11 @@
          * 一个都翻不回去。这里跟素纸主题对齐，补在气泡尾部。
          */
         var swipeBar = offlineSwipeBarHtml(m);
+        /*
+         * 角色状态栏：正文之后、时间戳之前。
+         * 数据在 m.statusBar.fields（落库时就解析好了），这里只套模板。
+         */
+        var statusBarHtml = offlineStatusBarHtml(m);
         var bubbleInner =
             deco +
             (isUser
@@ -1626,6 +1631,7 @@
                 : '<span class="xw-chat__quote" aria-hidden="true">“</span>') +
             (thinkingHtml ? '<div class="xw-chat__think">' + thinkingHtml + '</div>' : '') +
             body +
+            statusBarHtml +
             '<time class="xw-chat__time">' +
             time +
             (isUser ? '<span class="xw-chat__ticks" aria-hidden="true">✓✓</span>' : '') +
@@ -1685,6 +1691,80 @@
      * 就是「多来一版」。title 会跟着当前语义变，鼠标一悬停就知道
      * 这一下点下去是翻页还是重刷。
      */
+    /*
+     * 角色状态栏（线下）：正文之后那张自定义卡片。
+     *
+     * 与线上同构 —— 数据在 m.statusBar.fields，渲染时才套模板。
+     * 线下挂在 .xw-chat 气泡内、<time> 之前。
+     */
+    function offlineStatusBarHtml(m) {
+        if (!m || m.role !== 'assistant') return '';
+        var fields = m.statusBar && Array.isArray(m.statusBar.fields) ? m.statusBar.fields : null;
+        if (!fields || !fields.length) return '';
+        var sb = global.MiyaChatStatusBar;
+        if (!sb || typeof sb.buildCardHtml !== 'function') return '';
+        var cfg = null;
+        try {
+            cfg = typeof sb.resolveConfig === 'function'
+                ? sb.resolveConfig(global.miyaChatStore, ui.chatId)
+                : null;
+        } catch (e) {
+            cfg = null;
+        }
+        var inner = '';
+        try {
+            inner = sb.buildCardHtml({
+                fields: fields,
+                tag: (m.statusBar && m.statusBar.tag) || '',
+                config: cfg || {}
+            });
+        } catch (e2) {
+            inner = '';
+        }
+        if (!inner) return '';
+        return '<div class="xw-chat__statusbar" data-ap-statusbar="1">' + inner + '</div>';
+    }
+
+    /*
+     * 线下状态栏 iframe 水合。
+     * 复用同一套属性名（miya-sb-*），和线上是同一份逻辑，
+     * 只是线下要额外量高度 —— 手帐主题气泡窄，iframe 塌了会很难看。
+     */
+    function hydrateAppointmentStatusBarIframes(root) {
+        if (!root || !root.querySelectorAll) return;
+        var hosts = root.querySelectorAll('div[data-miya-sb-iframe="1"]');
+        var i;
+        for (i = 0; i < hosts.length; i++) {
+            var host = hosts[i];
+            if (!host || host.getAttribute('data-miya-sb-hydrated') === '1') continue;
+            var srcdoc = decodeApHtmlSrcdocB64(host.getAttribute('data-miya-sb-srcdoc'));
+            if (!srcdoc) continue;
+            try {
+                var blob = new Blob([srcdoc], { type: 'text/html;charset=utf-8' });
+                var burl = URL.createObjectURL(blob);
+                var iframe = document.createElement('iframe');
+                iframe.className = 'miya-sb-iframe';
+                iframe.setAttribute(
+                    'sandbox',
+                    'allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads'
+                );
+                iframe.setAttribute('referrerpolicy', 'no-referrer');
+                iframe.setAttribute('scrolling', 'no');
+                iframe.setAttribute('title', '状态栏');
+                iframe.src = burl;
+                host.setAttribute('data-miya-sb-hydrated', '1');
+                host.setAttribute('data-miya-sb-blob', burl);
+                host.innerHTML = '';
+                host.appendChild(iframe);
+                /* 高度由 iframe 内探针 postMessage 回来（父侧读不到 contentDocument） */
+                var sbMod = global.MiyaChatStatusBar;
+                if (sbMod && typeof sbMod.registerStatusBarFrame === 'function') {
+                    sbMod.registerStatusBarFrame(iframe);
+                }
+            } catch (e) {}
+        }
+    }
+
     function offlineSwipeBarHtml(m) {
         if (!m || m.role !== 'assistant') return '';
         /*
@@ -1885,6 +1965,8 @@
         }
         if (!lines) return '';
         var swipeBar = offlineSwipeBarHtml(m);
+        /* 角色状态栏：素纸主题也挂在正文之后、工具行之前 */
+        var statusBarHtml = offlineStatusBarHtml(m);
         if (!canEdit) {
             /*
              * locked 态也要带 data-ap-msg-id：隐藏楼层的 CSS 是按 id 精确命中的，
@@ -1898,6 +1980,7 @@
                 '">' +
                 thinkingHtml +
                 lines +
+                statusBarHtml +
                 swipeBar +
                 '</div>'
             );
@@ -1912,6 +1995,7 @@
             '<div class="xw-block__lines">' +
             lines +
             '</div>' +
+            statusBarHtml +
             /*
              * 底部一行：左边是「改 / 重发 / 删」，右边是候选切换 ‹ ›。
              *
@@ -2351,6 +2435,7 @@
 
         scheduleStreamScroll();
         hydrateAppointmentHtmlPanels(mount);
+        hydrateAppointmentStatusBarIframes(mount);
     }
 
     function scheduleStreamMountPatch() {
@@ -2831,6 +2916,17 @@
         syncOpeningPreviewMore(root);
         syncDockCollapsedUi();
         hydrateOfflineAvatars(root);
+        /*
+         * 整体重建后的水合。
+         *
+         * render() 是线下真正的入口（patchStoryBody 只在「已有正文且结构没变」时
+         * 就地重写），但这里原先漏了 HTML 面板与状态栏 iframe 的水合 ——
+         * 于是带 <script> 的模板（状态栏、HTML 卡片）只有走到 patchStoryBody
+         * 那条路径才活过来，一进场景就是死的。
+         * 两处都补上，保证「首次进入」和「就地重写」表现一致。
+         */
+        hydrateAppointmentHtmlPanels(root);
+        hydrateAppointmentStatusBarIframes(root);
         if (ui.view === 'story' && ui.chatId && ui.sessionId) {
             var msgsR = apStore().getSessionMessages(ui.chatId, ui.sessionId);
             ui.stableStoryKey = computeStableStoryKey(msgsR);
@@ -3169,6 +3265,7 @@ function renderWriter() {
                 timeEventsHtml(ui.chatId, Date.now()) +
                 renderStoryLines(msgs, [], [], true);
             hydrateAppointmentHtmlPanels(body);
+            hydrateAppointmentStatusBarIframes(body);
             resetStreamUi();
             if (streaming) ensureStreamMount(body);
             else clearStreamMount(body);
@@ -5126,19 +5223,257 @@ function renderWriter() {
         render();
         scrollToLatestOnEnter();
     }
+    /*
+     * ══════════════════════════════════════════════════════════════════
+     * 导入 SillyTavern 聊天记录（.jsonl）
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * ── 为什么需要这块 ──
+     * ST 的聊天文件是 JSONL（每行一个 JSON），扩展名 .jsonl。
+     * 但浏览器/系统不认识这个扩展名，一律按 application/octet-stream
+     * 之类处理，用户看到的图标/类型是「bin」—— 于是常有「我的 bin 能
+     * 不能导入」的疑问。**文件本身是纯文本，不是二进制**，直接读就行。
+     *
+     * 原有的 importOfflineChat 只认 .json 和「【第 N 层】」纯文本，
+     * .jsonl 会掉进纯文本分支，被逐行找【第N层】标记，自然什么都找不到。
+     *
+     * ── ST 文件长什么样（据真实样本）──
+     *   第 0 行  {"chat_metadata":{…}, "user_name":"…", "character_name":"…"}
+     *            ↑ 元信息行：没有 mes 字段，用它区分
+     *   第 1 行  {"name":"谢临川","is_user":false,"mes":" "}   ← ST 自动插的占位，要过滤
+     *   第 2 行  {"name":"花凛","is_user":true,"mes":"临川？"}
+     *   …
+     *
+     * ── AI 回复是稳定的四段式 ──
+     *   <thinking>…</thinking>          思维链 → 单独存 msg.thinking
+     *   <content>正文</content>         气泡正文 → msg.content
+     *   <tableEdit><!-- … --></tableEdit> 记忆表指令 → 剥掉（表格走单独的导入）
+     *   <STATUSBAR_DATA>…</STATUSBAR_DATA> 状态栏 → 剥掉
+     *
+     * 几个必须注意的字段坑：
+     *   · is_system 有的是 false、有的是 null → 判定必须用 === true
+     *   · swipes[0] 与 mes 完全相同 → 整个搬过来即可，别再把 mes 拼进去
+     *   · 正文里可能嵌套 <thinking>（外层 thinking 里还套了一层），
+     *     剥离时要用「最后一个 </thinking>」定位，否则会从内层截断
+     */
+
+    /* 把一段文本里的某对标签剥离（含全角变体；未闭合时剥到结尾） */
+    function stripTagBlock(text, tag) {
+        var out = String(text || '');
+        var t = String(tag || '');
+        if (!t) return out;
+        var esc_ = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        out = out.replace(new RegExp('<' + esc_ + '\\s*>[\\s\\S]*?<\\/' + esc_ + '\\s*>', 'gi'), '');
+        out = out.replace(new RegExp('＜' + esc_ + '\\s*＞[\\s\\S]*?＜\\/' + esc_ + '\\s*＞', 'gi'), '');
+        /* 未闭合（被截断 / 尾块）：从开标签一路剥到结尾 */
+        out = out.replace(new RegExp('<' + esc_ + '\\s*>[\\s\\S]*$', 'gi'), '');
+        out = out.replace(new RegExp('＜' + esc_ + '\\s*＞[\\s\\S]*$', 'gi'), '');
+        return out;
+    }
+
+    /* 取某对标签里的内容（取最后一个闭合之前的，兼容嵌套）；没有则返回 '' */
+    function grabTagBlock(text, tag) {
+        var src = String(text || '');
+        var t = String(tag || '');
+        if (!t) return '';
+        /*
+         * 半角与全角两套。全角的闭合有两种写法：
+         *   ＜／thinking＞（全角斜杠）和 ＜/thinking＞（半角斜杠混在全角尖括号里），
+         * 两种都要认 —— 模型吐全角时并不总是规整。
+         */
+        var pairs = [
+            { open: new RegExp('<' + t + '\\s*>', 'gi'),
+              close: new RegExp('<\\/' + t + '\\s*>', 'gi') },
+            { open: new RegExp('＜' + t + '\\s*＞', 'gi'),
+              close: new RegExp('＜[／/]' + t + '\\s*＞', 'gi') }
+        ];
+
+        for (var pi = 0; pi < pairs.length; pi++) {
+            var mOpen = null, m;
+            pairs[pi].open.lastIndex = 0;
+            while ((m = pairs[pi].open.exec(src)) !== null) { mOpen = m; break; }  /* 第一个开标签 */
+            if (!mOpen) continue;
+
+            /* 找最后一个闭标签：能正确处理「外层 thinking 里套了内层 thinking」 */
+            var lastClose = -1, c;
+            pairs[pi].close.lastIndex = mOpen.index + mOpen[0].length;
+            while ((c = pairs[pi].close.exec(src)) !== null) { lastClose = c.index; }
+            if (lastClose < 0) {
+                /* 未闭合：取到结尾 */
+                var tail = src.slice(mOpen.index + mOpen[0].length).trim();
+                if (tail) return tail;
+                continue;
+            }
+            var inner = src.slice(mOpen.index + mOpen[0].length, lastClose).trim();
+            if (inner) return inner;
+        }
+        return '';
+    }
+
+    /**
+     * 四段剥离：thinking / content / tableEdit / STATUSBAR_DATA。
+     * @returns {{thinking:string, content:string}}
+     */
+    function stripAllBlocks(raw) {
+        var src = String(raw || '');
+        if (!src.trim()) return { thinking: '', content: '' };
+
+        /* ① thinking —— 先抽出来单独存，正文里不能再残留（grabTagBlock 已覆盖全角） */
+        var thinking = grabTagBlock(src, 'thinking') || grabTagBlock(src, 'Thinking');
+
+        /* ② content —— 有 <content> 标签就以它包着的为准（边界最干净） */
+        var content = grabTagBlock(src, 'content') || grabTagBlock(src, 'Content');
+
+        if (!content) {
+            /* 没有 content 标签：剥掉 thinking 及各种块，剩下的当正文 */
+            content = src;
+            content = stripTagBlock(content, 'thinking');
+            content = stripTagBlock(content, 'Test_DS');
+            content = stripTagBlock(content, 'electric');
+        }
+
+        /* ③ tableEdit —— 复用记忆表引擎的剥离（保证与生成路径同一套规则） */
+        var mt = global.MiyaMemoryTableEngine;
+        if (mt && typeof mt.stripTableEditFromReply === 'function') {
+            try { content = mt.stripTableEditFromReply(content); } catch (eT) { /* 降级 */ }
+        }
+        content = stripTagBlock(content, 'tableEdit');
+
+        /* ④ STATUSBAR_DATA —— ST 预设自定义标签，本项目状态栏认的是 <miyastatus>，
+              两者不通，直接剥掉丢弃（不做字段映射，免得对不上反而错显） */
+        content = stripTagBlock(content, 'STATUSBAR_DATA');
+        content = stripTagBlock(content, 'statusbar_data');
+
+        /* ⑤ 兜底：清掉这些块常有残留的零碎标签与多余的星号围栏 */
+        content = content
+            .replace(/<\/?(?:electric|Test_DS|thinking|content|tableEdit|STATUSBAR_DATA)\s*>/gi, '')
+            .replace(/＜\/?(?:electric|Test_DS|thinking|content|tableEdit|STATUSBAR_DATA)\s*＞/gi, '')
+            .trim();
+
+        return { thinking: String(thinking || '').trim(), content: content };
+    }
+
+    /**
+     * 解析 ST 的 JSONL 聊天文件。
+     *
+     * @param {string} text 文件全文
+     * @returns {{title:string, messages:Array}|null}
+     *          不是 JSONL（解析不出 ≥2 行）时返回 null，由调用方回退旧逻辑。
+     */
+    function parseStJsonl(text) {
+        var raw = String(text || '');
+        if (!raw.trim()) return null;
+
+        var lines = raw.split(/\r?\n/);
+        var rows = [];
+        lines.forEach(function (line) {
+            var s = String(line || '').trim();
+            if (!s) return;
+            /* 以 { 开头基本就是 JSON 对象行；其它情况容忍但尝试解析 */
+            try {
+                var o = JSON.parse(s);
+                if (o && typeof o === 'object' && !Array.isArray(o)) rows.push(o);
+            } catch (e) { /* 跳过解析失败的行（文件头 BOM、尾空行等） */ }
+        });
+
+        /* 至少要有一行元信息 + 一行消息才认；否则不是 JSONL，交回旧逻辑 */
+        if (rows.length < 2) return null;
+
+        /* 元信息行 = 没有 mes 字段的那行（ST 的第 0 行） */
+        var meta = null;
+        var msgRows = [];
+        rows.forEach(function (o) {
+            if (meta === null && !('mes' in o)) { meta = o; return; }
+            if ('mes' in o || 'swipes' in o) msgRows.push(o);
+        });
+        if (!msgRows.length) return null;
+
+        var messages = [];
+        msgRows.forEach(function (o) {
+            var parsed = stripAllBlocks(o.mes);
+            var content = String(parsed.content || '').trim();
+
+            /*
+             * swipes 整体搬运：已确认 swipe[0] 就是 mes 本身，不重复拼。
+             *
+             * ⚠️ 必须 trim 后再判空。实测 ST 会给新聊天插一条 mes=' ' 的占位，
+             *    它的 swipes 是 [' ', ''] —— 只看 length 会当成「有两个候选」
+             *    而放过它，结果导入列表里第一条就是个空白楼层。
+             */
+            var swipes = [];
+            if (Array.isArray(o.swipes)) {
+                swipes = o.swipes
+                    .map(function (s) { return String(s == null ? '' : s); })
+                    .filter(function (s) { return s.trim() !== ''; });
+            }
+            /* 用户消息本来就没有候选，忽略 */
+            if (o.is_user === true) swipes = [];
+
+            /*
+             * 过滤 ST 自动插入的空白占位楼层（样本第 1 行就是 mes=' '，
+             * swipes=[' ', '']）。三条判据都空才算占位 —— 用 trim 后的内容判，
+             * 否则一个空格就能骗过 content 的非空检查。
+             */
+            if (!content.trim() && !parsed.thinking.trim() && !swipes.length) return;
+
+            var role = o.is_system === true ? 'system' : o.is_user === true ? 'user' : 'assistant';
+            var msg = { role: role, content: content };
+            if (parsed.thinking) msg.thinking = parsed.thinking;
+            if (swipes.length) msg.swipes = swipes;
+            var ts = Date.parse(String(o.send_date || ''));
+            if (!isNaN(ts)) msg.createdAt = ts;
+            messages.push(msg);
+        });
+
+        if (!messages.length) return null;
+
+        /* 标题：优先 ST 的 character_name；'unused' 是未绑定角色的占位，视为无效 */
+        var cn = meta && meta.character_name != null ? String(meta.character_name).trim() : '';
+        if (!cn || cn === 'unused') cn = '';
+
+        return { title: cn, messages: messages };
+    }
+
     function importOfflineChat() {
-        var input = document.createElement('input'); input.type = 'file'; input.accept = '.json,.txt';
+        var input = document.createElement('input'); input.type = 'file';
+        /*
+         * .jsonl 是 ST 的聊天格式；.bin 也收 —— 浏览器常把 .jsonl 显示成
+         * bin，用户很可能就按显示的名字去找文件，多列一个不吃亏。
+         */
+        input.accept = '.json,.jsonl,.txt,.bin';
         input.addEventListener('change', function () { var file = input.files && input.files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function () {
             try {
                 var text = String(reader.result || ''), payload;
-                if (/\.json$/i.test(file.name)) payload = JSON.parse(text);
-                else { var lines = text.split(/\r?\n/), msgs = [], role = 'assistant', buf = []; lines.forEach(function (line) { var hit = line.match(/^【第\s*\d+\s*层】\s*(.*)$/); if (hit) { if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); buf = []; role = /我/.test(hit[1]) ? 'user' : /系统/.test(hit[1]) ? 'system' : 'assistant'; return; } if (/^#\s*/.test(line)) return; buf.push(line); }); if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); payload = { session: { title: file.name.replace(/\.[^.]+$/, '') }, messages: msgs }; }
+                var baseName = file.name.replace(/\.[^.]+$/, '');
+
+                /*
+                 * 先试 ST 的 JSONL —— 放在最前面，且不看扩展名。
+                 * 理由：① 用户手上文件的扩展名可能是 .jsonl / .bin / 甚至 .txt，
+                 *         按名字分流反而漏；② 判据「能解析出 ≥2 行 JSON 且带 mes」
+                 *         足够严，普通 .json / 【第N层】文本都不会误判。
+                 * 认不出来就原样往下走旧逻辑，既有行为一点不动。
+                 */
+                var stPack = parseStJsonl(text);
+                if (stPack) {
+                    payload = {
+                        session: { title: stPack.title || baseName },
+                        messages: stPack.messages
+                    };
+                } else if (/\.json$/i.test(file.name)) {
+                    payload = JSON.parse(text);
+                } else {
+                    var lines = text.split(/\r?\n/), msgs = [], role = 'assistant', buf = [];
+                    lines.forEach(function (line) { var hit = line.match(/^【第\s*\d+\s*层】\s*(.*)$/); if (hit) { if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() }); buf = []; role = /我/.test(hit[1]) ? 'user' : /系统/.test(hit[1]) ? 'system' : 'assistant'; return; } if (/^#\s*/.test(line)) return; buf.push(line); });
+                    if (buf.join('\n').trim()) msgs.push({ role: role, content: buf.join('\n').trim() });
+                    payload = { session: { title: baseName }, messages: msgs };
+                }
+
                 var sess = apStore().importSession(ui.chatId, payload); if (!sess) throw new Error('invalid');
                 ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
                 resetScrollUiState();
                 render();
                 scrollToLatestOnEnter();
-                toast('聊天已导入');
+                toast(stPack ? ('已导入 ' + stPack.messages.length + ' 条聊天记录') : '聊天已导入');
             } catch (e) { console.error(e); toast('导入失败：文件格式不正确'); }
         }; reader.readAsText(file); }); input.click();
     }
@@ -5796,6 +6131,22 @@ function renderWriter() {
          */
         __testStopGeneration: function () {
             stopOfflineGeneration();
+        },
+        /*
+         * 测试专用后门：直连 ST jsonl 解析。
+         *
+         * 沿用 __testRegenFloor / __testStopGeneration 的既有约定。
+         * 导入流程整条链路要靠「点按钮 + 投文件 + 等 FileReader」才能跑通，
+         * 想单独验证「解析这一步对不对」时太笨重；这里把它透出来，
+         * 就能拿真实文件直接断言解析结果，不用搭一整套线下聊天上下文。
+         *
+         * 只做透传，不含任何业务判断。
+         */
+        __testParseStJsonl: function (text) {
+            return parseStJsonl(text);
+        },
+        __testStripBlocks: function (raw) {
+            return stripAllBlocks(raw);
         }
     };
 })(window);

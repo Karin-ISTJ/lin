@@ -1,0 +1,75 @@
+/* 角色状态栏（Status Bar）· 宿主容器样式
+ *
+ * 卡片内部的样式由用户模板自带（或内置默认模板带的内联 <style>）决定，
+ * 这里只管「卡片外壳怎么在气泡下方安家」：
+ *   - 与气泡左对齐（跟着对方的消息缩进）
+ *   - 不撑破气泡宽度
+ *   - 带脚本的模板走 iframe 时高度自适应，不出滚动条
+ */
+
+/* ── 宿主：贴在被回复的气泡正下方 ── */
+.miya-sb-host {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 6px 0 0;
+  padding: 0;
+  box-sizing: border-box;
+  /* 状态栏是「附加信息」，不参与气泡点击（查看心声、长按菜单等） */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 内联渲染（模板不含 <script>）：卡片本身就是内容 */
+.miya-sb-host > .miya-sb-card {
+  max-width: 100%;
+}
+
+/* ── iframe 渲染（模板含 <script>，走 Blob URL 隔离） ── */
+.miya-sb-iframe {
+  display: block;
+  width: 100%;
+  /* 兜底高度：脚本没跑起来 / 量不到 contentDocument 时也不会塌成一条线。
+     真实高度由 miya-chat-room.js 的 bindStatusBarIframeAutoHeight 回填。 */
+  min-height: 96px;
+  height: 96px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  overflow: hidden;
+  /* iframe 内部是独立文档，滚动条必须隐藏，否则会让气泡显得很脏 */
+  scrollbar-width: none;
+}
+.miya-sb-iframe::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── 线下（约定 / 当面）场景：正文后面那张卡 ── */
+.xw-chat__statusbar {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 10px 0 2px;
+  box-sizing: border-box;
+}
+
+/* ── 窄屏收一收，避免小屏上卡片边距吃掉太多正文宽度 ── */
+@media (max-width: 420px) {
+  .miya-sb-host {
+    margin-top: 5px;
+  }
+  .miya-sb-iframe {
+    min-height: 88px;
+  }
+}
+
+/* ── 设置面板里的模板编辑框 ──
+ * 等宽字体：模板是 HTML，等宽才能看清缩进与标签配对。
+ * tab-size 调小一点，避免缩进几层就把行推得很长。 */
+.miya-ct-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+}

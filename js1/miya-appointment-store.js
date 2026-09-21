@@ -383,6 +383,28 @@
             if (row.htmlRaw) out.htmlRaw = String(row.htmlRaw || '').trim();
         }
         if (row.type) out.type = String(row.type || '').trim();
+        /*
+         * 角色状态栏：字段数组随消息一起落库（与线上 MiyaChatStore 同构）。
+         * 存解析结果而不是原始 <STATUSBAR_DATA> 文本，渲染层就不必重复解析，
+         * 也不受模型换标签名的影响。
+         */
+        if (row.statusBar && typeof row.statusBar === 'object' && Array.isArray(row.statusBar.fields)) {
+            var sbFields = row.statusBar.fields
+                .map(function (f) {
+                    if (!f || typeof f !== 'object') return null;
+                    var n = String(f.name || '').trim();
+                    if (!n) return null;
+                    return {
+                        name: n.slice(0, 40),
+                        value: String(f.value == null ? '' : f.value).slice(0, 800)
+                    };
+                })
+                .filter(Boolean)
+                .slice(0, 40);
+            if (sbFields.length) {
+                out.statusBar = { fields: sbFields, tag: String(row.statusBar.tag || '').trim() };
+            }
+        }
         if (row.openingPresetId) out.openingPresetId = String(row.openingPresetId || '').trim();
         var castMirrors = normalizeCastMirrors(row.castMirrors);
         if (castMirrors) out.castMirrors = castMirrors;

@@ -424,7 +424,48 @@
         '<input type="time" class="ins-text-input" data-mq-set-bg-quiet-end step="60" value="' + esc(minToTimeStr(bg.quietEndMin != null ? bg.quietEndMin : 420)) + '">' +
       '</div>') +
       toggleRow('mq-set-bg-quiet-en', '启用静默', '该时段内不主动发消息', !!bg.quietEnabled)
-    ));
+    )) +
+    subBlock('角色状态栏', '角色每轮回复末尾输出的状态字段，渲染成气泡下方的卡片', renderStatusBarSection(bg));
+  }
+
+  /**
+   * 「角色状态栏」子块（会话级）。
+   *
+   * 与全局默认页（miya-chat-settings-panel）同一套字段，但写的是**本会话**的
+   * chatSettings.backgroundMessage.statusBar —— 也就是说你可以给每个角色配不同的卡面。
+   *
+   * 这里刻意不提供「从全局复制一份」按钮：resolveConfig 本来就按
+   * 会话级 → 全局级 → 内置默认 的顺序回落，不填就是跟随全局，填了才覆盖。
+   */
+  function renderStatusBarSection(bg) {
+    var cfg = bg && bg.statusBar && typeof bg.statusBar === 'object' ? bg.statusBar : {};
+    var sb = global.MiyaChatStatusBar;
+    var tpl = String(cfg.template || '');
+    return formCard(
+      toggleRow('mq-set-sb-enabled', '启用状态栏', '关掉后正文里的状态块会被直接移除，不显示卡片', cfg.enabled !== false) +
+      fieldBlock('标题', '卡片顶部的名字，用于 {{标签}} 占位', '<input type="text" class="ins-text-input" data-mq-set-sb-label value="' + esc(cfg.label || (sb && sb.DEFAULT_LABEL) || '状态栏') + '" placeholder="状态栏">') +
+      fieldBlock('HTML 模板', '留空则跟随「默认值」页里配的模板；模板里用 {{字段名}} 取值，{{字段列表}} 自动排其余字段',
+        '<textarea class="ins-text-input ins-text-input--area miya-ct-textarea" data-mq-set-sb-template rows="8" spellcheck="false" placeholder="留空则跟随全局默认">' + esc(tpl) + '</textarea>') +
+      '<p class="st-form-hint" data-mq-set-sb-fields>' + statusBarFieldHintHtml(tpl) + '</p>'
+    );
+  }
+
+  /** 把模板里出现的 {{字段}} 列成一行提示（与全局默认页同款文案） */
+  function statusBarFieldHintHtml(tpl) {
+    var s = String(tpl || '').trim();
+    var sb = global.MiyaChatStatusBar;
+    if (!s) return '未填模板，将<strong>跟随全局默认</strong>（未配全局则用内置卡片）。';
+    if (!sb) return '';
+    var fields = typeof sb.extractTemplateFields === 'function' ? sb.extractTemplateFields(s) : [];
+    var parts = [];
+    if (fields.length) parts.push('识别到 <strong>' + fields.length + '</strong> 个字段：' + esc(fields.join('、')));
+    if (typeof sb.usesFieldList === 'function' && sb.usesFieldList(s)) {
+      parts.push('含 <code>{{字段列表}}</code>：未显式引用的字段会自动按行渲染');
+    }
+    if (!parts.length) {
+      parts.push('模板里没有 <code>{{字段}}</code> 占位符，渲染出来会是固定内容。');
+    }
+    return parts.join('；') + '。';
   }
 
   /**
@@ -488,6 +529,23 @@
       if (!prevBg.lifeLikeEnabledAt) bg.lifeLikeEnabledAt = Date.now();
     } else if (prevBg.lifeLikeEnabled) {
       bg.lifeLikeNextPushAt = 0;
+    }
+    /*
+     * 角色状态栏（会话级覆盖）。
+     *
+     * 只在页面上确实渲染过这块表单时才写 —— 万一某个入口没带这块 UI
+     * （比如精简版设置页），不能因为读不到控件就把用户已配的状态栏清空。
+     * 判断依据用 textarea 是否存在，而不是 toggle（toggle 有默认值，
+     * 读不到会被当成「关闭」，反而是破坏性的）。
+     */
+    if (root && root.querySelector('[data-mq-set-sb-template]')) {
+      var prevSb = prevBg.statusBar && typeof prevBg.statusBar === 'object' ? prevBg.statusBar : {};
+      var nextSb = Object.assign({}, prevSb, {
+        enabled: isToggleOn(root, '#mq-set-sb-enabled'),
+        label: String((root.querySelector('[data-mq-set-sb-label]') || {}).value || '').trim() || '状态栏',
+        template: String((root.querySelector('[data-mq-set-sb-template]') || {}).value || '')
+      });
+      bg.statusBar = nextSb;
     }
     return bg;
   }
@@ -4147,6 +4205,12 @@
       if (e.target && e.target.id === 'mq-voice-pitch') {
         var pl = pageEl.querySelector('#mq-voice-pitch-lbl');
         if (pl) pl.textContent = String(e.target.value);
+        return;
+      }
+      /* 状态栏模板改动 → 实时刷新字段提示（用户边写边知道自己引用对没对） */
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-mq-set-sb-template')) {
+        var hint = pageEl.querySelector('[data-mq-set-sb-fields]');
+        if (hint) hint.innerHTML = statusBarFieldHintHtml(e.target.value);
         return;
       }
     });

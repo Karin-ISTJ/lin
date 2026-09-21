@@ -2939,8 +2939,39 @@
     return trMod.buildTranslateHtml(state.chatId, m, esc);
   }
 
-  function msgHasHeartVoice(chatId, msgId, hvIndex) {
-    if (!store || !chatId || !msgId) return false;
+  /*
+   * 角色状态栏（气泡下方那张自定义卡片）。
+   *
+   * 数据在消息里（m.statusBar.fields，落库时已解析好），这里只负责套模板 + 拼 HTML。
+   * 之所以渲染时才读配置：用户改一次模板，所有历史消息立刻跟着变，
+   * 不用回写任何数据 —— 这正是「无状态展示」相对「事件账本」省事的地方。
+   *
+   * 只有助手消息渲染；用户自己发的不带状态栏。
+   */
+  function renderStatusBarForMessage(m) {
+    if (!m || m.role !== 'assistant') return '';
+    var fields = m.statusBar && Array.isArray(m.statusBar.fields) ? m.statusBar.fields : null;
+    if (!fields || !fields.length) return '';
+    var sb = global.MiyaChatStatusBar;
+    if (!sb || typeof sb.buildCardHtml !== 'function') return '';
+    var cfg = null;
+    try {
+      cfg = typeof sb.resolveConfig === 'function' ? sb.resolveConfig(store, state.chatId) : null;
+    } catch (e) {
+      cfg = null;
+    }
+    try {
+      return sb.buildCardHtml({
+        fields: fields,
+        tag: (m.statusBar && m.statusBar.tag) || '',
+        config: cfg || {}
+      });
+    } catch (e2) {
+      return '';
+    }
+  }
+
+  function msgHasHeartVoice(chatId, msgId, hvIndex) {    if (!store || !chatId || !msgId) return false;
     if (hvIndex && typeof hvIndex === 'object') return !!hvIndex[String(msgId)];
     var chat = store.findChat(chatId);
     if (!chat || !Array.isArray(chat.heartVoiceLog) || !chat.heartVoiceLog.length) return false;
@@ -3087,6 +3118,12 @@
       bubbleWrap = '<div class="' + bubbleWrapCls + '">' + bubbleInner + '</div>';
     }
     var transAttach = isCard && !isMe && !isHtmlMsg && !isGrpRpCard && !isSrpCard ? renderTranslateAttach(m) : '';
+    /*
+     * 角色状态栏：贴在气泡下方、时间戳上方。
+     * 只渲染 m.statusBar 已解析好的字段，渲染时再套用用户配置的模板，
+     * 所以「改模板 → 历史消息也跟着变」是自然结果，不需要重算数据。
+     */
+    var statusBarHtml = renderStatusBarForMessage(m);
     var timeHtml = state.showTimestamps && m.createdAt
       ? '<time class="qq-room__msg-time">' + esc(formatMsgTime(m.createdAt)) + '</time>'
       : '';
@@ -3099,7 +3136,7 @@
     if (!isMe && !ctx.isGroup && m.anonymousDisguise) {
       titleRow = '<div class="qq-room__anonymous-label">匿名用户</div>';
     }
-    var stackInner = titleRow + quoteHtml + bubbleWrap + transAttach + timeHtml;
+    var stackInner = titleRow + quoteHtml + bubbleWrap + transAttach + statusBarHtml + timeHtml;
     var stack = '<div class="qq-room__bubble-stack">' + stackInner + '</div>';
     if (isMe) {
       return '<div class="' + cls + '" data-msg-id="' + esc(m.id) + '">' +
@@ -3216,6 +3253,62 @@
     var htmlApi = global.MiyaChatHtml;
     if (htmlApi && typeof htmlApi.hydrateChatHtmlIframesInContainer === 'function') {
       htmlApi.hydrateChatHtmlIframesInContainer(root);
+    }
+    hydrateStatusBarIframes(root);
+  }
+
+  /*
+   * 状态栏卡片的水合。
+   *
+   * 状态栏模板里可能带 <script>（ST 用户的正则模板几乎都带，用来做打字机、呼吸灯之类）。
+   * 带脚本的模板不能直接内联 —— 会污染聊天页、也可能互相打架 —— 所以
+   * buildCardHtml 已经把这种模板转成一个「占位 div + base64 srcdoc」，
+   * 由这里在插入 DOM 之后补上真正的 iframe。
+   *
+   * 属性名刻意选 miya-sb-* 而不是复用 miya-chat-html-*：两套水合器互不干扰，
+   * HTML 消息那边怎么改都不会波及状态栏。
+   */
+  function hydrateStatusBarIframes(container) {
+    var root = container || document;
+    if (!root || !root.querySelectorAll) return;
+    var htmlApi = global.MiyaChatHtml;
+    if (!htmlApi || typeof htmlApi.decodeSrcdocB64 !== 'function') return;
+    var hosts = root.querySelectorAll('div[data-miya-sb-iframe="1"]');
+    for (var i = 0; i < hosts.length; i++) {
+      var host = hosts[i];
+      if (!host || host.getAttribute('data-miya-sb-hydrated') === '1') continue;
+      var srcdoc = '';
+      try {
+        srcdoc = htmlApi.decodeSrcdocB64(host.getAttribute('data-miya-sb-srcdoc'));
+      } catch (eDec) {
+        srcdoc = '';
+      }
+      if (!srcdoc) continue;
+      try {
+        var blob = new Blob([srcdoc], { type: 'text/html;charset=utf-8' });
+        var burl = URL.createObjectURL(blob);
+        var iframe = document.createElement('iframe');
+        iframe.className = 'miya-sb-iframe';
+        iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads');
+        iframe.setAttribute('referrerpolicy', 'no-referrer');
+        iframe.setAttribute('scrolling', 'no');
+        iframe.setAttribute('title', '状态栏');
+        iframe.src = burl;
+        host.setAttribute('data-miya-sb-hydrated', '1');
+        host.setAttribute('data-miya-sb-blob', burl);
+        host.innerHTML = '';
+        host.appendChild(iframe);
+        /*
+         * 高度：iframe 是 sandbox + Blob URL，父页面读 contentDocument 恒为 null，
+         * 所以量高度只能由 iframe 内的探针 postMessage 出来（见 statusbar 模块的
+         * injectHeightProbe / registerStatusBarFrame）。
+         * 探针生效前由 CSS 的 min-height 兜底，不会塌成一条线。
+         */
+        var sbMod = global.MiyaChatStatusBar;
+        if (sbMod && typeof sbMod.registerStatusBarFrame === 'function') {
+          sbMod.registerStatusBarFrame(iframe);
+        }
+      } catch (e) {}
     }
   }
 

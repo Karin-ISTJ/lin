@@ -235,18 +235,43 @@
         return pkt.expireAt > 0 && Date.now() > pkt.expireAt && pkt.status !== 'done';
     }
 
-    /** 谁能领：普通/拼手气双方都能领；专属只有 targetName 能领 */
-    function canClaim(pkt, claimantName) {
+    /** 谁能领：普通/拼手气双方都能领；专属只有 targetName 能领；发送方本人不能领 */
+    function canClaim(pkt, claimantName, ctx) {
         if (!pkt || pkt.status !== 'active') return false;
         if (isExpired(pkt)) return false;
         if (remainingSlots(pkt) <= 0) return false;
         var who = trim(claimantName);
         if (!who) return false;
         if (claimedNames(pkt)[who]) return false;
+        /* 发送方本人不能领自己发的红包（红包是「发给对方」的）。
+           注意：单聊的发送方可能是用户、也可能是角色，两边都要挡住，
+           否则会出现「自己发自己领 → 红包立刻 done → 卡面褪色」的怪象。 */
+        if (isSenderName(pkt, who, ctx)) return false;
         /* 专属：targetName 为空表示「目标即对话对方」，由调用方在 ctx 层面判定；
            此处仅在显式指定了目标名且不匹配时拒绝 */
         if (pkt.mode === 'exclusive' && pkt.targetName && pkt.targetName !== who) return false;
         return true;
+    }
+
+    /**
+     * 判断 claimantName 是否就是这笔红包的发送方本人。
+     *  - fromRole === 'user'：发送方是「当前用户面具」
+     *  - fromRole === 'role'：发送方是该联系人（单聊里只有双方两人）
+     * 兜底还会比对 senderName，以覆盖导入 / 同步过来的老载荷。
+     */
+    function isSenderName(pkt, who, ctx) {
+        var name = trim(who);
+        if (!pkt || !name) return false;
+        var sender = '';
+        if (pkt.fromRole === 'user') {
+            sender = trim(ctx && ctx.profile && ctx.profile.name) || '我';
+        } else {
+            sender = trim(pkt.senderName) || trim(ctx && ctx.contact && ctx.contact.name);
+        }
+        if (sender && sender === name) return true;
+        /* 兜底：senderName 显式记录时，同名也视为发送方本人 */
+        var sn = trim(pkt.senderName);
+        return !!sn && sn === name;
     }
 
     /**
@@ -297,7 +322,7 @@
 
     /** ctx 感知的领取资格判定：能正确处理「专属目标未显式记录」的情况 */
     function canClaimTo(pkt, claimantName, ctx) {
-        if (!canClaim(pkt, claimantName)) return false;
+        if (!canClaim(pkt, claimantName, ctx)) return false;
         var who = trim(claimantName);
         if (pkt.mode === 'exclusive') {
             var target = exclusiveTargetName(pkt, ctx);
@@ -595,12 +620,15 @@
         if (!Number.isFinite(count) || count < 1) count = 1;
         var tail = trim(m[3]);
         var mode = count > 1 ? 'lucky' : 'normal';
-        /* 专属：祝福语前带「专属」标记。单聊里目标恒为对话对方 */
-        var exclusiveHit = /^专属\s*[|｜:：，,]?/.test(tail);
+        /* 专属：祝福语前带「专属」标记。单聊里目标恒为对话对方。
+         * 模型常写成 `红包-5｜专属|给你`（并列分隔符紧跟在金额后面），
+         * 上面的 RE_PARSE 会把 `｜` 一起吞进 tail，所以这里要容忍前导分隔符，
+         * 否则专属红包会被误判成普通红包。 */
+        var exclusiveHit = /^[\s|｜:：，,]*专属\s*[|｜:：，,]?/.test(tail);
         if (exclusiveHit) {
             mode = 'exclusive';
             count = 1;
-            tail = tail.replace(/^专属\s*[|｜:：，,]?\s*/, '');
+            tail = tail.replace(/^[\s|｜:：，,]*专属\s*[|｜:：，,]?\s*/, '');
         }
         var note = extractNoteFromTail(tail);
         var shares = splitByMode(mode, amount, count);
@@ -706,13 +734,20 @@
         var count = m[2] ? parseInt(m[2], 10) : 1;
         if (!Number.isFinite(count) || count < 1) count = 1;
         var mode = count > 1 ? 'lucky' : 'normal';
+        var tail = trim(m[3]);
+        /* 与 buildFromLine 保持一致：容忍 `红包-5｜专属|给你` 这类前导分隔符写法 */
+        if (/^[\s|｜:：，,]*专属\s*[|｜:：，,]?/.test(tail)) {
+            mode = 'exclusive';
+            count = 1;
+            tail = tail.replace(/^[\s|｜:：，,]*专属\s*[|｜:：，,]?\s*/, '');
+        }
         var shares = splitByMode(mode, amount, count);
         if (!shares) return null;
         return normalizeSingleRedPacket({
             mode: mode,
             totalAmount: amount,
             count: count,
-            note: extractNoteFromTail(m[3]),
+            note: extractNoteFromTail(tail),
             fromRole: 'role',
             shares: shares.map(function (amt) {
                 return { amount: amt, claimedBy: '', claimedAt: 0, claimId: '' };

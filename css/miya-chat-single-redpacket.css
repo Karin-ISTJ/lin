@@ -41,17 +41,21 @@
   background-repeat: no-repeat;
 }
 
-/* 已领完 / 已过期：整体降饱和并轻微调亮，状态靠观感表达，不画字 */
+/* 已领完 / 已过期：降饱和但保留"红包感"。
+ * 之前 saturate(0.42) 会整张卡退成暗褐，连发两个红包时两卡同时褪色，
+ * 用户会误以为「红包坏了 / 变白了」。现在只做轻微柔化，仍能一眼看出是红包。 */
 .srp-card--done {
   box-shadow: 0 4px 16px rgba(150, 92, 72, 0.10), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .srp-card--done .srp-card__cover {
-  filter: saturate(0.42) brightness(1.06) contrast(0.97);
+  filter: saturate(0.82) brightness(1.02);
+  opacity: 0.92;
 }
 
 .srp-card--expired .srp-card__cover {
-  filter: saturate(0.22) brightness(1.04) contrast(0.96);
+  filter: saturate(0.55) brightness(1.02);
+  opacity: 0.86;
 }
 
 /* 可领取时「開」金钮上的柔光呼吸（质心实测 49.5% / 77.2%） */
@@ -195,16 +199,24 @@
   padding: 10px 12px;
   border: 1px solid var(--soft-line, rgba(0, 0, 0, 0.06));
   border-radius: 12px;
-  background: var(--soft-bg-3, #fafafa);
+  /* 未聚焦时用纯白：之前用 --soft-bg-3(#FAFAFA)，在暖色遮罩下会显出一层粉感，
+     看起来像「输入框默认被染色」。聚焦再给金边强调即可。 */
+  background: #fff;
   font-size: 14px;
   font-family: inherit;
   color: var(--soft-ink, #7a6e64);
   outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.srp-field__input::placeholder {
+  color: rgba(122, 110, 100, 0.42);
 }
 
 .srp-field__input:focus {
   border-color: var(--soft-gold, #c9b896);
   background: #fff;
+  box-shadow: 0 0 0 3px rgba(201, 184, 150, 0.16);
 }
 
 .srp-field__target {

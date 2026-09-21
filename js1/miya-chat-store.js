@@ -2396,6 +2396,35 @@
         }
         if (raw && raw.imageGenPending) out.imageGenPending = true;
         if (raw && raw.imageGenFailed) out.imageGenFailed = true;
+        /*
+         * 角色状态栏：本轮快照，跟消息一起存。
+         * 存的是**解析后的字段数组**而不是原始那段 <STATUSBAR_DATA> 文本，
+         * 这样渲染层不必重复解析，也不依赖标签名（模型换个标签名照样能用）。
+         * 不带 statusBar 字段的消息（绝大多数）不会多出一个 null，保持存储干净。
+         */
+        if (raw && raw.statusBar && typeof raw.statusBar === 'object') {
+            var sb = raw.statusBar;
+            var sbFields = Array.isArray(sb.fields)
+                ? sb.fields
+                      .map(function (f) {
+                          if (!f || typeof f !== 'object') return null;
+                          var n = String(f.name || '').trim();
+                          if (!n) return null;
+                          return {
+                              name: n.slice(0, 40),
+                              value: String(f.value == null ? '' : f.value).slice(0, 800)
+                          };
+                      })
+                      .filter(Boolean)
+                      .slice(0, 40)
+                : [];
+            if (sbFields.length) {
+                out.statusBar = {
+                    fields: sbFields,
+                    tag: String(sb.tag || '').trim()
+                };
+            }
+        }
         return out;
     }
 

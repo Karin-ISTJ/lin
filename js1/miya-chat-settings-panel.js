@@ -226,6 +226,39 @@
         toggleRow('miya-ct-def-bg-quiet-en', '启用静默', '该时段内角色不会主动发消息') +
       '</div>' +
 
+      /*
+       * 角色状态栏（Status Bar）
+       *
+       * 说明为什么是「粘贴一整段 HTML」而不是可视化编辑器：
+       * 这批用户（从 SillyTavern 迁过来的）本来就在用正则替换手写 HTML 卡片，
+       * 模板库里存着一堆现成的。给他们一个 textarea 直接粘贴，迁移成本为零；
+       * 做成拖拽式编辑器反而要他们重学一遍。
+       *
+       * 模板里写 {{字段名}} 就是占位符；{{字段列表}} 会把「没显式写到的字段」
+       * 自动按行渲染出来，适合懒得一个个摆位置的写法。
+       */
+      '<div class="miya-ct-card">' +
+        '<p class="miya-ct-card__kicker">角色状态栏</p>' +
+        '<p class="miya-ct-row__hint" style="margin:0 0 10px;">' +
+          '角色每轮回复末尾可以用一对标签输出状态字段，这里配置把它渲染成什么样子。' +
+          '模板里用 <code>{{字段名}}</code> 取值，用 <code>{{字段列表}}</code> 自动排其余字段。' +
+        '</p>' +
+        toggleRow('miya-ct-def-sb-enabled', '启用状态栏', '关掉后正文里的状态块会被直接移除，不显示卡片') +
+        fieldRow('标题', '<input type="text" class="miya-ct-input" id="miya-ct-def-sb-label" placeholder="状态栏" value="状态栏">') +
+        '<div class="miya-ct-row" style="flex-direction:column;align-items:stretch;">' +
+          '<span class="miya-ct-row__label" style="margin-bottom:6px;">HTML 模板</span>' +
+          '<textarea class="miya-ct-input miya-ct-input--area miya-ct-textarea" id="miya-ct-def-sb-template" ' +
+            'rows="10" spellcheck="false" ' +
+            'placeholder="留空则使用内置默认卡片"></textarea>' +
+        '</div>' +
+        '<p class="miya-ct-row__hint" id="miya-ct-def-sb-fields" style="margin:6px 0 10px;">' +
+          '正在读取模板字段…</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="miya-ct-btn miya-ct-btn--primary" id="miya-ct-def-sb-save">保存状态栏</button>' +
+          '<button type="button" class="miya-ct-btn" id="miya-ct-def-sb-reset">恢复内置默认模板</button>' +
+        '</div>' +
+      '</div>' +
+
       '<button type="button" class="miya-ct-btn miya-ct-btn--primary" id="miya-ct-def-save">保存默认值</button>' +
 
       '<div class="miya-ct-card">' +
@@ -263,7 +296,106 @@
       setToggle('miya-ct-def-bg-quiet-en', bg.quietEnabled);
       setVal('miya-ct-def-bg-quiet-start', minToTimeStr(bg.quietStartMin != null ? bg.quietStartMin : 1380));
       setVal('miya-ct-def-bg-quiet-end', minToTimeStr(bg.quietEndMin != null ? bg.quietEndMin : 420));
+      fillStatusBarForm(bg);
     });
+  }
+
+  /*
+   * ── 角色状态栏：表单填充 ──
+   *
+   * 与后台消息同住在 backgroundMessage 下（statusBar 子键），
+   * 这样「全局默认 → 联系人覆盖」那套机制不用改一行就能复用。
+   */
+  function fillStatusBarForm(bg) {
+    var sb = global.MiyaChatStatusBar;
+    if (!sb) return;
+    var cfg = (bg && bg.statusBar && typeof bg.statusBar === 'object') ? bg.statusBar : {};
+    setToggle('miya-ct-def-sb-enabled', cfg.enabled !== false);
+    setVal('miya-ct-def-sb-label', cfg.label || sb.DEFAULT_LABEL || '状态栏');
+    var ta = $('miya-ct-def-sb-template');
+    if (ta) ta.value = String(cfg.template || '');
+    updateStatusBarFieldHint();
+  }
+
+  /** 实时把模板里出现的 {{字段}} 列出来，让用户知道自己写得对不对 */
+  function updateStatusBarFieldHint() {
+    var box = $('miya-ct-def-sb-fields');
+    if (!box) return;
+    var sb = global.MiyaChatStatusBar;
+    var ta = $('miya-ct-def-sb-template');
+    if (!sb || !ta) return;
+    var tpl = String(ta.value || '').trim();
+    if (!tpl) {
+      box.innerHTML =
+        '未填模板，将使用<strong>内置默认卡片</strong>（标题 + 五行情报）。';
+      return;
+    }
+    var fields = typeof sb.extractTemplateFields === 'function' ? sb.extractTemplateFields(tpl) : [];
+    var parts = [];
+    if (fields.length) {
+      parts.push('识别到 <strong>' + fields.length + '</strong> 个字段：' +
+        esc(fields.join('、')));
+    }
+    if (typeof sb.usesFieldList === 'function' && sb.usesFieldList(tpl)) {
+      parts.push('含 <code>{{字段列表}}</code>：未显式引用的字段会自动按行渲染');
+    }
+    if (!parts.length) {
+      parts.push('模板里没有 <code>{{字段}}</code> 占位符，渲染出来会是固定内容。' +
+        '请在需要填值的地方写上 <code>{{字段名}}</code>。');
+    }
+    box.innerHTML = parts.join('；') + '。';
+  }
+
+  function bindStatusBarForm() {
+    var ta = $('miya-ct-def-sb-template');
+    if (ta && !ta.dataset.sbBound) {
+      ta.dataset.sbBound = '1';
+      ta.addEventListener('input', updateStatusBarFieldHint);
+    }
+    var save = $('miya-ct-def-sb-save');
+    if (save && !save.dataset.sbBound) {
+      save.dataset.sbBound = '1';
+      save.addEventListener('click', function () {
+        var sb = global.MiyaChatStatusBar;
+        if (!sb) return;
+        var patch = {
+          enabled: !!($('miya-ct-def-sb-enabled') &&
+            $('miya-ct-def-sb-enabled').classList.contains('is-on')),
+          label: readVal('miya-ct-def-sb-label') || '状态栏',
+          template: ta ? String(ta.value || '') : ''
+        };
+        /* chatId 传空 → 写全局默认，与这个页面上的其它「默认值」语义一致 */
+        Promise.resolve(sb.saveConfig(null, '', patch)).then(function () {
+          updateStatusBarFieldHint();
+          toast('状态栏设置已保存');
+        });
+      });
+    }
+    var reset = $('miya-ct-def-sb-reset');
+    if (reset && !reset.dataset.sbBound) {
+      reset.dataset.sbBound = '1';
+      reset.addEventListener('click', function () {
+        var sb = global.MiyaChatStatusBar;
+        if (!sb) return;
+        /*
+         * 「恢复内置默认」= 把存储里的模板清空，而不是把内置模板的字符串抄进去。
+         *
+         * 两者看起来一样，差别在后面：清空之后 resolveConfig 每次渲染时
+         * 都重新取内置默认（usingDefaultTemplate=true），以后内置卡片改了、
+         * 加了字段，老用户自动跟上；抄一份进存储就永久冻结在「某个历史版本」，
+         * 也再没法从界面上区分「用户自己写的」和「当初的默认」。
+         *
+         * 但输入框里仍然把内置默认**展示**出来 —— 用户点「恢复默认」是想看看
+         * 默认长什么样、好在它基础上改，给个空框会让人以为点坏了。
+         * 展示 ≠ 落库：只要用户不点保存，存储里依然是空的。
+         */
+        if (ta) ta.value = String(sb.DEFAULT_TEMPLATE || '');
+        Promise.resolve(sb.saveConfig(null, '', { template: '' })).then(function () {
+          updateStatusBarFieldHint();
+          toast('已恢复内置默认模板');
+        });
+      });
+    }
   }
 
   function renderOverrideList() {
@@ -365,6 +497,7 @@
     });
     fillDefaultsForm();
     renderOverrideList();
+    bindStatusBarForm();
     return true;
   }
 

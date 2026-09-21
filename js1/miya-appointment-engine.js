@@ -692,6 +692,30 @@
         if (statusApi && typeof statusApi.stripStatusFromText === 'function') {
             body = statusApi.stripStatusFromText(body);
         }
+        /*
+         * 角色状态栏：在分段之前先摘走，理由和线上完全一致 ——
+         * <STATUSBAR_DATA> 里是「字段: 值」逐行排列，进了 splitDisplayParagraphs
+         * 会被拆成一段段正文，整块状态栏就散了。
+         * 解析结果随消息落库（statusBar 字段），渲染时再套模板。
+         */
+        var sbParsed = null;
+        var sbMod = global.MiyaChatStatusBar;
+        if (sbMod && typeof sbMod.parseFromText === 'function') {
+            try {
+                var sbCfg = typeof sbMod.resolveConfig === 'function'
+                    ? sbMod.resolveConfig(global.miyaChatStore, '')
+                    : null;
+                if (!sbCfg || sbCfg.enabled !== false) {
+                    var hit = sbMod.parseFromText(body);
+                    if (hit && hit.fields && hit.fields.length) {
+                        sbParsed = { fields: hit.fields, tag: hit.tag };
+                        body = typeof sbMod.stripFromText === 'function'
+                            ? String(sbMod.stripFromText(body) || '')
+                            : body;
+                    }
+                }
+            } catch (eSb) {}
+        }
         var hpApi = htmlApi();
         if (htmlMode && hpApi && typeof hpApi.extractHtmlOnlyFromReply === 'function') {
             var hp = hpApi.extractHtmlOnlyFromReply(body);
@@ -701,7 +725,8 @@
                     lines: [hp.raw],
                     renderAsHtml: true,
                     htmlRaw: hp.raw,
-                    htmlPayload: hp
+                    htmlPayload: hp,
+                    statusBar: sbParsed
                 };
             }
         }
@@ -716,7 +741,8 @@
         return {
             content: lines.join('\n\n'),
             lines: lines,
-            renderAsHtml: false
+            renderAsHtml: false,
+            statusBar: sbParsed
         };
     }
 
@@ -2557,6 +2583,13 @@
                     msgFields.htmlRaw = finalized.htmlRaw || content;
                 }
                 if (thinking) msgFields.thinking = thinking;
+                /* 状态栏跟着这条消息一起落库（与线上同构：statusBar.fields / statusBar.tag） */
+                if (finalized.statusBar && finalized.statusBar.fields && finalized.statusBar.fields.length) {
+                    msgFields.statusBar = {
+                        fields: finalized.statusBar.fields,
+                        tag: String(finalized.statusBar.tag || '')
+                    };
+                }
                 /* 线下 Swipe：若 handlers.replaceLastAssistant，则把上一层助手回复并入候选 */
                 var msg = null;
                 if (handlers.replaceLastAssistant && typeof aps.updateMessage === 'function') {

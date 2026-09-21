@@ -4868,6 +4868,38 @@
                 if (!String(bodyForBubbles || '').trim() && thinking && !options.callMode) {
                     throw new Error('empty_reply');
                 }
+                /*
+                 * 状态栏块先从正文里摘掉，并把字段留给气泡。
+                 *
+                 * 为什么必须在 splitBubbles 之前：
+                 *   <STATUSBAR_DATA> 里是「字段: 值」逐行排列，splitBubbles 会按行
+                 *   把它们拆成一个个独立气泡（「当前氛围」一个泡、「表面情绪」一个泡…），
+                 *   整块状态栏就被拆碎了，后面再想拼回去已经无从下手。
+                 *   所以在分段前剥走，把解析结果挂到 pendingStatusBar，
+                 *   等这条消息存下来之后写进消息字段。
+                 */
+                var pendingStatusBar = null;
+                var sbMod = global.MiyaChatStatusBar;
+                if (sbMod && typeof sbMod.parseFromText === 'function') {
+                    try {
+                        var sbCfg = typeof sbMod.resolveConfig === 'function'
+                            ? sbMod.resolveConfig(store, chatId)
+                            : null;
+                        if (!sbCfg || sbCfg.enabled !== false) {
+                            var sbParsed = sbMod.parseFromText(bodyForBubbles);
+                            if (sbParsed && sbParsed.fields.length) {
+                                pendingStatusBar = {
+                                    fields: sbParsed.fields,
+                                    tag: sbParsed.tag
+                                };
+                                bodyForBubbles =
+                                    typeof sbMod.stripFromText === 'function'
+                                        ? sbMod.stripFromText(bodyForBubbles)
+                                        : bodyForBubbles;
+                            }
+                        }
+                    } catch (eSb) {}
+                }
                 var fmtEarly = getOnlineFormatApi();
                 var htmlApi = global.MiyaChatHtml;
                 var userWantsHtml = !!(built && built.htmlMode);
@@ -5210,6 +5242,21 @@
                                             built.profile
                                         );
                                     }
+                                }
+                                /*
+                                 * 状态栏只挂在**最后一条**助手气泡上。
+                                 * 语义上它属于「整段回复的收尾」，挂中间会让用户
+                                 * 看到一半正文、一半卡片再接着正文，很割裂。
+                                 *
+                                 * 注意位置：必须放在 sanitizeRoleMessageFields 之后。
+                                 * sanitize 会重建 payload 字段，先挂会被冲掉。
+                                 */
+                                if (
+                                    pendingStatusBar &&
+                                    unitIndex === parsedBubbles.length - 1 &&
+                                    payload.role === 'assistant'
+                                ) {
+                                    payload.statusBar = pendingStatusBar;
                                 }
                                 if (awSanitize && typeof awSanitize.sanitizeRoleMessageFields === 'function') {
                                     payload = awSanitize.sanitizeRoleMessageFields(payload);
