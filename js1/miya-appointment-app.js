@@ -5614,13 +5614,57 @@ function renderWriter() {
          */
         var prevSessionId = ui.sessionId;
         var prevView = ui.view;
+        /*
+         * 三步各自单独包一层，只为把「到底是哪一步抛的」记下来。
+         *
+         * 用户环境里这个异常复现不出来（合成数据下 render 一直是正常的），
+         * 所以代码必须自己说清楚位置：如果三步合成一个 try，
+         * catch 里只知道「导入后刷新失败」，无从判断是 DOM 重建、
+         * 还是滚动定位出的问题 —— 那还得再来一轮二分。
+         * 分段之后，控制台会直接点名是哪一步。
+         */
+        var failAt = '';
         try {
             ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
+            failAt = 'resetScrollUiState';
             resetScrollUiState();
+            failAt = 'render';
             render();
+            failAt = 'scrollToLatestOnEnter';
             scrollToLatestOnEnter();
+            failAt = '';
         } catch (eRender) {
-            console.error('[import] 渲染阶段异常，回滚本次导入', eRender);
+            /*
+             * 把「哪一步炸的」完整暴露出来，而不是只吞一个对象。
+             * 用户反馈 DevTools 截图就能直接定位，不必再来一轮猜字段。
+             */
+            try {
+                console.error('[import] 渲染阶段异常，回滚本次导入');
+                console.error('  失败步骤:', failAt || '(未知)');
+                console.error('  错误:', eRender && (eRender.stack || eRender.message || eRender));
+                console.error('  名称:', eRender && eRender.name);
+                console.error('  ui  :', JSON.stringify({
+                    chatId: ui.chatId, sessionId: sess.id,
+                    prev: { sessionId: prevSessionId, view: prevView }
+                }));
+                console.error('  会话:', JSON.stringify({
+                    id: sess.id,
+                    title: sess.title,
+                    msgCount: (sess.messages || []).length,
+                    cast: (sess.cast || []).length,
+                    summaryList: (sess.summaryList || []).length,
+                    statusLog: (sess.statusLog || []).length
+                }));
+                console.error('  楼层概览:', JSON.stringify(((sess.messages || []).slice(0, 6)).map(function (m, i) {
+                    return {
+                        i: i,
+                        role: m && m.role,
+                        len: m && String(m.content || '').length,
+                        hasThinking: !!(m && m.thinking),
+                        swipeCount: (m && m.swipes ? m.swipes.length : 0)
+                    };
+                })));
+            } catch (eLog) { /* 日志本身不能把回滚带崩 */ }
             /*
              * 回滚顺序：先把界面指回原处（render 可能处于半完成状态），
              * 再摘记录。反过来的话，render 又一次读到已摘除的 session
