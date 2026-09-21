@@ -1,0 +1,109 @@
+/**
+ * Miya 桌面图标着色面板 · 预览 / 色块
+ * 滑条行样式复用 miya-chat-bubble-beautify.css 的 mib-range 体系（两个面板都在「我的」页内，同时加载）
+ */
+
+/* ── 预览舞台：仿主屏网格（52px 圆角底板 + 18px 线性图标 + 标签） ── */
+.mit-preview-stage {
+  padding: 12px;
+}
+.mit-preview-desk {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 8px;
+  padding: 18px 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ece9e2, #dfdcd6);
+}
+.mit-preview-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+/* 底板与真实桌面同一组变量：颜色 --miya-icon-plate-c（着色模块写入），
+   透明度 --miya-icon-plate-a（沿用 :root 现值，永不改动） */
+.mit-preview-plate {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--miya-icon-plate-c, 255, 255, 255), var(--miya-icon-plate-a, 0.55));
+  box-shadow: 0 0 0 1px rgba(120, 130, 145, 0.14) inset;
+  transition: background 0.15s linear;
+}
+.mit-preview-plate svg {
+  width: 18px;
+  height: 18px;
+  color: rgba(72, 76, 82, 0.78);
+}
+.mit-preview-lbl {
+  font-size: 10px;
+  color: rgba(60, 64, 70, 0.72);
+}
+.mit-preview-note {
+  margin: 10px 2px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--mi-sub, rgba(0, 0, 0, 0.5));
+}
+
+/* ── 色块（底板颜色标题行右侧） ── */
+.mit-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+  transition: background 0.15s linear;
+}
+
+/* ── 滑条：本模块自己的 range（与 mib-range 同款观感，data 键不同） ── */
+.mit-range__input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.mit-range__input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.mit-range__input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.mit-range__input::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.mit-range__input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+/* 色相彩虹轨道 */
+.mit-range__input[data-mit-key="h"]::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, #f66, #fc6, #ff6, #6f6, #6ff, #66f, #f6f, #f66);
+}
+.mit-range__input[data-mit-key="h"]::-moz-range-track {
+  background: linear-gradient(90deg, #f66, #fc6, #ff6, #6f6, #6ff, #66f, #f6f, #f66);
+}
