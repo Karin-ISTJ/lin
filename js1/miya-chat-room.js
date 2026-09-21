@@ -5860,6 +5860,17 @@
       if (t.closest('[data-voice-pick="record"]')) { e.preventDefault(); toolVoiceRecord(); return; }
       if (t.closest('[data-voice-pick="text"]')) { e.preventDefault(); closeOverlay(); toolVoiceManual(); return; }
       if (t.closest('[data-plus="transfer"]')) { e.preventDefault(); openTransferSheet(); return; }
+      /*
+       * 单聊红包按钮。
+       *
+       * 这个按钮在 TOOL_KEYS 里，而 redPacket 属于 PLUS_TOOL_KEYS，
+       * 所以它渲染出来带的是 data-plus="redPacket"（不是 data-qq-tool）。
+       * handleTool() 里其实早有 `key === 'redPacket'` 的分支，但那是 data-qq-tool
+       * 的通道 —— 本委托原先漏了这一条 data-plus 分支，导致点击冒泡到这里
+       * 逐条 closest 都不匹配，最后被静默丢弃：按钮点下去毫无反应。
+       * 这里补上，写法与相邻的 transfer / takeout 等保持一致。
+       */
+      if (t.closest('[data-plus="redPacket"]')) { e.preventDefault(); openSingleRedPacketSheet(); return; }
       if (t.closest('[data-plus="takeout"]')) { e.preventDefault(); openTakeoutSheet(); return; }
       if (t.closest('[data-plus="gift"]')) { e.preventDefault(); openGiftSheet(); return; }
       if (t.closest('[data-plus="location"]')) { e.preventDefault(); openLocationSheet(); return; }

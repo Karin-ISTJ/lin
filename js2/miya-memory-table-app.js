@@ -351,7 +351,72 @@
         a.click();
         return;
       }
+      if (e.target.closest('#miya-mt-import-st')) {
+        pickImportFile();
+        return;
+      }
     });
+
+    /*
+     * 导入：选一个 JSON 文件，解析后交给 store 做结构转换。
+     *
+     * 主要面向 SillyTavern「记忆增强表格」插件的导出文件
+     * （sheet.content 二维数组 → 本项目的 columns + rows）。
+     * 同时也吃本项目自己的导出文件（有 tables/columns 的那种），
+     * 这样用户换设备搬数据不用另找入口。
+     *
+     * 为什么先读成文本再 JSON.parse，而不是直接用 FileReader.readAsJSON：
+     * 文本方式才能在 parse 失败时把「像不像 JSON」判断清楚，
+     * 给出「文件不是 JSON」还是「结构不认识」这两种不同的提示。
+     */
+    function pickImportFile() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.style.display = 'none';
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          var parsed;
+          try {
+            parsed = JSON.parse(String(reader.result || ''));
+          } catch (eJson) {
+            toast('文件不是合法的 JSON');
+            return;
+          }
+          var st = global.MiyaMemoryTableStore;
+          if (!st || typeof st.importFromSt !== 'function') {
+            toast('记忆表模块未加载');
+            return;
+          }
+          st.importFromSt(state.chatId, parsed, { mode: 'replace' })
+            .then(function (res) {
+              state.tableIndex = 0;
+              render();
+              toast(
+                '已导入 ' + res.tables + ' 个表 · ' + res.rows + ' 行' +
+                  (res.skipped ? '（跳过 ' + res.skipped + ' 个无法识别的表）' : '')
+              );
+            })
+            .catch(function (err) {
+              var code = String((err && err.message) || '');
+              if (code === 'no_sheets') toast('这个文件里没找到表格数据');
+              else if (code === 'no_valid_table') toast('文件里没有可识别的表格（表头为空）');
+              else toast('导入失败：' + (code || '未知原因'));
+            });
+        };
+        reader.onerror = function () { toast('文件读取失败'); };
+        reader.readAsText(file, 'utf-8');
+      });
+      document.body.appendChild(input);
+      input.click();
+      /* 选完就丢掉这个临时 input，免得在 DOM 里越积越多 */
+      setTimeout(function () {
+        if (input.parentNode) input.parentNode.removeChild(input);
+      }, 1000);
+    }
   }
 
   // 生成钩子：生成前注入、生成后解析

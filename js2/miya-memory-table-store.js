@@ -203,6 +203,176 @@
     return out;
   }
 
+  /*
+   * ══════════════════════════════════════════════════════════════════
+   * 从 SillyTavern「记忆增强表格」插件（muyoou/st-memory-enhancement）导入
+   * ══════════════════════════════════════════════════════════════════
+   *
+   * 两个插件是同源思路（都用 <tableEdit> + insertRow/updateRow 驱动 AI 写表），
+   * 但落盘结构完全不同：
+   *
+   *   ST 插件（每个 sheet 一个对象）：
+   *     {
+   *       uid:    "sheet_ab12cd34",
+   *       name:   "角色特征",
+   *       enable: true,
+   *       content: [ ["角色","性格"], ["小雨","温柔"] ],   ← 含表头的二维数组
+   *       sourceData: { note: "记录外貌性格", insertNode: "...", ... }
+   *     }
+   *
+   *   本项目（每个表一个对象）：
+   *     {
+   *       id: "t_char", name: "角色特征", note: "记录外貌性格",
+   *       enabled: true, columns: ["角色","性格"], rows: [["小雨","温柔"]]
+   *     }
+   *
+   * 对应的桥接点很干净：
+   *   name     ← name
+   *   columns  ← content[0]          （第一行是表头）
+   *   rows     ← content[1..]        （其余是数据行）
+   *   note     ← sourceData.note
+   *   enabled  ← enable !== false    （注意字段名差一个 d）
+   *
+   * 几种要兜住的现实情况：
+   *   · 用户可能直接给数组（部分版本导出的是 sheet 数组本身，不带外层包装）
+   *   · 用户可能给的是插件的「模板」导出，结构与表格一致，照收
+   *   · AI 写表格时可能用全角逗号 / 多余空白，这里不清洗（清洗是引擎的事），
+   *     但**要保证列数对齐** —— 数据行比表头长就截断，比表头短就补空串，
+   *     否则渲染成表时会出现「行长短不一」的错位。
+   *   · 表头整行为空（ST 里 origin 单元格在 (0,0)，某些导出会把表头前多留一列）
+   *     → 丢掉前导空列，避免导入后第一列是个空列名的怪现象。
+   */
+
+  /* 把一行内容规整成「长度 = 列数」的字符串数组 */
+  function normalizeImportedRow(row, colCount) {
+    var arr = Array.isArray(row) ? row : [];
+    var out = [];
+    for (var i = 0; i < colCount; i++) {
+      var v = arr[i];
+      out.push(v == null ? '' : String(v));
+    }
+    return out;
+  }
+
+  /* 去掉表头行可能存在的「前导空列」（ST 的 origin 列在导出时偶有残留） */
+  function trimLeadingEmptyHeader(content) {
+    if (!content.length) return content;
+    var width = content.reduce(function (w, r) {
+      return Math.max(w, Array.isArray(r) ? r.length : 0);
+    }, 0);
+    if (width < 1) return content;
+
+    /* 逐列判断：该列在本表里是否为「全空」且位于最前 */
+    var drop = 0;
+    for (var c = 0; c < width; c++) {
+      var allEmpty = content.every(function (r) {
+        var v = Array.isArray(r) ? r[c] : '';
+        return String(v == null ? '' : v).trim() === '';
+      });
+      if (allEmpty) drop++;
+      else break;
+    }
+    if (!drop || drop >= width) return content;
+    return content.map(function (r) {
+      return (Array.isArray(r) ? r : []).slice(drop);
+    });
+  }
+
+  /* 判断一个对象是不是 ST 插件的 sheet（而不是本项目自己的表或导出包） */
+  function looksLikeStSheet(o) {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+    var hasContent = Array.isArray(o.content);
+    var hasUid = typeof o.uid === 'string' && /^sheet_/.test(o.uid);
+    /* content 是二维数组也算 —— 老版本可能没有 uid */
+    var contentIsMatrix =
+      hasContent &&
+      o.content.length > 0 &&
+      Array.isArray(o.content[0]);
+    return contentIsMatrix && (hasUid || 'name' in o || 'domain' in o || 'sourceData' in o);
+  }
+
+  /**
+   * 把 ST 插件的一个 sheet 转成本项目的表对象。
+   * 转不出来（没有有效表头）时返回 null，由调用方跳过并计数。
+   */
+  function convertStSheet(sheet) {
+    var content = Array.isArray(sheet.content) ? sheet.content.slice() : [];
+    content = trimLeadingEmptyHeader(content);
+    if (!content.length) return null;
+
+    var header = Array.isArray(content[0]) ? content[0] : [];
+    var columns = header.map(function (c) {
+      return String(c == null ? '' : c).trim();
+    });
+    /* 表头可能被 trimLeadingEmptyHeader 削成 0 列 */
+    if (!columns.length) return null;
+    /* 列名为空的列补一个占位名，否则渲染和 AI 指令都会错位 */
+    columns = columns.map(function (c, i) {
+      return c || '列' + (i + 1);
+    });
+
+    var rows = content
+      .slice(1)
+      .map(function (r) {
+        return normalizeImportedRow(r, columns.length);
+      })
+      .filter(function (r) {
+        /* 整行全空的行没有意义，丢掉（常见于 ST 表格尾部的空白行） */
+        return r.some(function (cell) {
+          return String(cell || '').trim() !== '';
+        });
+      });
+
+    var src = sheet.sourceData && typeof sheet.sourceData === 'object' ? sheet.sourceData : {};
+    var note = String(src.note != null ? src.note : sheet.note != null ? sheet.note : '').trim();
+
+    return {
+      id: uid('t'),
+      name: String(sheet.name || '').trim() || '导入表',
+      note: note,
+      enabled: sheet.enable !== false && sheet.enabled !== false,
+      columns: columns,
+      rows: rows
+    };
+  }
+
+  /**
+   * 从任意「ST 插件导出物」里抽出 sheet 数组。
+   *
+   * 真实世界里这个 JSON 的外层包装有好几种（插件版本 / 不同导出入口 /
+   * 用户自己从别处扒下来的片段），所以这里只做一件事：
+   * 一层层把「不含 sheet 的壳」剥掉，直到看见数组或死心。
+   *
+   * 能认的形态：
+   *   [ ... ]                   裸数组
+   *   { sheets:[...] }          插件列表导出
+   *   { tables:[...] }          本项目自己的导出
+   *   { data:[...] }            data 直接是数组
+   *   { data:{ sheets:[...] } } data 是个对象壳（real case，早期漏判过）
+   *   { preset:{...} }          预设壳
+   *
+   * ── 曾经的坑 ──
+   * 旧实现里 data 分支写的是 `Array.isArray(node.data)`，
+   * 于是 {data:{sheets:[...]}} 这种「data 是对象不是数组」的形态
+   * 在第 0 层就落到 return []。现在改成「是对象就继续往里剥」，
+   * 顺带把 preset 也统一进同一条路径。
+   */
+  function extractStSheets(input) {
+    var node = input;
+    /* 最多剥 4 层：足够覆盖现实里的包装深度，又能防畸形数据自引用绕死 */
+    for (var depth = 0; depth < 5; depth++) {
+      if (!node || typeof node !== 'object') return [];
+      if (Array.isArray(node)) return node;
+      if (Array.isArray(node.sheets)) return node.sheets;
+      if (Array.isArray(node.tables)) return node.tables;
+      /* data / preset 是「壳」，对象或数组都继续往下剥 */
+      if (node.data && typeof node.data === 'object') { node = node.data; continue; }
+      if (node.preset && typeof node.preset === 'object') { node = node.preset; continue; }
+      return [];
+    }
+    return [];
+  }
+
   function normalizeTable(t, index) {
     t = t || {};
     return {
@@ -561,6 +731,60 @@
     return setChatTables(chatId, tables, {});
   }
 
+  /**
+   * 从 ST 记忆增强插件的导出数据导入。
+   *
+   * @param {string} chatId
+   * @param {object|Array} input  插件导出的 JSON（已 parse）
+   * @param {object} [opts]
+   * @param {'replace'|'append'} [opts.mode='replace']  替换本项目的表 / 追加到现有表后面
+   * @returns {Promise<{tables:number, rows:number, skipped:number, mode:string}>}
+   */
+  function importFromSt(chatId, input, opts) {
+    opts = opts && typeof opts === 'object' ? opts : {};
+    var mode = opts.mode === 'append' ? 'append' : 'replace';
+    var cid = String(chatId || '').trim();
+    if (!cid) return Promise.reject(new Error('no_chat_id'));
+
+    var raw = extractStSheets(input);
+    if (!raw.length) return Promise.reject(new Error('no_sheets'));
+
+    var converted = [];
+    var skipped = 0;
+    raw.forEach(function (s) {
+      /* 只认像 ST sheet 的对象；本项目自己的表导回来也顺带兼容（有 columns） */
+      if (looksLikeStSheet(s)) {
+        var t = convertStSheet(s);
+        if (t) { converted.push(t); return; }
+        skipped++;
+        return;
+      }
+      if (s && typeof s === 'object' && Array.isArray(s.columns)) {
+        converted.push(normalizeTable(s, converted.length));
+        return;
+      }
+      skipped++;
+    });
+
+    if (!converted.length) return Promise.reject(new Error('no_valid_table'));
+
+    var next;
+    if (mode === 'append') {
+      next = getChatTables(cid).concat(converted);
+    } else {
+      next = converted;
+    }
+
+    return setChatTables(cid, next, {}).then(function () {
+      return {
+        tables: converted.length,
+        rows: converted.reduce(function (a, t) { return a + (t.rows || []).length; }, 0),
+        skipped: skipped,
+        mode: mode
+      };
+    });
+  }
+
   global.MiyaMemoryTableStore = {
     STORE_KEY: STORE_KEY,
     SETTINGS_KEY: SETTINGS_KEY,
@@ -578,6 +802,7 @@
     listChatIds: listChatIds,
     exportChat: exportChat,
     importChat: importChat,
+    importFromSt: importFromSt,
     normalizeTable: normalizeTable,
     rowKey: rowKey,
     parseRowKey: parseRowKey

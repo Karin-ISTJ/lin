@@ -3228,32 +3228,80 @@ function renderWriter() {
      * 会退回到「第一个联系人的第一个聊天」。于是多开几个聊天之后，
      * 每次重进都跳回最开始那个，而不是你最后一次待的地方。
      *
-     * 这里把 chatId + sessionId 落盘（IndexedDB KV，和 store 的其它记录同一个库），
-     * 打开时优先恢复。只存两个字符串，不碰任何业务数据。
+     * ⚠️ 这里曾经用 apStore()（global.MiyaAppointmentStore）去调 idbPutRecord /
+     *    idbGetRecord。那个对象**根本没有这两个方法** —— 它们是 miya-chat-store.js
+     *    给 global.miyaChatStore 提供的（见那里的 idbPutRecord / idbGetRecord）。
+     *    于是两个 typeof 守卫在第一行就 return：
+     *      · 写：什么都没存下
+     *      · 读：永远返回 null
+     *    整套记忆功能在真机上完全静默失效，表现就是「重进还是跳回第一个聊天」。
+     *
+     * 现在两条腿走路：
+     *   1) 首选 localStorage —— 只有两个短字符串，需求是「同步可读 + 抗意外退出」，
+     *      enterDirectOffline 是同步函数，localStorage 比异步 IDB 更贴合；
+     *      而且写下去立刻就能读到，不依赖任何 async 水合时序。
+     *   2) localStorage 不可用时（隐私模式 / 配额满）退回 miyaChatStore 的 IDB。
      */
     var LAST_ENTRY_KEY = 'miya_offline_last_entry_v1';
     var lastEntryCache = null;   /* { chatId, sessionId } | null，避免重复读库 */
 
+    /* localStorage 直读：同步、无依赖，失败静默返回 null */
+    function readLastEntryFromLs() {
+        try {
+            var raw = global.localStorage && global.localStorage.getItem(LAST_ENTRY_KEY);
+            if (!raw) return null;
+            /* 走通用包装（若有）以兼容项目里「LS 存的是 IDB 占位符」的约定 */
+            if (typeof global.miyaLsIsIdbPlaceholder === 'function'
+                && global.miyaLsIsIdbPlaceholder(raw)) {
+                return null;
+            }
+            var rec = JSON.parse(raw);
+            return rec && rec.chatId ? rec : null;
+        } catch (e) { return null; }
+    }
+
+    /* localStorage 直写：同步落盘，失败静默（不影响关窗） */
+    function writeLastEntryToLs(payload) {
+        try {
+            var s = JSON.stringify(payload);
+            if (typeof global.miyaSafeLsSet === 'function') {
+                global.miyaSafeLsSet(LAST_ENTRY_KEY, s);
+                return true;
+            }
+            global.localStorage.setItem(LAST_ENTRY_KEY, s);
+            return true;
+        } catch (e) { return false; }
+    }
+
     function rememberLastOfflineEntry() {
         var cid = String(ui.chatId || '').trim();
         if (!cid) return;
-        var st = apStore();
-        if (!st || typeof st.idbPutRecord !== 'function') return;
         var payload = { chatId: cid, sessionId: String(ui.sessionId || '').trim(), at: Date.now() };
+        /* 先更新内存缓存：即便两条落盘都失败，本次会话内仍能读到 */
         lastEntryCache = payload;
+        if (writeLastEntryToLs(payload)) return;
+        /* 兜底：localStorage 写不进时，交给 miyaChatStore 的 IDB（异步写，失败不管） */
+        var cs = chatStore();
+        if (!cs || typeof cs.idbPutRecord !== 'function') return;
         try {
-            var r = st.idbPutRecord(LAST_ENTRY_KEY, payload);
-            /* 写库是异步的，失败也不该影响关窗动作 */
+            var r = cs.idbPutRecord(LAST_ENTRY_KEY, payload);
             if (r && typeof r.catch === 'function') r.catch(function () {});
-        } catch (e) { /* 存储不可用则静默降级为「不记忆」 */ }
+        } catch (e) { /* 存储全不可用则降级为「本次会话内记忆」 */ }
     }
 
     function readLastOfflineEntry() {
         if (lastEntryCache) return Promise.resolve(lastEntryCache);
-        var st = apStore();
-        if (!st || typeof st.idbGetRecord !== 'function') return Promise.resolve(null);
+        /* 同步路径优先：openApp 的 hydrate 链里它已经就绪 */
+        var lsRec = readLastEntryFromLs();
+        if (lsRec) {
+            lastEntryCache = lsRec;
+            return Promise.resolve(lsRec);
+        }
+        /* 兜底：早期版本可能写进了 miyaChatStore 的 IDB */
+        var cs = chatStore();
+        if (!cs || typeof cs.idbGetRecord !== 'function') return Promise.resolve(null);
         var r;
-        try { r = st.idbGetRecord(LAST_ENTRY_KEY); } catch (e) { return Promise.resolve(null); }
+        try { r = cs.idbGetRecord(LAST_ENTRY_KEY); } catch (e) { return Promise.resolve(null); }
         if (!r || typeof r.then !== 'function') return Promise.resolve(null);
         return r.then(function (rec) {
             lastEntryCache = rec && rec.chatId ? rec : null;
