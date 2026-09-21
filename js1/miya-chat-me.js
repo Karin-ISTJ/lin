@@ -1043,14 +1043,6 @@
         '</span>' +
         '<span class="mi-dress-hub__arrow">→</span>' +
       '</button>' +
-      '<button type="button" class="mi-dress-hub__item" data-mq-dress-hub="icontint">' +
-        '<span class="mi-dress-hub__num">V.</span>' +
-        '<span class="mi-dress-hub__body">' +
-          '<strong>图标着色</strong>' +
-          '<span>主屏 / 程序坞图标底板换色 · 透明度不变</span>' +
-        '</span>' +
-        '<span class="mi-dress-hub__arrow">→</span>' +
-      '</button>' +
     '</div>';
   }
 
@@ -1087,15 +1079,6 @@
     var mod = global.MiyaChatBubbleBeautify;
     if (!mod || typeof mod.buildPanelHtml !== 'function') {
       return '<div class="mi-me-flow"><p class="mi-empty-hint">气泡美化模块未加载，请刷新页面</p></div>';
-    }
-    return '<div class="mi-me-flow">' + mod.buildPanelHtml(mod.getState()) + '</div>';
-  }
-
-  function renderIconTint() {
-    setHead('图标着色', '');
-    var mod = global.MiyaIconTint;
-    if (!mod || typeof mod.buildPanelHtml !== 'function') {
-      return '<div class="mi-me-flow"><p class="mi-empty-hint">图标着色模块未加载，请刷新页面</p></div>';
     }
     return '<div class="mi-me-flow">' + mod.buildPanelHtml(mod.getState()) + '</div>';
   }
@@ -1186,7 +1169,6 @@
       case 'dress-hub': return renderDressEmojiHub();
       case 'dress': return renderDressUp();
       case 'bubble': return renderBubbleBeautify();
-      case 'icontint': return renderIconTint();
       case 'heartvoice-tpl': return renderHeartVoiceTemplates();
       case 'emoji':
         return renderEmojiHub();
@@ -1246,13 +1228,6 @@
       var mibRoot = body.querySelector('[data-mib-root]');
       if (mibMod && mibRoot && typeof mibMod.bindPanelRoot === 'function') {
         mibMod.bindPanelRoot(mibRoot, function () { renderTop(); });
-      }
-    }
-    if (top && top.screen === 'icontint') {
-      var tintMod = global.MiyaIconTint;
-      var tintRoot = body.querySelector('[data-mit-root]');
-      if (tintMod && tintRoot && typeof tintMod.bindPanelRoot === 'function') {
-        tintMod.bindPanelRoot(tintRoot, function () { renderTop(); });
       }
     }
     if (top && top.screen === 'heartvoice-tpl') {
@@ -1325,8 +1300,6 @@
             ? global.MiyaChatHeartVoiceTemplates.whenPresetsReady()
             : Promise.resolve();
           hvChain.then(function () { push('heartvoice-tpl'); });
-        } else if (hubAct === 'icontint') {
-          push('icontint');
         }
         return;
       }
