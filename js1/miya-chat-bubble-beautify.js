@@ -273,7 +273,6 @@
         '<span class="mi-bf-block__label">气泡颜色</span>' +
         hslGroup('对方气泡', 'them', st) +
         hslGroup('我方气泡', 'me', st) +
-        '<p class="mi-bf-preview-hint">饱和度为 0% 时拖色相看不到变化，先把饱和度拉高再调色；亮度 ≤ ' + DARK_TEXT_THRESHOLD + '% 自动配白字；气泡描边已去除</p>' +
       '</div>' +
       '<div class="mi-bf-block">' +
         '<span class="mi-bf-block__label">尺寸</span>' +
@@ -290,7 +289,6 @@
       '<div class="mi-bf-block">' +
         '<span class="mi-bf-block__label">生成的 CSS</span>' +
         '<textarea class="mi-input mi-input--code mi-input--readonly" data-mib-css rows="12" readonly tabindex="-1">' + esc(css) + '</textarea>' +
-        '<p class="mi-bf-preview-hint">面板开启时已全局生效，无需粘贴；也可复制到「个性装扮 → 自定义 CSS」按聊天微调</p>' +
       '</div>' +
     '</div>';
   }
