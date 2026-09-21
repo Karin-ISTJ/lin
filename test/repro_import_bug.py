@@ -135,6 +135,51 @@ window.__mkProbe = function () {
         res.fellToOpeningPicker = !!(root && root.querySelector('.xw-opening-pick'));
       } catch (e3) {}
       return res;
+    },
+    /*
+     * 定向注入：让 render 阶段抛错，验证「写入之后」的异常会被回滚。
+     *
+     * 为什么要专测这一条：导入的失败提示与「记录是否真的落库」
+     * 必须是互斥的 —— 要么成功且留记录，要么失败且不留痕迹。
+     * 早先 importSession 写库之后、render 之前没有任何回滚，
+     * 渲染一抛错就会出现「告诉用户失败、列表里却多一条」的假失败。
+     *
+     * 注入手段：临时替换 store.getSessionMessages 让它抛错。
+     * 该函数处于 importSession 之后、render 内部，正是要覆盖的窗口。
+     */
+    injectRenderFailure: async function (chatId, text, fileName) {
+      var st = store();
+      var res = { leaked: null, escaped: '', toast: '', sessIdAfter: '', listDelta: -1 };
+      var before = st.getSessions(chatId).map(function (s) { return s.id; });
+      var orig = st.getSessionMessages;
+      var bomb = false;
+      st.getSessionMessages = function () {
+        if (bomb) throw new Error('BOOM-render-failure');
+        return orig.apply(st, arguments);
+      };
+      try {
+        bomb = true;
+        api().__testRunImport(chatId, text, fileName || 'min.jsonl');
+      } catch (e) {
+        /*
+         * 修复到位的话，异常应当在 runImportText 内部就被消化掉，
+         * 不该冒到这里 —— 所以这里捕获到反而是「未修复」的信号。
+         */
+        res.escaped = String(e && e.message || e);
+      } finally {
+        bomb = false;
+        st.getSessionMessages = orig;
+      }
+      await new Promise(function (r) { setTimeout(r, 300); });
+      var toastEl = document.getElementById('xw-toast');
+      res.toast = toastEl ? String(toastEl.textContent || '').trim() : '';
+      var after = st.getSessions(chatId).map(function (s) { return s.id; });
+      var added = after.filter(function (id) { return before.indexOf(id) < 0; });
+      res.leaked = added.length > 0;
+      res.listDelta = added.length;
+      var ui = api().__testUi ? api().__testUi() : null;
+      res.sessIdAfter = ui ? (ui.sessionId || '') : '';
+      return res;
     }
   };
 };
@@ -347,6 +392,55 @@ async def main():
         check("不同失败原因给出不同话术", all_distinct, json.dumps(msgs, ensure_ascii=False))
         check("空文件话术点明「文件是空的」",
               "空" in (msgs.get("空文件") or ""), f"{msgs.get('空文件')!r}")
+
+        # ══════ 用例 11：写入之后渲染抛错 → 必须整体回滚，不留脏记录 ══════
+        print("\n【用例 11】写入之后 render 抛错：不得留下脏记录")
+        jsonl11 = "\n".join([
+            json.dumps({"user_name": "User", "character_name": "Karin",
+                        "chat_metadata": {"integrity": "x"}}, ensure_ascii=False),
+            json.dumps({"name": "Karin", "is_user": False, "send_date": "2025-01-01T00:00:01.000Z",
+                        "mes": "第一层。", "swipes": ["第一层。"]}, ensure_ascii=False),
+            json.dumps({"name": "User", "is_user": True, "send_date": "2025-01-01T00:00:02.000Z",
+                        "mes": "第二层。", "swipes": ["第二层。"]}, ensure_ascii=False),
+        ]) + "\n"
+        # 先记下导入前的 ui 立场与列表，回滚后要与它逐字一致
+        ui_before11 = await pg.evaluate("() => window.miyaOfflineApp.__testUi()")
+        list_before11 = await pg.evaluate(
+            "(c) => window.MiyaAppointmentStore.getSessions(c).map(function (s) { return s.id; })",
+            chat_id)
+        r11 = await pg.evaluate(
+            "async (a) => await window.__mkProbe().injectRenderFailure(a.cid, a.text, a.name)",
+            {"cid": chat_id, "text": jsonl11, "name": "min.jsonl"})
+        print(f"      {json.dumps(r11, ensure_ascii=False)}")
+        check("渲染期异常被 runImportText 内部消化，未逃逸到外层",
+              not r11["escaped"], f"escaped={r11['escaped']!r}")
+        check("导入失败时列表里没有多出记录（整体回滚）",
+              r11["leaked"] is False, f"新增 {r11['listDelta']} 条")
+        """
+        回滚的正确含义是「回到导入之前」，不是「清空」。
+        导入前 ui 可能正指着用户已有的某个场次 —— 那条必须原样还回来，
+        而不是被一并抹掉（抹掉就等于顺手把用户的东西搞丢了）。
+        """
+        check("回滚后 ui.sessionId 回到导入前的场次（而非被清空）",
+              r11["sessIdAfter"] == ui_before11["sessionId"],
+              f"before={ui_before11['sessionId']!r} after={r11['sessIdAfter']!r}")
+        list_after11 = await pg.evaluate(
+            "(c) => window.MiyaAppointmentStore.getSessions(c).map(function (s) { return s.id; })",
+            chat_id)
+        check("回滚后卷宗列表与导入前完全相同（用户原有场次未被误伤）",
+              list_after11 == list_before11,
+              f"before={len(list_before11)} after={len(list_after11)}")
+        check("回滚话术说明了「已撤销」而不是推给文件",
+              "撤销" in (r11["toast"] or ""), f"toast={r11['toast']!r}")
+
+        # 回滚之后，正常导入仍应可用（不能把 store 搞成半死状态）
+        r11b = await pg.evaluate(
+            "async (a) => await window.__mkProbe().importText(a.cid, a.text, a.name)",
+            {"cid": chat_id, "text": jsonl11, "name": "min.jsonl"})
+        print(f"      回滚后重试: {json.dumps(r11b, ensure_ascii=False)}")
+        check("回滚后同一份文件仍能正常导入（store 未被搞坏）",
+              bool(r11b["sessId"]) and r11b["storyHasContent"] is True,
+              f"sessId={r11b['sessId']!r}")
 
         # ══════ 汇总 ══════
         print("\n" + "=" * 56)

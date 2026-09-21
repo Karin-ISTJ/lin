@@ -2760,6 +2760,41 @@
                recoverSessionsFromChatMirrors 会把已删卷宗复活。 */
             flushSave();
         },
+        /*
+         * 导入回滚专用：把刚由 importSession 写进去的那一条【干净地】撤回。
+         *
+         * 为什么不能直接复用 deleteSession：
+         *   · deleteSession 是「用户主动删卷宗」的语义，它会同时清线上镜像、
+         *     写墓碑、flushSave —— 对一条「刚写入、用户根本没见过的」记录
+         *     来说全是多余的副作用，尤其墓碑会污染 tombstone 表；
+         *   · 它还允许「找不到就构造空壳」继续往下走，而回滚场景下
+         *     找不到就说明本来就没写成功，什么都不该做。
+         *
+         * 这里只做一件事：在内存桶里按 id 摘掉这条，并把 activeSessionId
+         * 从它身上挪开（如果正指着它）。然后强落盘 —— 回滚是破坏性操作，
+         * 不能留给防抖，否则进程被杀就会留下「内存里没了、盘上还在」的错位。
+         *
+         * 只认 id，不认标题，避免误伤用户已有的同名记录。
+         */
+        discardImportedSession: function (chatId, sessionId) {
+            var sid = String(sessionId || '').trim();
+            if (!sid) return false;
+            load();
+            var b = chatBucket(chatId);
+            if (!b || !Array.isArray(b.sessions)) return false;
+            var before = b.sessions.length;
+            b.sessions = b.sessions.filter(function (s) {
+                return !(s && String(s.id) === sid);
+            });
+            if (b.sessions.length === before) return false;
+            /* activeSessionId 正指着被撤回的那条时要一并挪开，
+               否则会留下悬空指针 —— 后续 getSession 恒取不到。 */
+            if (String(b.activeSessionId || '') === sid) {
+                b.activeSessionId = b.sessions.length ? String(b.sessions[0].id || '') : '';
+            }
+            flushSave();
+            return true;
+        },
         setActiveSession: function (chatId, sessionId) {
             var b = chatBucket(chatId);
             if (!b) return;

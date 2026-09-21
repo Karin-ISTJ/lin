@@ -5590,16 +5590,56 @@ function renderWriter() {
         }
 
         /* ⑤ 校验过了才碰存储 */
-        var sess = apStore().importSession(ui.chatId, payload);
+        var store = apStore();
+        var sess = store.importSession(ui.chatId, payload);
         if (!sess) {
             toast('导入失败：' + IMPORT_FAIL.STORE_REJECT);
             return false;
         }
 
-        ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
-        resetScrollUiState();
-        render();
-        scrollToLatestOnEnter();
+        /*
+         * ⑤.5 写入之后的每一步都可能抛错（重建 DOM、水合 iframe、算滚动…）。
+         *
+         * 为什么必须在这里兜住、而不是让它冒到 importOfflineChat 的外层 catch：
+         *   外层 catch 只会说一句「文件处理时出错」—— 但此时记录【已经落库】了。
+         *   用户看到的是「导入失败」，存储里却实实在在多了一条，卷宗列表里能看见、
+         *   点进去也有内容。这正是本项目早先「先污染再报错」那个缺陷的同一种形状，
+         *   只不过那次发生在解析层（空数组被推进 store），这次发生在渲染层。
+         *
+         * 处置原则：**失败提示绝不允许伴随一个已生效的写入**。
+         *   要么整条导入成功、用户看到新卷宗；
+         *   要么整条撤回、用户看到失败 —— 不能一半。
+         * 所以这里捕获后主动回滚，把刚写进去的那一条摘干净，
+         * 再把 ui 指回导入前的位置，让界面回到用户点导入之前的样子。
+         */
+        var prevSessionId = ui.sessionId;
+        var prevView = ui.view;
+        try {
+            ui.sessionId = sess.id; ui.view = 'story'; ui.status = 'idle';
+            resetScrollUiState();
+            render();
+            scrollToLatestOnEnter();
+        } catch (eRender) {
+            console.error('[import] 渲染阶段异常，回滚本次导入', eRender);
+            /*
+             * 回滚顺序：先把界面指回原处（render 可能处于半完成状态），
+             * 再摘记录。反过来的话，render 又一次读到已摘除的 session
+             * 会再抛一次，把回滚本身也带崩。
+             */
+            ui.sessionId = prevSessionId;
+            ui.view = prevView;
+            try {
+                if (typeof store.discardImportedSession === 'function') {
+                    store.discardImportedSession(ui.chatId, sess.id);
+                }
+            } catch (eRoll) {
+                console.error('[import] 回滚失败，记录可能残留', eRoll);
+            }
+            try { render(); } catch (eAgain) { console.error(eAgain); }
+            toast('导入失败：写入后界面刷新出错，已撤销本次导入');
+            return false;
+        }
+
         toast(stPack
             ? ('已导入 ' + msgs.length + ' 条聊天记录')
             : '聊天已导入');
@@ -5619,16 +5659,20 @@ function renderWriter() {
             var reader = new FileReader();
             reader.onload = function () {
                 /*
-                 * 不在这里包 try/catch 兜底成「文件格式不正确」——
-                 * runImportText 内部已按失败原因分别给话术。
-                 * 留一层 try 只为防「渲染期异常」把整页搞崩，
-                 * 这种情况才用笼统话术（此时确实说不清是文件的问题）。
+                 * 这一层是**最后一道**兜底，正常情况下不该被触发：
+                 *   · 空的 / 不是 jsonl / 没有楼层 / JSON 损坏 / 没进聊天
+                 *     —— runImportText 内部已各自给了明确话术；
+                 *   · 写入后渲染抛错 —— runImportText 内部也已捕获并回滚。
+                 * 还能冒到这里，说明是这三者之外的意外（例如 FileReader
+                 * 的 result 取用本身出错）。此时刻意不用「文件格式不正确」
+                 * 那类会误导方向的措辞：说不清就不要假装说得清，
+                 * 让用户知道「不是文件的问题，可以原样再试一次」。
                  */
                 try {
                     runImportText(String(reader.result || ''), file.name);
                 } catch (e) {
-                    console.error(e);
-                    toast('导入失败：文件处理时出错，请重试');
+                    console.error('[import] 未预期的异常', e);
+                    toast('导入失败：处理时遇到意外错误，请重试（若反复出现可反馈此文件）');
                 }
             };
             reader.onerror = function () {
@@ -6330,7 +6374,7 @@ function renderWriter() {
          */
         __testRunImport: function (chatId, text, fileName) {
             if (chatId) ui.chatId = String(chatId);
-            runImportText(text, fileName || 'test.jsonl');
+            return runImportText(text, fileName || 'test.jsonl');
         },
         __testUi: function () {
             return { chatId: ui.chatId, sessionId: ui.sessionId, view: ui.view, status: ui.status };
