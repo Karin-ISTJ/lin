@@ -247,31 +247,20 @@
       '</header>' +
       '<div class="qq-room__main">' +
       '<div class="qq-room__scroll" id="mq-bf-preview-scroll">' +
-        /* 每行都要有 .qq-room__bubble-stack：它才是 flex:1 撑满行余宽的那层
-           （css/miya-chat.css 里定义），真实聊天室的气泡行同样带这一层
-           （js1/miya-chat-room.js 的 row 组装）。预览少了它，「最大宽度」这类
-           作用在 row 上的参数就演示不出真实效果。 */
         '<div class="qq-room__row qq-room__row--them qq-room__row--first">' +
           '<img class="qq-room__bubble-ava" src="' + PREVIEW_AVA_THEM + '" alt="">' +
-          '<div class="qq-room__bubble-stack">' +
-            '<div class="qq-room__bubble-wrap"><div class="qq-room__bubble">在吗？今晚有空吗</div></div>' +
-          '</div>' +
+          '<div class="qq-room__bubble-wrap"><div class="qq-room__bubble">在吗？今晚有空吗</div></div>' +
         '</div>' +
         '<div class="qq-room__row qq-room__row--them qq-room__row--last">' +
           '<img class="qq-room__bubble-ava" src="' + PREVIEW_AVA_THEM + '" alt="">' +
-          '<div class="qq-room__bubble-stack">' +
-            '<div class="qq-room__bubble-wrap"><div class="qq-room__bubble">想请你帮个小忙</div></div>' +
-          '</div>' +
+          '<div class="qq-room__bubble-wrap"><div class="qq-room__bubble">想请你帮个小忙</div></div>' +
         '</div>' +
         '<div class="qq-room__row qq-room__row--me qq-room__row--solo">' +
-          '<div class="qq-room__bubble-stack">' +
-            '<div class="qq-room__bubble-wrap"><div class="qq-room__bubble">可以的，你说</div></div>' +
-          '</div>' +
+          '<div class="qq-room__bubble-wrap"><div class="qq-room__bubble">可以的，你说</div></div>' +
           '<img class="qq-room__bubble-ava" src="' + PREVIEW_AVA_ME + '" alt="">' +
         '</div>' +
         '<div class="qq-room__row qq-room__row--them qq-room__row--solo">' +
           '<img class="qq-room__bubble-ava" src="' + PREVIEW_AVA_THEM + '" alt="">' +
-          '<div class="qq-room__bubble-stack">' +
           '<div class="qq-room__bubble-wrap qq-room__bubble-wrap--card">' +
             '<div class="qq-card qq-card-voice">' +
               '<div class="qq-card-voice__row">' +
@@ -283,7 +272,6 @@
                 '<span class="qq-card-voice__dur">3″</span>' +
               '</div>' +
             '</div>' +
-          '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -622,34 +610,6 @@
     return saveChatBeautify(chatId, patch);
   }
 
-  /* 气泡参数调试器面板。模块未加载时返回空串 —— 面板照常工作，
-     只是没有这层可视化调参入口，降级是安全的。
-     传入 customCss 是为了首帧就反解出正确的滑块值，避免闪一下默认值。 */
-  function buildBubbleTunerHtml(customCss) {
-    if (!global.MiyaBubbleTuner || !global.MiyaBubbleTuner.buildPanelHtml) return '';
-    try {
-      return global.MiyaBubbleTuner.buildPanelHtml(customCss);
-    } catch (e) {
-      return '';
-    }
-  }
-
-  /* 绑定调试器。模块未加载时静默跳过。 */
-  function bindBubbleTuner(root) {
-    if (!global.MiyaBubbleTuner || !global.MiyaBubbleTuner.bindTunerRoot) return;
-    try {
-      global.MiyaBubbleTuner.bindTunerRoot(root);
-    } catch (e) { /* 调试器故障不应连累主面板 */ }
-  }
-
-  /* 让调试器滑块跟随一段新的 CSS。模块未加载时静默跳过。 */
-  function syncBubbleTuner(root, css) {
-    if (!global.MiyaBubbleTuner || !global.MiyaBubbleTuner.syncFromCss) return;
-    try {
-      global.MiyaBubbleTuner.syncFromCss(root, css);
-    } catch (e) { /* 同上 */ }
-  }
-
   function buildPresetEditorHtml(bf) {
     bf = normalizeBeautify(bf);
     return '<div class="mi-bf-wrap">' +
@@ -659,9 +619,6 @@
         '<p class="mi-bf-preview-hint">下方编辑 CSS 时即时更新，结构与真实聊天室一致</p>' +
         '<div class="mi-bf-preview-stage">' + buildCssPreviewRoomHtml() + '</div>' +
       '</div>' +
-      /* 调试器紧跟在预览下方：展开时预览恰好在它正上方，
-         调参和看效果在同一屏内，不用来回滚。 */
-      buildBubbleTunerHtml(bf.customCss) +
       '<div class="mi-bf-block">' +
         '<div class="mi-bf-block__head">' +
           '<span class="mi-bf-block__label">自定义 CSS</span>' +
@@ -699,9 +656,6 @@
         '<p class="mi-bf-preview-hint">下方编辑 CSS 时即时更新，结构与真实聊天室一致</p>' +
         '<div class="mi-bf-preview-stage">' + buildCssPreviewRoomHtml() + '</div>' +
       '</div>' +
-      /* 调试器紧跟在预览下方：展开时预览恰好在它正上方，
-         调参和看效果在同一屏内，不用来回滚。 */
-      buildBubbleTunerHtml(bf.customCss) +
       '<div class="mi-bf-block">' +
         '<div class="mi-bf-block__head">' +
           '<span class="mi-bf-block__label">自定义 CSS</span>' +
@@ -810,10 +764,6 @@
   function bindAtelierRoot(root, chatId, onSaved) {
     root = resolveBeautifyRoot(root);
     if (!root) return;
-    /* 调试器的绑定放在幂等守卫**之前**：
-       守卫分支会 return，若放在后面，整页重绘后的重新绑定就走不到，
-       滑块会停在默认值而不是编辑区对应的值。 */
-    bindBubbleTuner(root);
     if (root.dataset.mqBfBound) {
       hydrateCssPreview(root);
       refreshAppliedList(root);
@@ -851,10 +801,6 @@
         var ta = root.querySelector('[data-mq-bf-custom-css]');
         if (ta) ta.value = preset.customCss || '';
         hydrateCssPreview(root);
-        /* 让调试器滑块跟着这份预设走，否则用户会看到「预览是新样式、
-           滑块还是默认值」的割裂状态。
-           反解在调试器内部按「识别不到就保持原值」降级。 */
-        syncBubbleTuner(root, ta ? ta.value : '');
         toast('已读取「' + name + '」');
         return;
       }
@@ -891,9 +837,6 @@
         }
         docImp.pickAndImport(cssTa).then(function () {
           hydrateCssPreview(root);
-          /* 导入的若是调试器生成的样式，滑块要跟着走；若是别人的手写皮肤，
-             调试器内部会识别不到并保持原值 + 给出提示。 */
-          syncBubbleTuner(root, cssTa ? cssTa.value : '');
           toast('CSS 已导入');
         }).catch(function (err) {
           docImp.toastError(err, toast);
@@ -1009,10 +952,6 @@
     clearAppliedBeautifyForChat: clearAppliedBeautifyForChat,
     hydrateCssPreview: hydrateCssPreview,
     clearPreviewCss: clearPreviewCss,
-    /* 导出给气泡调试器用：它在调色阶段要「只刷预览、不写编辑区」，
-       必须用同一套作用域规则，否则预览与真实的作用域关系会漂移。 */
-    scopeCssForPreview: scopeCssForPreview,
-    scopeCssForRoom: scopeCssForRoom,
     toast: toast
   };
 

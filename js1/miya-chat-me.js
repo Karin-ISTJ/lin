@@ -1027,8 +1027,16 @@
         '</span>' +
         '<span class="mi-dress-hub__arrow">→</span>' +
       '</button>' +
-      '<button type="button" class="mi-dress-hub__item" data-mq-dress-hub="heartvoice">' +
+      '<button type="button" class="mi-dress-hub__item" data-mq-dress-hub="bubble">' +
         '<span class="mi-dress-hub__num">III.</span>' +
+        '<span class="mi-dress-hub__body">' +
+          '<strong>气泡美化</strong>' +
+          '<span>我方 / 对方气泡配色 · 圆角 · 内边距</span>' +
+        '</span>' +
+        '<span class="mi-dress-hub__arrow">→</span>' +
+      '</button>' +
+      '<button type="button" class="mi-dress-hub__item" data-mq-dress-hub="heartvoice">' +
+        '<span class="mi-dress-hub__num">IV.</span>' +
         '<span class="mi-dress-hub__body">' +
           '<strong>自定义心声</strong>' +
           '<span>输出字段 · HTML 模板 · 预设库</span>' +
@@ -1064,6 +1072,15 @@
       cabMod.buildPanelHtml(cabMod.getState()) +
       (applied ? '<div class="mi-bf-wrap mi-bf-wrap--dress">' + applied + '</div>' : '') +
     '</div>';
+  }
+
+  function renderBubbleBeautify() {
+    setHead('气泡美化', '');
+    var mod = global.MiyaChatBubbleBeautify;
+    if (!mod || typeof mod.buildPanelHtml !== 'function') {
+      return '<div class="mi-me-flow"><p class="mi-empty-hint">气泡美化模块未加载，请刷新页面</p></div>';
+    }
+    return '<div class="mi-me-flow">' + mod.buildPanelHtml(mod.getState()) + '</div>';
   }
 
   function renderEmojiUrlImport(groupId) {
@@ -1151,6 +1168,7 @@
       case 'edit': return renderProfileEdit(top.data.profileId);
       case 'dress-hub': return renderDressEmojiHub();
       case 'dress': return renderDressUp();
+      case 'bubble': return renderBubbleBeautify();
       case 'heartvoice-tpl': return renderHeartVoiceTemplates();
       case 'emoji':
         return renderEmojiHub();
@@ -1203,6 +1221,13 @@
       if (bfMod && bfWrap) {
         bfMod.bindAtelierRoot(bfWrap, null, function () { renderTop(); });
         bfMod.refreshAppliedList(bfWrap);
+      }
+    }
+    if (top && top.screen === 'bubble') {
+      var mibMod = global.MiyaChatBubbleBeautify;
+      var mibRoot = body.querySelector('[data-mib-root]');
+      if (mibMod && mibRoot && typeof mibMod.bindPanelRoot === 'function') {
+        mibMod.bindPanelRoot(mibRoot, function () { renderTop(); });
       }
     }
     if (top && top.screen === 'heartvoice-tpl') {
@@ -1268,6 +1293,8 @@
           chain.then(function () { push('dress'); });
         } else if (hubAct === 'emoji') {
           push('emoji', { expandedGroups: {} });
+        } else if (hubAct === 'bubble') {
+          push('bubble');
         } else if (hubAct === 'heartvoice') {
           var hvChain = global.MiyaChatHeartVoiceTemplates && global.MiyaChatHeartVoiceTemplates.whenPresetsReady
             ? global.MiyaChatHeartVoiceTemplates.whenPresetsReady()

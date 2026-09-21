@@ -1,0 +1,186 @@
+/**
+ * Miya 气泡美化面板 · HSL 滑条 / 开关 / 实时预览
+ * 依赖 miya-chat-settings.css 的 mi-bf-block / mi-input / mi-pill 体系，仅做增量样式
+ */
+
+/* ── 启用开关 ── */
+.mib-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #e3e0dc;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.25s var(--mc-ease, ease), border-color 0.25s var(--mc-ease, ease);
+  flex-shrink: 0;
+}
+.mib-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.25s var(--mc-ease, ease);
+}
+.mib-switch.is-on {
+  background: #2c2a26;
+  border-color: #2c2a26;
+}
+.mib-switch.is-on .mib-switch__knob {
+  transform: translateX(18px);
+}
+
+/* ── 预览舞台 ── */
+.mib-preview-stage {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.028);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+.mib-preview-room {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 12px;
+  border-radius: 12px;
+  background: #f5f5f3;
+  overflow: hidden;
+}
+/* 预览房间内复用 qq-room__row / __bubble 全局类，这里补齐基线与重置 */
+.mib-preview-room .qq-room__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 0;
+  max-width: 72%;
+}
+.mib-preview-room .qq-room__row--them { justify-content: flex-start; margin-right: auto; }
+.mib-preview-room .qq-room__row--me { justify-content: flex-end; margin-left: auto; }
+.mib-preview-room .qq-room__bubble-ava {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #ebe8e3;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.mib-preview-room .qq-room__bubble-wrap { min-width: 0; }
+.mib-preview-room .qq-room__bubble {
+  font-size: 0.8125rem;
+  line-height: 1.48;
+  font-weight: 400;
+  letter-spacing: 0;
+  word-break: break-word;
+  box-shadow: none;
+  transition: none;
+}
+
+/* ── HSL 颜色组 ── */
+.mib-hsl {
+  padding: 12px 12px 6px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.022);
+  border: 1px solid rgba(0, 0, 0, 0.045);
+  margin-top: 10px;
+}
+.mib-hsl:first-of-type { margin-top: 0; }
+.mib-hsl__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mib-hsl__chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+  transition: background 0.15s linear;
+}
+.mib-hsl__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.mib-hsl__hex {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 滑条行 ── */
+.mib-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.mib-range__name {
+  width: 76px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.mib-range__val {
+  width: 46px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+.mib-range__input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.mib-range__input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.mib-range__input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.mib-range__input::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.mib-range__input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+/* 色相滑条用彩虹轨道，一眼可辨 */
+.mib-range__input[data-mib-key$="H"]::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, #f66, #fc6, #ff6, #6f6, #6ff, #66f, #f6f, #f66);
+}
+.mib-range__input[data-mib-key$="H"]::-moz-range-track {
+  background: linear-gradient(90deg, #f66, #fc6, #ff6, #6f6, #6ff, #66f, #f6f, #f66);
+}
