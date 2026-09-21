@@ -2027,8 +2027,20 @@
                     return;
                 }
                 var para = inner.search(/\n\s*\n/);
-                if (para >= 0 && trim(inner.slice(para))) {
-                    out = out.slice(0, m.index) + trim(inner.slice(para));
+                /*
+                 * ⚠️ 这里必须是 x.trim()，不能写成 trim(x)。
+                 *
+                 * 本文件从未定义过名为 trim 的全局函数，写成 trim(...)
+                 * 会直接抛 ReferenceError: trim is not defined。
+                 *
+                 * 为什么这个错误能潜伏很久：它只在「未闭合 thinking」这条
+                 * 分支里执行 —— 即某一层开了 <thinking> 却没闭合。
+                 * 常规聊天里思维段都是成对的，走不到这里；一旦遇到
+                 * 只有思维段、正文为空的那种楼层（ST 导入很常见），
+                 * 异常就会在渲染期爆出来，表现为「界面刷新出错」。
+                 */
+                if (para >= 0 && inner.slice(para).trim()) {
+                    out = out.slice(0, m.index) + inner.slice(para).trim();
                 } else {
                     out = out.slice(0, m.index).trim();
                 }
