@@ -273,7 +273,7 @@
         '<span class="mi-bf-block__label">气泡颜色</span>' +
         hslGroup('对方气泡', 'them', st) +
         hslGroup('我方气泡', 'me', st) +
-        '<p class="mi-bf-preview-hint">亮度 ≤ ' + DARK_TEXT_THRESHOLD + '% 时该侧文字自动改白；气泡自带描边已按需去除</p>' +
+        '<p class="mi-bf-preview-hint">饱和度为 0% 时拖色相看不到变化，先把饱和度拉高再调色；亮度 ≤ ' + DARK_TEXT_THRESHOLD + '% 自动配白字；气泡描边已去除</p>' +
       '</div>' +
       '<div class="mi-bf-block">' +
         '<span class="mi-bf-block__label">尺寸</span>' +
@@ -283,7 +283,8 @@
         rangeRow('内边距·纵向', 'padY', st.padY) +
       '</div>' +
       '<div class="mi-btn-row">' +
-        '<button type="button" class="mi-pill mi-pill--dark" data-mib-copy>复制 CSS</button>' +
+        '<button type="button" class="mi-pill mi-pill--dark" data-mib-apply>应用气泡</button>' +
+        '<button type="button" class="mi-pill" data-mib-copy>复制 CSS</button>' +
         '<button type="button" class="mi-pill mi-pill--ghost" data-mib-reset>重置默认</button>' +
       '</div>' +
       '<div class="mi-bf-block">' +
@@ -364,6 +365,22 @@
         return;
       }
 
+      /* 应用气泡：一键「开启 + 保存 + 应用到聊天室 + 刷新预览」。
+         部分手机 WebView 拖滑条只派发 change 不派发 input，自动联动可能缺席，
+         此按钮是明确的手动兜底入口。 */
+      if (e.target.closest('[data-mib-apply]')) {
+        var applied = saveState({ enabled: true });
+        apply(applied);
+        hydratePreview(root, applied);
+        var toggleBtn = root.querySelector('[data-mib-toggle]');
+        if (toggleBtn) {
+          toggleBtn.classList.add('is-on');
+          toggleBtn.setAttribute('aria-checked', 'true');
+        }
+        toast('气泡已应用到聊天');
+        return;
+      }
+
       if (e.target.closest('[data-mib-copy]')) {
         copyText(buildCss(getState(), '#qq-room')).then(function () {
           toast('CSS 已复制');
@@ -383,12 +400,12 @@
       }
     });
 
-    root.addEventListener('input', function (e) {
-      var inp = e.target.closest('[data-mib-key]');
-      if (!inp) return;
-      var key = inp.getAttribute('data-mib-key');
+    /* 滑条联动：input + change 双监听。部分移动端 WebView 在拖动 range 时
+       只派发 change（或只在松手时派发），只听 input 会导致预览"看起来不动"。 */
+    function handleControl(root, key, raw) {
+      if (!key) return;
       var patch = {};
-      patch[key] = Number(inp.value);
+      patch[key] = Number(raw);
       var st = saveState(patch);
 
       var valEl = root.querySelector('[data-mib-val="' + key + '"]');
@@ -407,6 +424,18 @@
 
       hydratePreview(root, st);
       schedulePersist();
+    }
+
+    root.addEventListener('input', function (e) {
+      var inp = e.target.closest('[data-mib-key]');
+      if (!inp) return;
+      handleControl(root, inp.getAttribute('data-mib-key'), inp.value);
+    });
+
+    root.addEventListener('change', function (e) {
+      var inp = e.target.closest('[data-mib-key]');
+      if (!inp) return;
+      handleControl(root, inp.getAttribute('data-mib-key'), inp.value);
     });
 
     hydratePreview(root, getState());
