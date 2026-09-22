@@ -1,0 +1,20 @@
+{
+  "name": "miya-offline-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Karin 离线聊天 App —— 版本、构建与测试工具链",
+  "scripts": {
+    "bump": "node tools/version.js bump",
+    "bump:all": "node tools/version.js bump --all",
+    "verify": "node tools/version.js verify",
+    "status": "node tools/version.js status",
+    "lint": "eslint js1 js2 tools sw.js",
+    "lint:undef": "eslint js1 js2 tools sw.js --quiet",
+    "test": "python3 test/run-all.py",
+    "test:fast": "python3 test/run-all.py --fast",
+    "test:list": "python3 test/run-all.py --list"
+  },
+  "devDependencies": {
+    "eslint": "^10.11.0"
+  }
+}

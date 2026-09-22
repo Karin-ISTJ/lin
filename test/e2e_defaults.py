@@ -13,10 +13,13 @@
 - 「恢复」能让已覆盖的联系人回到全局
 - 桌面设置 App 已不存在（回归边界）
 """
-import asyncio, json
+import asyncio, json, os
 from playwright.async_api import async_playwright
 
-BASE = "http://localhost:8098/index.html"
+# 允许用 MIYA_BASE 指定服务地址。
+# 以前这里写死 8098，没法被 test/run-all.py 统一调度 ——
+# 总入口会自己挑一个空闲端口起服务，写死端口就只能手动另开一个。
+BASE = os.environ.get("MIYA_BASE", "http://localhost:8098").rstrip("/") + "/index.html"
 UA = ("Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 VIEWPORT = {"width": 412, "height": 915}

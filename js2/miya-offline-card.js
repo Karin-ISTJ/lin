@@ -89,6 +89,16 @@
        于是别的卡自定义的类型也能显示出来，不会丢内容。 */
 
     /* 每种类型对应一组字段名。字段数量不匹配时多余的部分忽略、缺的部分留空。 */
+    /*
+     * 字段表。key = 类型名（小写），value = 该类型按顺序的字段名。
+     *
+     * ⚠️ 关于 choice（剧情建议）：
+     * 与其余类型的关键区别 —— **这一条是可点的**。
+     * 点一下就把文本当作自己的发言发出去（见 appointment-app 的
+     * root 点击委托里 [data-mi-choice] 分支）。
+     *   text = 建议正文（点击后真正发出去的内容）
+     *   hint = 可选的一句话补充，只用于展示，不参与发送
+     */
     var SCHEMA = {
         profile:      ['name', 'title', 'level', 'fame', 'quote'],
         pinned:       ['emoji', 'tag', 'title', 'desc', 'cue'],
@@ -99,7 +109,8 @@
         sidequest:    ['title', 'progress', 'desc', 'reward'],
         todo:         ['done', 'text'],
         post:         ['author', 'role', 'title', 'desc'],
-        reply:        ['author', 'time', 'text']
+        reply:        ['author', 'time', 'text'],
+        choice:       ['text', 'hint']
     };
 
     /* 类型 → 归属的分区。未知类型统一进「更多」，保证不丢内容。 */
@@ -113,7 +124,8 @@
         sidequest: 'quest',
         todo: 'todo',
         post: 'board',
-        reply: 'board'
+        reply: 'board',
+        choice: 'choice'
     };
 
     /* 分区标题。可被卡片自己的 [Section|key|标题] 覆盖。 */
@@ -124,6 +136,7 @@
         quest: '任务',
         todo: '待办',
         board: '公告',
+        choice: '剧情建议',
         more: '更多'
     };
 
@@ -165,7 +178,13 @@
         mail: 'mail', mails: 'mail', letters: 'mail',
         quest: 'quest', quests: 'quest', task: 'quest', tasks: 'quest',
         todo: 'todo', todos: 'todo', checklist: 'todo',
-        board: 'board', boards: 'board', posts: 'board', notice: 'board'
+        board: 'board', boards: 'board', posts: 'board', notice: 'board',
+        /*
+         * 剧情建议。必须登记，否则 [Choices] 这行会走「未知题材」分支 ——
+         * 标题虽然保留下来，但 __cursor 会指向一个不在 GROUP_OF 里的 key，
+         * 后续 [Choice|…] 条目反而落不进去，四条建议会集体消失。
+         */
+        choice: 'choice', choices: 'choice', options: 'choice', option: 'choice'
     };
 
     function parseCard(rawText) {
@@ -371,6 +390,30 @@
                 (item.desc ? '<div class="xwc__item-desc">' + esc(item.desc) + '</div>' : '') +
                 (item.cue ? '<div class="xwc__item-cue">' + esc(item.cue) + '</div>' : '') +
                 '</div>';
+        }
+
+        /*
+         * 剧情建议：渲染成**可点的一整行**。
+         *
+         * 点击后把 text 当作自己的发言发出去（委托在 appointment-app）。
+         * 所以这里不能用 div —— 用 button 才有原生键盘可达性
+         * （Tab 焦点、Enter/Space 触发），也不必自己补 tabindex/role。
+         *
+         * ⚠️ 放进属性的是 escAttr 转义过的文本，不是原文：
+         * 建议里出现引号 / 尖括号（很常见，比如「他说：『好』」）
+         * 会直接破坏 HTML 结构，甚至把后半段解析成标签。
+         * 委托那边读的是 dataset，取回来就是原文，无需再反转义。
+         *
+         * 不需要「第几条」这种索引：发送内容就是 text 本身，
+         * 索引除了让 HTML 变复杂之外没有用处。
+         */
+        if (t === 'choice') {
+            var ctext = String(item.text || '').trim();
+            if (!ctext) return '';
+            return '<button type="button" class="xwc__choice" data-mi-choice="' + escAttr(ctext) + '">' +
+                '<span class="xwc__choice-text">' + esc(ctext) + '</span>' +
+                (item.hint ? '<span class="xwc__choice-hint">' + esc(item.hint) + '</span>' : '') +
+                '</button>';
         }
 
         /* 未知类型：标题 + 字段列表，保证内容不丢 */

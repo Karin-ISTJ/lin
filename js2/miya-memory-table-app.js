@@ -512,8 +512,16 @@
        * 不是线上聊天室的消息 id。两者互不冲突：线下的删除入口
        * （MiyaAppointmentStore.deleteMessage）拿到的也正是这个 id，
        * 因此删除时按同一口径回溯即可命中。
+       *
+       * ⚠️ 正文优先取 mtRaw，不能取 content。
+       *
+       * 线下引擎在解析正文**之前**就把 <tableEdit> 剥掉了（否则标签会写进
+       * 楼层、下一轮被当历史送回），所以 message.content 里根本没有表格动作，
+       * 拿它去解析永远是 applied:false —— 记忆一条也写不进去。
+       * 引擎把那一段原始标记留在 message.mtRaw 上，这里要用它。
+       * mtRaw 为空（这一版本来就没写表格）时才回退到 content。
        */
-      text = ctx.result.message.content;
+      text = String(ctx.result.message.mtRaw || '').trim() || ctx.result.message.content;
       collectIds([ctx.result.message]);
     } else if (ctx.result.raw) {
       text = ctx.result.raw;
@@ -530,12 +538,161 @@
     if (res && res.notice) toast(res.notice);
   }
 
+  /*
+   * ══════════════════════════════════════════════════════════════════
+   * 确认楼层 —— 候选被用户选定后，补写它的记忆
+   * ══════════════════════════════════════════════════════════════════
+   *
+   * 背景
+   * ────
+   * 线下一条角色楼层可以用 ‹ › 翻出多个候选，它们共用同一个消息 id。
+   * 候选还悬着时引擎**不写记忆**（见 appointment-engine 的
+   * shouldDeferMemoryForPendingSwipe），免得两条时间线串味。
+   *
+   * 等用户在某个候选下面继续发消息，那个候选就被钉住了 ——
+   * 这里是「钉住」那一刻的补写入口。
+   *
+   * 为什么能直接拿已存正文提取
+   * ──────────────────────────
+   * 提取入口 eng.processAssistantReply(chatId, text, { sourceMsgIds })
+   * 接的是**纯文本**，不需要生成时的原始 raw。所以补写只要把候选已存的
+   * content 递给它就行，不用改动引擎的生成链路。
+   *
+   * 幂等性
+   * ──────
+   * 同一个楼层被确认多次（比如用户连发两条消息）时，这里可能被调多次。
+   * 靠 processAssistantReply 里 tableEdit 的动作语义兜底（同一行 updateRow
+   * 会覆盖而不是追加），不额外加去重状态 —— 多一个状态就多一处会不同步的地方。
+   *
+   * ⚠️ 真正拿来解析的是楼层上的 **mtRaw**（原始 <tableEdit> 标记），
+   * 不是 content。因为引擎在落库前就把标记从正文里剥掉了（否则标签会
+   * 写进楼层、下一轮被当历史送回），content 里根本没有表格动作。
+   * 只用 content 的话，这里永远解析出 applied:false —— 补写形同虚设。
+   * 见 appointment-store 的 normalizeMessage.mtRaw。
+   *
+   * @param {string} chatId
+   * @param {string} messageId 被确认的 assistant 楼层 id
+   * @param {string} [content] 该楼层当前候选的正文（mtRaw 缺失时的兜底）
+   * @returns {Promise<number>} 写入提示数（失败返回 0，不抛）
+   */
+  function commitConfirmedFloor(chatId, messageId, content) {
+    var cid = String(chatId || '').trim();
+    var mid = String(messageId || '').trim();
+    if (!cid || !mid) return Promise.resolve(0);
+
+    /*
+     * 从会话里把这一层的 mtRaw 取出来。
+     *
+     * ⚠️ 用 getActiveSession(chatId) 而不是 getSession(chatId)：
+     *   后者第二参缺省时 sid = ''，find 不可能命中，恒定返回 null
+     *   （这一步踩过：写成单参会静默拿到 null，然后一路退回 content，
+     *   表现就是「补写永远 applied:false」，看着像功能没做）。
+     *
+     * 优先 mtRaw；取不到（老数据 / 这一版本来就没写表格）时回退 content，
+     * 此时多半解析不出动作，返回 0 —— 是「无事可做」，不是故障。
+     */
+    var raw = '';
+    var fallback = String(content || '');
+    var sid = '';
+    try {
+        var aps = global.MiyaAppointmentStore;
+        if (aps) {
+            var sess = null;
+            if (typeof aps.getActiveSession === 'function') sess = aps.getActiveSession(cid);
+            if (!sess && typeof aps.getSession === 'function') {
+                /* 找不到活跃会话时兜底：拿会话列表里最新的一场 */
+                var all = typeof aps.getSessions === 'function' ? (aps.getSessions(cid) || []) : [];
+                if (all.length) sess = all[0];
+            }
+            if (sess && sess.id) {
+                sid = String(sess.id);
+                var list = (typeof aps.getSessionMessages === 'function')
+                    ? (aps.getSessionMessages(cid, sid) || [])
+                    : [];
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i] && String(list[i].id) === mid) {
+                        raw = String(list[i].mtRaw || '').trim();
+                        if (!fallback) fallback = String(list[i].content || '');
+                        break;
+                    }
+                }
+            }
+        }
+    } catch (eRead) { /* 读不到就走兜底 */ }
+
+    var text = raw || fallback;
+    if (!String(text).trim()) return Promise.resolve(0);
+    var eng = global.MiyaMemoryTableEngine;
+    if (!eng || typeof eng.processAssistantReply !== 'function') return Promise.resolve(0);
+    /*
+     * 补写失败绝不能影响发消息 —— 记忆丢一轮可以下一轮补，
+     * 消息发不出去是用户直接可见的故障。全部吞掉。
+     */
+    return Promise.resolve()
+      .then(function () {
+        return eng.processAssistantReply(cid, text, { sourceMsgIds: [mid] });
+      })
+      .then(function (res) {
+        if (res && res.notice) toast(res.notice);
+        /* 真写进去了才刷新面板，免得用户点开记忆表看到的是旧数据 */
+        if (res && res.applied) {
+          /*
+           * 写成功后把**这一候选**的待落库标记清掉。
+           *
+           * 不清的话，用户在这一层下面再发第二条消息时又会被补写一次 ——
+           * 同一段表格动作被重复应用。虽然 insertRow 会追加一条重复行，
+           * 但更糟的是 maxRows 裁剪会因此提前把别的行挤掉。
+           *
+           * ⚠️ 只清所确认的那一候选（按 swipeId 定位），
+           * 不能整条楼层一起清 —— 别的候选还没被确认，
+           * 它们的标记要留着，用户翻过去发消息时才轮到它们。
+           * 清成空串（而不是删键）：normalizeMessage 只在有值时才写该字段，
+           * 空串即等价于「没有待落库标记」。
+           */
+          try {
+              var aps2 = global.MiyaAppointmentStore;
+              if (aps2 && sid && typeof aps2.updateMessage === 'function') {
+                  var curM = null;
+                  if (typeof aps2.getSessionMessages === 'function') {
+                      var list2 = aps2.getSessionMessages(cid, sid) || [];
+                      for (var k = 0; k < list2.length; k++) {
+                          if (list2[k] && String(list2[k].id) === mid) { curM = list2[k]; break; }
+                      }
+                  }
+                  var rawList = (curM && Array.isArray(curM.swipeMtRaw)) ? curM.swipeMtRaw.slice() : [];
+                  var pos = curM && Number.isFinite(Number(curM.swipeId))
+                      ? Math.max(0, Math.floor(Number(curM.swipeId))) : 0;
+                  if (rawList.length > pos) rawList[pos] = '';
+                  aps2.updateMessage(cid, sid, mid, {
+                      mtRaw: '',
+                      swipeMtRaw: rawList.map(function (x) { return String(x == null ? '' : x); })
+                  });
+              }
+          } catch (eClear) {}
+          try {
+            render();
+          } catch (eRender) {}
+          return 1;
+        }
+        return 0;
+      })
+      .catch(function (e) {
+        try {
+          if (global.console && console.warn) {
+            console.warn('[memtable] commitConfirmedFloor failed', e);
+          }
+        } catch (eLog) {}
+        return 0;
+      });
+  }
+
   global.MiyaMemoryTableApp = {
     open: open,
     close: close,
     render: render,
     beforeGenerate: beforeGenerate,
-    afterGenerate: afterGenerate
+    afterGenerate: afterGenerate,
+    commitConfirmedFloor: commitConfirmedFloor
   };
 
   function boot() {

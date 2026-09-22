@@ -781,7 +781,15 @@
                 farm: { playerPlots: [], rolePlots: [], warehouse: {}, log: [], missFour: 0, missAnimal: 0, updatedAt: 0 },
                 lifeLikeNextPushAt: 0,
                 lifeLikeNextPushAnchorTs: 0,
-                lifeLikeEnabledAt: 0
+                lifeLikeEnabledAt: 0,
+                /*
+                 * 每日主动上限。maxPerDay = 0 表示不限（保持旧行为）。
+                 * dayKey 用本地日期 YYYY-MM-DD，跨天自动归零；
+                 * 两个字段都由 saveProactiveAttempt 维护，失败不进计数。
+                 */
+                maxPerDay: 0,
+                dayKey: '',
+                dayCount: 0
             },
             videoCallEnabled: true,
             callBackground: { mode: 'none', url: '', blobId: '' },
@@ -1360,6 +1368,15 @@
             bm.activeEnabled = false;
             bm.offlineEnabled = false;
         }
+        /*
+         * 每日上限归一化。
+         * 老档没有这三个字段 → maxPerDay 落 0（不限），行为与升级前一致，
+         * 不会因为升级突然把人的主动消息掐掉。
+         * dayKey 只认 YYYY-MM-DD 形态，别的值一律清空（清空即视为跨天）。
+         */
+        bm.maxPerDay = Math.min(200, Math.max(0, parseInt(bm.maxPerDay, 10) || 0));
+        bm.dayKey = /^\d{4}-\d{2}-\d{2}$/.test(String(bm.dayKey || '')) ? String(bm.dayKey) : '';
+        bm.dayCount = Math.min(100000, Math.max(0, parseInt(bm.dayCount, 10) || 0));
         out.backgroundMessage = bm;
         out.minimaxVoiceId = String(out.minimaxVoiceId || '').trim();
         out.minimaxLanguageBoost = String(out.minimaxLanguageBoost || 'auto').trim() || 'auto';
@@ -5573,7 +5590,15 @@
                     'proactiveBaselineAt',
                     'lastOfflineAt',
                     'offlineRollAnchor',
-                    'offlineRollGapMs'
+                    'offlineRollGapMs',
+                    /*
+                     * 每日计数的落账状态：这两个必须留在会话级。
+                     * 进了全局配置就会被 defaultGlobalSlice() 的 '' / 0 盖掉，
+                     * 表现为「明明发过 3 条，上限还是拦不住」。
+                     * maxPerDay 本身是配置项，不走这里。
+                     */
+                    'dayKey',
+                    'dayCount'
                 ];
                 var chatBgPatch = {};
                 chatLevelBgKeys.forEach(function (k) {

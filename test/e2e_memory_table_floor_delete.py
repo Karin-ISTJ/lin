@@ -19,9 +19,13 @@
 """
 import asyncio
 import json
+import re
 import sys
+from pathlib import Path
 
 from playwright.async_api import async_playwright
+
+ROOT = Path(__file__).resolve().parent.parent
 
 BASE = 'http://127.0.0.1:8099/index.html'
 SEED = "try{localStorage.clear();}catch(e){}"
@@ -165,9 +169,26 @@ async def main():
     check('E3 删第一层后行数 = 1', len(after1) == 1, str(len(after1)))
     check('E3 删第二层后行数 = 0', len(after2) == 0,
           json.dumps(after2, ensure_ascii=False))
+    # ── 表结构仍在 ────────────────────────────────────────────
+    #
+    # 这里**不能**写死一个数字。早先写的是 `== 5`，而 defaultTables()
+    # 早已是**六张**表（时空/角色特征/社交关系/任务/事件/物品），
+    # 于是这条断言长期处于假失败状态 —— 它测的不是「结构有没有被删掉」，
+    # 而是「表的数量还是不是当年那个数」，后者一改表就要重新对数字，
+    # 既误报又遮蔽真问题。
+    #
+    # 改成：期望数量从源码里的 defaultTables() 现场数出来，
+    # 这样加表/删表都不会误报，而「被 dropChat 清空」仍然抓得住。
+    store_src = (ROOT / 'js2' / 'miya-memory-table-store.js').read_text(encoding='utf-8')
+    m = re.search(r'function defaultTables\(\)\s*\{(.*?)\n  \}', store_src, re.S)
+    expected_tables = len(re.findall(r"id:\s*'t_", m.group(1))) if m else None
+
+    check('默认表数量可从源码推出（守卫有效性）',
+          expected_tables is not None and expected_tables > 0,
+          'expected=%s' % expected_tables)
     check('表结构未被破坏（resetChat/dropChat 语义区分）',
-          d.get('表结构仍在') is True and d.get('表数量') == 5,
-          'tables=%s' % d.get('表数量'))
+          d.get('表结构仍在') is True and d.get('表数量') == expected_tables,
+          'tables=%s expected=%s' % (d.get('表数量'), expected_tables))
 
     print('')
     print('─' * 60)

@@ -150,6 +150,13 @@
         return document.getElementById(id);
     }
 
+    /*
+     * 文本位置转义（元素内容）。
+     *
+     * ⚠ 不含单引号 —— 这对**文本位置**是安全的，但绝不能拿它去填
+     * 属性值，尤其是单引号包起来的属性值。属性请用下面的 escAttr()。
+     * 两者的区别不是「哪个更严」，而是「用在哪」。
+     */
     function esc(t) {
         return String(t || '')
             .replace(/&/g, '&amp;')
@@ -158,8 +165,28 @@
             .replace(/"/g, '&quot;');
     }
 
+    /*
+     * 属性值转义。
+     *
+     * 五件都要转：& < > " '
+     *
+     * 为什么必须带单引号 —— 早先这里只转 & 和 "，而 renderStory() 把
+     * 结果塞进了 **单引号** 里：
+     *     ' style="--xw-stream-face:url(' + ava + ')"'
+     * 头像值里只要有一个 '，就能提前闭合 url('，把后面的内容顶成
+     * 独立属性（实测 style 被拆成 style / onmouseover / x 三段）。
+     * 转义集合必须覆盖**所有**可能包裹它的引号，不能只管双引号。
+     *
+     * < 和 > 也一并转：属性值虽然不解析标签，但少了它们，
+     * 同一份输出被挪到文本位置时就漏了。
+     */
     function escAttr(s) {
-        return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function chatStore() {
@@ -1986,10 +2013,27 @@
          */
         if (next === sid) return;
         var content = String(swipes[next] || '');
+        /*
+         * 切候选时，把「这一版待落库的记忆标记」也一起切过去。
+         *
+         * 候选表存的是各版剥离后的正文，剥离后就解析不出记忆动作了，
+         * 所以引擎把各版的标记按序号并存在 swipeMtRaw 里（与 swipes 对齐）。
+         * 不跟着切的话，翻回第 1 版再发消息，补写的会是**最后一版**的记忆 ——
+         * 正是这次要修的「串味」换了个地方复现。
+         */
+        var mtRawList = Array.isArray(m.swipeMtRaw) ? m.swipeMtRaw : [];
         aps.updateMessage(ui.chatId, ui.sessionId, msgId, {
             content: content,
             swipeId: next,
-            swipes: swipes
+            swipes: swipes,
+            /*
+             * 显式带上（哪怕空串）：normalizeMessage 只在有值时才写该字段，
+             * 不传就会沿用旧值 —— 那正好是「翻页之后标记还是上一版的」。
+             */
+            mtRaw: String(mtRawList[next] == null ? '' : mtRawList[next]),
+            swipeMtRaw: swipes.map(function (_x, i) {
+                return String(mtRawList[i] == null ? '' : mtRawList[i]);
+            })
         });
         /*
          * ⚠️ 这里原来写的是 renderStory()。
@@ -2878,7 +2922,16 @@
         );
         if (!castContacts.length && contact) castContacts = [contact];
         var primaryFace = castContacts[0] || contact;
-        var ava = esc(contactAvatar(primaryFace));
+        /*
+         * 必须用 escAttr 而不是 esc。
+         *
+         * 这个值下面要进的是 style="--xw-stream-face:url('...')" ——
+         * 它在**单引号内**，而 esc() 按设计不转 '。
+         * 用 esc 的话，头像里一个 ' 就能提前闭合 url('，
+         * 把后面的字符顶成独立属性（实测 style 被拆成三段）。
+         * 属性值一律走 escAttr，它把 & < > " ' 全转了。
+         */
+        var ava = escAttr(contactAvatar(primaryFace));
         var sceneTitle = String((sess && sess.title) || '').trim() || '未命名场景';
         /*
          * 卷宗条（.xw-ribbon）已整体移除。
@@ -3840,6 +3893,64 @@ function renderWriter() {
         return !preset || preset.enterToSend !== false;
     }
 
+    /*
+     * ══════════════════════════════════════════════════════════════════
+     * 确认「末尾那个还在挑的候选」—— 用户发消息就算选定
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * 与 appointment-engine 的 shouldDeferMemoryForPendingSwipe 是一对：
+     *   · 引擎侧：末层有候选 → 生成时**不写**记忆
+     *   · 这里：  用户发消息 → 该候选被钉住 → **补写**记忆
+     *
+     * 两边必须成对，任何一边单独存在都是故障：
+     *   · 只有引擎侧 → 记忆永远不写（功能等于关掉）
+     *   · 只有这里  → 候选生成时就写，翻候选照样串味
+     *
+     * 为什么是「用户发消息」而不是「用户点了某个候选」：
+     * 翻看候选（‹ ›）是**浏览**，不代表选定 —— 用户可能翻完又翻回去。
+     * 而继续往下写，是唯一明确的「这一段我认了」的信号。
+     *
+     * 判据与引擎侧对齐：只认**末尾且带候选**的角色楼层。
+     * 历史楼层不参与（它早被下面的楼层钉住了，生成时已正常写入）。
+     */
+    function confirmPendingFloorBeforeSend() {
+        try {
+            if (!ui.chatId || !ui.sessionId) return;
+            var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
+            if (!Array.isArray(msgs) || !msgs.length) return;
+            /* 从末尾往前找第一条活着的角色楼层 */
+            var last = null;
+            for (var i = msgs.length - 1; i >= 0; i--) {
+                var m = msgs[i];
+                if (!m || m.deleted) continue;
+                if (m.role !== 'assistant') break; /* 末尾不是角色楼层 → 无事可做 */
+                if (!String(m.content || '').trim()) break; /* 空楼层（生成中）→ 跳过 */
+                last = m;
+                break;
+            }
+            if (!last) return;
+            var swipes = Array.isArray(last.swipes) ? last.swipes : [];
+            if (swipes.length < 1) return; /* 没有候选 → 生成时已写过，不重复 */
+            var mt = global.MiyaMemoryTableApp;
+            if (!mt || typeof mt.commitConfirmedFloor !== 'function') return;
+            /*
+             * 补写用的正文以**当前显示的那一版**为准。
+             *
+             * last.content 就是引擎写回、界面正在渲染的那一版
+             *（翻候选时 updateMessage 会把 swipes[sid] 写进 content），
+             * 所以直接用它即可，不需要再去查 swipeId 索引。
+             */
+            mt.commitConfirmedFloor(ui.chatId, last.id, last.content);
+        } catch (eConfirm) {
+            /* 补写是锦上添花，绝不能因为它把发消息拦下来 */
+            try {
+                if (global.console && console.warn) {
+                    console.warn('[floor] confirm pending floor failed', eConfirm);
+                }
+            } catch (eLog) {}
+        }
+    }
+
     function sendMessage() {
         var input = $('xw-writer-input');
         if (!input) return;
@@ -3856,6 +3967,29 @@ function renderWriter() {
             return;
         }
         var wasEmpty = !storyHasContent();
+        /*
+         * ══════════════════════════════════════════════════════════════
+         * 发出「我已选定这个走向」的信号 —— 补写候选的记忆
+         * ══════════════════════════════════════════════════════════════
+         *
+         * 背景：线下一条角色楼层可以有多个候选（右下角 ‹ › 翻看），
+         * 它们共用同一个消息 id。候选还悬着时引擎**不写记忆**
+         * （见 appointment-engine 的 shouldDeferMemoryForPendingSwipe），
+         * 免得两条时间线互相串味。
+         *
+         * 用户现在开始打字发消息 —— 这就是「我接受上面那一版」的意思，
+         * 上面那个候选被钉住了，此刻才把它的记忆补进记忆表。
+         *
+         * ⚠️ 必须在 addMessage **之前**取：
+         * addMessage 会在末尾追加一条 user 楼层，之后「上面那一条」
+         * 依然能找到，但这一步只依赖「加之前」的末尾状态，
+         * 先取更不容易在将来被顺序改动改坏。
+         *
+         * ⚠️ 不等待、不阻塞发消息。
+         * 补写失败只是这一轮记忆没落上（下一轮生成会自然补），
+         * 而消息发不出去是用户直接可见的故障 —— 两件事的严重度不对等。
+         */
+        confirmPendingFloorBeforeSend();
         var userMsg = apStore().addMessage(ui.chatId, ui.sessionId, { role: 'user', content: text });
         if (!userMsg) {
             toast('没发出去，请退回重选角色');
@@ -5950,6 +6084,62 @@ function renderWriter() {
                 toggleFloor(hideBtn.getAttribute('data-ap-floor-hide'));
                 return;
             }
+            /*
+             * 剧情建议卡：点一条 = 替我把这句话发出去。
+             *
+             * ── 为什么必须走委托 ──
+             * 和上面的 ‹ ›、现实时钟卡同理：卡片所在楼层每次都会随
+             * patchStoryBody() 重建 innerHTML，直接绑在 button 上的监听器
+             * 会一起消失，表现为「按钮在、点了没反应」。
+             *
+             * ── 为什么只认末尾楼层 ──
+             * 建议代表「接下来可以怎么做」，只在剧情推进到那儿时才成立。
+             * 历史楼层上点它 = 把一句话插到旧剧情中间，会把时间线截断，
+             * 后面那些楼层全部变得没有来处。
+             *
+             * 不过这不代表「历史楼层就不能用」：用户删掉后面楼层后，
+             * 那一层自然又成为末尾，按钮随之恢复可用 ——
+             * 这正好符合「后悔了，退回去重选一个走向」的用法，
+             * 不需要额外记什么状态，位置本身就是判据。
+             */
+            var choiceBtn = e.target && e.target.closest ? e.target.closest('[data-mi-choice]') : null;
+            if (choiceBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                var engNow = apEngine();
+                if (engNow && typeof engNow.isBusy === 'function' && engNow.isBusy(ui.chatId, ui.sessionId)) {
+                    toast('等上一镜结束再说');
+                    return;
+                }
+                if (!ui.chatId || !ui.sessionId) return;
+
+                var choiceText = String(choiceBtn.getAttribute('data-mi-choice') || '').trim();
+                if (!choiceText) return;
+
+                var sessNow = apStore().getSession(ui.chatId, ui.sessionId);
+                var liveMsgs = ((sessNow && sessNow.messages) || []).filter(function (m) {
+                    return m && !m.deleted && String(m.content || '').trim();
+                });
+                var lastMsg = liveMsgs.length ? liveMsgs[liveMsgs.length - 1] : null;
+                /*
+                 * 判断「这个按钮属于末尾那一层」：从按钮往上找到它所在的
+                 * 楼层容器，取其 data-ap-msg-id，与末尾楼层比对。
+                 * 用容器 id 判断而不是比较文本，是因为同一句话可能出现在多层。
+                 */
+                var floorEl = choiceBtn.closest ? choiceBtn.closest('[data-ap-msg-id]') : null;
+                var floorId = floorEl ? floorEl.getAttribute('data-ap-msg-id') : '';
+                if (!lastMsg || !floorId || floorId !== String(lastMsg.id)) {
+                    toast('这条建议已经过去了，往下聊才作数');
+                    return;
+                }
+
+                var inputEl = $('xw-writer-input');
+                if (!inputEl) return;
+                inputEl.value = choiceText;
+                sendMessage();
+                return;
+            }
             var brBtn = e.target && e.target.closest ? e.target.closest('[data-ap-floor-branch]') : null;
             if (brBtn) {
                 e.stopPropagation();
@@ -6573,6 +6763,18 @@ function renderWriter() {
         },
         __testStoryHasContent: function () {
             return storyHasContent();
+        },
+        /*
+         * 测试专用后门：直连候选翻看。
+         *
+         * 同 __testRegenFloor 的理由 —— ‹ › 键要先渲染出候选条、
+         * 再点 DOM 才能触发，而单测「翻看会不会把记忆标记切过去」
+         * 时不必搭一整套线下聊天上下文。这里透出内部函数，
+         * 让测试走的就是用户点 ‹ 的那条代码路径（applyOfflineSwipe），
+         * 而不是测试自己再写一份 updateMessage。
+         */
+        __testApplySwipe: function (msgId, delta) {
+            applyOfflineSwipe(String(msgId || ''), Number(delta) || 0);
         }
     };
 })(window);

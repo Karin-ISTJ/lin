@@ -73,13 +73,27 @@
      *
      * 抽成函数是因为「重回」和「楼层右下角 ›」两条路径都要用到，
      * 上限规则必须只有一份实现 —— 否则改了一处、另一处会漂。
+     *
+     * @returns {{list: string[], keepIdx: number[]}}
+     *   list    —— 裁剪后的候选表
+     *   keepIdx —— 每个保留项在**入参数组**里的原下标，末尾额外补一个
+     *              新追加项的下标（即入参长度）。调用方用它把**平行的**
+     *              数组（如各候选的记忆标记 swipeMtRaw）裁成同一形状，
+     *              不必把裁剪规则抄第二遍 —— 抄了就会漂。
      */
     function pushSwipeCandidate(prevSwipes, content) {
-        var list = Array.isArray(prevSwipes) ? prevSwipes.slice() : [];
+        var src = Array.isArray(prevSwipes) ? prevSwipes.slice() : [];
+        var list = src.slice();
         list.push(String(content || ''));
+        /* 保留项的原下标表；末尾补上「新追加项」的下标 = src.length */
+        var keepIdx = [];
+        var i;
+        for (i = 0; i < src.length; i++) keepIdx.push(i);
+        keepIdx.push(src.length);
         /* 条数上限：先粗筛一道，避免下面那个循环在极端数据上跑太久 */
         if (list.length > SWIPE_MAX) {
             list = [list[0]].concat(list.slice(-(SWIPE_MAX - 1)));
+            keepIdx = [keepIdx[0]].concat(keepIdx.slice(-(SWIPE_MAX - 1)));
         }
         /*
          * 字符总量上限：从**中间**开始丢，保住头部锚点与尾部新候选。
@@ -87,14 +101,27 @@
          * 用户会以为「刷出来的候选被吃了」，比存储超限更难理解。
          */
         var totalChars = 0;
-        var i;
         for (i = 0; i < list.length; i++) totalChars += String(list[i] || '').length;
         while (list.length > 2 && totalChars > SWIPE_CHAR_LIMIT) {
             var dropIdx = 1;
             totalChars -= String(list[dropIdx] || '').length;
             list.splice(dropIdx, 1);
+            keepIdx.splice(dropIdx, 1);
         }
-        return list;
+        return { list: list, keepIdx: keepIdx };
+    }
+
+    /**
+     * 按候选表的裁剪结果，把平行数组（各候选的记忆标记）裁成同一形状。
+     *
+     * 与 pushSwipeCandidate 配套使用：那边给出 keepIdx，这里照着选。
+     * 长度不足的位置补空串 —— 缺标记比错位安全（错位会写错楼层的记忆）。
+     */
+    function alignSwipeMtRaw(prevMtRaw, keepIdx) {
+        var src = Array.isArray(prevMtRaw) ? prevMtRaw : [];
+        return (Array.isArray(keepIdx) ? keepIdx : []).map(function (i) {
+            return String(src[i] == null ? '' : src[i]);
+        });
     }
 
     function eng() {
@@ -2102,6 +2129,77 @@
         return s.replace(/\n{3,}/g, '\n\n').trim();
     }
 
+    /*
+     * ══════════════════════════════════════════════════════════════════
+     * 候选「延迟写入」判据 —— 末层还在挑时不落记忆
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * 问题
+     * ────
+     * 线下一条角色楼层可以用右下角 ‹ › 翻出多个候选（不同剧情走向），
+     * 但候选**共用同一个消息 id**（引擎用 replaceTargetId 写回同一层）。
+     * 记忆表的行溯源只记到消息 id 这一层，无法区分候选。
+     *
+     * 于是出现两种错法：
+     *   · 生成候选 B 时，软删会把 A 写的记忆一起回收 —— A 的记忆凭空空了；
+     *   · 用户翻回候选 A，界面回到 A，记忆表却停在 B —— 这就是「串味」。
+     *
+     * 解法（延迟写入）
+     * ────────────────
+     * 候选还悬着（用户没选定）时，**先不写记忆**。
+     * 等用户在某个候选下面继续发消息，那个候选才算被钉住，
+     * 这时才补写它的记忆（见 MiyaMemoryTableApp.commitConfirmedFloor）。
+     *
+     * 为什么判据是「末尾 + 有候选」而不是只看候选
+     * ──────────────────────────────────────────
+     * 单候选的正常生成也走同一个收尾分支。若只看「有候选」就跳过，
+     * 结果会是**所有**线下记忆都不写 —— 那是把功能关掉，不是修 bug。
+     * 只有「末尾那个还在挑的」才该延迟。
+     *
+     * 判不出来时按「是末尾」处理：宁可少写一次（下一轮或确认时补上），
+     * 也不要在两条时间线之间串味。方向是刻意选的。
+     *
+     * @param {object} sess 会话（带 messages 数组）
+     * @param {object} msg  本轮落地的消息（引擎刚写回/新增的那条）
+     * @returns {boolean} true = 应当跳过本轮记忆写入
+     */
+    function shouldDeferMemoryForPendingSwipe(sess, msg) {
+        try {
+            if (!sess || !Array.isArray(sess.messages) || !msg || !msg.id) return false;
+            /*
+             * 只有角色楼层才有候选。用户楼层不该被这条逻辑影响 ——
+             * 用户发言本身就是「已确认」的信号（见 commitConfirmedFloor）。
+             */
+            if (msg.role !== 'assistant') return false;
+            var swipes = Array.isArray(msg.swipes) ? msg.swipes : [];
+            /* 没有候选 = 用户没在挑，照旧写（这是绝大多数生成） */
+            if (swipes.length < 1) return false;
+            /*
+             * 后面还有活着的楼层 → 这一层已经被用户的选择钉住了，
+             * 下面是历史楼层，按老行为正常写。
+             */
+            var rows = sess.messages;
+            var idx = -1;
+            for (var i = rows.length - 1; i >= 0; i--) {
+                if (rows[i] && rows[i].id === msg.id) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0) return true; /* 找不到自己 → 保守按末尾处理 */
+            for (var j = idx + 1; j < rows.length; j++) {
+                var row = rows[j];
+                if (!row || row.deleted) continue;
+                /* 有正文的消息才算「下面的楼层」；空占位行不算 */
+                if (String(row.content || '').trim()) return false;
+            }
+            return true; /* 确认是末尾 → 还在挑 → 延迟 */
+        } catch (e) {
+            /* 判不出来一律按「是末尾」：少写一次可以补，串味补不回来 */
+            return true;
+        }
+    }
+
     function maybeAutoSummary(chatId, sessionId, preset) {
         /*
          * 自动场次纪要已下线：以前每满 N 层自动写一份纪要卡片插进正片，
@@ -2559,11 +2657,31 @@
                         if (teExtract && teExtract.text != null) fullRaw = teExtract.text;
                     } catch (eTeEx) {}
                 }
+                var mtRawForMsg = '';
                 try {
                     var mtEng = global.MiyaMemoryTableEngine;
                     if (mtEng && typeof mtEng.processAssistantReply === 'function') {
-                        var mtRes = mtEng.processAssistantReply(chatId, fullRaw);
+                        /*
+                         * ⚠️ 这一处**只剥离、不落库**（dryRun）。
+                         *
+                         * 这一句原本揽着两件事：
+                         *   1. 剥离 <tableEdit> 标记 —— 必须无条件做，
+                         *      否则标签会顺着 content 写进楼层，下一轮被当历史送回；
+                         *   2. 把表格动作落进记忆表 —— 这一步要看「这一版会不会被选走」。
+                         *
+                         * 早先没分开，于是候选还悬着时（用户还没选定）表格照样落库，
+                         * 「延迟写入」形同虚设 —— 真正把候选版写进记忆表的是这里，
+                         * 而不是收尾的 afterGenerate。
+                         *
+                         * 现在：本处只剥离，并把**原始标记**留在 mtRawForMsg 里
+                         * 随消息一起落库（见 appointment-store 的 normalizeMessage.mtRaw）。
+                         * 落库时机只有两个，二选一：
+                         *   · 用户选定这一版（发消息）→ commitConfirmedFloor
+                         *   · 本来就是终版（无候选/非末尾）→ 收尾时的 afterGenerate
+                         */
+                        var mtRes = mtEng.processAssistantReply(chatId, fullRaw, { dryRun: true });
                         if (mtRes && mtRes.text != null) fullRaw = mtRes.text;
+                        mtRawForMsg = (mtRes && mtRes.mtRaw) || '';
                     }
                 } catch (eMtOff) {}
                 var apiData = completion && completion.data != null ? completion.data : null;
@@ -2583,6 +2701,15 @@
                     msgFields.htmlRaw = finalized.htmlRaw || content;
                 }
                 if (thinking) msgFields.thinking = thinking;
+                /*
+                 * 把「这一版原本要写的记忆」随消息一起落库。
+                 *
+                 * 正文里的 <tableEdit> 已经在前面剥掉了（否则标签会进楼层、
+                 * 下一轮被当历史送回），但候选还悬着时我们故意不落库，
+                 * 等用户选定再补写 —— 补写需要原文，所以留一份在这里。
+                 * 见 appointment-store 的 normalizeMessage.mtRaw。
+                 */
+                if (mtRawForMsg) msgFields.mtRaw = mtRawForMsg;
                 /* 状态栏跟着这条消息一起落库（与线上同构：statusBar.fields / statusBar.tag） */
                 if (finalized.statusBar && finalized.statusBar.fields && finalized.statusBar.fields.length) {
                     msgFields.statusBar = {
@@ -2690,6 +2817,16 @@
                         var keepCand = handlers.keepRegenCandidate === true;
                         var prevSwipes = keepCand && Array.isArray(lastAsst.swipes) ? lastAsst.swipes.slice() : [];
                         /*
+                         * 候选各自的记忆标记（与 prevSwipes 平行）。
+                         *
+                         * 取旧值时用 lastAsst.swipeMtRaw —— 上一轮归档下来
+                         * 各候选的标记；当前正显示那一版（就是 lastAsst 自己）
+                         * 的标记是 lastAsst.mtRaw。
+                         */
+                        var prevSwipesMtRaw = Array.isArray(lastAsst.swipeMtRaw)
+                            ? lastAsst.swipeMtRaw.slice()
+                            : [];
+                        /*
                          * 当前正文是否要补成第一个候选。
                          *
                          * 两个条件缺一不可：
@@ -2703,9 +2840,22 @@
                          * 反过来说，直接调用引擎（不经过 regenerateAssistantFloor）
                          * 的老路径因为没软删，正文仍在、deleted 仍是 false，
                          * 补候选的行为和以前完全一致，不会退化。
+                         *
+                         * ⚠️ 正文与标记必须**在同一个分支里一起补**，
+                         * 不能各写一个 if。
+                         *
+                         * 这不是洁癖：早先正文补一条、标记也补一条，标记那句照抄了
+                         * 正文的条件（含 `!prevSwipes.length`）—— 可正文那句已经先跑过，
+                         * 到标记这一步 prevSwipes.length 早就是 1 了，条件恒假，
+                         * 标记**一次都没补上**。表现出来就是「翻回第 1 版再确认，
+                         * 写进去的却是最新版的记忆」—— 正是这次要修的串味，
+                         * 只是换了个地方。
                          */
                         if (keepCand && !lastAsst.deleted && !prevSwipes.length && lastAsst.content) {
                             prevSwipes.push(String(lastAsst.content));
+                            if (!prevSwipesMtRaw.length) {
+                                prevSwipesMtRaw.push(String(lastAsst.mtRaw || ''));
+                            }
                         }
                         /*
                          * 追加候选并裁剪。
@@ -2725,10 +2875,22 @@
                          * 候选表的产生必须只属于 › 键，刷新键写完就该是干干净净
                          * 的一版（swipes 为空数组，前端不渲染任何候选条）。
                          */
+                        var pushRes;
                         if (keepCand) {
-                            prevSwipes = pushSwipeCandidate(prevSwipes, content);
+                            /*
+                             * 被裁掉的那个候选，它那份记忆标记要跟着一起裁 ——
+                             * 否则标记数组会比候候选表长/错位，翻看时按
+                             * swipeId 取到的就是别的候选的标记（写错记忆）。
+                             */
+                            pushRes = pushSwipeCandidate(prevSwipes, content);
+                            prevSwipes = pushRes.list;
+                            prevSwipesMtRaw = alignSwipeMtRaw(
+                                prevSwipesMtRaw.concat([mtRawForMsg || '']),
+                                pushRes.keepIdx
+                            );
                         } else {
                             prevSwipes = [];
+                            prevSwipesMtRaw = [];
                         }
                         var swipeId = prevSwipes.length ? prevSwipes.length - 1 : 0;
                         msg = aps.updateMessage(chatId, sessionId, lastAsst.id, {
@@ -2737,7 +2899,17 @@
                             renderAsHtml: !!finalized.renderAsHtml,
                             htmlRaw: finalized.renderAsHtml ? (finalized.htmlRaw || content) : '',
                             swipes: prevSwipes,
+                            swipeMtRaw: prevSwipesMtRaw,
                             swipeId: swipeId,
+                            /*
+                             * 覆盖成**本版**的待落库标记。
+                             *
+                             * 必须显式带上（哪怕为空串）：候选表里存的是
+                             * 各版剥离后的正文，翻到哪一版就对应哪一份标记。
+                             * 若这里不传，normalizeMessage 会沿用旧值，
+                             * 于是「翻到 A 却写进 B 的记忆」—— 正是要修的那个串味。
+                             */
+                            mtRaw: mtRawForMsg || '',
                             /*
                              * 必须显式把 deleted 置回 false。
                              *
@@ -2775,7 +2947,24 @@
                 }
                 maybeAutoSummary(chatId, sessionId, preset);
                 var result = { message: msg, lines: lines, raw: fullRaw };
-                if (global.MiyaMemoryTableApp && typeof global.MiyaMemoryTableApp.afterGenerate === 'function') {
+                /*
+                 * 记忆写入的**延迟门**。
+                 *
+                 * 末层还在挑候选（swipes 非空且没被下面的楼层钉住）时先不写，
+                 * 等用户选定后再由 MiyaMemoryTableApp.commitConfirmedFloor 补写。
+                 * 理由与判据见 shouldDeferMemoryForPendingSwipe 的说明。
+                 *
+                 * ⚠️ 只包住 afterGenerate 这一句。
+                 * 上面三行（状态快照 / 状态栏 / 自动总结）都是与候选无关的
+                 * 收尾，一个都不能跟着跳 —— 状态栏跳了就是「状态卡片不更新」，
+                 * 自动总结跳了就是「分镜不沉淀」，都是与本次修复无关的新故障。
+                 */
+                var deferMemory = shouldDeferMemoryForPendingSwipe(sessAfter, msg);
+                if (
+                    !deferMemory &&
+                    global.MiyaMemoryTableApp &&
+                    typeof global.MiyaMemoryTableApp.afterGenerate === 'function'
+                ) {
                     try {
                         global.MiyaMemoryTableApp.afterGenerate({
                             scope: 'offline',

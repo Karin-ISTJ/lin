@@ -159,6 +159,18 @@
                 bmPatch.offlineRollAnchor = Date.now();
                 bmPatch.offlineRollGapMs = (lo + Math.random() * (hi - lo)) * 60000;
             }
+            /*
+             * 每日计数 +1（只在真的发出去之后记）。
+             *
+             * 跨天时从 1 起算，不是从旧值累加 —— 否则昨天发满 3 次，
+             * 今天第一次成功会写成 4，配额被前一天的残留顶掉。
+             */
+            var nowTs = Date.now();
+            var todayKey = localDayKey(nowTs);
+            var curBgForDay = (settings && settings.backgroundMessage) || {};
+            var sameDay = String(curBgForDay.dayKey || '') === todayKey;
+            bmPatch.dayKey = todayKey;
+            bmPatch.dayCount = (sameDay ? clampInt(curBgForDay.dayCount, 0, 100000, 0) : 0) + 1;
         }
         return store.saveChatSettings(chatId, { backgroundMessage: bmPatch });
     }
@@ -176,6 +188,72 @@
         var now = nowMinutes();
         if (qs < qe) return now >= qs && now < qe;
         return now >= qs || now < qe;
+    }
+
+    /*
+     * 用户是不是正在等/正在写？
+     *
+     * 为什么需要这个门
+     * ────────────────
+     * 主动消息的时机由我们决定，但**用户此刻在做什么**只有界面知道。
+     * 没有这道门时会出现这种情况：用户正在输入框里打一段长回复，
+     * 角色突然插一条主动消息进来 —— 轻则打断思路，重则那次 render
+     * 把输入框重建掉，草稿受影响。
+     *
+     * 判定刻意做得**宽**（宁可少发一次，也别在人家打字时插嘴）：
+     *   · 焦点在任何可输入元素里 + 里面有内容 → 视为「正在写」
+     *   · 焦点在输入框里但内容是空的     → 不算（人只是点了一下）
+     *   · 任何元素带 .is-typing 之类标记 → 也算
+     *
+     * 不看具体 id：输入框有 xw-writer-input / qq-room-input 等多个，
+     * 按 id 列举迟早漏。按「标签 + contenteditable」判更稳。
+     */
+    function isUserComposing() {
+        try {
+            var el = document.activeElement;
+            if (!el) return false;
+            if (el.getAttribute && el.getAttribute('data-user-typing') === '1') return true;
+            var tag = String(el.tagName || '').toLowerCase();
+            var editable = el.isContentEditable === true;
+            if (tag !== 'textarea' && tag !== 'input' && !editable) return false;
+            /*
+             * 输入框里要有实际内容才算「在写」。
+             * 只看焦点会把「刚点了一下输入框又去翻别处」也当成在写，
+             * 那种情况没必要压制主动消息。
+             */
+            var v = editable ? String(el.textContent || '') : String(el.value || '');
+            return v.trim().length > 0;
+        } catch (e) {
+            /* 判不出来一律当作「没在写」，不能因为查询失败就永久不发 */
+            return false;
+        }
+    }
+
+    /** 本地日期键 YYYY-MM-DD（按用户所在时区，不用 UTC）。 */
+    function localDayKey(ts) {
+        var d = ts ? new Date(ts) : new Date();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + m + '-' + day;
+    }
+
+    /*
+     * 每日主动上限 —— 跨天自动归零。
+     *
+     * 为什么单靠「间隔」不够
+     * ──────────────────────
+     * 现有约束是「两次之间至少隔 N 分钟」+「静音时段」。
+     * 两条都满足时，理论上可以一整天不间断地主动发。
+     * 用户把页面挂着不管，回来就是满屏「在吗」。
+     *
+     * 返回 true 表示「今天还能发」。
+     */
+    function withinDailyCap(bg, now) {
+        var cap = clampInt(bg && bg.maxPerDay, 0, 200, 0);
+        if (!cap) return true; /* 0 = 不限，保持旧行为 */
+        var today = localDayKey(now);
+        if (String((bg && bg.dayKey) || '') !== today) return true; /* 跨天了，计数作废 */
+        return clampInt(bg && bg.dayCount, 0, 100000, 0) < cap;
     }
 
     function buildRecentAssistantDigest(store, chatId, limit) {
@@ -607,6 +685,16 @@
             if (options.isOffline && !bg.offlineEnabled) return Promise.resolve();
         }
         if (isBackgroundSuppressed(bg, Date.now())) return Promise.resolve();
+        /*
+         * 礼貌门：用户正在输入框里写字时，这轮跳过。
+         *
+         * 注意是「跳过」不是「失败」—— 直接 resolve，不写 lastPushFailAt，
+         * 免得这次压制被当成发送失败、把冷却期也一起拉长。
+         * 下一次 tick 会重新评估，人写完就自然恢复。
+         */
+        if (isUserComposing()) return Promise.resolve();
+        /* 礼貌门：今天已经主动够次数了（0 = 不限，见 withinDailyCap）。 */
+        if (!withinDailyCap(bg, Date.now())) return Promise.resolve();
         var scheduledAt = 0;
         var scheduledAnonymous = false;
         var lead;

@@ -435,11 +435,52 @@
                 out.swipeId = Number.isFinite(sid)
                     ? Math.max(0, Math.min(out.swipes.length - 1, Math.floor(sid)))
                     : out.swipes.length - 1;
+                /*
+                 * 候选各自的「待落库记忆标记」，与 swipes 一一对齐。
+                 *
+                 * 候选表存的是各版剥离后的正文，剥离后就再也解析不出
+                 * 「这一版原本要写什么记忆」（见下面 mtRaw 的说明）。
+                 * 用户可能翻 ‹ 回到第 1 版再确认 —— 那时要写的是第 1 版的
+                 * 记忆，不是最新那版的。所以标记必须**按候选分别保存**，
+                 * 只留一份「当前版」的标记是不够的。
+                 *
+                 * 长度以 swipes 为准：短了补空串、长了截断，
+                 * 保证 swipeMtRaw[swipeId] 恒等于当前显示那一版的标记。
+                 */
+                if (Array.isArray(row.swipeMtRaw)) {
+                    out.swipeMtRaw = out.swipes.map(function (_x, i) {
+                        return String(row.swipeMtRaw[i] == null ? '' : row.swipeMtRaw[i]);
+                    });
+                }
             } else {
                 /* 显式清空：候选表归零，当前版就是唯一一版（swipeId 0） */
                 out.swipes = [];
                 out.swipeId = 0;
+                out.swipeMtRaw = [];
             }
+        }
+        /*
+         * 记忆表待落库的原始标记（线下候选专用）。
+         *
+         * 为什么需要这个字段
+         * ──────────────────
+         * 线下生成时，正文里的 <tableEdit> 必须在**解析正文之前**就剥掉，
+         * 否则标签会顺着 content 写进楼层，下一轮又被当历史送回，模型照着模仿。
+         * 但剥离之后就再也解析不出「这一版原本要写什么记忆」了。
+         *
+         * 而候选还悬着时我们**故意不落库**（见引擎的
+         * shouldDeferMemoryForPendingSwipe）—— 等用户选定那一版再补写。
+         * 补写总得知道原文，所以剥离时顺手把原始标记留在这里。
+         *
+         * 这个字段记的是**当前显示那一版**的标记（随 swipeId 切换而更新）；
+         * 各候选各自的标记在 swipeMtRaw 里按序号并存。
+         *
+         * 只在「有标记」时才写这个字段，普通楼层不会多出一个空键。
+         * 一旦落库成功（commitConfirmedFloor），调用方会传 mtRaw: ''
+         * 把它清掉，避免同一段标记被重复应用。
+         */
+        if (row.mtRaw && String(row.mtRaw).trim()) {
+            out.mtRaw = String(row.mtRaw);
         }
         return out;
     }
@@ -2528,11 +2569,31 @@
             var text = String(row.content || '').trim();
             var swipes = Array.isArray(row.swipes) ? row.swipes.slice() : [];
             /*
+             * 记忆标记必须与候选表**同步归档**。
+             *
+             * 候选表里的每一版都对应一段「它原本要写的记忆」
+             * （见 normalizeMessage.swipeMtRaw）。这里把当前正文补进
+             * 候选表第 0 位，它的标记也必须跟着补 —— 否则标记数组
+             * 与候选表错位，翻回第 1 版确认时补写的会是别的版本的记忆。
+             *
+             * ⚠️ 为什么补在这里而不是让引擎补：
+             *   本函数会**先于**引擎把候选表填好，于是引擎那边
+             *   「候选表还空着才补」的判断就不会成立，标记也就跟着漏了。
+             *   归档动作发生在哪，归档就要在哪做全 —— 分两处就会漏一处。
+             */
+            var swipeMtRaw = Array.isArray(row.swipeMtRaw) ? row.swipeMtRaw.slice() : [];
+            /*
              * 锚点只在「候选表还是空的、且当前有正文」时补一次。
              * 已经有候选说明历次刷新都归档过了，再补会把自己重复塞进去。
              */
-            if (!swipes.length && text) swipes.push(text);
-            return store.deleteMessage(chatId, sessionId, messageId, { swipes: swipes });
+            if (!swipes.length && text) {
+                swipes.push(text);
+                if (!swipeMtRaw.length) swipeMtRaw.push(String(row.mtRaw || ''));
+            }
+            return store.deleteMessage(chatId, sessionId, messageId, {
+                swipes: swipes,
+                swipeMtRaw: swipeMtRaw
+            });
         },
         /**
          * 重答次数 +1（该楼层被刷新/重回的累计次数）。

@@ -224,6 +224,8 @@
           '<input type="time" class="miya-ct-input" id="miya-ct-def-bg-quiet-end" step="60" style="width:112px;">' +
         '</div>') +
         toggleRow('miya-ct-def-bg-quiet-en', '启用静默', '该时段内角色不会主动发消息') +
+        fieldRow('每日上限', '<input type="number" class="miya-ct-input" id="miya-ct-def-bg-max-day" min="0" max="200" value="0">') +
+        '<p class="miya-ct-row__hint" style="margin:-4px 0 0;">一天最多主动找你几次；0 = 不限。按本地日期跨天自动归零。静默时段只限制「几点发」，这个才限制「一天几条」。</p>' +
       '</div>' +
 
       /*
@@ -296,6 +298,7 @@
       setToggle('miya-ct-def-bg-quiet-en', bg.quietEnabled);
       setVal('miya-ct-def-bg-quiet-start', minToTimeStr(bg.quietStartMin != null ? bg.quietStartMin : 1380));
       setVal('miya-ct-def-bg-quiet-end', minToTimeStr(bg.quietEndMin != null ? bg.quietEndMin : 420));
+      setVal('miya-ct-def-bg-max-day', bg.maxPerDay != null ? bg.maxPerDay : 0);
       fillStatusBarForm(bg);
     });
   }
@@ -431,6 +434,8 @@
     if (!mod) return Promise.resolve(false);
     var qStart = timeStrToMin(readVal('miya-ct-def-bg-quiet-start'));
     var qEnd = timeStrToMin(readVal('miya-ct-def-bg-quiet-end'));
+    /* readNum 的默认值语义是「读不到就用 0」，正好等于「不限」，符合字段约定 */
+    var maxDay = readNum('miya-ct-def-bg-max-day', 0);
     var patch = {
       memoryCount: readNum('miya-ct-def-memory-count', 80),
       summaryTrigger: readNum('miya-ct-def-summary-trigger', 0),
@@ -440,7 +445,8 @@
         activeIntervalMin: readNum('miya-ct-def-bg-active-min', 30),
         quietEnabled: isToggleOn('miya-ct-def-bg-quiet-en'),
         quietStartMin: Number.isFinite(qStart) ? qStart : 1380,
-        quietEndMin: Number.isFinite(qEnd) ? qEnd : 420
+        quietEndMin: Number.isFinite(qEnd) ? qEnd : 420,
+        maxPerDay: Math.min(200, Math.max(0, maxDay))
       }
     };
     return mod.saveGlobal(patch).then(function () {

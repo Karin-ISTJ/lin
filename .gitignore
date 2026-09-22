@@ -1,0 +1,13 @@
+# ── 依赖 ──
+node_modules/
+package-lock.json
+
+# ── 测试中间产物 ──
+.testruns/
+__pycache__/
+*.pyc
+
+# ── 编辑器 / 系统 ──
+.DS_Store
+.vscode/
+.idea/

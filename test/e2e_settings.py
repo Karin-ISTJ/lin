@@ -7,10 +7,12 @@
 3. 改值 → 保存 → 重开 → 值是否留住
 4. lifeLike 与定时主动消息的互斥反馈
 """
-import asyncio, json
+import asyncio, json, os
 from playwright.async_api import async_playwright
 
-BASE = "http://localhost:8098/index.html"
+# 允许用 MIYA_BASE 指定服务地址（同 e2e_defaults.py 的理由：
+# 写死端口就没法被 test/run-all.py 统一调度）。
+BASE = os.environ.get("MIYA_BASE", "http://localhost:8098").rstrip("/") + "/index.html"
 UA = ("Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 VIEWPORT = {"width": 412, "height": 915}

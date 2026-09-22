@@ -1,0 +1,616 @@
+{
+  "files": {
+    "img/miya-icon.png": {
+      "hash": "af9552bdfea5",
+      "version": 53
+    },
+    "img/miya-icon-180.png": {
+      "hash": "dfee3fa865ac",
+      "version": 53
+    },
+    "css/style.css": {
+      "hash": "9d504baebf4d",
+      "version": 46
+    },
+    "css/miya-desk-p1-weekcal.css": {
+      "hash": "d1e4b5cc98bd",
+      "version": 13
+    },
+    "css/miya-desk-custom.css": {
+      "hash": "966115e29093",
+      "version": 54
+    },
+    "css/miya-desk-wg-4x1.css": {
+      "hash": "72ad52adb28e",
+      "version": 10
+    },
+    "css/miya-desk-wg-4x2.css": {
+      "hash": "d62bce47aee7",
+      "version": 14
+    },
+    "css/miya-desk-wg-4x3.css": {
+      "hash": "6ab224b1e624",
+      "version": 12
+    },
+    "css/miya-desk-wg-4x4.css": {
+      "hash": "f2cc02173237",
+      "version": 4
+    },
+    "css/miya-desk-wg-2x2.css": {
+      "hash": "a185569f76c6",
+      "version": 11
+    },
+    "css/miya-desk-wg-2x1.css": {
+      "hash": "cd655cf7247c",
+      "version": 6
+    },
+    "css/miya-desk-wg-custom.css": {
+      "hash": "d685e0d44598",
+      "version": 5
+    },
+    "css/miya-apps.css": {
+      "hash": "eb3b4547c967",
+      "version": 51
+    },
+    "css/miya-st-prompt-presets.css": {
+      "hash": "977a5c07e886",
+      "version": 29
+    },
+    "css/miya-vault.css": {
+      "hash": "e2a5cbb88a35",
+      "version": 6
+    },
+    "css/miya-settings.css": {
+      "hash": "de9b04234601",
+      "version": 37
+    },
+    "css/miya-worldbook.css": {
+      "hash": "4f3f3f5cea4a",
+      "version": 15
+    },
+    "css/miya-memory-table.css": {
+      "hash": "295c6a7a0b24",
+      "version": 3
+    },
+    "css/miya-contacts.css": {
+      "hash": "02f293a1b3ee",
+      "version": 7
+    },
+    "css/miya-chat.css": {
+      "hash": "d0222c0b4851",
+      "version": 63
+    },
+    "css/miya-chat-group.css": {
+      "hash": "42fe0bbfcfbd",
+      "version": 7
+    },
+    "css/miya-chat-group-redpacket.css": {
+      "hash": "032284a047ac",
+      "version": 6
+    },
+    "css/miya-chat-single-redpacket.css": {
+      "hash": "33c480d350cb",
+      "version": 10
+    },
+    "css/miya-chat-statusbar.css": {
+      "hash": "19ce6e357a8d",
+      "version": 3
+    },
+    "css/miya-chat-ins.css": {
+      "hash": "e7626108c441",
+      "version": 56
+    },
+    "css/miya-chat-app-beautify.css": {
+      "hash": "b82847d25c6b",
+      "version": 2
+    },
+    "css/miya-chat-bubble-beautify.css": {
+      "hash": "746424b0fc8d",
+      "version": 5
+    },
+    "css/miya-icon-tint.css": {
+      "hash": "2d68b11a6719",
+      "version": 4
+    },
+    "css/miya-chat-settings.css": {
+      "hash": "ceac5d049cba",
+      "version": 52
+    },
+    "css/miya-chat-album.css": {
+      "hash": "f4dde1c8940d",
+      "version": 8
+    },
+    "css/miya-chat-me-ins.css": {
+      "hash": "f2f8613a7eff",
+      "version": 11
+    },
+    "css/miya-offline-card.css": {
+      "hash": "1b7f1423ceaf",
+      "version": 7
+    },
+    "css/miya-offline.css": {
+      "hash": "01a878466acd",
+      "version": 78
+    },
+    "css/miya-offline-themes.css": {
+      "hash": "22f1aa223ba3",
+      "version": 46
+    },
+    "css/miya-chat-call.css": {
+      "hash": "912f191dc641",
+      "version": 3
+    },
+    "css/miya-chat-notify.css": {
+      "hash": "1b05f586b989",
+      "version": 7
+    },
+    "css/miya-thermal.css": {
+      "hash": "2e363124cf25",
+      "version": 16
+    },
+    "css/miya-ios-no-blue.css": {
+      "hash": "7082df4e1c62",
+      "version": 3
+    },
+    "css/miya-lockscreen.css": {
+      "hash": "53e467d2da47",
+      "version": 15
+    },
+    "js2/miya-storage.js": {
+      "hash": "227481addedb",
+      "version": 18
+    },
+    "js2/miya-toast.js": {
+      "hash": "5a6d940b9a74",
+      "version": 2
+    },
+    "js2/miya-api-config.js": {
+      "hash": "f1597658fe99",
+      "version": 102
+    },
+    "js1/miya-diagnostics.js": {
+      "hash": "d0db48b7e475",
+      "version": 2
+    },
+    "js2/miya-backup.js": {
+      "hash": "2951752cf2df",
+      "version": 5
+    },
+    "js2/miya-perf.js": {
+      "hash": "bad89570777b",
+      "version": 4
+    },
+    "js2/miya-token.js": {
+      "hash": "a38ba3c67122",
+      "version": 2
+    },
+    "js2/miya-lazy-boot.js": {
+      "hash": "696603210f7a",
+      "version": 32
+    },
+    "js1/miya-bg-timer.js": {
+      "hash": "0826dfc9b6a3",
+      "version": 2
+    },
+    "js2/miya-zip-store.js": {
+      "hash": "a28ee12a124f",
+      "version": 5
+    },
+    "js2/miya-dialog.js": {
+      "hash": "d581371213a6",
+      "version": 5
+    },
+    "js2/miya-theme.js": {
+      "hash": "22c08b1b0b11",
+      "version": 38
+    },
+    "js2/miya-desk-custom-widget-templates.js": {
+      "hash": "706c7076d9ae",
+      "version": 7
+    },
+    "js2/miya-desk-custom.js": {
+      "hash": "4e6c45394fdf",
+      "version": 63
+    },
+    "js2/miya-lockscreen.js": {
+      "hash": "f0e9865e53e6",
+      "version": 15
+    },
+    "js1/miya-beautify-app.js": {
+      "hash": "56ac46226bfd",
+      "version": 51
+    },
+    "js2/miya-msg-sound.js": {
+      "hash": "3f226435faaf",
+      "version": 5
+    },
+    "js2/miya-image-gen-dict.js": {
+      "hash": "093e1c033f0f",
+      "version": 2
+    },
+    "js2/miya-image-gen.js": {
+      "hash": "c7e6fc6798b9",
+      "version": 16
+    },
+    "js2/miya-imagegen-app.js": {
+      "hash": "2e802020b449",
+      "version": 2
+    },
+    "js2/miya-settings-app.js": {
+      "hash": "ab6b8f32ab51",
+      "version": 101
+    },
+    "js1/miya-contacts-store.js": {
+      "hash": "dbb813db7aaf",
+      "version": 4
+    },
+    "js1/miya-contacts-relationship-store.js": {
+      "hash": "d106d3a4db0c",
+      "version": 3
+    },
+    "js2/miya-gbk-decode.js": {
+      "hash": "d92d13444bd2",
+      "version": 2
+    },
+    "js2/miya-worldbook-doc-import.js": {
+      "hash": "e65cecdc5809",
+      "version": 6
+    },
+    "js1/miya-beautify-doc-import.js": {
+      "hash": "a82ec4fb320c",
+      "version": 4
+    },
+    "js2/miya-tavern-card-import.js": {
+      "hash": "f3c86733bb40",
+      "version": 6
+    },
+    "js1/miya-contacts-app.js": {
+      "hash": "683e8d46fcc8",
+      "version": 13
+    },
+    "js2/miya-worldbook-st.js": {
+      "hash": "ab9f92c58ac0",
+      "version": 13
+    },
+    "js2/miya-worldbook-store.js": {
+      "hash": "06a62e315c03",
+      "version": 20
+    },
+    "js2/miya-worldbook-matcher.js": {
+      "hash": "d00c6452f1a3",
+      "version": 9
+    },
+    "js2/miya-worldbook-prompt.js": {
+      "hash": "331669bc2eb1",
+      "version": 21
+    },
+    "js2/miya-worldbook-app.js": {
+      "hash": "a0f247a060b7",
+      "version": 34
+    },
+    "js1/miya-chat-global-settings.js": {
+      "hash": "20eed927cd8a",
+      "version": 10
+    },
+    "js1/miya-chat-store.js": {
+      "hash": "7a808c0580d5",
+      "version": 102
+    },
+    "js1/miya-chat-dynamic-avatar.js": {
+      "hash": "4a99ad855db9",
+      "version": 5
+    },
+    "js1/miya-chat-emoji-url.js": {
+      "hash": "a508d0f388f7",
+      "version": 2
+    },
+    "js1/miya-chat-contacts-sync.js": {
+      "hash": "84c73bbabc2c",
+      "version": 4
+    },
+    "js1/miya-chat-awareness.js": {
+      "hash": "f1c0ee0ae0d8",
+      "version": 15
+    },
+    "js1/miya-chat-online-format.js": {
+      "hash": "b4fbf34db522",
+      "version": 63
+    },
+    "js1/miya-chat-summary.js": {
+      "hash": "1e99ebc64e98",
+      "version": 10
+    },
+    "js1/miya-chat-memory-extract.js": {
+      "hash": "6ba0fdedb082",
+      "version": 5
+    },
+    "js1/miya-chat-translate.js": {
+      "hash": "4d7aa868ada5",
+      "version": 11
+    },
+    "js1/miya-chat-image.js": {
+      "hash": "1fb5e5cc38b0",
+      "version": 5
+    },
+    "js1/miya-chat-album.js": {
+      "hash": "4cf19f5b6619",
+      "version": 13
+    },
+    "js1/miya-chat-moments.js": {
+      "hash": "0509ec5212f7",
+      "version": 18
+    },
+    "js1/miya-chat-wallet.js": {
+      "hash": "3c03c21e8e11",
+      "version": 4
+    },
+    "js1/miya-chat-call-sound.js": {
+      "hash": "0558906989e0",
+      "version": 4
+    },
+    "js1/miya-chat-calls.js": {
+      "hash": "2c38f0870a92",
+      "version": 5
+    },
+    "js1/miya-chat-html.js": {
+      "hash": "300f2438e125",
+      "version": 5
+    },
+    "js2/miya-generation-lifecycle.js": {
+      "hash": "e9fbef2fa191",
+      "version": 3
+    },
+    "js2/miya-memory-table-store.js": {
+      "hash": "dfe540a6d2f2",
+      "version": 7
+    },
+    "js2/miya-memory-table-engine.js": {
+      "hash": "0c4cfaa596e6",
+      "version": 8
+    },
+    "js2/miya-memory-table-app.js": {
+      "hash": "557014507d8c",
+      "version": 9
+    },
+    "js1/miya-chat-time-events.js": {
+      "hash": "d373e5431a86",
+      "version": 4
+    },
+    "js1/miya-chat-statusbar.js": {
+      "hash": "f2e0a46ec862",
+      "version": 6
+    },
+    "js1/miya-chat-farm.js": {
+      "hash": "42793c7df0d8",
+      "version": 7
+    },
+    "js1/miya-chat-engine.js": {
+      "hash": "1124078fddad",
+      "version": 112
+    },
+    "js1/miya-chat-group.js": {
+      "hash": "9a7b5df1a589",
+      "version": 13
+    },
+    "js1/miya-chat-group-redpacket.js": {
+      "hash": "fb0ca4271d7e",
+      "version": 10
+    },
+    "js1/miya-chat-single-redpacket.js": {
+      "hash": "5542a0e39141",
+      "version": 9
+    },
+    "js1/miya-chat-wallpaper-picker.js": {
+      "hash": "4e69b2dc415d",
+      "version": 4
+    },
+    "js1/miya-chat-album-picker.js": {
+      "hash": "1c8f50dabd45",
+      "version": 2
+    },
+    "js1/miya-chat-group-ledger.js": {
+      "hash": "02713b5e096e",
+      "version": 3
+    },
+    "js1/miya-chat-group-settings.js": {
+      "hash": "c1052c4cddc8",
+      "version": 23
+    },
+    "js1/miya-appointment-store.js": {
+      "hash": "cf581827e905",
+      "version": 59
+    },
+    "js2/miya-offline-source-ref.js": {
+      "hash": "d403ce17a91d",
+      "version": 10
+    },
+    "js2/miya-offline-beautify.js": {
+      "hash": "f42a11b66d97",
+      "version": 20
+    },
+    "js2/miya-offline-text-decor.js": {
+      "hash": "d861f8161e84",
+      "version": 2
+    },
+    "js1/miya-appointment-memory.js": {
+      "hash": "f05a4fdc5213",
+      "version": 18
+    },
+    "js1/miya-appointment-engine.js": {
+      "hash": "90971178d50c",
+      "version": 67
+    },
+    "js1/miya-appointment-app.js": {
+      "hash": "0f8c44ea8ea5",
+      "version": 156
+    },
+    "js1/miya-chat-heartvoice-templates.js": {
+      "hash": "fa611ce707f9",
+      "version": 17
+    },
+    "js1/miya-chat-heartvoice.js": {
+      "hash": "2a6c15f89365",
+      "version": 12
+    },
+    "js2/miya-offline-card.js": {
+      "hash": "2ebf6ab10a06",
+      "version": 11
+    },
+    "js2/miya-offline-status.js": {
+      "hash": "9c01b0880904",
+      "version": 11
+    },
+    "js1/miya-chat-notify.js": {
+      "hash": "a7ea8e0fec7a",
+      "version": 15
+    },
+    "js1/miya-chat-lifelike.js": {
+      "hash": "3ae709b1f56e",
+      "version": 11
+    },
+    "js1/miya-chat-background.js": {
+      "hash": "bb59e94acf67",
+      "version": 21
+    },
+    "js1/miya-beautify-source-ref.js": {
+      "hash": "19f05e95ae2d",
+      "version": 4
+    },
+    "js1/miya-chat-beautify.js": {
+      "hash": "cdf71bbd02e6",
+      "version": 24
+    },
+    "js1/miya-chat-app-beautify-source-ref.js": {
+      "hash": "f49d12177359",
+      "version": 5
+    },
+    "js1/miya-chat-app-beautify.js": {
+      "hash": "c52f9201ba84",
+      "version": 7
+    },
+    "js1/miya-chat-bubble-beautify.js": {
+      "hash": "86285305d275",
+      "version": 9
+    },
+    "js2/miya-icon-tint.js": {
+      "hash": "7356923a26c9",
+      "version": 5
+    },
+    "js1/miya-chat-me.js": {
+      "hash": "99aa8b1a9d0b",
+      "version": 32
+    },
+    "js1/miya-chat-contact-settings.js": {
+      "hash": "759a2ba7e3e9",
+      "version": 97
+    },
+    "js1/miya-chat-voice-tts.js": {
+      "hash": "183bf12fe8a0",
+      "version": 5
+    },
+    "js1/miya-chat-voice-record.js": {
+      "hash": "0cadbc18f2b8",
+      "version": 3
+    },
+    "js1/miya-chat-order-ui.js": {
+      "hash": "a0a57250a869",
+      "version": 5
+    },
+    "js1/miya-chat-love-poem.js": {
+      "hash": "80607d978037",
+      "version": 2
+    },
+    "js1/miya-chat-backups.js": {
+      "hash": "f8751e4149fd",
+      "version": 3
+    },
+    "js1/miya-chat-room.js": {
+      "hash": "435bddf24e1d",
+      "version": 117
+    },
+    "js1/miya-chat-settings-panel.js": {
+      "hash": "fcfa369ea002",
+      "version": 21
+    },
+    "js1/miya-chat-ui-theme.js": {
+      "hash": "6aa9cd001fc7",
+      "version": 6
+    },
+    "js1/miya-chat-app.js": {
+      "hash": "5e1f7b369c5a",
+      "version": 54
+    },
+    "js2/miya-weather-store.js": {
+      "hash": "e1d0c83d4033",
+      "version": 5
+    },
+    "js2/miya-weather-bridge.js": {
+      "hash": "37aa65dad4fa",
+      "version": 10
+    },
+    "js2/miya-itinerary-store.js": {
+      "hash": "649b91dacbf7",
+      "version": 9
+    },
+    "js2/miya-itinerary-bridge.js": {
+      "hash": "97cb30a1bcb3",
+      "version": 25
+    },
+    "js2/miya-diary-store.js": {
+      "hash": "9ff3cfefc55b",
+      "version": 3
+    },
+    "js2/miya-diary-bridge.js": {
+      "hash": "39e52b4e6e32",
+      "version": 5
+    },
+    "js2/miya-diary-peek.js": {
+      "hash": "fbd3e2a6c86b",
+      "version": 2
+    },
+    "js1/miya-couple-store.js": {
+      "hash": "865d2ec74268",
+      "version": 11
+    },
+    "js1/miya-couple-bridge.js": {
+      "hash": "537b132b510f",
+      "version": 6
+    },
+    "js1/miya-couple-checkin-bridge.js": {
+      "hash": "c008a7ca324c",
+      "version": 8
+    },
+    "js1/miya-couple-timeline-bridge.js": {
+      "hash": "8b6b0a561704",
+      "version": 4
+    },
+    "js1/miya-couple-board-bridge.js": {
+      "hash": "c000ed176d37",
+      "version": 2
+    },
+    "js1/miya-couple-invite.js": {
+      "hash": "7e8f6f9d55cd",
+      "version": 3
+    },
+    "js2/miya-mode-switch.js": {
+      "hash": "55c5f970c95c",
+      "version": 5
+    },
+    "js2/miya-st-prompt-presets-store.js": {
+      "hash": "103b36a58af0",
+      "version": 34
+    },
+    "js2/miya-st-prompt-presets-app.js": {
+      "hash": "48ead1daf88d",
+      "version": 34
+    },
+    "js1/app.js": {
+      "hash": "f8f216aaf328",
+      "version": 98
+    }
+  },
+  "sw": {
+    "cache": "miya-v296-karin",
+    "build": "sw-53"
+  }
+}

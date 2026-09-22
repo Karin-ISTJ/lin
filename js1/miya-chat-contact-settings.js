@@ -423,7 +423,10 @@
         '<span class="mi-inline-nums__sep">至</span>' +
         '<input type="time" class="ins-text-input" data-mq-set-bg-quiet-end step="60" value="' + esc(minToTimeStr(bg.quietEndMin != null ? bg.quietEndMin : 420)) + '">' +
       '</div>') +
-      toggleRow('mq-set-bg-quiet-en', '启用静默', '该时段内不主动发消息', !!bg.quietEnabled)
+      toggleRow('mq-set-bg-quiet-en', '启用静默', '该时段内不主动发消息', !!bg.quietEnabled) +
+      '<p class="st-form-hint">静默只限制「几点发」，不限制「一天发几条」。挂机一整天仍可能被连着找。</p>' +
+      fieldBlock('每日上限', '一天最多主动找你几次；0 = 不限。按本地日期跨天自动归零，与 AB 两类的间隔限制叠加生效',
+        '<input type="number" class="ins-text-input" data-mq-set-bg-max-day min="0" max="200" value="' + esc(bg.maxPerDay != null ? bg.maxPerDay : 0) + '">')
     )) +
     subBlock('角色状态栏', '角色每轮回复末尾输出的状态字段，渲染成气泡下方的卡片', renderStatusBarSection(bg));
   }
@@ -481,12 +484,19 @@
     var qEnd = timeStrToMin((root.querySelector('[data-mq-set-bg-quiet-end]') || {}).value);
     var prevBg = (s && s.backgroundMessage) || {};
     var lifeLikeOn = isToggleOn(root, '#mq-set-lifelike');
+    /*
+     * 每日上限：非数字一律回落到 0（= 不限），不要用 `|| 0` 之外的花样 ——
+     * 用户把输入框清空时 parseInt 是 NaN，此时「不限」比「突然限死成 1 条」安全。
+     */
+    var maxDayRaw = parseInt((root.querySelector('[data-mq-set-bg-max-day]') || {}).value, 10);
+    if (!Number.isFinite(maxDayRaw)) maxDayRaw = prevBg.maxPerDay != null ? prevBg.maxPerDay : 0;
     var bgPatch = {
       activeEnabled: lifeLikeOn ? false : isToggleOn(root, '#mq-set-bg-active'),
       activeIntervalMin: parseInt((root.querySelector('[data-mq-set-bg-active-min]') || {}).value, 10) || 30,
       quietEnabled: isToggleOn(root, '#mq-set-bg-quiet-en'),
       quietStartMin: Number.isFinite(qStart) ? qStart : (prevBg.quietStartMin != null ? prevBg.quietStartMin : 1380),
-      quietEndMin: Number.isFinite(qEnd) ? qEnd : (prevBg.quietEndMin != null ? prevBg.quietEndMin : 420)
+      quietEndMin: Number.isFinite(qEnd) ? qEnd : (prevBg.quietEndMin != null ? prevBg.quietEndMin : 420),
+      maxPerDay: Math.min(200, Math.max(0, maxDayRaw))
     };
     /* 让全局配置里保留一份完整的记忆字段，避免同一联系人只改了一个字段时，
        其它字段回落到 miyaChatGlobalSettings 的默认值（而不是使用者上次设定的值）。 */
@@ -2160,6 +2170,7 @@
     setToggle('#mq-set-bg-quiet-en', mcBg.quietEnabled != null ? !!mcBg.quietEnabled : !!pBg.quietEnabled);
     setVal('[data-mq-set-bg-quiet-start]', minToTimeStr(mcBg.quietStartMin != null ? mcBg.quietStartMin : (pBg.quietStartMin != null ? pBg.quietStartMin : 1380)));
     setVal('[data-mq-set-bg-quiet-end]', minToTimeStr(mcBg.quietEndMin != null ? mcBg.quietEndMin : (pBg.quietEndMin != null ? pBg.quietEndMin : 420)));
+    setVal('[data-mq-set-bg-max-day]', mcBg.maxPerDay != null ? mcBg.maxPerDay : (pBg.maxPerDay != null ? pBg.maxPerDay : 0));
     setVal('[data-mq-set-render-limit]', p.messageRenderLimit);
     setVal('[data-mq-set-bubble-min]', p.roleReplyBubbleMin);
     setVal('[data-mq-set-bubble-max]', p.roleReplyBubbleMax);

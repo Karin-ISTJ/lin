@@ -1059,7 +1059,6 @@
               }
               alert('已导入世界书「' + book + '」共 ' + n + ' 条\n可在列表中展开 / 收起切换');
               if (typeof renderList === 'function') renderList();
-              else if (typeof refresh === 'function') refresh();
             }).catch(function (err) {
               alert((err && err.message) || '导入失败');
             });

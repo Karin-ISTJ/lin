@@ -247,7 +247,10 @@
     'proactiveBaselineAt',
     'lastOfflineAt',
     'offlineRollAnchor',
-    'offlineRollGapMs'
+    'offlineRollGapMs',
+    /* 每日计数的落账状态，与 miya-chat-store.js 的 chatLevelBgKeys 保持同步 */
+    'dayKey',
+    'dayCount'
   ];
 
   function applyToChatSettings(base, contactId) {

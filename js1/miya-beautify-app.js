@@ -197,12 +197,6 @@
   function markIconSelection(key, gridKind) {
     if (gridKind === 'extra') selectedExtraKey = key;
     else if (gridKind === 'custom-icon') selectedCustomIconKey = key;
-    else if (gridKind === 'p2-icon') selectedP2IconKey = key;
-    else if (gridKind === 'p2-widget') selectedP2WidgetKey = key;
-    else if (gridKind === 'p3-icon') selectedP3IconKey = key;
-    else if (gridKind === 'p3-widget') selectedP3WidgetKey = key;
-    else if (gridKind === 'p4-icon') selectedP4IconKey = key;
-    else if (gridKind === 'p4-widget') selectedP4WidgetKey = key;
     else selectedIconKey = key;
 
     var gridMap = {

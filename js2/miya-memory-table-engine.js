@@ -874,20 +874,50 @@
    *
    * @param {string} chatId
    * @param {string} replyText
-   * @param {{sourceMsgIds?: string[]}} [opts] sourceMsgIds 为本轮落地消息的 id
+   * @param {{sourceMsgIds?: string[], dryRun?: boolean}} [opts]
+   *        sourceMsgIds 为本轮落地消息的 id
    *        （通常一个或多个 assistant 气泡）。用于建立**行溯源**：
    *        把这次写入的行标记为「由这些楼层生成」，用户删除楼层时即可精确回收。
    *        不传则只写表、不更新溯源（保持既有调用方的行为不变）。
+   *
+   *        dryRun = true：**只剥离 <tableEdit>，不落库**。
+   *        给「还有下一道门要判」的调用方用 —— 线下生成时，
+   *        正文要在解析前就剥掉标记（否则标签会写进楼层内容），
+   *        但那时还不知道这一版会不会被用户选走（候选还悬着）。
+   *        于是先 dryRun 拿到干净文本，等确认后再正式落库。
    */
   function processAssistantReply(chatId, replyText, opts) {
     var store = global.MiyaMemoryTableStore;
     if (!store) return { text: replyText, applied: false };
+    var dryRun = !!(opts && opts.dryRun);
     var settings = store.loadSettings();
     if (settings.enabled === false || settings.isAiWrite === false) {
       return { text: stripTableEditFromReply(replyText), applied: false };
     }
     var actions = parseTableEditBlock(replyText);
     var clean = stripTableEditFromReply(replyText);
+    /*
+     * dryRun：只剥离，不落库，同时把**原始标记**回传。
+     *
+     * 调用方（线下引擎）要在解析正文之前拿到干净文本，但此刻还不知道
+     * 这一版会不会被用户选走，所以不能落库。可剥离之后原文就没了，
+     * 补写时无从下手 —— 于是把原始标记一并回传，让调用方自己保管。
+     */
+    if (dryRun) {
+      /*
+       * 原始标记整段收齐。
+       *
+       * 一轮回复里可能出现多段 <tableEdit>（正文写一次、旁白再写一次），
+       * 只取首尾会漏掉中间的 —— 直接用全局匹配把所有段都留下来。
+       */
+      var allBlocks = String(replyText).match(/<tableEdit>[\s\S]*?<\/tableEdit>/gi) || [];
+      return {
+        text: clean,
+        applied: false,
+        dryRun: true,
+        mtRaw: allBlocks.length ? allBlocks.join('\n') : ''
+      };
+    }
     if (!actions.length) return { text: clean, applied: false };
     var tables = store.getChatTables(chatId);
     /*

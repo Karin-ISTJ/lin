@@ -616,6 +616,29 @@
           if (delta.reasoning) reasoningAcc += delta.reasoning;
         } catch (e) { /* ignore partial SSE */ }
       }
+      /* 流式读被中断（断线 / 空闲超时）时通知调用方：
+         这段内容是真的，但没说完。上层据此提示用户，
+         避免把半句话当成完整发言存进历史。
+
+         ⚠️ 本函数此前**引用了一个不存在的 markPartial** ——
+         它实际定义在 parseCompletionResponse（第 207 行）内部，
+         与本函数是两套独立的实现，闭包链并不相通，调用必抛 ReferenceError。
+         后果：流式中断（最需要提示用户「话没说完」的时刻）自己先崩，
+         且抛点在 finishPartial 内，导致 finalizeAccum 也走不到 ——
+         已收内容连正常收尾都拿不到。
+
+         这里补上本函数自己的实现（reqOpts 是第 497 行的形参，闭包可见）。 */
+      function markPartial(err) {
+        if (typeof reqOpts.onPartial === 'function') {
+          try {
+            reqOpts.onPartial({
+              reason: (err && err.name === 'StreamIdleTimeout') ? 'idle_timeout' : 'disconnected',
+              message: String((err && err.message) || '流式中断')
+            });
+          } catch (e) {}
+        }
+        return null;
+      }
       /* 中断收尾：把已收内容交给 finalizeAccum 走正常后处理，并标记 partial。
          注意此时 finishReason 大概是空串，所以不会被当成「max_tokens 截断」误报。
          去掉了退避续读——同一个 reader 出错后不会复活，重试只是白等。 */

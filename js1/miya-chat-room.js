@@ -5886,7 +5886,6 @@
         if (teApi && state.chatId && teId && typeof teApi.claim === 'function') {
           teApi.claim(store, state.chatId, teId, 'user');
           if (typeof renderMessages === 'function') renderMessages(state.chatId, { preserveScroll: true });
-          else if (typeof paintRoom === 'function') paintRoom(state.chatId);
         }
         return;
       }
@@ -5899,7 +5898,6 @@
         if (teApi2 && state.chatId && teId2 && typeof teApi2.dismiss === 'function') {
           teApi2.dismiss(store, state.chatId, teId2, 'user');
           if (typeof renderMessages === 'function') renderMessages(state.chatId, { preserveScroll: true });
-          else if (typeof paintRoom === 'function') paintRoom(state.chatId);
         }
         return;
       }
@@ -6182,6 +6180,18 @@
     ]);
   }
 
+  /*
+   * 只摆好房间外壳（DOM / 工具栏 / 头像位），不绑定具体会话。
+   *
+   * 调用时机：miya-chat-app 里「联系人无会话 → 先开壳 → 再 createChat」，
+   * 此时 chatId 尚不存在，所以这里**不能**也不该设置 state.chatId。
+   * 真正的 state.chatId 由随后的 open(chatId) 负责写入。
+   *
+   * ⚠️ 这里原有一行 `state.chatId = chatId;`（引用了不存在的变量），
+   * 严格模式下必抛 ReferenceError —— 且抛点在本函数中段，
+   * 导致后续 closeEmojiPanel / renderQuoteBar / is-open 等一整套初始化全被跳过。
+   * 已删除：既修掉崩溃，也顺带纠正「此处本就无会话可绑」的语义。
+   */
   function prepareShell(contact) {
     store = global.miyaChatStore;
     ensureRoomRoot();
@@ -6190,7 +6200,6 @@
     if (state.chatId) parkActiveChatPane();
     var app = $('miya-chat-app');
     if (app) app.classList.add('qq-room-open');
-    state.chatId = chatId;
     state.avatars = {};
     state.quoteRef = null;
     state.narrationMode = false;
