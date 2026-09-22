@@ -1988,6 +1988,17 @@ html.qq-img-lightbox-open {
   to { opacity: 1; transform: none; }
 }
 
+/* ── 抽屉键盘适配：房间静止，面板平滑上抬 ──
+ * 抽屉打开时点输入框（金额 / 祝福语等），房间不再整体收缩——
+ * qq-room--keyboard 的 top/height 瞬变会把遮罩、面板、背景聊天一起拽动，
+ * 视觉上就是「闪一下」。现在面板按 --qq-kb-offset（JS 维护，含 PWA 超界补偿）
+ * 平移到键盘上方：transform 走合成器，背景零重排零位移，
+ * 数字键盘与文本键盘开合都表现为同一条平滑滑移曲线。 */
+.qq-room__overlay .qq-sheet__panel {
+  transform: translateY(calc(-1 * var(--qq-kb-offset, 0px)));
+  transition: transform 0.26s ease-out;
+}
+
 .qq-sheet__panel {
   position: relative;
   background:

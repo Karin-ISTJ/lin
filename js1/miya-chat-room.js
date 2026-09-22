@@ -328,13 +328,31 @@
     });
   }
 
-  /* 底部抽屉（红包 / 转账等 qq-sheet）打开期间，聊天滚动区在毛玻璃遮罩之下。
-   * 此时键盘若再强制贴底，背景会隔着半透明遮罩肉眼可见地窜动 ——
-   * 这就是「点红包输入框界面闪一下」的主因。抽屉在场时跳过贴底，
-   * 只让抽屉自身随视口收起，背景保持原位。 */
+  /* 底部抽屉（红包 / 转账等 qq-sheet）打开期间的键盘策略：「房间静止」。
+   * 若照常给房间加 qq-room--keyboard（top/height 瞬变），毛玻璃遮罩、面板、
+   * 背景聊天会整块瞬移 —— 金额数字键盘与祝福语文本键盘的高度、触发序列不同，
+   * 瞬移的幅度也不同，这就是「点金额闪一下」的根源。抽屉在场时房间保持整高，
+   * 面板只靠 --qq-kb-offset 做 transform 平移（CSS 有过渡），背景零位移零重排。 */
   function isRoomSheetOverlayOpen() {
     var ov = $('qq-room-overlay');
     return !!(ov && !ov.hidden && ov.childElementCount > 0);
+  }
+
+  /* 独立 PWA 下 --app-height 取的是整块屏幕高度，比 window.innerHeight 高出
+   * home 指示区一段；面板上抬时把这段超界一并补上，才能正好贴住键盘顶。 */
+  function roomKeyboardOverscanPx() {
+    var v = getComputedStyle(document.documentElement).getPropertyValue('--app-height');
+    var appH = parseFloat(v);
+    if (!(appH > 0)) return 0;
+    return Math.max(0, Math.round(appH - (window.innerHeight || 0)));
+  }
+
+  /* 解除房间因键盘产生的收缩布局（不动 --qq-kb-offset，由调用方决定抬升量） */
+  function detachRoomKeyboardLayout() {
+    roomEl.classList.remove('qq-room--keyboard');
+    roomEl.style.removeProperty('--qq-kb-top');
+    roomEl.style.removeProperty('--qq-kb-height');
+    syncChatAppKeyboardShell(false);
   }
 
   function syncIosKeyboardInset(vv, inset) {
@@ -347,12 +365,19 @@
     iosKeyboardWasOpen = open;
 
     if (open && vv) {
+      if (isRoomSheetOverlayOpen()) {
+        /* 抽屉在场：房间静止，面板平移上抬（含 PWA 超界补偿） */
+        detachRoomKeyboardLayout();
+        roomEl.style.setProperty('--qq-kb-offset', (inset + roomKeyboardOverscanPx()) + 'px');
+        if ((vv.offsetTop || 0) > 0) window.scrollTo(0, 0);
+        return;
+      }
       roomEl.classList.add('qq-room--keyboard');
       roomEl.style.setProperty('--qq-kb-top', Math.round(vv.offsetTop || 0) + 'px');
       roomEl.style.setProperty('--qq-kb-height', Math.round(vv.height) + 'px');
       syncChatAppKeyboardShell(true, vv);
       if ((vv.offsetTop || 0) > 0) window.scrollTo(0, 0);
-      if (!isRoomSheetOverlayOpen()) scrollRoomToBottom($('qq-room-scroll'), true);
+      scrollRoomToBottom($('qq-room-scroll'), true);
       return;
     }
 
@@ -571,13 +596,20 @@
     }
 
     var open = inset > 40;
+    if (isRoomSheetOverlayOpen()) {
+      /* 抽屉在场：房间静止，面板按 --qq-kb-offset 平移上抬（见 CSS）。
+       * 键盘没开时保持 0，避免面板无故浮起。 */
+      detachRoomKeyboardLayout();
+      roomEl.style.setProperty('--qq-kb-offset', (open ? inset + roomKeyboardOverscanPx() : 0) + 'px');
+      return;
+    }
     roomEl.classList.toggle('qq-room--keyboard', open);
     if (open && vv) {
       roomEl.style.setProperty('--qq-kb-top', Math.round(vv.offsetTop || 0) + 'px');
       roomEl.style.setProperty('--qq-kb-height', Math.round(vv.height) + 'px');
       syncChatAppKeyboardShell(true, vv);
       if ((vv.offsetTop || 0) > 0) window.scrollTo(0, 0);
-      if (!isRoomSheetOverlayOpen()) scrollRoomToBottom($('qq-room-scroll'), true);
+      scrollRoomToBottom($('qq-room-scroll'), true);
     } else {
       roomEl.style.removeProperty('--qq-kb-top');
       roomEl.style.removeProperty('--qq-kb-height');
@@ -4042,6 +4074,13 @@
     if (!ov) return;
     ov.innerHTML = html;
     ov.hidden = false;
+    /* 撰写框键盘还没关就直接开抽屉：房间可能仍处于键盘收缩态。
+     * 此刻先切到「房间静止」模式，面板改由 --qq-kb-offset 抬到键盘上方，
+     * 避免抽屉期间再触发一次整房间的收缩/展开瞬移。 */
+    if (roomEl.classList.contains('qq-room--keyboard')) {
+      detachRoomKeyboardLayout();
+      roomEl.style.setProperty('--qq-kb-offset', (keyboardInsetPx() + roomKeyboardOverscanPx()) + 'px');
+    }
   }
 
   function getActiveThinkingText() {
