@@ -290,12 +290,6 @@
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
 }
-.fg-plot__drop {
-  position: absolute;
-  top: 6px;
-  left: 8px;
-  font-size: 13px;
-}
 .fg-plot__fert {
   position: absolute;
   top: 6px;
@@ -498,13 +492,13 @@
  *  农场风全局提示条 · 浇水湿润土地
  * ═══════════════════════════════════════════════════════════ */
 
-/* ── 浇过水的土地：整块变深（湿土色），配合 💧 角标 ── */
+/* ── 浇过水的土地：整块变深（湿土色），无 💧 角标 ── */
 .fg-plot.is-watered::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(92, 62, 40, 0.20), rgba(66, 44, 26, 0.36));
+  background: linear-gradient(180deg, rgba(74, 46, 24, 0.30), rgba(52, 32, 16, 0.48));
   mix-blend-mode: multiply;
   pointer-events: none;
 }
@@ -541,48 +535,43 @@
   transition-timing-function: linear;
 }
 
-/* ── 地块气泡：奶黄小木牌 + 尾巴，冒出后上浮渐隐 ── */
-.fg-bubble {
+/* ── 屏幕中间提示框：所有操作反馈集中在此（非气泡） ── */
+.fg-toasts {
   position: absolute;
-  bottom: calc(100% + 9px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9;
-  padding: 6px 13px;
-  border-radius: 13px;
-  background: linear-gradient(180deg, #fffaf0, #ffefd2);
-  border: 2px solid #e3b877;
-  color: #6b5443;
-  font-size: 12.5px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  top: 42%;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0 40px;
   pointer-events: none;
-  box-shadow: 0 5px 14px rgba(160, 105, 55, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  animation: fg-bubble-pop 1.7s ease forwards;
 }
-.fg-bubble::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -6.5px;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  background: #ffefd2;
-  border-right: 2px solid #e3b877;
-  border-bottom: 2px solid #e3b877;
-  transform: rotate(45deg);
+.fg-toast {
+  max-width: 100%;
+  padding: 13px 26px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fffaf0 0%, #ffedcb 100%);
+  border: 2.5px solid #d9a55e;
+  color: #6b5443;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(120, 72, 34, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -2px 0 rgba(226, 181, 110, 0.35);
+  animation: fg-toast-in 1.9s ease forwards;
 }
-@keyframes fg-bubble-pop {
-  0%   { opacity: 0; transform: translateX(-50%) translateY(9px) scale(0.6); }
-  12%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.07); }
-  20%  { transform: translateX(-50%) translateY(0) scale(1); }
-  76%  { opacity: 1; transform: translateX(-50%) translateY(-4px) scale(1); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-15px) scale(0.95); }
+@keyframes fg-toast-in {
+  0%   { opacity: 0; transform: scale(0.72); }
+  12%  { opacity: 1; transform: scale(1.05); }
+  20%  { transform: scale(1); }
+  82%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.94); }
 }
 
-/* ── 收获动效：作物上升慢慢消失 ── */
+/* ── 收获飘字：小「🍇+1」上升慢慢消失 ── */
 .fg-fx {
   position: absolute;
   inset: 0;
@@ -592,31 +581,25 @@
   pointer-events: none;
   z-index: 7;
 }
-.fg-fx--rise {
-  font-size: 36px;
-  filter: drop-shadow(0 2px 3px rgba(120, 80, 50, 0.28));
-  animation: fg-rise 1.15s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+.fg-fx--gain {
+  gap: 1px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow:
+    0 0 3px rgba(94, 58, 30, 0.95),
+    1px 1px 0 rgba(94, 58, 30, 0.85),
+    -1px 1px 0 rgba(94, 58, 30, 0.85),
+    1px -1px 0 rgba(94, 58, 30, 0.85),
+    -1px -1px 0 rgba(94, 58, 30, 0.85);
+  animation: fg-gain-rise 1.25s ease-out forwards;
 }
-@keyframes fg-rise {
-  0%   { transform: translateY(0) scale(1); opacity: 1; }
-  22%  { transform: translateY(-10px) scale(1.12); opacity: 1; }
-  100% { transform: translateY(-60px) scale(1.3); opacity: 0; }
-}
-
-/* 收获时的星光飘散（✨🌟 各自向 --fx-dx/--fx-dy 方向散开） */
-.fg-fx--spark {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  font-size: 16px;
-  animation: fg-spark 0.95s ease-out forwards;
-}
-@keyframes fg-spark {
-  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-  22%  { opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--fx-dx, 0px)), calc(-50% + var(--fx-dy, -44px))) scale(1.15); opacity: 0; }
+.fg-fx--gain i { font-style: normal; font-size: 16px; }
+@keyframes fg-gain-rise {
+  0%   { transform: translateY(6px); opacity: 0; }
+  16%  { transform: translateY(0); opacity: 1; }
+  72%  { opacity: 1; }
+  100% { transform: translateY(-46px); opacity: 0; }
 }
 
 /* ── 锄头挖掉：作物缩小旋转消失 ── */
@@ -628,45 +611,8 @@
   100% { transform: scale(0.12) rotate(24deg); opacity: 0; }
 }
 
-/* ── 农场风全局提示条（替代普通白框 toast） ── */
-.fg-toasts {
-  position: absolute;
-  top: 58px;
-  left: 0;
-  right: 0;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 0 22px;
-  pointer-events: none;
-}
-.fg-toast {
-  max-width: 100%;
-  padding: 9px 18px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #fff7e0, #ffe9bb);
-  border: 2px solid #e2b56e;
-  color: #6b5443;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-align: center;
-  box-shadow: 0 6px 16px rgba(170, 110, 60, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  animation: fg-toast-in 2.4s ease forwards;
-}
-@keyframes fg-toast-in {
-  0%   { opacity: 0; transform: translateY(-14px) scale(0.86); }
-  10%  { opacity: 1; transform: translateY(0) scale(1.04); }
-  16%  { transform: translateY(0) scale(1); }
-  80%  { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-10px); }
-}
-
 /* 减少动态偏好：动画降级为简单淡入淡出 */
 @media (prefers-reduced-motion: reduce) {
   .fg-plot.is-busy { animation: none; }
-  .fg-fx--rise, .fg-fx--spark { animation-duration: 0.6s; }
-  .fg-bubble, .fg-toast { animation-duration: 1.2s; }
+  .fg-fx--gain, .fg-toast { animation-duration: 0.8s; }
 }

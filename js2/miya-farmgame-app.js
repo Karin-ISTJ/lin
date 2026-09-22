@@ -2,14 +2,16 @@
  *
  * 回合制小农场：播种→浇水→过夜生长→收获→卖出→升级开地。
  *
- * 交互（v2 直觉化改造）：
+ * 交互（v3 简洁化）：
  *   · 直接点地块就干活，看地块状态自动判断：
- *     空地 → 选种播种 · 缺水 → 浇水 · 缺肥 → 施肥 · 成熟 → 收获
+ *     空地 → 选种播种（直接种好）· 缺水 → 浇水 · 缺肥 → 施肥 · 成熟 → 收获
  *   · 动作按钮一键化：播种=选种后种满空地，浇水/施肥=全田一键，
  *     锄头=面板勾选清理，「一键收获」保留。
- *   · 播种/浇水/施肥在地块上播放进度条（单块 3 秒，一键波浪式快速过），
- *     完成时地块冒出农场风小气泡（🌱播下xx种子 / 💧 / ✨）。
- *   · 收获即时：作物上升慢慢消失 + ✨飘散 + 「✨收获xx+1」气泡。
+ *   · 浇水/施肥/锄地在地块上播放进度条（单块 3 秒，一键波浪式快速过）；
+ *     播种不需要进度条，直接完成。
+ *   · 所有提示集中在屏幕中间的提示框（不再逐块冒气泡）。
+ *   · 收获即时：作物直接消失 + 地块上方小「🍇+1」飘字上升渐隐。
+ *   · 浇过的地块整块变深（湿土色）即代表浇过水，无 💧 角标。
  * 数据层在 miya-farmgame-store.js，本文件只管渲染与交互。
  *
  * 打开方式：桌面「星露农场」图标 → APP_HANDLERS.farmgame → MiyaFarmGame.open()
@@ -30,8 +32,6 @@
   var BULK_STEP_MS = 900;      /* 一键操作：单块进度条时长 */
   var BULK_STAGGER_MS = 340;   /* 一键操作：地块依次错开启动 */
   var HARVEST_STAGGER_MS = 260;/* 一键收获：逐块动效间隔 */
-  var FX_MS = 1200;            /* 飘浮动效时长 */
-  var BUBBLE_MS = 1700;        /* 气泡停留时长 */
 
   /* ── 工具 ── */
   function $(id) { return document.getElementById(id); }
@@ -43,7 +43,7 @@
 
   function getApp() { return $(APP_ID); }
 
-  /* ── 农场风提示（木牌胶囊，替代普通白框 toast） ── */
+  /* ── 屏幕中间提示框：所有操作反馈都显示在这里 ── */
   function toast(msg) {
     if (!msg) return;
     var box = $('fg-toasts');
@@ -60,42 +60,23 @@
     t.className = 'fg-toast';
     t.textContent = msg;
     box.appendChild(t);
-    while (box.children.length > 3) box.removeChild(box.firstChild);
-    setTimeout(function () { t.remove(); }, 2400);
+    while (box.children.length > 2) box.removeChild(box.firstChild);
+    setTimeout(function () { t.remove(); }, 1900);
   }
 
-  /* ── 地块气泡：从地块头顶冒出的奶黄小木牌 ── */
-  function bubble(i, text) {
-    var plot = document.querySelector('#fg-grid [data-plot="' + i + '"]');
-    if (!plot) { toast(text); return; }
-    plot.querySelectorAll('.fg-bubble').forEach(function (b) { b.remove(); });
-    var b = document.createElement('span');
-    b.className = 'fg-bubble';
-    b.textContent = text;
-    plot.appendChild(b);
-    setTimeout(function () { b.remove(); }, BUBBLE_MS);
-  }
-
-  /* ── 地块特效：emoji 飘起渐隐 / 星星散开 ── */
-  function fxEmit(plot, cls, emoji, dx, dy, ms) {
+  /* ── 地块飘字：小尺寸「🍇+1」上升渐隐（收获用） ── */
+  function gainFx(i, emoji, n) {
+    var plot = plotEl(i);
+    if (!plot) return;
+    plot.querySelectorAll('.fg-fx--gain').forEach(function (el) { el.remove(); });
     var el = document.createElement('span');
-    el.className = 'fg-fx ' + cls;
-    el.textContent = emoji;
-    if (dx != null) { el.style.setProperty('--fx-dx', dx + 'px'); el.style.setProperty('--fx-dy', dy + 'px'); }
+    el.className = 'fg-fx fg-fx--gain';
+    el.innerHTML = '<i>' + emoji + '</i>+' + n;
     plot.appendChild(el);
-    setTimeout(function () { el.remove(); }, ms || FX_MS);
+    setTimeout(function () { el.remove(); }, 1300);
   }
 
   function plotEl(i) { return document.querySelector('#fg-grid [data-plot="' + i + '"]'); }
-
-  /* 收获动效：作物上升慢慢消失 + 星光飘散 */
-  function harvestFx(i, emoji) {
-    var plot = plotEl(i);
-    if (!plot) return;
-    fxEmit(plot, 'fg-fx--rise', emoji, 0, 0, 1150);
-    fxEmit(plot, 'fg-fx--spark', '✨', -20, -34, 900);
-    fxEmit(plot, 'fg-fx--spark', '🌟', 18, -46, 1000);
-  }
 
   /* ── 进度条：土地上的劳作进度（3 秒 / 一键快速） ── */
   function startProgress(i, ms, done) {
@@ -262,7 +243,6 @@
       if (p.watered) cls += ' is-watered';
       inner =
         '<span class="fg-plot__crop' + (mature ? ' fg-plot__crop--mature' : '') + '">' + c.stages[p.stage] + '</span>' +
-        (p.watered && !mature ? '<span class="fg-plot__drop">💧</span>' : '') +
         (p.fert ? '<span class="fg-plot__fert">✨</span>' : '') +
         (mature ? '<span class="fg-plot__shine" aria-hidden="true"></span>' : '');
     } else {
@@ -306,7 +286,7 @@
     return true;
   }
 
-  /* 播种（单块）：点空地 → 选种 → 土地进度条 → 🌱气泡 */
+  /* 播种（单块）：点空地 → 选种 → 直接种好（无进度条） */
   function doSow(i, cropId) {
     var c = STORE.CROPS[cropId];
     var s = STORE.getState();
@@ -320,13 +300,11 @@
     STORE.save();
     renderHead(s);
     closeSheet();
-    startProgress(i, PROGRESS_MS, function () {
-      renderPlotCell(i);
-      bubble(i, '🌱 播下' + c.name + '种子');
-    });
+    renderPlotCell(i);
+    toast('🌱 播下' + c.name + '种子');
   }
 
-  /* 一键播种：选种后种满所有空地（体力/金币不够时量力而行） */
+  /* 一键播种：选种后种满所有空地（体力/金币不够时量力而行），直接完成 */
   function bulkSow(cropId) {
     var c = STORE.CROPS[cropId];
     var s = STORE.getState();
@@ -353,11 +331,8 @@
     STORE.save();
     renderHead(s);
     closeSheet();
-    toast('🌱 开始播种 ' + m + ' 块地…');
-    wave(targets, BULK_STEP_MS, BULK_STAGGER_MS, function (i) {
-      renderPlotCell(i);
-      bubble(i, '🌱 播下' + c.name + '种子');
-    });
+    renderAll();
+    toast('🌱 播下' + c.name + '种子 ×' + m);
   }
 
   /* 浇水（单块） */
@@ -371,7 +346,7 @@
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      bubble(i, '💧 浇好了，今晚就长');
+      toast('💧 浇好了，今晚就长');
     });
   }
 
@@ -397,7 +372,6 @@
     toast('💧 一键浇水 ' + m + ' 块…');
     wave(targets, BULK_STEP_MS, BULK_STAGGER_MS, function (i) {
       renderPlotCell(i);
-      bubble(i, '💧 浇好了，今晚就长');
     });
   }
 
@@ -412,7 +386,7 @@
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      bubble(i, '✨ 施了肥，收获 +1');
+      toast('✨ 施了肥，收获 +1');
     });
   }
 
@@ -439,7 +413,6 @@
     toast('✨ 一键施肥 ' + m + ' 块…');
     wave(targets, BULK_STEP_MS, BULK_STAGGER_MS, function (i) {
       renderPlotCell(i);
-      bubble(i, '✨ 施了肥，收获 +1');
     });
   }
 
@@ -461,7 +434,7 @@
     if (plot) plot.classList.add('is-vanishing');
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      bubble(i, '⛏ 锄掉了' + c.name + (back > 0 ? '，退 ' + back + ' 金币' : ''));
+      toast('⛏ 锄掉了' + c.name + (back > 0 ? '，退 ' + back + ' 金币' : ''));
     });
   }
 
@@ -494,11 +467,10 @@
     toast('⛏ 一键锄掉 ' + m + ' 块…');
     wave(targets, BULK_STEP_MS, BULK_STAGGER_MS, function (i) {
       renderPlotCell(i);
-      bubble(i, '⛏ 锄掉了');
     });
   }
 
-  /* 收获（单块）：作物上升慢慢消失 + ✨气泡 */
+  /* 收获（单块）：作物直接消失，土地上方飘小「🍇+1」 */
   function harvestPlot(i) {
     var s = STORE.getState();
     var p = s.plots[i];
@@ -512,8 +484,8 @@
     STORE.save();
     renderHead(s);
     renderPlotCell(i);
-    harvestFx(i, c.icon);
-    bubble(i, '✨ 收获' + c.name + ' +' + yieldN);
+    gainFx(i, c.icon, yieldN);
+    toast('✨ 收获' + c.name + ' +' + yieldN);
     announceLevelUps(ups);
   }
 
@@ -547,8 +519,7 @@
     meta.forEach(function (m, k) {
       setTimeout(function () {
         renderPlotCell(m.i);
-        harvestFx(m.i, m.icon);
-        bubble(m.i, '✨ 收获' + m.name + ' +' + m.y);
+        gainFx(m.i, m.icon, m.y);
       }, k * HARVEST_STAGGER_MS);
     });
     var names = Object.keys(crops).map(function (k) { return STORE.CROPS[k].name + '×' + crops[k]; }).join('、');
@@ -791,7 +762,7 @@
     if (mature) { harvestPlot(i); return; }           /* 成熟 → 收获 */
     if (!p.watered) { doWater(i); return; }           /* 缺水 → 浇水 */
     if (!p.fert && STORE.hasFert(s.level)) { doFert(i); return; }  /* 缺肥 → 施肥 */
-    bubble(i, p.fert ? '💤 都伺候好了，等它长大吧' : '💤 等它长大吧（施肥 Lv.3 解锁）');
+    toast(p.fert ? '💤 都伺候好了，等它长大吧' : '💤 等它长大吧（施肥 Lv.3 解锁）');
   }
 
   /* ── 事件绑定（委托，只绑一次） ── */
