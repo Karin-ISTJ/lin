@@ -7,6 +7,14 @@
    让 .wrap / .sec / .choice 这些极通用的类名只在卡内生效，
    不会误伤线下其它地方（.choice 这种名字在别处很容易撞车）。
    卡片内部的类名、层级、伪元素、响应式规则一个没动。
+
+   ⚠️ 字号必须钉死（见文件末尾的「字号免疫」段）：
+   css/style.css 里有一条 [data-miya-fs] 全局规则，会把 **所有后代元素**
+   的 font-size 强行写成 calc(1em * var(--miya-font-size-scale)) !important。
+   用户在线下设置里调过字号时，.miya-offline-app 会被打上 data-miya-fs，
+   于是卡片里每一层 div / button 都各乘一次倍率 —— 标题挤成一坨、
+   字距被拉爆、卡片高度失控，和独立 HTML 打开的效果天差地别。
+   下面是给这条规则打的补丁。
    ──────────────────────────────────────────────────────────── */
 
 .xw-plot-card {
@@ -37,6 +45,99 @@
 .xw-plot-card * {
   box-sizing: border-box;
 }
+
+/* ── 字号免疫 ──────────────────────────────────────────────────
+   这一段是这张卡最关键、也最容易写错的部分，动之前请读完。
+
+   ① 现象
+      同一份卡片代码，单独用 HTML 打开很好看；放进项目里，
+      标题挤成一坨、字距被拉爆、卡片高得离谱。
+
+   ② 根因
+      css/style.css 里有一条全局字号缩放规则，展开后等价于：
+
+        [data-miya-fs] :where(div, button, span, ...)
+                       :not(...)×10 {
+          font-size: calc(1em * var(--miya-font-size-scale, 1)) !important;
+        }
+
+      · 用户在线下设置里调过字号时，miya-theme.js 会给 .miya-offline-app
+        加上 data-miya-fs，并用【内联样式】把 --miya-font-size-scale
+        设成倍率（如 1.25）。
+      · 它用 1em —— 相对值，且带 !important，命中【每一个后代标签】。
+      · 卡片有 .wrap / .sec / .sec-title / .choice 多层嵌套，
+        每层都被这条规则重算一次，倍率沿层级反复累积。
+      · 实测（headless Chromium，scale=1.25，修复前）：
+          标题 12px    → 48.8281px
+          选项 14px    → 48.8281px
+          字距 .18em   → 8.78906px
+        卡片直接没法看，这就是「差这么多」的全部原因。
+
+   ③ 试错记录（别重复踩）
+      a. 只加 `.xw-plot-card * { font-size: ... !important }`
+         → 无效。两个 !important 相撞时比特异性，
+           对家 (0,10,1)，我们 (0,1,0)，差一个数量级。
+      b. 用 `.miya-offline-app .xw-plot-card[...] .sec-title` 把特异性顶到 (0,3,0)
+         → 仍无效，还是输给 (0,10,1)。
+      c. 把 --miya-font-size-scale 在卡片上归零
+         → 部分有效但不彻底。变量是在 .miya-offline-app 上【内联】设的，
+           内联值优先于继承，子元素根本读不到我们写在卡片根上的归零；
+           而且 1em 会在每一层重新取「父级已放大后的计算值」，
+           哪怕变量是 1，累积出来的结果也已经被上游带偏了（实测 20px）。
+
+   ④ 最终解法：变量归零 + 每一层都给绝对字号
+      · 变量归零：把 --miya-font-size-scale 铺到卡内【每一个元素】上，
+        让对家的 calc(1em × var(...)) 退化成 1em；
+      · 绝对字号：再给每一层显式写死设计稿的 px 值。
+        这一条才是真正解决问题的 —— 有了绝对尺寸，
+        「继承自被放大的父级」这条传播链就被切断了，
+        1em 取到的就是这一层自己的设定值。
+
+      两者缺一不可：只归零不写死，1em 仍会取到上游的放大值（20px 那次）。
+
+   ⑤ 副作用（刻意接受）
+      用户调线下字号时，卡片不跟着变大。原因：这张卡是成品设计，
+      字号 / 字距 / 内边距 / 圆角是一套调好的整体，跟着缩必然变形 ——
+      那就又回到「和独立 HTML 不一样」的老问题了。
+   ──────────────────────────────────────────────────────────── */
+
+/* ① 伪元素与窄屏的字号补丁（元素本体的字号由 JS 内联负责，见下）
+
+   为什么元素本体不在这里写 font-size：
+   style.css 的 [data-miya-fs] 规则展开后特异性是 (0,10,1)
+   （10 个 :not(.class) + 1 个 :where(div)，而 :where() 里的标签列表
+   仍会贡献元素位）。两个 !important 相撞时【只比特异性】，
+   CSS 文件里无论怎么叠加选择器都追不平，而且很脆 ——
+   将来对面多一个 :not() 就又输了。
+
+   唯一稳赢的是【内联样式 + !important】，它在层叠里优先级最高。
+   所以正文字号在 js2/miya-offline-plot.js 的 renderPlotCardHtml 里
+   以 style="font-size:XXpx !important" 直接写进元素。
+
+   本段只处理内联够不到的部分：伪元素（::before / ::after 无法内联）
+   和窄屏覆盖。伪元素跟随已钉死的父级 em 走，天然安全。 */
+
+/* 标题两侧的竖线 / 横线是伪元素画的，不承载文字 */
+.xw-plot-card .sec-title::before,
+.xw-plot-card .sec-title::after {
+  font-size: 0;
+}
+
+/* 左 ◇ 符号：13px（设计稿如此，比正文小一号） */
+.xw-plot-card .choice::before {
+  font-size: 13px;
+}
+
+/* 右箭头是 border 画的，没有文字 */
+.xw-plot-card .choice::after {
+  font-size: 0;
+}
+
+/* 极窄屏的选项字号由 JS 侧判定后内联输出（13.5px），
+   这里不再重复声明 —— 见 js2/miya-offline-plot.js 中
+   renderPlotCardHtml 的 narrow 分支注释：
+   内联的 !important 永远压过样式表的 !important，
+   媒体查询在这里写了也不会生效，留着只会误导后来者。 */
 
 .xw-plot-card .wrap {
   padding: 16px 14px;
@@ -111,7 +212,6 @@
     box-shadow .16s ease,
     background .16s ease;
 }
-
 .xw-plot-card .choice:last-child {
   margin-bottom: 0;
 }
@@ -127,6 +227,8 @@
   opacity: .55;
   font-size: 13px;
   line-height: 1;
+  /* 按下 / 悬停时加深，需要一个过渡才不突兀 */
+  transition: opacity .16s ease;
 }
 
 /* 右侧箭头：默认隐藏 */
@@ -161,9 +263,26 @@
   opacity: .9;
 }
 
+/* ── 按下反馈 ──────────────────────────────────────────────────
+   独立 HTML 里点下去会「浮起来 + 紫描边 + 紫调阴影」，
+   那是因为桌面鼠标同时命中了 :hover 和 :active。
+
+   触屏没有 hover，只靠原来那句 `.choice:active { transform: translateY(0);
+   box-shadow: none; }` 等于「把浮起取消」—— 按下去反而什么都不发生。
+
+   所以这里把 :active 补成一套完整的按下态：
+   描边转紫、浮起、紫调阴影、◇ 符号加深。
+   数值全部取自上面 :hover 那组，只是让它能在触屏独立演出来。
+   ──────────────────────────────────────────────────────────── */
 .xw-plot-card .choice:active {
-  transform: translateY(0);
-  box-shadow: none;
+  transform: translateY(-2px);
+  border-color: rgba(107, 78, 158, .38);
+  background: #fff;
+  box-shadow: 0 6px 16px -12px rgba(107, 78, 158, .55);
+}
+
+.xw-plot-card .choice:active::before {
+  opacity: .9;
 }
 
 .xw-plot-card .choice:focus-visible {
@@ -194,7 +313,6 @@
 
   .xw-plot-card .choice {
     padding: 12px 34px 12px 38px;
-    font-size: 13.5px;
   }
 
   .xw-plot-card .choice::before {

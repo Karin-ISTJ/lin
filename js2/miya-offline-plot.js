@@ -82,6 +82,24 @@
     var MAX_ITEMS = 6;
     var MAX_ITEM_LEN = 120;
 
+    /* ── 字号强绑定（防全局字号缩放）────────────────────────────
+       style.css 里有一条 [data-miya-fs] 全局规则，把后代元素字号写成
+       calc(1em * var(--miya-font-size-scale)) !important，命中每个标签、
+       且是相对值会逐层累积。用户调过线下字号时卡片会爆炸
+       （12px 滚成 48.83px）。唯一稳赢的写法是【内联 + !important】，
+       因为内联样式的 !important 在层叠中优先级最高，
+       而 CSS 文件里无论怎么堆选择器都追不平对家的 (0,10,1) 特异性。
+
+       这三个常量代表设计稿里的绝对值，集中放这里便于校对：
+         15px = 卡片根 / 中间容器的基准
+         12px = 「剧情建议」标题
+         14px = 每个选项按钮
+       ──────────────────────────────────────────────────────── */
+    var FIX_FS_15 = 'font-size:15px !important';
+    var FIX_FS_12 = 'font-size:12px !important';
+    var FIX_FS_14 = 'font-size:14px !important';
+    var FIX_FS_13_5 = 'font-size:13.5px !important';
+
     /* 行首前缀：项目符号 / 编号 / 全角编号，后面可能跟一个空格或制表符 */
     var PREFIX_RE = /^\s*(?:[-–—·•*‧∙※]|\(?\d{1,2}[).、．]?|[①②③④⑤⑥⑦⑧⑨⑩]|（\d{1,2}）)\s*/;
 
@@ -148,6 +166,32 @@
      *   · 卡片自带一套局部 CSS 变量，任何主题下颜色一致。
      * 卡片内部的类名、层级、伪元素一个没动。
      *
+     * ⚠️ 内联的 font-size + !important 是必需的，别删也别简化成纯 CSS：
+     *
+     *   css/style.css 里有一条全局字号缩放规则，展开后等价于
+     *     [data-miya-fs] :where(div, button, span, …):not(×10) {
+     *       font-size: calc(1em * var(--miya-font-size-scale, 1)) !important;
+     *     }
+     *   用户在线下设置里调过字号时，miya-theme.js 会给 .miya-offline-app
+     *   加上 data-miya-fs，并用内联样式设 --miya-font-size-scale = 倍率。
+     *   它用 1em（相对值）且命中每一个后代标签，卡片多层嵌套各乘一次，
+     *   12px 的标题会滚成 48.83px，整张卡彻底走形 —— 这就是
+     *   「单独打开 HTML 好看，放进项目里丑」的全部原因。
+     *
+     *   为什么必须写在 style 属性里：
+     *   两个 !important 相撞时比特异性。对家是 (0,10,1)
+     *   （10 个 :not(.class) + 1 个 :where(div)），
+     *   CSS 文件里无论怎么堆选择器都追不平，
+     *   而【内联样式 + !important】在层叠里是最高一级，必胜。
+     *
+     *   副作用（刻意接受）：用户调线下字号时卡片不跟着变大。
+     *   这张卡是成品设计，字号/字距/内边距是一套调好的整体，
+     *   跟着缩必然变形，那就又回到「和独立 HTML 不一样」了。
+     *
+     *   --miya-font-size-scale:1 同时写在根上做双保险：
+     *   万一将来那条全局规则改了写法（比如去掉 !important），
+     *   变量归零也能让 calc 退化成 1em。
+     *
      * @param {string[]} items 建议文案（已解析、未转义）
      * @returns {string} HTML；无建议时返回空串
      */
@@ -161,11 +205,36 @@
             .slice(0, MAX_ITEMS);
         if (!list.length) return '';
 
+        /*
+         * 窄屏（≤420px）选项字号收一档，与设计稿的响应式规则一致。
+         *
+         * 为什么要在 JS 里判一次：字号是内联写的，而【内联的 !important
+         * 永远压过样式表里的 !important】—— 媒体查询那条
+         * `@media (max-width:420px){ .choice{font-size:13.5px} }`
+         * 根本赢不了内联的 14px。所以这里主动把值改成 13.5px。
+         *
+         * matchMedia 不可用时（极老的 WebView）回退到窗口宽度，
+         * 再不行就当宽屏 —— 宁可字号大一档，也不能让卡片不显示。
+         */
+        var narrow = false;
+        try {
+            if (typeof global.matchMedia === 'function') {
+                narrow = global.matchMedia('(max-width: 420px)').matches;
+            } else if (typeof global.innerWidth === 'number') {
+                narrow = global.innerWidth <= 420;
+            }
+        } catch (eNarrow) {
+            narrow = false;
+        }
+        var choiceFs = narrow ? FIX_FS_13_5 : FIX_FS_14;
+
         var choices = list
             .map(function (text) {
                 return (
                     '<button type="button" class="choice" data-ap-plot-choice="' +
                     escAttr(text) +
+                    '" style="' +
+                    choiceFs +
                     '">' +
                     esc(text) +
                     '</button>'
@@ -174,10 +243,19 @@
             .join('');
 
         return (
-            '<div class="xw-plot-card" data-ap-plot-card="1">' +
-            '<div class="wrap">' +
-            '<div class="sec">' +
-            '<div class="sec-title">剧情建议</div>' +
+            '<div class="xw-plot-card" data-ap-plot-card="1"' +
+            ' style="--miya-font-size-scale:1;' +
+            FIX_FS_15 +
+            '">' +
+            '<div class="wrap" style="' +
+            FIX_FS_15 +
+            '">' +
+            '<div class="sec" style="' +
+            FIX_FS_15 +
+            '">' +
+            '<div class="sec-title" style="' +
+            FIX_FS_12 +
+            '">剧情建议</div>' +
             choices +
             '</div></div></div>'
         );
