@@ -28,7 +28,7 @@
   var busy = {};             /* 地块动画中：i -> { end, total, timer } */
 
   /* ── 节奏常量 ── */
-  var PROGRESS_MS = 3000;      /* 单块操作：进度条 3 秒 */
+  var PROGRESS_MS = 1200;      /* 单块操作：进度条 1.2 秒 */
   var BULK_STEP_MS = 900;      /* 一键操作：单块进度条时长 */
   var BULK_STAGGER_MS = 340;   /* 一键操作：地块依次错开启动 */
   var HARVEST_STAGGER_MS = 260;/* 一键收获：逐块动效间隔 */
@@ -36,6 +36,55 @@
   /* ── 操作提示（随机 pool，每次干完活抽一句） ── */
   var WATER_TOASTS = ['咕嘟咕嘟，浇好啦~', '水够啦~剩下的就交给时间吧~'];
   var FERT_TOASTS = ['撒一把魔法肥料～', '咕嘟咕嘟，营养渗进去啦~'];
+
+  /* ── BGM：进农场响起、退出暂停；音符按钮开关（偏好存 localStorage）。
+     换曲子必须换文件名（farm-bgm-2.mp3 …）—— SW 对音频缓存按路径归一，
+     只换内容不改名会一直放旧歌（与贴图同一规则）。 ── */
+  var BGM_URL = 'audio/farmgame/farm-bgm-1.mp3';
+  var BGM_KEY = 'miya-farmgame-bgm';
+  var bgmAudio = null;
+  var bgmPending = false;   /* 自动播放被浏览器拦截：等下一次交互再起 */
+
+  function bgmPrefOn() {
+    try { return localStorage.getItem(BGM_KEY) !== 'off'; } catch (e) { return true; }
+  }
+  function ensureBgm() {
+    if (bgmAudio) return bgmAudio;
+    bgmAudio = new Audio(BGM_URL);
+    bgmAudio.loop = true;
+    bgmAudio.volume = 0.38;
+    return bgmAudio;
+  }
+  function bgmPlaying() { return !!bgmAudio && !bgmAudio.paused && !bgmAudio.ended; }
+  function syncBgmBtn() {
+    var btn = $('fg-bgm');
+    if (!btn) return;
+    btn.classList.toggle('is-on', bgmPlaying());
+    btn.classList.toggle('is-off', !bgmPlaying());
+  }
+  function tryStartBgm() {
+    if (!bgmPrefOn()) { syncBgmBtn(); return; }
+    var a = ensureBgm();
+    var pr = a.play();
+    if (pr && pr.catch) pr.catch(function () { bgmPending = true; });
+    syncBgmBtn();
+  }
+  function stopBgm() {
+    if (bgmAudio) bgmAudio.pause();
+    bgmPending = false;
+    syncBgmBtn();
+  }
+  function toggleBgm() {
+    if (bgmPrefOn()) {
+      try { localStorage.setItem(BGM_KEY, 'off'); } catch (e) {}
+      stopBgm();
+      toast('🔇 音乐已关');
+    } else {
+      try { localStorage.setItem(BGM_KEY, 'on'); } catch (e) {}
+      tryStartBgm();
+      toast(bgmPlaying() ? '🎵 晨雾漫过谷仓时' : '🎵 音乐稍后响起');
+    }
+  }
 
   /* ── 工具 ── */
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -64,8 +113,9 @@
     var t = document.createElement('div');
     t.className = 'fg-toast';
     t.textContent = msg;
+    /* 新提示出现时立刻顶掉上一条：同屏永远只有一条提示 */
+    while (box.children.length) box.removeChild(box.firstChild);
     box.appendChild(t);
-    while (box.children.length > 2) box.removeChild(box.firstChild);
     setTimeout(function () { t.remove(); }, 1900);
   }
 
@@ -158,6 +208,7 @@
     app.setAttribute('aria-hidden', 'false');
     if (!opened) { bindEvents(app); opened = true; }
     renderAll();
+    tryStartBgm();
     /* IDB 水合完成后重渲染：冷启动时同步读可能只拿到占位符，
        真档在 IDB 里，异步取回后需要刷新一次界面 */
     STORE.hydrateFromIdb().then(function () { renderAll(); });
@@ -167,6 +218,7 @@
     var app = getApp();
     if (!app) return;
     STORE.save();
+    stopBgm();
     app.hidden = true;
     app.setAttribute('aria-hidden', 'true');
     closeSheet();
@@ -182,6 +234,7 @@
     renderFoot(s);
     var pc = $('fg-plotcount');
     if (pc) pc.textContent = '（' + STORE.plotCountFor(s.level) + ' 块地）';
+    syncBgmBtn();
   }
 
   function renderHead(s) {
@@ -774,6 +827,11 @@
   function bindEvents(root) {
     root.addEventListener('click', function (e) {
       var t = e.target;
+
+      /* 自动播放曾被拦截：任意一次点击（用户手势）里补启动 */
+      if (bgmPending) { bgmPending = false; tryStartBgm(); }
+
+      if (t.closest && t.closest('[data-fg-bgm-toggle]')) { toggleBgm(); return; }
 
       var closeBtn = t.closest && t.closest('[data-fg-close]');
       if (closeBtn) { closeSheet(); return; }

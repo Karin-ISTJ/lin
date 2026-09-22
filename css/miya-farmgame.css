@@ -92,6 +92,31 @@
   box-shadow: 0 2px 8px rgba(150, 110, 80, 0.16);
   cursor: pointer;
 }
+
+/* ── BGM 开关：同款圆形白底，播放中音符轻摇 ── */
+.fg-bgm {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: #fffdf8;
+  color: #8a6b4e;
+  font-size: 19px;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(150, 110, 80, 0.16);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, color 0.15s ease, opacity 0.15s ease;
+}
+.fg-bgm:active { transform: scale(0.92); }
+.fg-bgm.is-on { animation: fg-bgm-sway 1.4s ease-in-out infinite; }
+.fg-bgm.is-off { color: #c8b6a3; opacity: 0.72; }
+@keyframes fg-bgm-sway {
+  0%, 100% { transform: rotate(-14deg); }
+  50% { transform: rotate(14deg); }
+}
 .fg-mail__dot {
   position: absolute;
   top: -4px;
@@ -299,12 +324,10 @@
 .fg-plot.is-mature {
   box-shadow: 0 4px 14px rgba(240, 170, 80, 0.55), 0 0 0 2.5px rgba(255, 205, 110, 0.9);
 }
-/* ── 成熟：两颗 ✨ 绕作物转圈 + 闪烁（取代原右上角光点） ──
-   shine 本体是地块中心的 0×0 锚点，::before/::after 沿半径转圈，
-   rotate(...) translateX(r) rotate(-...) 让 ✨ 保持正立不侧翻。 */
+/* ── 成熟：✨ 从作物处缓缓上升渐隐（循环，两颗错开；非绕圈，无右上角固定） ── */
 .fg-plot__shine {
   position: absolute;
-  top: 50%;
+  top: 48%;
   left: 50%;
   width: 0;
   height: 0;
@@ -316,23 +339,19 @@
   content: "✨";
   position: absolute;
   top: 0;
-  left: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   filter: drop-shadow(0 0 4px rgba(255, 219, 130, 0.95));
-  animation: fg-shine-orbit 2.6s linear infinite, fg-shine-twinkle 1.15s ease-in-out infinite alternate;
+  opacity: 0;
+  animation: fg-shine-rise 2.2s ease-out infinite;
 }
-.fg-plot__shine::after {
-  font-size: 11px;
-  animation-delay: -1.3s, -0.55s;
-}
-@keyframes fg-shine-orbit {
-  from { transform: rotate(0turn) translateX(30px) rotate(0turn); }
-  to   { transform: rotate(1turn) translateX(30px) rotate(-1turn); }
-}
-@keyframes fg-shine-twinkle {
-  from { opacity: 0.2; }
-  to   { opacity: 1; }
+.fg-plot__shine::before { left: -16px; }
+.fg-plot__shine::after  { left: 8px; animation-delay: 1.1s; }
+@keyframes fg-shine-rise {
+  0%   { transform: translate(0, 6px) scale(0.7); opacity: 0; }
+  18%  { opacity: 1; }
+  65%  { opacity: 0.85; }
+  100% { transform: translate(0, -38px) scale(1.05); opacity: 0; }
 }
 
 /* ── 主按钮 ── */
@@ -512,13 +531,13 @@
  *  农场风全局提示条 · 浇水湿润土地
  * ═══════════════════════════════════════════════════════════ */
 
-/* ── 浇过水的土地：整块变深（湿土色），无 💧 角标 ── */
+/* ── 浇过水的土地：整块轻微变深（湿土色），无 💧 角标 ── */
 .fg-plot.is-watered::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(74, 46, 24, 0.30), rgba(52, 32, 16, 0.48));
+  background: linear-gradient(180deg, rgba(74, 46, 24, 0.14), rgba(52, 32, 16, 0.24));
   mix-blend-mode: multiply;
   pointer-events: none;
 }
