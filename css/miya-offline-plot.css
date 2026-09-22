@@ -17,24 +17,8 @@
    下面是给这条规则打的补丁。
    ──────────────────────────────────────────────────────────── */
 
-/* ── 变量隔离 · 卡内颜色一律不读宿主变量 ────────────────────────
-   这张卡的八个色值全部由 js2/miya-offline-plot.js 以【内联变量】写在
-   卡片根节点上，这里只写兜底常量，好让裸开这份 CSS 也不塌。
-
-   为什么非要内联、而不是写在下面这条规则里 —— 因为「线下 → 样式 →
-   自定义」的 CSS 会被注入到 #miya-offline-app 内部（见
-   js2/miya-offline-beautify.js 的 injectCustomCss），注入点就在卡片
-   的祖先链上：一旦用户的皮肤 CSS 里出现 `--ink` / `--soft` / `--hair`
-   / `--gold` / `--purple` / `--panel` 这类通用名（它们太容易撞），
-   自定义 <style> 的位置又排在 miya-offline-plot.css 之后，
-   就会被卡片子元素【继承】过去 —— 卡片的紫调瞬间被皮肤里的
-   暖金色 / 暖米色顶掉，看起来就是「被线下页面的颜色染黄了」。
-
-   内联声明只作用于卡片根这一个元素，优先级压过任何同名的
-   继承值，且不依赖加载顺序 —— 皮肤写什么名字都染不进来。
-   这里写成兜底值而非 var()，是为了「变量根本没定义」时也有一份正确的颜色。
-   ──────────────────────────────────────────────────────────── */
 .xw-plot-card {
+  /* 局部变量：只在本卡作用域内生效，不污染全局也不受主题影响 */
   --ink: #2A2436;
   --soft: #7A7290;
   --hair: rgba(107, 78, 158, .20);
@@ -52,7 +36,7 @@
   /* 局内字体取线下正文字体族，字号沿用外层，保证与正文同一语感 */
   font-size: 15px;
   line-height: 1.6;
-  color: var(--ink, #2A2436);
+  color: var(--ink);
   text-align: left;
 }
 
@@ -152,7 +136,7 @@
 /* 极窄屏的选项字号由 JS 侧判定后内联输出（13.5px），
    这里不再重复声明 —— 见 js2/miya-offline-plot.js 中
    renderPlotCardHtml 的 narrow 分支注释：
-   内联的 !important 永远压过样式表里的 !important，
+   内联的 !important 永远压过样式表的 !important，
    媒体查询在这里写了也不会生效，留着只会误导后来者。 */
 
 .xw-plot-card .wrap {
@@ -162,9 +146,9 @@
 .xw-plot-card .sec {
   position: relative;
   padding: 16px 16px 14px;
-  border: 1px solid var(--hair, rgba(107, 78, 158, .20));
+  border: 1px solid var(--hair);
   border-radius: 12px;
-  background: var(--panel, #FCFAFF);
+  background: var(--panel);
   box-shadow:
     0 1px 2px rgba(42, 36, 54, .04),
     0 8px 24px -18px rgba(107, 78, 158, .45);
@@ -180,7 +164,7 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .18em;
-  color: var(--soft, #7A7290);
+  color: var(--purple);
   line-height: 1;
 }
 
@@ -193,7 +177,7 @@
   height: 12px;
   margin-top: -6px;
   border-radius: 2px;
-  background: linear-gradient(180deg, var(--purple-l, #8B6FC4), var(--purple, #6B4E9E));
+  background: var(--purple);
 }
 
 .xw-plot-card .sec-title::after {
@@ -201,7 +185,7 @@
   flex: 1;
   height: 1px;
   margin-left: 10px;
-  background: linear-gradient(90deg, var(--hair, rgba(107, 78, 158, .20)), transparent);
+  background: linear-gradient(90deg, var(--hair), transparent);
 }
 
 /* 选项按钮 */
@@ -211,10 +195,10 @@
   width: 100%;
   margin: 0 0 8px;
   padding: 14px 40px 14px 44px;
-  border: 1px solid var(--hair, rgba(107, 78, 158, .20));
+  border: 1px solid var(--hair);
   border-radius: 10px;
   background: #fff;
-  color: var(--ink, #2A2436);
+  color: var(--ink);
   font: inherit;
   font-size: 14px;
   line-height: 1.55;
@@ -239,7 +223,7 @@
   left: 18px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--purple, #6B4E9E);
+  color: var(--purple);
   opacity: .55;
   font-size: 13px;
   line-height: 1;
@@ -256,8 +240,8 @@
   width: 6px;
   height: 6px;
   margin-top: -3px;
-  border-top: 1.5px solid var(--purple, #6B4E9E);
-  border-right: 1.5px solid var(--purple, #6B4E9E);
+  border-top: 1.5px solid var(--purple);
+  border-right: 1.5px solid var(--purple);
   transform: rotate(45deg);
   opacity: 0;
   transition: opacity .16s ease, right .16s ease;
@@ -302,7 +286,7 @@
 }
 
 .xw-plot-card .choice:focus-visible {
-  outline: 2px solid var(--purple-l, #8B6FC4);
+  outline: 2px solid var(--purple-l);
   outline-offset: 2px;
 }
 
