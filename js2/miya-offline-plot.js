@@ -100,6 +100,39 @@
     var FIX_FS_14 = 'font-size:14px !important';
     var FIX_FS_13_5 = 'font-size:13.5px !important';
 
+    /* ── 颜色强绑定（防自定义皮肤串色）──────────────────────────
+       卡片是成品设计，八个色值全部写死。它们原先定义在
+       css/miya-offline-plot.css 的 .xw-plot-card 规则里，看着没问题
+       （没引用任何 --xw-*），但「线下 → 样式 → 自定义 CSS」一开，
+       卡片就会被皮肤颜色染掉。
+
+       原因不在卡片，而在 CSS 继承：
+       · 自定义 CSS 由 miya-offline-beautify.js 的 injectCustomCss()
+         注入到 #miya-offline-app **内部**，注入点就在卡片的祖先链上；
+       · 皮肤里只要出现 `--ink` / `--soft` / `--hair` / `--gold` /
+         `--purple` / `--panel` 这类通用名（几乎一定会撞），
+         就会被卡片的子元素继承；
+       · 自定义 <style> 在文档里的位置排在 miya-offline-plot.css 之后，
+         同特异性下后者胜出 —— 卡片的紫调被皮肤里的暖金 / 暖米顶掉。
+
+       只要变量还定义在卡片根上，它就在继承链里，就能被上游覆盖，
+       所以修法不是「改选择器特异性」而是「换存放位置」：
+       把变量内联写到卡片根这一个元素上，优先级压过任何继承值，
+       且与加载顺序无关 —— 皮肤写什么名字都染不进来。
+
+       改色值只改这里（CSS 文件里那份是给「裸开 CSS」用的同值兜底，
+       两份必须一致，文件末尾有交叉引用注释）。
+       ──────────────────────────────────────────────────────── */
+    var INLINE_COLORS = [
+        '--ink:#2A2436',
+        '--soft:#7A7290',
+        '--hair:rgba(107,78,158,.20)',
+        '--purple:#6B4E9E',
+        '--purple-l:#8B6FC4',
+        '--gold:#C9A227',
+        '--panel:#FCFAFF'
+    ].join(';') + ';';
+
     /* 行首前缀：项目符号 / 编号 / 全角编号，后面可能跟一个空格或制表符 */
     var PREFIX_RE = /^\s*(?:[-–—·•*‧∙※]|\(?\d{1,2}[).、．]?|[①②③④⑤⑥⑦⑧⑨⑩]|（\d{1,2}）)\s*/;
 
@@ -192,6 +225,26 @@
      *   万一将来那条全局规则改了写法（比如去掉 !important），
      *   变量归零也能让 calc 退化成 1em。
      *
+     * ⚠️ 八个颜色变量为什么也必须内联，而不是留在 CSS 文件里：
+     *
+     *   它们最初是写在 css/miya-offline-plot.css 的 .xw-plot-card 规则里，
+     *   看起来完全自洽 —— 不引用任何 --xw-*，换主题也不会变。
+     *   但只要用户碰过「线下 → 样式 → 自定义 CSS」，卡片就会被染黄：
+     *   自定义 CSS 是由 miya-offline-beautify.js 的 injectCustomCss()
+     *   注入到 #miya-offline-app **内部**的，注入点正好落在卡片的祖先链上。
+     *   于是皮肤 CSS 里任何一句 `--ink` / `--soft` / `--hair` / `--gold` /
+     *   `--purple` / `--panel`（这些名字太通用，几乎一定会撞）都会
+     *   被卡片的子元素【继承】过去；而自定义 <style> 在文档里的位置
+     *   排在 miya-offline-plot.css 之后，同特异性下后者胜出 ——
+     *   卡片的紫调就被皮肤里的暖金 / 暖米顶掉，正是用户看到的「染黄」。
+     *
+     *   注意这不是「谁写错了」，而是「CSS 继承 + 文档顺序」的必然结果：
+     *   只要变量还定义在卡片根上，它就在继承链里，就能被上游覆盖。
+     *   内联声明把作用域压缩到卡片根这一个元素，优先级压过任何
+     *   继承值，且与加载顺序无关 —— 皮肤写什么名字都染不进来。
+     *   （顺带一提，index.html 里给这张卡的样式表加 ?v= 也治不了它：
+     *     那是 HTTP 缓存版本号，跟层叠先后是两回事。）
+     *
      * @param {string[]} items 建议文案（已解析、未转义）
      * @returns {string} HTML；无建议时返回空串
      */
@@ -244,7 +297,9 @@
 
         return (
             '<div class="xw-plot-card" data-ap-plot-card="1"' +
-            ' style="--miya-font-size-scale:1;' +
+            ' style="' +
+            '--miya-font-size-scale:1;' +
+            INLINE_COLORS +
             FIX_FS_15 +
             '">' +
             '<div class="wrap" style="' +
