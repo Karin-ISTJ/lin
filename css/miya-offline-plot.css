@@ -33,6 +33,13 @@
   /* 长文案不撑破容器 */
   overflow-wrap: anywhere;
   word-break: break-word;
+  /* 字体必须钉死成设计稿的衬线宋体：线下 App 根节点是 --xw-sans 黑体
+     且带 font-weight:300，不写死的话整张卡会变成「细黑体」，
+     和独立打开设计 HTML 的观感完全两样（这是两者长不一样的头号原因）。
+     真正压得住全局自定义字体规则（style.css 里 body :where(...) !important）
+     的内联版本由 js2/miya-offline-plot.js 输出，这里管继承与伪元素。 */
+  font-family: "Noto Serif CJK SC", "Noto Serif SC", "Songti SC", "Source Han Serif SC", serif;
+  font-weight: 400;
   /* 局内字体取线下正文字体族，字号沿用外层，保证与正文同一语感 */
   font-size: 15px;
   line-height: 1.6;
@@ -123,9 +130,10 @@
   font-size: 0;
 }
 
-/* 左 ◇ 符号：13px（设计稿如此，比正文小一号） */
+/* 左 ◇ 符号：1.05em 随按钮字号走（设计稿如此，按钮 14px 时约 14.7px；
+   之前写死 13px 偏小一号，符号存在感不足） */
 .xw-plot-card .choice::before {
-  font-size: 13px;
+  font-size: 1.05em;
 }
 
 /* 右箭头是 border 画的，没有文字 */
@@ -133,11 +141,9 @@
   font-size: 0;
 }
 
-/* 极窄屏的选项字号由 JS 侧判定后内联输出（13.5px），
-   这里不再重复声明 —— 见 js2/miya-offline-plot.js 中
-   renderPlotCardHtml 的 narrow 分支注释：
-   内联的 !important 永远压过样式表的 !important，
-   媒体查询在这里写了也不会生效，留着只会误导后来者。 */
+/* 极窄屏的选项字号与宽屏统一 15px（设计稿 .93em=14.88 ≈ .94em=15.04，
+   差 0.16px 不值得分支），由 JS 内联输出；
+   窄屏只收内距，见文件末尾的媒体查询。 */
 
 .xw-plot-card .wrap {
   padding: 16px 14px;
@@ -145,13 +151,13 @@
 
 .xw-plot-card .sec {
   position: relative;
-  padding: 16px 16px 14px;
+  padding: 10px 12px 12px;
   border: 1px solid var(--hair);
   border-radius: 12px;
   background: var(--panel);
   box-shadow:
-    0 1px 2px rgba(42, 36, 54, .04),
-    0 8px 24px -18px rgba(107, 78, 158, .45);
+    0 1px 2px rgba(70, 50, 110, .04),
+    0 10px 28px -20px rgba(70, 50, 110, .30);
 }
 
 /* 标题：左侧紫色竖线 + 字距 + 右侧渐隐横线 */
@@ -159,7 +165,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  padding-left: 12px;
+  padding-left: 11px;
   margin-bottom: 10px;
   font-size: 12px;
   font-weight: 600;
@@ -184,8 +190,8 @@
   content: "";
   flex: 1;
   height: 1px;
-  margin-left: 10px;
-  background: linear-gradient(90deg, var(--hair), transparent);
+  margin-left: 8px;
+  background: linear-gradient(90deg, var(--hair) 0%, rgba(107, 78, 158, .08) 60%, transparent 100%);
 }
 
 /* 选项按钮 */
@@ -193,24 +199,40 @@
   position: relative;
   display: block;
   width: 100%;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   padding: 14px 40px 14px 44px;
   border: 1px solid var(--hair);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: 12px;
+  /* 底色必须是「白渐变叠在面板色上」，不能写成纯 #fff：
+     纯白按钮衬着 #FCFAFF 淡紫面板，对比一强，
+     整张卡看起来就「更紫」，和设计 HTML 里微微泛紫、
+     与面板融合的按钮完全两样（App 截图偏薰衣草色的根源）。 */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 70%),
+    var(--panel);
+  /* 默认态三层阴影 —— 设计稿质感的核心，之前一直漏写：
+     近影定边 + 远处弥散托底 + 顶部内高光，按钮才「浮」在面板上。
+     没有这条就是「死白一片」，正是预览 vs App 观感差距的最后一块。 */
+  box-shadow:
+    0 1px 1px rgba(70, 50, 110, .05),
+    0 6px 16px -12px rgba(70, 50, 110, .35),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  /* 设计稿 .94em × 16px 基准 = 15.04px，与 JS 内联值保持一致 */
+  font-size: 15px;
+  font-weight: 400;
   line-height: 1.55;
+  letter-spacing: .005em;
   text-align: left;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
   transition:
-    transform .16s ease,
-    border-color .16s ease,
-    box-shadow .16s ease,
-    background .16s ease;
+    transform .22s cubic-bezier(.2, .8, .2, 1),
+    border-color .22s ease,
+    box-shadow .22s ease,
+    background-color .22s ease;
 }
 .xw-plot-card .choice:last-child {
   margin-bottom: 0;
@@ -220,47 +242,53 @@
 .xw-plot-card .choice::before {
   content: "◇";
   position: absolute;
-  left: 18px;
+  left: 16px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--purple);
   opacity: .55;
-  font-size: 13px;
   line-height: 1;
-  /* 按下 / 悬停时加深，需要一个过渡才不突兀 */
-  transition: opacity .16s ease;
+  /* 按下 / 悬停时加深放大，opacity 与 transform 都要过渡才顺滑 */
+  transition: opacity .22s ease, transform .22s ease;
 }
 
-/* 右侧箭头：默认隐藏 */
+/* 右侧箭头：默认隐藏在 -3px 处，hover 滑入（设计稿机制） */
 .xw-plot-card .choice::after {
   content: "";
   position: absolute;
-  right: 18px;
+  right: 16px;
   top: 50%;
   width: 6px;
   height: 6px;
-  margin-top: -3px;
-  border-top: 1.5px solid var(--purple);
-  border-right: 1.5px solid var(--purple);
-  transform: rotate(45deg);
+  margin-top: -4px;
+  border-top: 1.5px solid var(--soft);
+  border-right: 1.5px solid var(--soft);
+  transform: translateX(-3px) rotate(45deg);
   opacity: 0;
-  transition: opacity .16s ease, right .16s ease;
+  transition:
+    transform .22s cubic-bezier(.2, .8, .2, 1),
+    opacity .22s ease,
+    border-color .22s ease;
 }
 
 .xw-plot-card .choice:hover {
   transform: translateY(-2px);
-  border-color: rgba(107, 78, 158, .38);
-  background: #fff;
-  box-shadow: 0 6px 16px -12px rgba(107, 78, 158, .55);
+  border-color: var(--purple-l);
+  box-shadow:
+    0 2px 4px rgba(70, 50, 110, .08),
+    0 12px 26px -14px rgba(107, 78, 158, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .95);
 }
 
 .xw-plot-card .choice:hover::after {
-  opacity: .7;
-  right: 15px;
+  opacity: 1;
+  border-color: var(--purple-l);
+  transform: translateX(0) rotate(45deg);
 }
 
 .xw-plot-card .choice:hover::before {
-  opacity: .9;
+  opacity: 1;
+  transform: translateY(-50%) scale(1.08);
 }
 
 /* ── 按下反馈 ──────────────────────────────────────────────────
@@ -276,13 +304,16 @@
    ──────────────────────────────────────────────────────────── */
 .xw-plot-card .choice:active {
   transform: translateY(-2px);
-  border-color: rgba(107, 78, 158, .38);
-  background: #fff;
-  box-shadow: 0 6px 16px -12px rgba(107, 78, 158, .55);
+  border-color: var(--purple-l);
+  box-shadow:
+    0 2px 4px rgba(70, 50, 110, .08),
+    0 12px 26px -14px rgba(107, 78, 158, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .95);
 }
 
 .xw-plot-card .choice:active::before {
-  opacity: .9;
+  opacity: 1;
+  transform: translateY(-50%) scale(1.08);
 }
 
 .xw-plot-card .choice:focus-visible {
@@ -301,25 +332,15 @@
   }
 }
 
-/* 极窄屏：内边距收紧 */
+/* 极窄屏：只收选项内距与 ◇ 位置（与设计稿媒体查询逐字一致，
+   wrap / sec 的内距在任何屏宽下都不变，否则手机上卡片会比
+   独立 HTML 更瘦一圈，又是一处「长不一样」） */
 @media (max-width: 420px) {
-  .xw-plot-card .wrap {
-    padding: 12px 10px;
-  }
-
-  .xw-plot-card .sec {
-    padding: 14px 12px 12px;
-  }
-
   .xw-plot-card .choice {
-    padding: 12px 34px 12px 38px;
+    padding: 13px 34px 13px 40px;
   }
 
   .xw-plot-card .choice::before {
     left: 14px;
-  }
-
-  .xw-plot-card .choice::after {
-    right: 14px;
   }
 }

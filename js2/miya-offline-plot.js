@@ -97,8 +97,35 @@
        ──────────────────────────────────────────────────────── */
     var FIX_FS_15 = 'font-size:15px !important';
     var FIX_FS_12 = 'font-size:12px !important';
-    var FIX_FS_14 = 'font-size:14px !important';
-    var FIX_FS_13_5 = 'font-size:13.5px !important';
+    /* 按钮字号对齐设计稿真实值：设计基准 16px，
+       宽屏 .94em = 15.04px、窄屏 .93em = 14.88px —— 两者只差 0.16px，
+       统一钉 15px。之前钉 14px/13.5px 是整卡比独立预览小一圈的原因之一。 */
+    var FIX_FS_BTN = 'font-size:15px !important';
+
+    /* ── 字体强绑定（防全局字体/字重覆盖）────────────────────────
+       和上面的字号是同一类问题，两条全局规则会改掉卡片字形：
+         1. .miya-offline-app 根节点 font-family:var(--xw-sans)
+            （黑体）+ font-weight:300 —— 卡片不写死就会变成「细黑体」；
+         2. 用户启用自定义字体时，style.css 里有
+            html.miya-custom-font-active body :where(:not(...)×5) {
+              font-family: var(--miya-font) !important;
+            }
+            特异性 (0,3,3) 且带 !important，命中 body 下每一个元素，
+            CSS 文件里无论怎么堆选择器都追不平 ——
+            唯一稳赢的还是【内联 + !important】。
+
+       设计稿指定的是衬线宋体，所以这里整卡钉死 serif 栈：
+       Android 的 Noto Serif CJK SC / Noto Serif SC、
+       iOS/macOS 的 Songti SC、部分国产 ROM 的 Source Han Serif SC，
+       最后落 generic serif（Android 上通常也是 Noto Serif 系）。
+       与独立打开设计 HTML 用的是同一栈 → 同一设备同一观感。
+       ──────────────────────────────────────────────────────── */
+    /* ⚠️ 字体名必须用【单引号】：这段字符串要拼进 style="..." 双引号属性里，
+       若字体名也用双引号，第一个 " 就会把 style 属性截断，整条声明失效
+       （实测踩过：computed 落回全局字体，卡片又变黑体）。 */
+    var FIX_FF = "font-family:'Noto Serif CJK SC','Noto Serif SC','Songti SC','Source Han Serif SC',serif !important";
+    var FIX_FW_400 = 'font-weight:400 !important';
+    var FIX_FW_600 = 'font-weight:600 !important';
 
     /* 行首前缀：项目符号 / 编号 / 全角编号，后面可能跟一个空格或制表符 */
     var PREFIX_RE = /^\s*(?:[-–—·•*‧∙※]|\(?\d{1,2}[).、．]?|[①②③④⑤⑥⑦⑧⑨⑩]|（\d{1,2}）)\s*/;
@@ -206,27 +233,15 @@
         if (!list.length) return '';
 
         /*
-         * 窄屏（≤420px）选项字号收一档，与设计稿的响应式规则一致。
+         * 窄屏（≤420px）只收内距（CSS 媒体查询负责，见样式表），
+         * 字号不再分支：设计稿宽屏 .94em=15.04px、窄屏 .93em=14.88px，
+         * 只差 0.16px，统一内联 15px。
          *
-         * 为什么要在 JS 里判一次：字号是内联写的，而【内联的 !important
-         * 永远压过样式表里的 !important】—— 媒体查询那条
-         * `@media (max-width:420px){ .choice{font-size:13.5px} }`
-         * 根本赢不了内联的 14px。所以这里主动把值改成 13.5px。
-         *
-         * matchMedia 不可用时（极老的 WebView）回退到窗口宽度，
-         * 再不行就当宽屏 —— 宁可字号大一档，也不能让卡片不显示。
+         * 之所以不在这里写媒体查询：字号是内联 !important，
+         * 样式表里的媒体查询永远赢不了它 —— 分支没有意义。
          */
-        var narrow = false;
-        try {
-            if (typeof global.matchMedia === 'function') {
-                narrow = global.matchMedia('(max-width: 420px)').matches;
-            } else if (typeof global.innerWidth === 'number') {
-                narrow = global.innerWidth <= 420;
-            }
-        } catch (eNarrow) {
-            narrow = false;
-        }
-        var choiceFs = narrow ? FIX_FS_13_5 : FIX_FS_14;
+
+        var choiceFs = FIX_FS_BTN;
 
         var choices = list
             .map(function (text) {
@@ -235,6 +250,10 @@
                     escAttr(text) +
                     '" style="' +
                     choiceFs +
+                    ';' +
+                    FIX_FF +
+                    ';' +
+                    FIX_FW_400 +
                     '">' +
                     esc(text) +
                     '</button>'
@@ -246,15 +265,31 @@
             '<div class="xw-plot-card" data-ap-plot-card="1"' +
             ' style="--miya-font-size-scale:1;' +
             FIX_FS_15 +
+            ';' +
+            FIX_FF +
+            ';' +
+            FIX_FW_400 +
             '">' +
             '<div class="wrap" style="' +
             FIX_FS_15 +
+            ';' +
+            FIX_FF +
+            ';' +
+            FIX_FW_400 +
             '">' +
             '<div class="sec" style="' +
             FIX_FS_15 +
+            ';' +
+            FIX_FF +
+            ';' +
+            FIX_FW_400 +
             '">' +
             '<div class="sec-title" style="' +
             FIX_FS_12 +
+            ';' +
+            FIX_FF +
+            ';' +
+            FIX_FW_600 +
             '">剧情建议</div>' +
             choices +
             '</div></div></div>'
