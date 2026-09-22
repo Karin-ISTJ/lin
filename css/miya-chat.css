@@ -1988,32 +1988,6 @@ html.qq-img-lightbox-open {
   to { opacity: 1; transform: none; }
 }
 
-/* ── 抽屉键盘适配：房间静止，面板平滑上抬 ──
- * 抽屉打开时点输入框（金额 / 祝福语等），房间不再整体收缩——
- * qq-room--keyboard 的 top/height 瞬变会把遮罩、面板、背景聊天一起拽动，
- * 视觉上就是「闪一下」。现在面板按 --qq-kb-offset（JS 维护，含 PWA 超界补偿）
- * 平移到键盘上方：transform 走合成器，背景零重排零位移，
- * 数字键盘与文本键盘开合都表现为同一条平滑滑移曲线。 */
-.qq-room__overlay .qq-sheet__panel {
-  transform: translateY(calc(-1 * var(--qq-kb-offset, 0px)));
-  transition: transform 0.26s ease-out;
-}
-
-/* ── 安卓抽屉键盘过渡 ──
- * .miya-chat-app 是 fixed+inset:0，直接跟随浏览器窗口（ICB）高度；
- * 安卓上键盘开合、以及输入法在「文本 ↔ 数字面板」间切换（金额等数字输入）
- * 引发的窗口高度变化往往是一次性瞬变，应用高度会带着房间、遮罩、面板整块跳，
- * 这就是安卓下「点金额闪一下、点祝福语不闪」的根源（数字面板与文本键盘高度不同）。
- * 抽屉在场期间（html.miya-kb-smooth，由 openOverlay/closeOverlay 维护）：
- * 应用高度改由 --app-height（rAF 跟随窗口）驱动，并加一条极短过渡，
- * 把瞬变摊平成贴合键盘动画的滑移。iOS 键盘不缩放窗口，走房间静止方案，不适用此规则。 */
-html:not(.is-ios).miya-kb-smooth .miya-chat-app {
-  top: 0;
-  bottom: auto;
-  height: var(--app-height, 100dvh);
-  transition: height 0.09s linear;
-}
-
 .qq-sheet__panel {
   position: relative;
   background:

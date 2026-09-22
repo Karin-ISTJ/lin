@@ -244,3 +244,53 @@
   font-size: 11px;
   color: #6b6560;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * 用户装饰层（#miya-chat-app > [data-chat-app-deco]）—— 定位约束
+ *
+ * 病史（"图片 1600px 布局炸裂，改小尺寸后过阵子又复发"的根治）：
+ *   容器与 .chat-app-deco__item 此前在全部 CSS 里零定义。JS 侧
+ *   renderDecoLayer() 写入的 left/top/width/height 内联样式全部按
+ *   "绝对定位悬浮"设计，但约束它们的定位规则缺失 → 装饰层退化成
+ *   flex column 里的普通文档流块。用户一旦配置了较大尺寸的装饰图
+ *   （实测 1600px），大图实占布局空间，把 .qq-pages（flex:1）压成
+ *   左侧窄条 —— 表现为"消息页挤成一竖条 + 右侧一张巨图"。
+ *   手动把图改成两位数 px 只是把文档流占位变小（治标）：
+ *   换张图、调大尺寸或恢复备份后立即复发。
+ *
+ * 修复语义：装饰层回到设计意图 —— 永远悬浮覆盖、不参与布局、
+ *   不拦截点击（injectGuardCss 已有 pointer-events:none !important 兜底）。
+ *   无论装饰图尺寸多大，最坏情况是被 overflow 裁剪，绝不再挤爆布局。
+ * 层级：.soft-deco（系统装饰）= 0、.qq-pages（内容）= 1，
+ *   用户装饰取 2 悬浮于内容之上（装饰图列表有 z 0–999 供内部再分层）。
+ * ───────────────────────────────────────────────────────────────────── */
+#miya-chat-app .chat-app-deco {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 内置涂鸦层：同样不参与布局（空 div 时零占位，有内容也不撑爆容器） */
+#miya-chat-app .chat-app-deco--builtin-doodle-msg,
+#miya-chat-app .chat-app-deco--builtin-doodle-mine {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 单张装饰图：JS 内联的 left/top/width/height 至此才有定位语义 */
+#miya-chat-app .chat-app-deco__item {
+  position: absolute;
+}
+
+#miya-chat-app .chat-app-deco__item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* 与"上传后设页面、位置与尺寸(px)"的拉伸语义一致 */
+  user-select: none;
+  -webkit-user-drag: none;
+}
