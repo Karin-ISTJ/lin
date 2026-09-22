@@ -303,7 +303,7 @@
       if (p.watered) cls += ' is-watered';
       inner =
         '<span class="fg-plot__crop' + (mature ? ' fg-plot__crop--mature' : '') + '">' + c.stages[p.stage] + '</span>' +
-        (p.fert ? '<span class="fg-plot__fert">✨</span>' : '') +
+        (p.fertToday ? '<span class="fg-plot__fert">✨</span>' : '') +
         (mature ? '<span class="fg-plot__shine" aria-hidden="true"></span>' : '');
     } else {
       cls += ' is-empty';
@@ -441,7 +441,7 @@
     var p = s.plots[i];
     if (!p || p.fert) return;
     if (!spendEnergy(STORE.ENERGY_COST.fert)) return;
-    p.fert = true;
+    p.fert = true; p.fertToday = true;
     STORE.save();
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
@@ -467,7 +467,7 @@
     if (m < targets.length) toast('💤 体力只够施 ' + m + ' 块');
     targets = targets.slice(0, m);
     s.energy -= per * m;
-    targets.forEach(function (i) { s.plots[i].fert = true; });
+    targets.forEach(function (i) { s.plots[i].fert = true; s.plots[i].fertToday = true; });
     STORE.save();
     renderHead(s);
     toast('✨ 一键施肥 ' + m + ' 块…');
@@ -604,6 +604,11 @@
     var cal = STORE.calendarOf(s.day);
     s.day += 1;
     s.stats.daysPlayed += 1;
+
+    /* 施肥标记只保留当天：过夜即消失（+1 产量增益 p.fert 不受影响） */
+    for (var fi = 0; fi < s.plots.length; fi++) {
+      if (s.plots[fi]) s.plots[fi].fertToday = false;
+    }
 
     var w = STORE.rollWeather();
     var nextCal = STORE.calendarOf(s.day);

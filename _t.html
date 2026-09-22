@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<link rel="stylesheet" href="css/miya-farmgame.css?v=10">
+<link rel="stylesheet" href="css/miya-farmgame.css?v=11">
 <style>body{margin:0}</style>
 </head><body>
   <div class="farmgame-app" id="miya-farmgame-app" hidden aria-hidden="true">
@@ -77,21 +77,6 @@
     <div class="fg-sheet" id="fg-sheet" hidden></div>
   </div>
 
-<script src="js2/miya-farmgame-store.js?v=4"></script>
-<script src="js2/miya-farmgame-app.js?v=8"></script>
-<script>
-window.addEventListener('load', function(){
-  MiyaFarmGame.open();
-  setTimeout(function(){
-    var st = MiyaFarmGameStore.getState();
-    st.level = 5;
-    st.plots[0] = { crop: 'strawberry', stage: 2, watered: false, fert: false }; /* 成熟 */
-    st.plots[1] = { crop: 'pea', stage: 0, watered: false, fert: false };
-    MiyaFarmGame.open();
-    setTimeout(function(){
-      document.querySelector('[data-plot="1"]').click(); /* 浇水 → is-busy，验证土地静止 */
-    }, 500);
-  }, 400);
-});
-</script>
+<script src="js2/miya-farmgame-store.js?v=5"></script>
+<script src="js2/miya-farmgame-app.js?v=10"></script>
 </body></html>

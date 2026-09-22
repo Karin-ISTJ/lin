@@ -157,7 +157,8 @@
           crop: p.crop,
           stage: clampInt(p.stage, 0, CROPS[p.crop].stages.length - 1, 0),
           watered: !!p.watered,
-          fert: !!p.fert
+          fert: !!p.fert,
+          fertToday: !!p.fertToday
         };
       });
     }
