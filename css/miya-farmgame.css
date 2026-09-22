@@ -190,6 +190,10 @@
   box-shadow: 0 2px 6px rgba(150, 110, 80, 0.14);
   cursor: pointer;
   transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 .fg-act:active { transform: scale(0.96); }
 .fg-act.is-active {
@@ -270,7 +274,8 @@
   color: rgba(255, 255, 255, 0.85);
   text-shadow: 0 1px 2px rgba(120, 80, 50, 0.25);
 }
-.fg-plot.is-empty.is-active-mode { outline: 3px dashed rgba(239, 111, 166, 0.75); outline-offset: -6px; }
+.fg-plot.is-empty { outline: 2.5px dashed rgba(239, 111, 166, 0.0); outline-offset: -6px; transition: outline-color 0.2s ease; }
+.fg-plot.is-empty:active { outline-color: rgba(239, 111, 166, 0.75); }
 .fg-plot__crop {
   position: absolute;
   inset: 0;
@@ -485,4 +490,183 @@
   color: #fff;
   font-size: 13px;
   pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * v2 直觉化交互 · 新增样式
+ *  土地劳作进度条 · 地块气泡提示 · 收获上升动效
+ *  农场风全局提示条 · 浇水湿润土地
+ * ═══════════════════════════════════════════════════════════ */
+
+/* ── 浇过水的土地：整块变深（湿土色），配合 💧 角标 ── */
+.fg-plot.is-watered::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(92, 62, 40, 0.20), rgba(66, 44, 26, 0.36));
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* ── 劳作中：土地轻脉动 ── */
+.fg-plot.is-busy { animation: fg-plot-pulse 1.1s ease-in-out infinite; }
+@keyframes fg-plot-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+
+/* ── 土地进度条（播种/浇水/施肥/锄地 3 秒劳作） ── */
+.fg-progress {
+  position: absolute;
+  left: 13%;
+  right: 13%;
+  bottom: 13%;
+  height: 12px;
+  border-radius: 7px;
+  background: rgba(72, 46, 26, 0.46);
+  box-shadow: inset 0 1px 3px rgba(48, 28, 12, 0.55), 0 1px 0 rgba(255, 240, 210, 0.4);
+  overflow: hidden;
+  z-index: 5;
+  pointer-events: none;
+}
+.fg-progress > i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #c3ec90, #7ec850 70%, #5daa3c);
+  box-shadow: 0 0 8px rgba(165, 232, 120, 0.6);
+  transition: width 3s linear;
+  transition-timing-function: linear;
+}
+
+/* ── 地块气泡：奶黄小木牌 + 尾巴，冒出后上浮渐隐 ── */
+.fg-bubble {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  padding: 6px 13px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #fffaf0, #ffefd2);
+  border: 2px solid #e3b877;
+  color: #6b5443;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 5px 14px rgba(160, 105, 55, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  animation: fg-bubble-pop 1.7s ease forwards;
+}
+.fg-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6.5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: #ffefd2;
+  border-right: 2px solid #e3b877;
+  border-bottom: 2px solid #e3b877;
+  transform: rotate(45deg);
+}
+@keyframes fg-bubble-pop {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(9px) scale(0.6); }
+  12%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.07); }
+  20%  { transform: translateX(-50%) translateY(0) scale(1); }
+  76%  { opacity: 1; transform: translateX(-50%) translateY(-4px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-15px) scale(0.95); }
+}
+
+/* ── 收获动效：作物上升慢慢消失 ── */
+.fg-fx {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 7;
+}
+.fg-fx--rise {
+  font-size: 36px;
+  filter: drop-shadow(0 2px 3px rgba(120, 80, 50, 0.28));
+  animation: fg-rise 1.15s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+@keyframes fg-rise {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  22%  { transform: translateY(-10px) scale(1.12); opacity: 1; }
+  100% { transform: translateY(-60px) scale(1.3); opacity: 0; }
+}
+
+/* 收获时的星光飘散（✨🌟 各自向 --fx-dx/--fx-dy 方向散开） */
+.fg-fx--spark {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  font-size: 16px;
+  animation: fg-spark 0.95s ease-out forwards;
+}
+@keyframes fg-spark {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  22%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--fx-dx, 0px)), calc(-50% + var(--fx-dy, -44px))) scale(1.15); opacity: 0; }
+}
+
+/* ── 锄头挖掉：作物缩小旋转消失 ── */
+.fg-plot.is-vanishing .fg-plot__crop {
+  animation: fg-vanish 0.5s ease-in forwards;
+}
+@keyframes fg-vanish {
+  0%   { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.12) rotate(24deg); opacity: 0; }
+}
+
+/* ── 农场风全局提示条（替代普通白框 toast） ── */
+.fg-toasts {
+  position: absolute;
+  top: 58px;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  pointer-events: none;
+}
+.fg-toast {
+  max-width: 100%;
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff7e0, #ffe9bb);
+  border: 2px solid #e2b56e;
+  color: #6b5443;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(170, 110, 60, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  animation: fg-toast-in 2.4s ease forwards;
+}
+@keyframes fg-toast-in {
+  0%   { opacity: 0; transform: translateY(-14px) scale(0.86); }
+  10%  { opacity: 1; transform: translateY(0) scale(1.04); }
+  16%  { transform: translateY(0) scale(1); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+/* 减少动态偏好：动画降级为简单淡入淡出 */
+@media (prefers-reduced-motion: reduce) {
+  .fg-plot.is-busy { animation: none; }
+  .fg-fx--rise, .fg-fx--spark { animation-duration: 0.6s; }
+  .fg-bubble, .fg-toast { animation-duration: 1.2s; }
 }

@@ -2943,17 +2943,17 @@
       <!-- 动作区 -->
       <section class="fg-actions" aria-label="农事动作">
         <div class="fg-actions__row">
-          <button type="button" class="fg-act" id="fg-act-sow" data-fg-act="sow">播种</button>
-          <button type="button" class="fg-act" id="fg-act-water" data-fg-act="water">浇水</button>
-          <button type="button" class="fg-act" id="fg-act-fert" data-fg-act="fert">施肥</button>
-          <button type="button" class="fg-act fg-act--hoe" id="fg-act-hoe" data-fg-act="hoe">锄头</button>
-          <button type="button" class="fg-act fg-act--bulk" id="fg-act-bulk" data-fg-bulk><span>一键收获</span></button>
+          <button type="button" class="fg-act" id="fg-act-sow" data-fg-act="sow">🌱 播种</button>
+          <button type="button" class="fg-act" id="fg-act-water" data-fg-act="water">💧 浇水</button>
+          <button type="button" class="fg-act" id="fg-act-fert" data-fg-act="fert">✨ 施肥</button>
+          <button type="button" class="fg-act fg-act--hoe" id="fg-act-hoe" data-fg-act="hoe">⛏ 锄头</button>
+          <button type="button" class="fg-act fg-act--bulk" id="fg-act-bulk" data-fg-bulk><span>✨ 一键收获</span></button>
         </div>
         <div class="fg-energy">
           <div class="fg-energy__bar"><span id="fg-energybar" style="width:100%"></span></div>
           <span class="fg-energy__num">体力 <b id="fg-energynum">20/20</b></span>
         </div>
-        <p class="fg-hint" id="fg-hint">先点上方动作按钮，再点农田；成熟作物直接点收</p>
+        <p class="fg-hint" id="fg-hint">直接点地块干活：空地播种 · 缺水浇水 · 缺肥施肥 · 熟了收获</p>
       </section>
 
       <!-- 农田 -->
@@ -2974,6 +2974,9 @@
         <button type="button" class="fg-footer__reset" data-fg-reset>重开农场</button>
       </footer>
     </div>
+
+    <!-- 农场风提示条（替代普通白框 toast） -->
+    <div class="fg-toasts" id="fg-toasts"></div>
 
     <!-- 底部浮层（种子/仓库/信箱共用） -->
     <div class="fg-sheet" id="fg-sheet" hidden></div>
