@@ -34,8 +34,8 @@
   var HARVEST_STAGGER_MS = 260;/* 一键收获：逐块动效间隔 */
 
   /* ── 操作提示（随机 pool，每次干完活抽一句） ── */
-  var WATER_TOASTS = ['咕嘟咕嘟，浇好啦。', '水够啦，剩下的交给时间。'];
-  var FERT_TOASTS = ['撒一把魔法肥料～', '咕嘟咕嘟，营养渗进去啦。'];
+  var WATER_TOASTS = ['咕嘟咕嘟，浇好啦~', '水够啦~剩下的就交给时间吧~'];
+  var FERT_TOASTS = ['撒一把魔法肥料～', '咕嘟咕嘟，营养渗进去啦~'];
 
   /* ── 工具 ── */
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }

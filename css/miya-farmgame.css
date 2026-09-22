@@ -2,7 +2,7 @@
  *
  * 视觉：对标小红书"星露谷 Lite"海报 —— 奶粉橙渐变背景、奶白圆角卡片、
  * 暖棕文字、胶囊动作按钮（选中态粉色高亮）、贴图地块。
- * 贴图：img/farmgame/banner.jpg（顶部小屋横幅）、plot-soil.png（地块）。
+ * 贴图：img/farmgame/banner.jpg（顶部小屋横幅）、plot-soil-2.png（地块）。
  */
 
 .farmgame-app {
@@ -257,7 +257,7 @@
   border: none;
   padding: 0;
   border-radius: 18px;
-  background: url("../img/farmgame/plot-soil.png?v=2") center / 100% 100% no-repeat, #e8d5bd;
+  background: url("../img/farmgame/plot-soil-2.png") center / 100% 100% no-repeat, #e8d5bd;
   box-shadow: 0 4px 10px rgba(150, 110, 80, 0.16);
   cursor: pointer;
   transition: transform 0.12s ease;
@@ -299,20 +299,40 @@
 .fg-plot.is-mature {
   box-shadow: 0 4px 14px rgba(240, 170, 80, 0.55), 0 0 0 2.5px rgba(255, 205, 110, 0.9);
 }
+/* ── 成熟：两颗 ✨ 绕作物转圈 + 闪烁（取代原右上角光点） ──
+   shine 本体是地块中心的 0×0 锚点，::before/::after 沿半径转圈，
+   rotate(...) translateX(r) rotate(-...) 让 ✨ 保持正立不侧翻。 */
 .fg-plot__shine {
   position: absolute;
-  top: 8px;
-  right: 10px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ffe9a8;
-  box-shadow: 0 0 8px 3px rgba(255, 219, 130, 0.85);
-  animation: fg-twinkle 1.4s ease-in-out infinite;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
 }
-@keyframes fg-twinkle {
-  0%, 100% { opacity: 0.35; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.15); }
+.fg-plot__shine::before,
+.fg-plot__shine::after {
+  content: "✨";
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 15px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 219, 130, 0.95));
+  animation: fg-shine-orbit 2.6s linear infinite, fg-shine-twinkle 1.15s ease-in-out infinite alternate;
+}
+.fg-plot__shine::after {
+  font-size: 11px;
+  animation-delay: -1.3s, -0.55s;
+}
+@keyframes fg-shine-orbit {
+  from { transform: rotate(0turn) translateX(30px) rotate(0turn); }
+  to   { transform: rotate(1turn) translateX(30px) rotate(-1turn); }
+}
+@keyframes fg-shine-twinkle {
+  from { opacity: 0.2; }
+  to   { opacity: 1; }
 }
 
 /* ── 主按钮 ── */
