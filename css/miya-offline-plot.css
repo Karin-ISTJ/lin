@@ -1,0 +1,207 @@
+/* ── 线下正文底部 · 剧情建议卡 ──────────────────────────────────
+   这张卡的外观是用户指定的成品，**不属于线下主题的一部分**：
+   色值、间距、圆角、阴影一律按给定代码原样写死，
+   不引用 --xw-* 主题变量，因此博物馆 / 手帐 / 自定义皮肤下长得完全一致。
+
+   唯一的结构性调整是外面套了一层 .xw-plot-card 作用域，
+   让 .wrap / .sec / .choice 这些极通用的类名只在卡内生效，
+   不会误伤线下其它地方（.choice 这种名字在别处很容易撞车）。
+   卡片内部的类名、层级、伪元素、响应式规则一个没动。
+   ──────────────────────────────────────────────────────────── */
+
+.xw-plot-card {
+  /* 局部变量：只在本卡作用域内生效，不污染全局也不受主题影响 */
+  --ink: #2A2436;
+  --soft: #7A7290;
+  --hair: rgba(107, 78, 158, .20);
+  --purple: #6B4E9E;
+  --purple-l: #8B6FC4;
+  --gold: #C9A227;
+  --panel: #FCFAFF;
+
+  /* 卡片自身在正文里的落位：贴在正文最底部，与最后一层留出呼吸感 */
+  display: block;
+  margin: 18px 0 4px;
+  /* 长文案不撑破容器 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  /* 局内字体取线下正文字体族，字号沿用外层，保证与正文同一语感 */
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  text-align: left;
+}
+
+/* 卡内元素命中时不做全局 reset 依赖：把盒模型钉死，避免其它皮肤的通配规则干扰 */
+.xw-plot-card,
+.xw-plot-card * {
+  box-sizing: border-box;
+}
+
+.xw-plot-card .wrap {
+  padding: 16px 14px;
+}
+
+.xw-plot-card .sec {
+  position: relative;
+  padding: 16px 16px 14px;
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow:
+    0 1px 2px rgba(42, 36, 54, .04),
+    0 8px 24px -18px rgba(107, 78, 158, .45);
+}
+
+/* 标题：左侧紫色竖线 + 字距 + 右侧渐隐横线 */
+.xw-plot-card .sec-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  color: var(--soft);
+  line-height: 1;
+}
+
+.xw-plot-card .sec-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--purple-l), var(--purple));
+}
+
+.xw-plot-card .sec-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  margin-left: 10px;
+  background: linear-gradient(90deg, var(--hair), transparent);
+}
+
+/* 选项按钮 */
+.xw-plot-card .choice {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 14px 40px 14px 44px;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition:
+    transform .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    background .16s ease;
+}
+
+.xw-plot-card .choice:last-child {
+  margin-bottom: 0;
+}
+
+/* 左侧 ◇ 紫色符号 */
+.xw-plot-card .choice::before {
+  content: "◇";
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--purple);
+  opacity: .55;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* 右侧箭头：默认隐藏 */
+.xw-plot-card .choice::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-top: 1.5px solid var(--purple);
+  border-right: 1.5px solid var(--purple);
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity .16s ease, right .16s ease;
+}
+
+.xw-plot-card .choice:hover {
+  transform: translateY(-2px);
+  border-color: rgba(107, 78, 158, .38);
+  background: #fff;
+  box-shadow: 0 6px 16px -12px rgba(107, 78, 158, .55);
+}
+
+.xw-plot-card .choice:hover::after {
+  opacity: .7;
+  right: 15px;
+}
+
+.xw-plot-card .choice:hover::before {
+  opacity: .9;
+}
+
+.xw-plot-card .choice:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.xw-plot-card .choice:focus-visible {
+  outline: 2px solid var(--purple-l);
+  outline-offset: 2px;
+}
+
+/* 触屏：没有 hover，箭头不显示（保留 ◇ 作视觉锚点） */
+@media (hover: none) {
+  .xw-plot-card .choice {
+    padding-right: 20px;
+  }
+
+  .xw-plot-card .choice::after {
+    display: none;
+  }
+}
+
+/* 极窄屏：内边距收紧 */
+@media (max-width: 420px) {
+  .xw-plot-card .wrap {
+    padding: 12px 10px;
+  }
+
+  .xw-plot-card .sec {
+    padding: 14px 12px 12px;
+  }
+
+  .xw-plot-card .choice {
+    padding: 12px 34px 12px 38px;
+    font-size: 13.5px;
+  }
+
+  .xw-plot-card .choice::before {
+    left: 14px;
+  }
+
+  .xw-plot-card .choice::after {
+    right: 14px;
+  }
+}

@@ -1931,6 +1931,73 @@
     }
 
     /**
+     * 剧情走向建议卡 —— 贴在**整段正文的最底部**（不在任何楼层内部）。
+     *
+     * 为什么是场景级、不是楼层级
+     * ────────────────────────
+     * 这张卡的语义是「接下来我可以怎么走」，说的是**当前这一刻**。
+     * 挂到每一层下面会同时出两个问题：
+     *   · 翻历史时满屏都是过期建议 —— 第 3 层的建议对应的是第 3 层的处境，
+     *     点下去模型接的是第 12 层之后的情节，必然驴唇不对马嘴；
+     *   · 楼层级别的 DOM 每层都要多一份，长场景的白闪与滚动抖动都会变明显。
+     * 所以它只出现一次，永远跟着最新那条建议走。
+     *
+     * 数据从哪来
+     * ──────────
+     * 由引擎在生成时解析 <plot> 标记，存进楼层自己的 m.plotHints
+     * （见 finalizeAppointmentAssistantBody）。这里只负责「取最后一份」。
+     *
+     * ⚠️ 取的是「最后一条**带建议**的 assistant 楼层」，不是「最后一条楼层」。
+     *
+     * 用户点掉一条建议后，会立刻发出一条 user 楼层（点击即发送，见
+     * bindFloorToolsDelegate）。那一刻最后一条楼层就是这条 user，
+     * 它身上当然没有建议 —— 若按「最后一条」取值，卡片会在点下去的瞬间消失。
+     * 这正是想要的缓动：旧建议先留在屏上，等新的一版生成出来再整批换掉，
+     * 中间不会出现「卡一下没了又冒出来」的跳变。
+     */
+    function plotHintCardHtml(msgs) {
+        var list = Array.isArray(msgs) ? msgs : [];
+        var plotApi = global.MiyaOfflinePlot;
+        if (!plotApi || typeof plotApi.plotItemsFromMessage !== 'function') return '';
+        var picked = null;
+        for (var i = list.length - 1; i >= 0; i--) {
+            var m = list[i];
+            if (!m || m.deleted || m.hidden) continue;
+            if (m.role !== 'assistant') continue;
+            if (!String(m.content || '').trim()) continue;
+            var items = plotApi.plotItemsFromMessage(m);
+            if (items && items.length) {
+                picked = items;
+                break;
+            }
+        }
+        if (!picked || !picked.length) return '';
+        var html = '';
+        try {
+            html = plotApi.renderPlotCardHtml(picked);
+        } catch (e) {
+            html = '';
+        }
+        return html || '';
+    }
+
+    /** 剧情建议指纹：只取「当前会显示的那几条」的文本，用于稳定 key */
+    function plotHintFingerprint(msgs) {
+        var list = Array.isArray(msgs) ? msgs : [];
+        var plotApi = global.MiyaOfflinePlot;
+        if (!plotApi || typeof plotApi.plotItemsFromMessage !== 'function') return '';
+        for (var i = list.length - 1; i >= 0; i--) {
+            var m = list[i];
+            if (!m || m.deleted || m.hidden) continue;
+            if (m.role !== 'assistant') continue;
+            if (!String(m.content || '').trim()) continue;
+            var items = plotApi.plotItemsFromMessage(m);
+            if (items && items.length) return contentFingerprint(items.join('\u0001'));
+        }
+        return '';
+    }
+
+    /**
      * 读一层楼的候选位置：候选表、总版数、当前第几版。
      *
      * total 用 `swipes.length || 1` 而不是 `swipes.length`：
@@ -2350,7 +2417,18 @@
              * 跟 :fh 是同一类坑，所以按同样的办法补指纹。
              */
             ':te' +
-            timeEventsFingerprint()
+            timeEventsFingerprint() +
+            /*
+             * 剧情建议指纹。
+             *
+             * 建议属于「场景级、挂在正文最底部、不属于任何楼层」的那一类内容，
+             * 跟现实时钟事件卡是同一个坑：只靠「最后一条消息」判有无变化会漏。
+             * 例如切候选（‹ ›）时内容换了、建议也跟着换，但消息条数没动、
+             * last.id 也没动 —— 不带这个指纹，patchStoryBody 会判定「无变化」，
+             * 卡片就停在上一版的建议上，用户点下去模型接的是另一条时间线。
+             */
+            ':ph' +
+            plotHintFingerprint(m)
         );
     }
 
@@ -2982,10 +3060,22 @@
          * 插一张当下的账本会跟卷宗里的时间线打架。
          */
         var teHtml = timeEventsHtml(ui.chatId, Date.now());
+        /*
+         * 剧情走向建议卡：挂在**整段正文之后、流式挂载点之前**。
+         *
+         * 位置三选一，只有这个是自洽的：
+         *   · 正文之前 —— 用户还没读到这一镜发生了什么，先问「接下来怎么走」本末倒置；
+         *   · 流式挂载点之后 —— 生成中这一块会不断被改写，卡片会被顶来顶去，
+         *     点的时候按钮在动，很难点中；
+         *   · 正文之后、流式之前 —— 已落定的内容全部在上方，卡片稳稳贴在最底部。
+         * 生成中卡片照常留着（建议取自上一版），等新一版落定再整批替换。
+         */
+        var plotHtml = plotHintCardHtml(msgs);
         var scriptInner =
             '<article class="xw-script" id="mol-story-body">' +
             teHtml +
             renderStoryLines(msgs, [], [], true) +
+            plotHtml +
             (streamingActive
                 ? '<div class="xw-stream-mount" data-ap-stream-mount aria-live="polite"></div>'
                 : '') +
@@ -3411,7 +3501,8 @@ function renderWriter() {
             body.innerHTML =
                 wmHtml +
                 timeEventsHtml(ui.chatId, Date.now()) +
-                renderStoryLines(msgs, [], [], true);
+                renderStoryLines(msgs, [], [], true) +
+                plotHintCardHtml(msgs);
             hydrateAppointmentHtmlPanels(body);
             hydrateAppointmentStatusBarIframes(body);
             resetStreamUi();
@@ -3951,10 +4042,31 @@ function renderWriter() {
         }
     }
 
-    function sendMessage() {
+    /**
+     * 发送一条消息。
+     *
+     * @param {string} [presetText] 以文本直接发送，不读输入框。
+     *   剧情建议卡的点击走的就是这条路（见 bindFloorToolsDelegate）——
+     *   卡片语义是「我选这条」，用户已经点过一次确认动作，
+     *   再让他去输入框里点一下发送是多余的一步。
+     */
+    function sendMessage(presetText) {
         var input = $('xw-writer-input');
-        if (!input) return;
-        var text = String(input.value || '').trim();
+        /*
+         * presetText 只在显式传字符串时才认。
+         * 这里必须挡住「被当事件处理器直接调用」的情形 ——
+         * 那种写法下传进来的是 Event 对象，若照着 String() 一转，
+         * 就会把 "[object MouseEvent]" 当成用户发言发出去。
+         * 现有的两个调用点都不传参，但接口留了口子就要自己封住。
+         */
+        var preset = typeof presetText === 'string' ? presetText.trim() : '';
+        /*
+         * 预设文案路径下不要求输入框存在：
+         * 极端情况（输入框被别的分支禁用了 / 还没渲染出来）也不该让
+         * 一个已经点下去的选择静默失效。
+         */
+        if (!preset && !input) return;
+        var text = preset || String(input.value || '').trim();
         if (!text) return;
         if (typeof persistAppointmentPresetFromSheet === 'function') {
             try {
@@ -3995,8 +4107,17 @@ function renderWriter() {
             toast('没发出去，请退回重选角色');
             return;
         }
-        input.value = '';
-        input.disabled = true;
+        /*
+         * 清空输入框 / 置灰，只在「真的用了输入框里的字」时才做。
+         * 点剧情建议发出时输入框里可能有用户没写完的草稿 ——
+         * 那是他的东西，我们发的是建议原文，不能顺手把它抹掉。
+         * 置灰照做（生成期间本来就不该能输入），结束后
+         * endWriterGeneration() 会恢复。
+         */
+        if (input && !preset) {
+            input.value = '';
+            input.disabled = true;
+        }
         var sendBtn = $('xw-writer-go');
         if (sendBtn) sendBtn.disabled = true;
         if (wasEmpty) {
@@ -6051,6 +6172,39 @@ function renderWriter() {
                 return;
             }
             /*
+             * 剧情走向建议卡的选项。
+             *
+             * 走委托的理由跟上面两张卡完全一样：这张卡挂在正文底部，
+             * 每次 patchStoryBody 重写 mol-story-body 的 innerHTML 时
+             * 都会被重建一次。直接绑元素 = 生成完就变成裸按钮。
+             *
+             * 点击语义是「我选这条」→ **直接发送**，不是填进输入框。
+             * 用户选的是「此刻我说什么」，已经做过一次明确的选择动作，
+             * 再让他去输入框按一次发送是多余的一步（而且那张卡在正文底部，
+             * 输入框在屏幕更下方，来回一趟很别扭）。
+             * 原文一字不改地发出去 —— 见 sendMessage 的 presetText 参数。
+             */
+            var plotBtn = e.target && e.target.closest
+                ? e.target.closest('[data-ap-plot-choice]')
+                : null;
+            if (plotBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                /*
+                 * 生成中不接：这一刻模型正在写，发出去也是被 busy 挡回来
+                 * （见 sendMessage 里的 isBusy 判断），不如当场说清楚，
+                 * 免得用户以为是自己没点到。
+                 */
+                var plotEng = apEngine();
+                if (plotEng && plotEng.isBusy(ui.chatId, ui.sessionId)) {
+                    toast('等上一镜结束再说');
+                    return;
+                }
+                var choiceText = String(plotBtn.getAttribute('data-ap-plot-choice') || '').trim();
+                if (choiceText) sendMessage(choiceText);
+                return;
+            }
+            /*
              * 楼层里的候选切换键 ‹ ›。
              *
              * 这两枚按钮以前是在 bindEvents() 里用 querySelectorAll 逐个绑的，
@@ -6082,62 +6236,6 @@ function renderWriter() {
                 e.stopPropagation();
                 e.preventDefault();
                 toggleFloor(hideBtn.getAttribute('data-ap-floor-hide'));
-                return;
-            }
-            /*
-             * 剧情建议卡：点一条 = 替我把这句话发出去。
-             *
-             * ── 为什么必须走委托 ──
-             * 和上面的 ‹ ›、现实时钟卡同理：卡片所在楼层每次都会随
-             * patchStoryBody() 重建 innerHTML，直接绑在 button 上的监听器
-             * 会一起消失，表现为「按钮在、点了没反应」。
-             *
-             * ── 为什么只认末尾楼层 ──
-             * 建议代表「接下来可以怎么做」，只在剧情推进到那儿时才成立。
-             * 历史楼层上点它 = 把一句话插到旧剧情中间，会把时间线截断，
-             * 后面那些楼层全部变得没有来处。
-             *
-             * 不过这不代表「历史楼层就不能用」：用户删掉后面楼层后，
-             * 那一层自然又成为末尾，按钮随之恢复可用 ——
-             * 这正好符合「后悔了，退回去重选一个走向」的用法，
-             * 不需要额外记什么状态，位置本身就是判据。
-             */
-            var choiceBtn = e.target && e.target.closest ? e.target.closest('[data-mi-choice]') : null;
-            if (choiceBtn) {
-                e.stopPropagation();
-                e.preventDefault();
-
-                var engNow = apEngine();
-                if (engNow && typeof engNow.isBusy === 'function' && engNow.isBusy(ui.chatId, ui.sessionId)) {
-                    toast('等上一镜结束再说');
-                    return;
-                }
-                if (!ui.chatId || !ui.sessionId) return;
-
-                var choiceText = String(choiceBtn.getAttribute('data-mi-choice') || '').trim();
-                if (!choiceText) return;
-
-                var sessNow = apStore().getSession(ui.chatId, ui.sessionId);
-                var liveMsgs = ((sessNow && sessNow.messages) || []).filter(function (m) {
-                    return m && !m.deleted && String(m.content || '').trim();
-                });
-                var lastMsg = liveMsgs.length ? liveMsgs[liveMsgs.length - 1] : null;
-                /*
-                 * 判断「这个按钮属于末尾那一层」：从按钮往上找到它所在的
-                 * 楼层容器，取其 data-ap-msg-id，与末尾楼层比对。
-                 * 用容器 id 判断而不是比较文本，是因为同一句话可能出现在多层。
-                 */
-                var floorEl = choiceBtn.closest ? choiceBtn.closest('[data-ap-msg-id]') : null;
-                var floorId = floorEl ? floorEl.getAttribute('data-ap-msg-id') : '';
-                if (!lastMsg || !floorId || floorId !== String(lastMsg.id)) {
-                    toast('这条建议已经过去了，往下聊才作数');
-                    return;
-                }
-
-                var inputEl = $('xw-writer-input');
-                if (!inputEl) return;
-                inputEl.value = choiceText;
-                sendMessage();
                 return;
             }
             var brBtn = e.target && e.target.closest ? e.target.closest('[data-ap-floor-branch]') : null;
@@ -6775,6 +6873,58 @@ function renderWriter() {
          */
         __testApplySwipe: function (msgId, delta) {
             applyOfflineSwipe(String(msgId || ''), Number(delta) || 0);
+        },
+        /*
+         * 测试专用后门：剧情建议卡。
+         *
+         * 暴露三件事，都是「光看 DOM 断言不了」的部分：
+         *   · html      —— 当前会画出来的卡片 HTML（空串 = 不该有卡）
+         *   · fingerprint —— 进稳定 key 的那段指纹
+         *   · click     —— 走真实委托路径点第 i 个选项
+         *
+         * 为什么不做成「测试自己插 DOM 再点」：
+         * 委托绑在 #xw-root 上，而 #xw-root 只在 render() 里才建出来。
+         * 测试自己插节点会绕过 bindEvents，测出来的是「没绑委托也能点」，
+         * 恰好把要验的东西漏掉。这里直接读页面里真实的 #xw-root，
+         * 找不到就明说 —— 让「场景没打开」这件事暴露出来，而不是静默通过。
+         *
+         * 只做透传，不含任何业务判断。
+         */
+        __testPlot: {
+            html: function () {
+                var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
+                return plotHintCardHtml(msgs);
+            },
+            fingerprint: function () {
+                var msgs = apStore().getSessionMessages(ui.chatId, ui.sessionId);
+                return plotHintFingerprint(msgs);
+            },
+            /* 直接往会话里塞一条带 plotHints 的角色楼层，返回它的 id */
+            seed: function (items, chatId, sessionId) {
+                var cid = String(chatId || ui.chatId || '');
+                var sid = String(sessionId || ui.sessionId || '');
+                if (!cid || !sid) return '';
+                var m = apStore().addMessage(cid, sid, {
+                    role: 'assistant',
+                    content: '（测试正文）他停了一下，把茶杯放回桌上。',
+                    plotHints: Array.isArray(items) ? items : []
+                });
+                return (m && m.id) || '';
+            },
+            /* 点第 i 个选项（默认 0），走真实 DOM 事件让委托接住 */
+            click: function (i) {
+                var root = $('xw-root');
+                if (!root) return 'no-root';
+                if (!root.__miyaFloorToolsBound) return 'delegate-not-bound';
+                var btns = root.querySelectorAll('[data-ap-plot-choice]');
+                var idx = Math.floor(Number(i) || 0);
+                if (!btns.length) return 'no-card';
+                if (!btns[idx]) return 'no-such-choice';
+                btns[idx].dispatchEvent(new MouseEvent('click', {
+                    bubbles: true, cancelable: true, view: window
+                }));
+                return 'clicked';
+            }
         }
     };
 })(window);

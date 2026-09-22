@@ -484,13 +484,60 @@
             '4、正文应为场景描写 + 动作 + 对话的连贯叙事（小说/剧本体），承接的是本场线下楼层与用户本轮输入，不是线上聊天记录。\n' +
             '5、跨场景记忆仅作背景知晓，禁止把记忆原文复述成新的线上气泡。\n' +
             '6、回顾近期跨场景记忆，勿机械复读相同开场与句式。\n' +
-            '7、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。';
+            '7、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。' +
+            '\n' +
+            buildPlotHintRules(roleName, userName);
         var statusApi = global.MiyaOfflineStatus;
         if (statusApi && typeof statusApi.isEnabled === 'function' && statusApi.isEnabled()) {
             base +=
                 '\n6、正文结束后必须按【线下格式规则·状态栏】完整输出 <miyastatus>...</miyastatus>；状态不得写入正文。';
         }
         return base;
+    }
+
+    /**
+     * 剧情走向建议 —— 输出规则。
+     *
+     * 这一段是给「正文底部的剧情建议卡」喂数据的唯一来源。
+     * 卡片要能点，就必须先有内容；而内容由谁产生是个绕不开的选择：
+     *
+     *   · 静态预设 —— 改动最小，但固定四句和剧情对不上，
+     *     点下去模型接不住，等于是个摆设。
+     *   · 模型动态生成 —— 建议由「这一场戏到底走到哪儿了」推出来，
+     *     点哪条都接得上。这是用户选定的方案。
+     *
+     * 于是这里规定标记与格式。三条设计约束：
+     *
+     *   ① 独立标记 <plot>…</plot>，且**必须放在正文与状态栏之后**。
+     *      解析层整段摘走它，标记不进楼层正文 —— 否则下一轮会被当历史
+     *      送回给模型，它会照着格式自己再吐一遍（历史上 <tableEdit>
+     *      / <miyaevent> 都踩过这个坑，见引擎里那两处剥离）。
+     *
+     *   ② 每行以「- 」开头。解析用宽松前缀，但规则里给出规范写法，
+     *      让模型吐出来的东西尽量整齐，减少后端兜底解析的压力。
+     *
+     *   ③ 条数与长度都封死。这是贴在正文末尾的卡片，四条以内一眼看完；
+     *      写成长段落就变成第二篇正文了。
+     *
+     * 人称刻意说明「用户视角第一人称」：卡片的语义是「接下来我可以说/做」，
+     * 不是「角色会做什么」。写成角色动作的话，点下去等于替角色做决定。
+     */
+    function buildPlotHintRules(roleName, userName) {
+        return (
+            '【运转规则·剧情走向建议】\n' +
+            '① 正文（以及状态栏，若启用）全部写完后，另起一段输出剧情走向建议，' +
+            '用 <plot> 与 </plot> 包住，标记内不要写任何解释文字。\n' +
+            '② 建议固定 3 到 4 条，每条独占一行，行首写「- 」（连字符 + 一个空格）。\n' +
+            '③ 每条都必须是' + userName + '此刻**可以直接说出口或直接做出来**的一个具体选择，' +
+            '用' + userName + '的第一人称写，例如「我说：…」「我把…递过去」「我什么都不说，只是站着」。\n' +
+            '④ 四条之间要拉开方向差异：至少覆盖「主动推进」「试探/迂回」「退让或沉默」等不同走向，' +
+            '不要四条都是同一个意思的改写。\n' +
+            '⑤ 每条不超过 40 字，只写这一个动作或这一句话本身，不要附带解释、不要写结果、不要写' +
+            roleName + '的反应。\n' +
+            '⑥ 建议必须承接当前这一幕的处境与情绪，与' + roleName +
+            '的人设、世界书设定都说得通；不得凭空引入新角色、新场景或与上文矛盾的信息。\n' +
+            '⑦ <plot> 只出现在整段回复的最末尾，正文中间任何位置都不得出现该标记。'
+        );
     }
 
     function buildWorldbookScopeBlock(contact, preset) {
@@ -715,6 +762,33 @@
     function finalizeAppointmentAssistantBody(parsed, htmlMode) {
         var body = String((parsed && parsed.content) || '').trim();
         if (!body) return { content: '', lines: [], renderAsHtml: false };
+
+        /*
+         * 剧情走向建议：必须最先摘走。
+         *
+         * 位置比状态栏还靠前，理由是「它在整段回复的最末尾、且是唯一一处
+         * 带行首列表符号的结构」—— 越早剥掉，后面所有按行/按段处理的逻辑
+         * （状态栏解析、splitDisplayParagraphs 分段）都不会把建议行卷进去。
+         * 顺序反了的话，建议会被当成正文段落渲染一遍：正文里出现四行
+         * 「- 我说：…」，末尾再挂一张同样的卡片，用户看到的是重复内容。
+         *
+         * 这里只做两件事：解析出列表、把标记从 body 里删掉。
+         * 解析结果原样随消息落库（plotHints），渲染层直接取用，
+         * 不在渲染时重复解析 —— 与 statusBar 的处理方式一致。
+         */
+        var plotApi = global.MiyaOfflinePlot;
+        var plotItems = [];
+        if (plotApi && typeof plotApi.extractPlotItems === 'function') {
+            try {
+                plotItems = plotApi.extractPlotItems(body) || [];
+            } catch (ePlot) {
+                plotItems = [];
+            }
+            if (typeof plotApi.stripPlot === 'function') {
+                body = String(plotApi.stripPlot(body) || '');
+            }
+        }
+
         var statusApi = global.MiyaOfflineStatus;
         if (statusApi && typeof statusApi.stripStatusFromText === 'function') {
             body = statusApi.stripStatusFromText(body);
@@ -753,7 +827,8 @@
                     renderAsHtml: true,
                     htmlRaw: hp.raw,
                     htmlPayload: hp,
-                    statusBar: sbParsed
+                    statusBar: sbParsed,
+                    plotHints: plotItems
                 };
             }
         }
@@ -769,7 +844,8 @@
             content: lines.join('\n\n'),
             lines: lines,
             renderAsHtml: false,
-            statusBar: sbParsed
+            statusBar: sbParsed,
+            plotHints: plotItems
         };
     }
 
@@ -2717,6 +2793,18 @@
                         tag: String(finalized.statusBar.tag || '')
                     };
                 }
+                /*
+                 * 剧情走向建议随楼层一起落库。
+                 *
+                 * 存解析后的字符串数组，而不是原始 <plot> 文本：
+                 *   · 渲染层直接取用，不必每帧重解析；
+                 *   · 模型换写法（少写一行、前缀不对）只影响一次落库结果，
+                 *     不会让卡片在重新渲染时凭空变形。
+                 * 空数组也要显式带上 —— 「这一版没有建议」是个有效状态
+                 * （比如模型这轮没吐标记），不传的话 normalizeMessage
+                 * 会沿用上一版的建议，卡片就会挂着一批对不上剧情的老选项。
+                 */
+                msgFields.plotHints = Array.isArray(finalized.plotHints) ? finalized.plotHints.slice() : [];
                 /* 线下 Swipe：若 handlers.replaceLastAssistant，则把上一层助手回复并入候选 */
                 var msg = null;
                 if (handlers.replaceLastAssistant && typeof aps.updateMessage === 'function') {

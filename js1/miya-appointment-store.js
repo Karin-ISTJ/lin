@@ -482,6 +482,30 @@
         if (row.mtRaw && String(row.mtRaw).trim()) {
             out.mtRaw = String(row.mtRaw);
         }
+        /*
+         * 剧情走向建议（线下正文底部那张卡的数据源）。
+         *
+         * 与 swipes 同样按「传没传」分流：
+         *   · 没传（undefined）→ 不动这个字段，沿用旧值。
+         *     普通 patch（改 hidden、改 content）不该顺手把建议抹掉。
+         *   · 传了数组        → 以本次为准，空数组即「清空建议」。
+         *
+         * 空数组必须能生效：模型某轮没吐 <plot> 时引擎会显式传 []，
+         * 若被当成「没传」跳过，卡片就会挂着上一轮那批已经过期的选项 ——
+         * 用户点了，模型接的是另一段剧情的台词。
+         *
+         * 长度和单条长度都在这里夹一次：数据可能来自导入的存档或
+         * 手改过的 JSON，落库层是最后一道闸。上限与渲染模块保持一致
+         * （MiyaOfflinePlot.MAX_ITEMS / MAX_ITEM_LEN），但不直接依赖它 ——
+         * 那个模块不在 store 的加载顺序保证范围内。
+         */
+        if (Array.isArray(row.plotHints)) {
+            out.plotHints = row.plotHints
+                .map(function (x) { return String(x == null ? '' : x).trim(); })
+                .filter(Boolean)
+                .slice(0, 6)
+                .map(function (x) { return x.slice(0, 120); });
+        }
         return out;
     }
 
