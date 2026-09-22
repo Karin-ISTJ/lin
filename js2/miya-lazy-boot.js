@@ -58,6 +58,14 @@
         'js2/miya-fun-sayguess-app.js?v=10',
         'js2/miya-fun-app.js?v=3'
       ]
+    },
+    /* 星露农场：回合制小游戏（与聊天双人农场 miya-chat-farm.js 互不相干） */
+    farmUiGame: {
+      css: ['css/miya-farmgame.css?v=1'],
+      js: [
+        'js2/miya-farmgame-store.js?v=1',
+        'js2/miya-farmgame-app.js?v=1'
+      ]
     }
   };
 
@@ -67,7 +75,8 @@
     itinerary: ['itineraryUi', 'apiCore'],
     weather: ['weatherUi', 'apiCore'],
     memory: ['memoryUi'],
-    fun: ['funUi', 'apiCore']
+    fun: ['funUi', 'apiCore'],
+    farmgame: ['farmUiGame']
   };
 
   var loadedCss = Object.create(null);

@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-55">
+  <meta name="miya-sw-build" content="sw-56">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=53" type="image/png">
@@ -2906,6 +2906,77 @@
       </div>
       <div class="sg-toast" id="sg-toast" role="status"></div>
     </div>
+  </div>
+
+  <!-- 星露农场 · FarmGame（回合制经营小游戏） -->
+  <div class="farmgame-app" id="miya-farmgame-app" hidden aria-hidden="true">
+    <div class="fg-shell">
+      <button type="button" class="fg-close" data-fg-exit aria-label="关闭农场">
+        <img class="mi-ico-img" src="img/icons/x-close.svg" alt="" width="16" height="16">
+      </button>
+
+      <!-- 顶部横幅：小屋 + 等级 + 金币 + 信箱 -->
+      <header class="fg-banner">
+        <div class="fg-banner__head">
+          <h2 class="fg-banner__title">星露农场</h2>
+          <div class="fg-banner__res">
+            <button type="button" class="fg-mail" data-fg-mail-open aria-label="农场信箱">
+              📬<span class="fg-mail__dot" id="fg-maildot" hidden>0</span>
+            </button>
+            <span class="fg-gold">🪙 <b id="fg-gold">0</b></span>
+          </div>
+        </div>
+        <div class="fg-banner__lv">
+          <p class="fg-banner__lvl" id="fg-level">Lv.1 休闲农场主</p>
+          <div class="fg-expbar"><span id="fg-expbar" style="width:0%"></span></div>
+          <p class="fg-banner__exp" id="fg-expneed">距离升级还需 60 经验</p>
+        </div>
+      </header>
+
+      <!-- 日期条 -->
+      <div class="fg-datebar">
+        <span class="fg-datebar__date" id="fg-date">🌱 春月一日</span>
+        <span class="fg-datebar__year" id="fg-year">第 1 年</span>
+        <span class="fg-datebar__weather" id="fg-weather">☀️ 晴天</span>
+      </div>
+
+      <!-- 动作区 -->
+      <section class="fg-actions" aria-label="农事动作">
+        <div class="fg-actions__row">
+          <button type="button" class="fg-act" id="fg-act-sow" data-fg-act="sow">播种</button>
+          <button type="button" class="fg-act" id="fg-act-water" data-fg-act="water">浇水</button>
+          <button type="button" class="fg-act" id="fg-act-fert" data-fg-act="fert">施肥</button>
+          <button type="button" class="fg-act fg-act--hoe" id="fg-act-hoe" data-fg-act="hoe">锄头</button>
+          <button type="button" class="fg-act fg-act--bulk" id="fg-act-bulk" data-fg-bulk><span>一键收获</span></button>
+        </div>
+        <div class="fg-energy">
+          <div class="fg-energy__bar"><span id="fg-energybar" style="width:100%"></span></div>
+          <span class="fg-energy__num">体力 <b id="fg-energynum">20/20</b></span>
+        </div>
+        <p class="fg-hint" id="fg-hint">先点上方动作按钮，再点农田；成熟作物直接点收</p>
+      </section>
+
+      <!-- 农田 -->
+      <section class="fg-field" aria-label="我的农田">
+        <h3 class="fg-field__title">我的农田 <small id="fg-plotcount"></small></h3>
+        <div class="fg-grid" id="fg-grid"></div>
+      </section>
+
+      <!-- 主按钮 -->
+      <button type="button" class="fg-btn fg-btn--next" data-fg-next>进入次日 🌙</button>
+      <div class="fg-footrow">
+        <button type="button" class="fg-btn" data-fg-barn-open>仓库</button>
+        <button type="button" class="fg-btn" data-fg-save>存档</button>
+      </div>
+
+      <footer class="fg-footer">
+        <p id="fg-daycount">已度过 0 天</p>
+        <button type="button" class="fg-footer__reset" data-fg-reset>重开农场</button>
+      </footer>
+    </div>
+
+    <!-- 底部浮层（种子/仓库/信箱共用） -->
+    <div class="fg-sheet" id="fg-sheet" hidden></div>
   </div>
 
   <!-- 行程轨迹 · Itinerary -->

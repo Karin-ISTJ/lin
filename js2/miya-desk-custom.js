@@ -16,7 +16,8 @@
        老用户桌面布局里的 'set' 由 normalizeLayout 的未知图标过滤兜掉。 */
     'book', 'memory', 'chat', 'beauty', 'stpreset',
     'couple', 'itinerary',
-    'notes', 'fun', 'imagegen'
+    'notes', 'fun', 'imagegen',
+    'farmgame'
   ];
 
   var DEFAULT_DOCK = ['contacts'];
@@ -52,6 +53,7 @@
     memory: '记忆', chat: '聊天', beauty: '美化', stpreset: 'ST预设',
     couple: '情侣空间', itinerary: '行程轨迹',
     notes: '日记', fun: '娱乐', imagegen: '生图',
+    farmgame: '星露农场',
     contacts: '联系人'
   };
 

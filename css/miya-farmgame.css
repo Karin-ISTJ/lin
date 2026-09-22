@@ -1,0 +1,488 @@
+/* miya-farmgame.css — 星露农场（回合制经营小游戏）
+ *
+ * 视觉：对标小红书"星露谷 Lite"海报 —— 奶粉橙渐变背景、奶白圆角卡片、
+ * 暖棕文字、胶囊动作按钮（选中态粉色高亮）、贴图地块。
+ * 贴图：img/farmgame/banner.jpg（顶部小屋横幅）、plot-soil.png（地块）。
+ */
+
+.farmgame-app {
+  position: fixed;
+  inset: 0;
+  z-index: 640;
+  overflow: hidden;
+  font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+  color: #6b5443;
+  background: linear-gradient(178deg, #ffe9e2 0%, #fff3e0 38%, #fff8ec 72%, #fdf6e8 100%);
+  -webkit-font-smoothing: antialiased;
+}
+.farmgame-app[hidden] { display: none !important; }
+
+.fg-shell {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── 关闭按钮 ── */
+.fg-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.82);
+  color: #8a6f5c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(150, 110, 80, 0.14);
+  cursor: pointer;
+}
+
+/* ── 顶部横幅 ── */
+.fg-banner {
+  position: relative;
+  border-radius: 22px;
+  padding: 14px 16px 16px;
+  background: url("../img/farmgame/banner.jpg") center 32% / cover no-repeat;
+  box-shadow: 0 10px 26px rgba(180, 120, 90, 0.18);
+  overflow: hidden;
+}
+.fg-banner::before {
+  /* 底部奶白渐变托底，保证文字可读 */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 244, 235, 0.10) 0%, rgba(255, 244, 235, 0.62) 58%, rgba(255, 247, 238, 0.94) 100%);
+  pointer-events: none;
+}
+.fg-banner__head,
+.fg-banner__lv { position: relative; z-index: 1; }
+
+.fg-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fg-banner__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #5d4634;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.fg-banner__res { display: flex; align-items: center; gap: 8px; }
+
+.fg-mail {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: #fffdf8;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(150, 110, 80, 0.16);
+  cursor: pointer;
+}
+.fg-mail__dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #f97a8c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+.fg-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 14px 0 10px;
+  border-radius: 19px;
+  background: #fffdf8;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(150, 110, 80, 0.16);
+}
+.fg-gold b { font-size: 18px; color: #5d4634; }
+
+.fg-banner__lv { margin-top: 10px; }
+.fg-banner__lvl {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b5443;
+}
+.fg-expbar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.72);
+  overflow: hidden;
+}
+.fg-expbar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ffbe6b, #ffa14e);
+  transition: width 0.3s ease;
+}
+.fg-banner__exp {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #a3806a;
+}
+
+/* ── 日期条 ── */
+.fg-datebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 2px 0;
+  font-size: 13px;
+}
+.fg-datebar__date {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: #e7f3e2;
+  color: #3d7a44;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.fg-datebar__year,
+.fg-datebar__weather {
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #8a6f5c;
+  font-weight: 600;
+}
+
+/* ── 动作区 ── */
+.fg-actions { margin-top: 14px; }
+.fg-actions__row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.fg-act {
+  height: 46px;
+  border: none;
+  border-radius: 14px;
+  background: #d9cfc2;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: 0 2px 6px rgba(150, 110, 80, 0.14);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.fg-act:active { transform: scale(0.96); }
+.fg-act.is-active {
+  background: linear-gradient(135deg, #f79bc0, #ef6fa6);
+  box-shadow: 0 4px 12px rgba(239, 111, 166, 0.4);
+}
+.fg-act--hoe { background: #a9825f; }
+.fg-act--hoe.is-active { background: linear-gradient(135deg, #f79bc0, #ef6fa6); }
+.fg-act--bulk { grid-column: 1 / 3; background: #d9cfc2; }
+.fg-act--bulk.is-locked { opacity: 0.62; }
+.fg-act.is-locked { opacity: 0.62; }
+.fg-act.is-tired { filter: saturate(0.55); opacity: 0.72; }
+
+.fg-energy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.fg-energy__bar {
+  flex: 1;
+  height: 9px;
+  border-radius: 5px;
+  background: #ead9c6;
+  overflow: hidden;
+}
+.fg-energy__bar span {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #8fd07e, #5cb85f);
+  transition: width 0.3s ease;
+}
+.fg-energy__num { font-size: 12px; color: #a3806a; white-space: nowrap; }
+.fg-energy__num b { color: #e2894f; }
+
+.fg-hint {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  color: #b09277;
+  min-height: 1.2em;
+}
+
+/* ── 农田 ── */
+.fg-field { margin-top: 12px; }
+.fg-field__title {
+  margin: 0 2px 10px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #5d4634;
+}
+.fg-field__title small { font-size: 12px; font-weight: 500; color: #b09277; }
+.fg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.fg-plot {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: none;
+  padding: 0;
+  border-radius: 18px;
+  background: url("../img/farmgame/plot-soil.png") center / 100% 100% no-repeat, #e8d5bd;
+  box-shadow: 0 4px 10px rgba(150, 110, 80, 0.16);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.fg-plot:active { transform: scale(0.96); }
+.fg-plot__plus {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(120, 80, 50, 0.25);
+}
+.fg-plot.is-empty.is-active-mode { outline: 3px dashed rgba(239, 111, 166, 0.75); outline-offset: -6px; }
+.fg-plot__crop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  filter: drop-shadow(0 2px 2px rgba(120, 80, 50, 0.2));
+}
+.fg-plot__crop--mature { animation: fg-bounce 1.6s ease-in-out infinite; }
+@keyframes fg-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.fg-plot__drop {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-size: 13px;
+}
+.fg-plot__fert {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 13px;
+}
+.fg-plot.is-mature {
+  box-shadow: 0 4px 14px rgba(240, 170, 80, 0.55), 0 0 0 2.5px rgba(255, 205, 110, 0.9);
+}
+.fg-plot__shine {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffe9a8;
+  box-shadow: 0 0 8px 3px rgba(255, 219, 130, 0.85);
+  animation: fg-twinkle 1.4s ease-in-out infinite;
+}
+@keyframes fg-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* ── 主按钮 ── */
+.fg-btn {
+  border: none;
+  border-radius: 18px;
+  height: 52px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #7a5b30;
+  background: linear-gradient(180deg, #ffe9a8, #ffd97e);
+  box-shadow: 0 5px 14px rgba(235, 170, 80, 0.38);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.fg-btn:active { transform: scale(0.97); }
+.fg-btn--next {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  color: #7a5b30;
+}
+.fg-footrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+.fg-footrow .fg-btn { height: 46px; font-size: 15px; letter-spacing: 0.06em; }
+
+/* ── 页脚 ── */
+.fg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #b09277;
+}
+.fg-footer__reset {
+  border: none;
+  background: none;
+  color: #c99a8a;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── 底部浮层（种子 / 仓库 / 信箱） ── */
+.fg-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 68%;
+  overflow-y: auto;
+  border-radius: 22px 22px 0 0;
+  background: #fffdf8;
+  box-shadow: 0 -10px 30px rgba(120, 80, 50, 0.25);
+  padding: 14px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+}
+.fg-sheet[hidden] { display: none !important; }
+.fg-sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.fg-sheet__head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #5d4634;
+}
+.fg-sheet__close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: #f3e9dc;
+  color: #8a6f5c;
+  font-size: 17px;
+  cursor: pointer;
+}
+.fg-sheet__tip {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  color: #b09277;
+  text-align: center;
+}
+
+/* 种子列表 */
+.fg-seed-list { display: flex; flex-direction: column; gap: 8px; }
+.fg-seed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 14px;
+  background: #faf3e8;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.1s ease;
+}
+.fg-seed:active { transform: scale(0.98); }
+.fg-seed.is-poor { opacity: 0.5; }
+.fg-seed__icon { font-size: 26px; }
+.fg-seed__meta { flex: 1; min-width: 0; }
+.fg-seed__meta b { display: block; font-size: 14px; color: #5d4634; }
+.fg-seed__meta small { font-size: 11px; color: #b09277; }
+.fg-seed__price { font-size: 13px; font-weight: 700; color: #e2894f; white-space: nowrap; }
+
+/* 仓库 */
+.fg-barn-list { display: flex; flex-direction: column; gap: 8px; }
+.fg-barn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #faf3e8;
+}
+.fg-barn-row__icon { font-size: 24px; }
+.fg-barn-row__meta { flex: 1; min-width: 0; }
+.fg-barn-row__meta b { display: block; font-size: 14px; color: #5d4634; }
+.fg-barn-row__meta small { font-size: 11px; color: #b09277; }
+.fg-barn-row__btns { display: flex; gap: 6px; }
+.fg-mini {
+  border: none;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b5443;
+  background: #f0e4d2;
+  cursor: pointer;
+}
+.fg-mini--gold { background: linear-gradient(135deg, #ffe9a8, #ffd97e); color: #7a5b30; }
+
+/* 信箱 */
+.fg-mail-list { display: flex; flex-direction: column; gap: 8px; }
+.fg-mail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #faf3e8;
+}
+.fg-mail-row.is-unread { background: #fff0d9; }
+.fg-mail-row__icon { font-size: 20px; }
+.fg-mail-row__body b { display: block; font-size: 13px; color: #5d4634; font-weight: 600; }
+.fg-mail-row__body small { font-size: 11px; color: #b09277; }
+
+/* 兜底 toast（项目 toast 系统不可用时） */
+.farmgame-fallback-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 9px 16px;
+  border-radius: 18px;
+  background: rgba(70, 52, 40, 0.9);
+  color: #fff;
+  font-size: 13px;
+  pointer-events: none;
+}
