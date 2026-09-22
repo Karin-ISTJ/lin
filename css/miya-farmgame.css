@@ -322,7 +322,7 @@
   font-size: 13px;
 }
 .fg-plot.is-mature {
-  box-shadow: 0 4px 14px rgba(240, 170, 80, 0.55), 0 0 0 2.5px rgba(255, 205, 110, 0.9);
+  box-shadow: 0 4px 12px rgba(240, 170, 80, 0.38);
 }
 /* ── 成熟：✨ 沿地块两侧缓缓升起渐隐（循环、错开相位；避开中心作物，不遮挡） ── */
 .fg-plot__shine {
@@ -341,8 +341,8 @@
   opacity: 0;
   animation: fg-shine-rise 2.2s ease-out infinite;
 }
-.fg-plot__shine::before { left: 14%; bottom: 16%; }
-.fg-plot__shine::after  { right: 14%; bottom: 26%; animation-delay: 1.1s; }
+.fg-plot__shine::before { left: 25%; bottom: 16%; }
+.fg-plot__shine::after  { right: 25%; bottom: 26%; animation-delay: 1.1s; }
 @keyframes fg-shine-rise {
   0%   { transform: translateY(6px) scale(0.7); opacity: 0; }
   20%  { opacity: 0.95; }
@@ -538,12 +538,7 @@
   pointer-events: none;
 }
 
-/* ── 劳作中：土地轻脉动 ── */
-.fg-plot.is-busy { animation: fg-plot-pulse 1.1s ease-in-out infinite; }
-@keyframes fg-plot-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.025); }
-}
+/* ── 劳作中：土地保持静止（进度条已足够表达），不再脉动 ── */
 
 /* ── 土地进度条（播种/浇水/施肥/锄地 3 秒劳作） ── */
 .fg-progress {
