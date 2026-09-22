@@ -328,6 +328,15 @@
     });
   }
 
+  /* 底部抽屉（红包 / 转账等 qq-sheet）打开期间，聊天滚动区在毛玻璃遮罩之下。
+   * 此时键盘若再强制贴底，背景会隔着半透明遮罩肉眼可见地窜动 ——
+   * 这就是「点红包输入框界面闪一下」的主因。抽屉在场时跳过贴底，
+   * 只让抽屉自身随视口收起，背景保持原位。 */
+  function isRoomSheetOverlayOpen() {
+    var ov = $('qq-room-overlay');
+    return !!(ov && !ov.hidden && ov.childElementCount > 0);
+  }
+
   function syncIosKeyboardInset(vv, inset) {
     if (!vv) vv = window.visualViewport;
     inset = inset || 0;
@@ -343,7 +352,7 @@
       roomEl.style.setProperty('--qq-kb-height', Math.round(vv.height) + 'px');
       syncChatAppKeyboardShell(true, vv);
       if ((vv.offsetTop || 0) > 0) window.scrollTo(0, 0);
-      scrollRoomToBottom($('qq-room-scroll'), true);
+      if (!isRoomSheetOverlayOpen()) scrollRoomToBottom($('qq-room-scroll'), true);
       return;
     }
 
@@ -568,7 +577,7 @@
       roomEl.style.setProperty('--qq-kb-height', Math.round(vv.height) + 'px');
       syncChatAppKeyboardShell(true, vv);
       if ((vv.offsetTop || 0) > 0) window.scrollTo(0, 0);
-      scrollRoomToBottom($('qq-room-scroll'), true);
+      if (!isRoomSheetOverlayOpen()) scrollRoomToBottom($('qq-room-scroll'), true);
     } else {
       roomEl.style.removeProperty('--qq-kb-top');
       roomEl.style.removeProperty('--qq-kb-height');

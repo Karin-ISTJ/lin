@@ -1964,6 +1964,15 @@ html.qq-img-lightbox-open {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  /* 遮罩入场渐隐：此前 hidden 一摘除，全屏 backdrop-blur 瞬间糊上，
+   * 视觉上就是「闪一下」。加一层 opacity 过渡后，模糊随遮罩一起淡入。
+   * [hidden] 走 display:none，每次重开动画都会重新播放。 */
+  animation: qq-overlay-in 0.26s ease both;
+}
+
+@keyframes qq-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .qq-room__overlay[hidden] { display: none !important; }

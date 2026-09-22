@@ -222,8 +222,12 @@
 .srp-field__target {
   display: block;
   padding: 10px 12px;
+  border: 1px solid var(--soft-line, rgba(0, 0, 0, 0.06));
   border-radius: 12px;
-  background: var(--soft-gold-soft, rgba(201, 184, 150, 0.28));
+  /* 「专属给」目标框与金额 / 祝福语输入框同款白底描边。
+   * 原先用 --soft-gold-soft 浅金底，在面板上会泛出粉感，
+   * 被一眼误读成「粉色输入框」，与其他输入框也不统一。 */
+  background: #fff;
   font-size: 13.5px;
   color: var(--soft-ink, #7a6e64);
 }
