@@ -61,10 +61,10 @@
     },
     /* 星露农场：回合制小游戏（与聊天双人农场 miya-chat-farm.js 互不相干） */
     farmUiGame: {
-      css: ['css/miya-farmgame.css?v=3'],
+      css: ['css/miya-farmgame.css?v=5'],
       js: [
-        'js2/miya-farmgame-store.js?v=3',
-        'js2/miya-farmgame-app.js?v=3'
+        'js2/miya-farmgame-store.js?v=4',
+        'js2/miya-farmgame-app.js?v=4'
       ]
     }
   };

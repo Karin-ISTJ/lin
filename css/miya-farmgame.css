@@ -175,7 +175,7 @@
 .fg-actions { margin-top: 14px; }
 .fg-actions__row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .fg-act {
@@ -200,9 +200,9 @@
   background: linear-gradient(135deg, #f79bc0, #ef6fa6);
   box-shadow: 0 4px 12px rgba(239, 111, 166, 0.4);
 }
-.fg-act--hoe { background: #a9825f; }
+.fg-act--hoe { background: #a9825f; order: 5; }
 .fg-act--hoe.is-active { background: linear-gradient(135deg, #f79bc0, #ef6fa6); }
-.fg-act--bulk { grid-column: 1 / 3; background: #d9cfc2; }
+.fg-act--bulk { grid-column: span 2; order: 4; background: #d9cfc2; }
 .fg-act--bulk.is-locked { opacity: 0.62; }
 .fg-act.is-locked { opacity: 0.62; }
 .fg-act.is-tired { filter: saturate(0.55); opacity: 0.72; }
@@ -257,7 +257,7 @@
   border: none;
   padding: 0;
   border-radius: 18px;
-  background: url("../img/farmgame/plot-soil.png") center / 100% 100% no-repeat, #e8d5bd;
+  background: url("../img/farmgame/plot-soil.png?v=2") center / 100% 100% no-repeat, #e8d5bd;
   box-shadow: 0 4px 10px rgba(150, 110, 80, 0.16);
   cursor: pointer;
   transition: transform 0.12s ease;

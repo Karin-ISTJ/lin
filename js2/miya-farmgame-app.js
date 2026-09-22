@@ -33,7 +33,12 @@
   var BULK_STAGGER_MS = 340;   /* 一键操作：地块依次错开启动 */
   var HARVEST_STAGGER_MS = 260;/* 一键收获：逐块动效间隔 */
 
+  /* ── 操作提示（随机 pool，每次干完活抽一句） ── */
+  var WATER_TOASTS = ['咕嘟咕嘟，浇好啦。', '水够啦，剩下的交给时间。'];
+  var FERT_TOASTS = ['撒一把魔法肥料～', '咕嘟咕嘟，营养渗进去啦。'];
+
   /* ── 工具 ── */
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -346,7 +351,7 @@
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      toast('💧 浇好了，今晚就长');
+      toast('💧 ' + pick(WATER_TOASTS));
     });
   }
 
@@ -386,7 +391,7 @@
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      toast('✨ 施了肥，收获 +1');
+      toast('✨ ' + pick(FERT_TOASTS));
     });
   }
 
