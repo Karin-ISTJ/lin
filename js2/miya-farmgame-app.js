@@ -33,9 +33,12 @@
   var BULK_STAGGER_MS = 340;   /* 一键操作：地块依次错开启动 */
   var HARVEST_STAGGER_MS = 260;/* 一键收获：逐块动效间隔 */
 
-  /* ── 操作提示（随机 pool，每次干完活抽一句） ── */
+  /* ── 操作提示（两条交替出现：浇一次换一句，不重复不随机） ── */
   var WATER_TOASTS = ['咕嘟咕嘟，浇好啦~', '水够啦~剩下的就交给时间吧~'];
   var FERT_TOASTS = ['撒一把魔法肥料～', '咕嘟咕嘟，营养渗进去啦~'];
+  var waterAlt = 0, fertAlt = 0;
+  function nextWater() { var m = WATER_TOASTS[waterAlt % WATER_TOASTS.length]; waterAlt++; return m; }
+  function nextFert() { var m = FERT_TOASTS[fertAlt % FERT_TOASTS.length]; fertAlt++; return m; }
 
   /* ── BGM：进农场响起、退出暂停；音符按钮开关（偏好存 localStorage）。
      换曲子必须换文件名（farm-bgm-2.mp3 …）—— SW 对音频缓存按路径归一，
@@ -87,7 +90,6 @@
   }
 
   /* ── 工具 ── */
-  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -404,7 +406,7 @@
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      toast('💧 ' + pick(WATER_TOASTS));
+      toast('💧 ' + nextWater());
     });
   }
 
@@ -444,7 +446,7 @@
     renderHead(s);
     startProgress(i, PROGRESS_MS, function () {
       renderPlotCell(i);
-      toast('✨ ' + pick(FERT_TOASTS));
+      toast('✨ ' + nextFert());
     });
   }
 
