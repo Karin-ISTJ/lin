@@ -214,6 +214,11 @@
     cancelIosKbRecovery();
     iosKeyboardWasOpen = false;
     clearKeyboardState();
+    /* 抽屉在场且键盘仍开着（iOS 从后台切回等场景）：上面 clearKeyboardState 把
+     * --qq-kb-offset 清零，会把面板摔回键盘后面 —— 立刻按当前 inset 重新抬起。 */
+    if (isRoomSheetOverlayOpen() && keyboardInsetPx() > 40) {
+      roomEl.style.setProperty('--qq-kb-offset', (keyboardInsetPx() + roomKeyboardOverscanPx()) + 'px');
+    }
     captureIosViewportBaseline();
     if (!isIOSChat()) {
       if (resync && roomEl && !roomEl.hidden && state.chatId) syncKeyboardInset();
@@ -335,7 +340,8 @@
    * 面板只靠 --qq-kb-offset 做 transform 平移（CSS 有过渡），背景零位移零重排。 */
   function isRoomSheetOverlayOpen() {
     var ov = $('qq-room-overlay');
-    return !!(ov && !ov.hidden && ov.childElementCount > 0);
+    /* 房间整体隐藏时（退出聊天），overlay 的开关态可能是残留的，不算「抽屉在场」 */
+    return !!(ov && !ov.hidden && ov.childElementCount > 0 && roomEl && !roomEl.hidden);
   }
 
   /* 独立 PWA 下 --app-height 取的是整块屏幕高度，比 window.innerHeight 高出
@@ -4065,6 +4071,8 @@
     }
     var ov = $('qq-room-overlay');
     if (ov) { ov.hidden = true; ov.innerHTML = ''; }
+    /* 抽屉关闭：撤下安卓键盘高度平滑类（见 miya-chat.css 的 miya-kb-smooth） */
+    document.documentElement.classList.remove('miya-kb-smooth');
     restoreComposeAfterOverlay();
   }
 
@@ -4074,6 +4082,11 @@
     if (!ov) return;
     ov.innerHTML = html;
     ov.hidden = false;
+    /* 安卓：键盘弹出 / 输入法在「文本 ↔ 数字面板」之间切换时，窗口高度是一次性瞬变，
+     * fixed 跟随窗口的 .miya-chat-app 会带着房间、遮罩、面板整块跳 —— 「闪一下」。
+     * 抽屉在场期间挂上 miya-kb-smooth：应用高度改由 --app-height 驱动并做极短过渡，
+     * 瞬变被摊平成贴合键盘动画的滑移。 */
+    document.documentElement.classList.add('miya-kb-smooth');
     /* 撰写框键盘还没关就直接开抽屉：房间可能仍处于键盘收缩态。
      * 此刻先切到「房间静止」模式，面板改由 --qq-kb-offset 抬到键盘上方，
      * 避免抽屉期间再触发一次整房间的收缩/展开瞬移。 */
