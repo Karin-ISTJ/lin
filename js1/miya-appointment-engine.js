@@ -1019,6 +1019,11 @@
         var contact = input.contact;
         var profile = input.profile;
         var chatSettings = input.chatSettings;
+        /* chatId：本函数自身作用域没有这个变量（它是 buildApiMessages 的入参），
+           必须经 input 传入——状态栏教学取模板要按聊天级取。
+           修复记录：v70 曾直接引用外层不存在的 chatId，导致每次构建
+           线下 system prompt 都抛 ReferenceError，线下消息全部发不出去。 */
+        var chatId = input.chatId || '';
         var preset = input.preset;
         var history = input.history || [];
         var contextText = String(input.contextText || '');
@@ -1303,6 +1308,7 @@
         var systemContent = buildAppointmentSystemPrompt({
             contact: contact,
             profile: profile,
+            chatId: chatId,
             chatSettings: settings,
             preset: preset,
             history: slice,
