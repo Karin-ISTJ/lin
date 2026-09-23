@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<script src="js1/miya-chat-statusbar.js?v=31"></script>
+<script src="js2/miya-offline-plot.js?v=7"></script>
+<script src="js2/miya-offline-status.js?v=11"></script>
+</head><body>
+<pre id="log">PENDING</pre>
+<script>
+function finalize(body) {
+  var plotApi = MiyaOfflinePlot;
+  var plotItems = [];
+  try { plotItems = plotApi.extractPlotItems(body) || []; } catch (e) { plotItems = []; }
+  body = String(plotApi.stripPlot(body) || '');
+  var sbParsed = null;
+  var hit = MiyaChatStatusBar.parseFromText(body);
+  if (hit && hit.fields && hit.fields.length) sbParsed = { fields: hit.fields, tag: hit.tag };
+  body = MiyaOfflineStatus.stripStatusFromText(body);
+  return { body: body.trim(), plotCount: plotItems.length, sb: sbParsed };
+}
+var STATUS = '<miyastatus>心情: 悸乱\n状态: 指尖还残留着纸条的触感\n想法: 他到底想说什么</miyastatus>';
+var PLOT_CLOSED  = '<plot>- 我把纸条折好塞回信封\n- 我假装没看见他的目光\n- 我先开口打破沉默</plot>';
+var PLOT_OPEN    = '<plot>- 我把纸条折好塞回信封\n- 我假装没看见他的目光';
+var CASES = [
+  ['规范顺序: 正文→状态栏→plot(闭合)', '他在暮色里停住脚步。\n' + STATUS + '\n' + PLOT_CLOSED],
+  ['plot未闭合+状态栏在后(违规输出)', '他在暮色里停住脚步。\n' + PLOT_OPEN + '\n' + STATUS],
+  ['plot先(闭合)状态栏在后(违规)',    '他在暮色里停住脚步。\n' + PLOT_CLOSED + '\n' + STATUS],
+  ['只有状态栏没有plot',              '他在暮色里停住脚步。\n' + STATUS]
+];
+var out = [];
+CASES.forEach(function (c) {
+  var r = finalize(c[1]);
+  var names = r.sb ? r.sb.fields.map(function(f){return f.name;}).join('/') : '';
+  var ok = r.sb && r.sb.fields && r.sb.fields.length === 3 && r.plotCount >= 1;
+  var tagOk = r.body.indexOf('miyastatus') < 0 && r.body.indexOf('心情') < 0;
+  out.push((ok && tagOk ? 'PASS ✓' : 'FAIL ✗') + ' ' + c[0] +
+    ' | 状态栏字段=' + (r.sb ? r.sb.fields.length : 0) + '/3(' + names + ')' +
+    ' | 剧情条目=' + r.plotCount +
+    ' | 正文无残留=' + tagOk);
+});
+document.getElementById('log').textContent = out.join('\n');
+</script>
+</body></html>

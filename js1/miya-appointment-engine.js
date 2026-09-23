@@ -484,14 +484,19 @@
             '4、正文应为场景描写 + 动作 + 对话的连贯叙事（小说/剧本体），承接的是本场线下楼层与用户本轮输入，不是线上聊天记录。\n' +
             '5、跨场景记忆仅作背景知晓，禁止把记忆原文复述成新的线上气泡。\n' +
             '6、回顾近期跨场景记忆，勿机械复读相同开场与句式。\n' +
-            '7、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。' +
-            '\n' +
-            buildPlotHintRules(roleName, userName);
+            '7、若用户要求番外、小剧场、HTML 页或其它特殊玩法，以该轮 $ 元指令为准；见提示词最末【用户元指令·线下·最高优先级】；仍须贴合人设与世界书核心设定。';
         var statusApi = global.MiyaOfflineStatus;
         if (statusApi && typeof statusApi.isEnabled === 'function' && statusApi.isEnabled()) {
+            /* 编号接在基础规则之后；且必须排在剧情建议规则**之前**——
+               状态栏在正文之后、<plot> 之前输出，规则顺序与输出顺序一致，
+               模型才不容易把 <plot> 写到状态栏前面导致解析层互相干扰。 */
             base +=
-                '\n6、正文结束后必须按【线下格式规则·状态栏】完整输出 <miyastatus>...</miyastatus>；状态不得写入正文。';
+                '\n7、正文结束后先按【线下格式规则·状态栏】完整输出 <miyastatus>...</miyastatus>，状态不得写入正文；' +
+                '状态栏写完后，再输出剧情走向建议 <plot>（见下）。';
         }
+        base +=
+            '\n' +
+            buildPlotHintRules(roleName, userName);
         return base;
     }
 
@@ -790,14 +795,15 @@
         }
 
         var statusApi = global.MiyaOfflineStatus;
-        if (statusApi && typeof statusApi.stripStatusFromText === 'function') {
-            body = statusApi.stripStatusFromText(body);
-        }
         /*
          * 角色状态栏：在分段之前先摘走，理由和线上完全一致 ——
          * <STATUSBAR_DATA> 里是「字段: 值」逐行排列，进了 splitDisplayParagraphs
          * 会被拆成一段段正文，整块状态栏就散了。
          * 解析结果随消息落库（statusBar 字段），渲染时再套模板。
+         *
+         * ⚠️ 顺序铁律：parseFromText 靠 <miyastatus> 标记定位，必须**先解析、后剥离**。
+         * 旧代码先 stripStatusFromText 再 parseFromText，标记先被删光，
+         * 解析永远落空 —— 状态栏因此整块消失（剧情建议上线时引入的回归）。
          */
         var sbParsed = null;
         var sbMod = global.MiyaChatStatusBar;
@@ -810,12 +816,14 @@
                     var hit = sbMod.parseFromText(body);
                     if (hit && hit.fields && hit.fields.length) {
                         sbParsed = { fields: hit.fields, tag: hit.tag };
-                        body = typeof sbMod.stripFromText === 'function'
-                            ? String(sbMod.stripFromText(body) || '')
-                            : body;
                     }
                 }
             } catch (eSb) {}
+        }
+        if (statusApi && typeof statusApi.stripStatusFromText === 'function') {
+            body = statusApi.stripStatusFromText(body);
+        } else if (sbParsed && sbMod && typeof sbMod.stripFromText === 'function') {
+            body = String(sbMod.stripFromText(body) || '');
         }
         var hpApi = htmlApi();
         if (htmlMode && hpApi && typeof hpApi.extractHtmlOnlyFromReply === 'function') {

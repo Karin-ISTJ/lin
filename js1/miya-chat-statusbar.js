@@ -135,7 +135,11 @@
      *   两边会互相剥离正文 —— 线下状态栏会凭空消失，或者同一段内容被渲染两次。
      *   所以本模块只认「不属于任何既有系统」的标签。
      */
-    var KNOWN_TAGS = ['STATUSBAR_DATA', 'statusbar_data', 'StatusBar_Data', '状态栏'];
+    /* miyastatus：线下楼层的正式状态栏标记（见引擎【线下格式规则·状态栏】与
+       appointment-app 的剥离注释——「本项目状态栏认的是 <miyastatus>」）。
+       旧表里只有 ST 预设惯用的 STATUSBAR_DATA 系列，线下提示词让模型输出
+       <miyastatus>、解析器却不认，状态栏因此整块消失。 */
+    var KNOWN_TAGS = ['STATUSBAR_DATA', 'statusbar_data', 'StatusBar_Data', '状态栏', 'miyastatus'];
 
     var RE_FIELD_LINE = /^\s*([^:：\n]{1,40})\s*[:：]\s*(.*)$/;
 

@@ -21,9 +21,12 @@
 
     var TAG = 'plot';
 
-    /* 允许 </plot> 缺失（流式截断时常见），用 $ 锚住尾部兜底 */
+    /* 允许 </plot> 缺失（流式截断时常见），用 $ 锚住尾部兜底。
+       ⚠️ 但不能吞到 <miyastatus>：模型偶尔不按规则把状态栏写在 plot 之后，
+       未闭合兜底若一路吞到 $ 会连状态栏块一起吃掉 —— 用前瞻在 miyastatus 处刹住
+       （全角 ＜miyastatus＞ 同防）。 */
     function blockRegex() {
-        return new RegExp('<' + TAG + '\\s*>([\\s\\S]*?)(?:<\\s*\\/\\s*' + TAG + '\\s*>|$)', 'i');
+        return new RegExp('<' + TAG + '\\s*>([\\s\\S]*?)(?:<\\s*\\/\\s*' + TAG + '\\s*>|(?=<miyastatus|＜miyastatus)|$)', 'i');
     }
 
     function hasPlotBlock(rawText) {
@@ -55,7 +58,8 @@
         if (!txt) return '';
         if (!hasPlotBlock(txt)) return txt;
         return txt.replace(new RegExp('<\\s*' + TAG + '\\s*>[\\s\\S]*?<\\s*\\/\\s*' + TAG + '\\s*>', 'gi'), ' ')
-            .replace(new RegExp('<\\s*' + TAG + '\\s*>[\\s\\S]*$', 'gi'), ' ')
+            /* 未闭合：剥到结尾；但 <miyastatus> 之前必须刹住，别把状态栏一起剥掉 */
+            .replace(new RegExp('<\\s*' + TAG + '\\s*>[\\s\\S]*?(?=<miyastatus|＜miyastatus|$)', 'gi'), ' ')
             .replace(/\n{3,}/g, '\n\n')
             .trim();
     }
