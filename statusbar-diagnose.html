@@ -332,11 +332,18 @@
         if (residue) anyResidue = true;
         var emptyShell = n === 0;
         if (emptyShell) anyEmptyShell = true;
+        /* 剧情建议落库：plotHints 数组长度 + 正文残留 plot 标记（半/全角） */
+        var ph = m.plotHints;
+        var phN = Array.isArray(ph) ? ph.filter(function (x) { return String(x || '').trim(); }).length
+          : (typeof ph === 'string' && ph.trim() ? 1 : 0);
+        var plotResidue = /<\s*plot|＜\s*plot/i.test(String(m.content || ''));
         rows += '<tr>' +
           '<td>' + esc(trunc(m.content || '', 24)) + '</td>' +
           '<td>' + (n > 0 ? '<span class="ok-tx">' + n + ' 个字段</span>' : '<span class="fail-tx">无落库</span>') + '</td>' +
           '<td>' + esc(m.statusBar && m.statusBar.tag || '-') + '</td>' +
           '<td>' + (residue ? '<span class="warn-tx">有残留</span>' : '干净') + '</td>' +
+          '<td>' + (phN > 0 ? '<span class="ok-tx">' + phN + ' 条</span>'
+            : (plotResidue ? '<span class="warn-tx">标记残留未落库</span>' : '<span class="dim">本层无</span>')) + '</td>' +
           '</tr>';
       });
       var bodyCls = anyEmptyShell || anyResidue ? badge(true, anyResidue, false) : badge(true);
@@ -390,7 +397,7 @@
         '<div class="kv"><b>教学字段名单</b>：' + (fieldNames.length ? fieldNames.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') : '<span class="fail-tx">(空)</span>') + '</div>' +
         '<div class="kv" style="margin-top:6px"><b>落库体检（最新会话最近 5 条 AI 楼层）</b></div>' +
         (recent.length ?
-          '<table><tr><th>楼层开头</th><th>statusBar 落库</th><th>tag</th><th>正文残留</th></tr>' + rows + '</table>' +
+          '<table><tr><th>楼层开头</th><th>statusBar 落库</th><th>tag</th><th>正文残留</th><th>剧情建议</th></tr>' + rows + '</table>' +
           (anyEmptyShell && !anyFloored ? '<div class="fail-tx">最新楼层全部无落库 → AI 回复里没带 miyastatus 块，或解析落空。结合教学字段名单与正文残留列判断。</div>' : '') +
           (anyResidue ? '<div class="warn-tx">正文有残留标记 → 剥离逻辑异常（旧版本行为）。</div>' : '')
           : '<div class="hint">最新会话没有 assistant 楼层。</div>') +

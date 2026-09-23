@@ -4286,6 +4286,13 @@ function renderWriter() {
         }
         /* 缺省 false：不归档候选。候选只属于 › 键 */
         var keep = keepVersion === true;
+        /*
+         * 重答防雷同：在软删之前把这一版正文抓下来。
+         * 软删（deleteMessage / softDeleteForRegenerate）会把 content 清空，
+         * 晚了就没了。引擎拿它做「新版 vs 旧版」归一化查重，
+         * 雷同自动换向重试 —— 这是压住「刷新出来还是一模一样」的兜底。
+         */
+        var prevContentForRegen = String(m.content || '');
         var eng = apEngine();
         var aps = apStore();
         /*
@@ -4362,6 +4369,8 @@ function renderWriter() {
                         {
                             replaceTargetId: m.id,
                             attempt: attempt,
+                            /* 重答防雷同：上一版正文，供引擎输出查重 */
+                            prevContent: prevContentForRegen,
                             /* 见引擎侧 keepRegenCandidate：› 留旧版，刷新键不留 */
                             keepRegenCandidate: keep
                         }
@@ -5180,6 +5189,12 @@ function renderWriter() {
 
         if (msg.role === 'assistant') {
             /*
+             * 重答防雷同：软删之前先抓这一版正文。
+             * removeMessagesFrom 会把楼层清空，晚了就没了；
+             * 引擎拿它做「新版 vs 旧版」查重，雷同自动换向重试。
+             */
+            var prevContentForResend = String(msg.content || '');
+            /*
              * 起点要回到「这一轮」的开头：通常就是紧挨着的那条用户消息。
              * 这样重发才是让角色重新答一次，而不是凭空重写、把提问也丢掉。
              */
@@ -5258,6 +5273,8 @@ function renderWriter() {
                                 } catch (eAtt) {}
                                 return Math.max(1, Array.isArray(msg.swipes) ? msg.swipes.length : 0);
                             })(),
+                            /* 重答防雷同：上一版正文，供引擎输出查重 */
+                            prevContent: prevContentForResend,
                             /*
                              * ⚠️ 必须显式传 false —— 「重发」是纯重写，不产候选。
                              *

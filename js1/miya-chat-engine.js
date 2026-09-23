@@ -943,9 +943,17 @@
         var tail;
         if (opts.isRegenerate) {
             if (historyTailState === 'user_spoke_last') {
-                tail = buildRegenerateTailNudge(
-                    readLastRawAssistantReply(apiChatId || opts.chatId)
-                );
+                /*
+                 * 优先用 opts._regenCtx.prevRaw（sendChat 在 buildApiMessages
+                 * 之前统一取好的那份）。直接再调 readLastRawAssistantReply
+                 * 会把撤回快照**重复消费**——后调的一方拿到空串，
+                 * nudge 里的引用块就会凭空消失。
+                 */
+                var regenPrevRaw =
+                    opts._regenCtx && typeof opts._regenCtx.prevRaw === 'string'
+                        ? opts._regenCtx.prevRaw
+                        : readLastRawAssistantReply(apiChatId || opts.chatId);
+                tail = buildRegenerateTailNudge(regenPrevRaw);
             }
         } else if (resumeRewrite && historyTailState === 'user_spoke_last') {
             /*
@@ -4613,6 +4621,153 @@
         };
     }
 
+    /*
+     * ═══════════════════════════════════════════════════════════════
+     * 重答防雷同（三重机制）—— 针对「重新生成还是一模一样」的根治
+     *
+     * ── 为什么前三轮修复（全是提示词）没压住 ──
+     *
+     * 前三轮修的全是「提示词」：nudge 引用上一版原文、排除同义改写歧义、
+     * resumeRewrite 补约束。方向没错，但它们有一个共同盲区：
+     * **从头到尾没有任何一处验证过「新回复是否真的和上一版不同」**。
+     * 提示词只是祈祷，输出侧没有闭环。
+     *
+     * 而且有两个提示词永远压不住的雷：
+     *
+     *   1. 中转站/网关的请求级缓存。大量 OpenAI 兼容中转（为省钱）
+     *      会按请求体哈希缓存 completion——短时间内同 body 的请求
+     *      直接回放缓存内容。线上重回的 nudge 引用「上一版原文」，
+     *      一旦第 1 次重答就和原版一样（温度低时很常见），第 2 次重答的
+     *      上下文与 nudge 引用文本就与第 1 次**逐字节相同**——
+     *      网关直接把缓存吐回来，用户看到一字不差的内容。
+     *
+     *   2. 采样参数零差异化。请求体里 temperature 固定取自 ST 生成设置，
+     *      没有 seed，也没有重答分支。用户预设温度为 0~0.2 时，
+     *      「输入几乎相同 + 贪心解码」在长 system + 强人设锚定下
+     *      完全可以复现出逐字相同的回复——nudge 只是末尾一小段，
+     *      压不过几千字的上下文锚。
+     *
+     * 所以这次改成三层，缺一不可：
+     *
+     *   ① 请求唯一化：每次重答在 messages 末尾注入一条唯一的「查重码」
+     *      （nonce + 尝试序号）。保证**任何一层**按 body 缓存都不可能命中，
+     *      同时给模型一个可区分的输入信号。
+     *   ② 采样差异化：仅重答请求温度上浮（+0.15 × 尝试序号，上限 1.6）。
+     *      只动这一个请求、只往多样性方向推——用户点「重新生成」本身就是
+     *      「要一版不一样的」，这是对配置意图的正确解读，不算偷改。
+     *   ③ 输出查重闭环：生成成功后把新正文与上一版（撤回前快照）做
+     *      归一化比对（剥思维链/标签/空白/全半角标点后按字符二元组
+     *      算 Dice 相似度）；判定雷同就**自动换向重试**（附更硬的
+     *      系统块 + 更高温度），最多 3 次。这才是唯一能保证
+     *      「用户看到的不一样」的机制——因为它验证的是结果本身。
+     * ═══════════════════════════════════════════════════════════════
+     */
+    function makeRegenNonce() {
+        return (
+            Date.now().toString(36) +
+            '-' +
+            Math.floor(Math.random() * 0xffffffff).toString(36)
+        );
+    }
+
+    /*
+     * 把两版回复收拾成可比对的形态：
+     * 先抽正文（剥思维链/心声/状态栏/推送标签），再剥掉剩余标签、
+     * 全部空白与全半角标点，转小写。两边走同一套归一化，
+     * 差的只有"实义内容"，比对才公平。
+     */
+    function normalizeReplyForRegenCompare(raw) {
+        var s = String(raw || '');
+        try {
+            if (typeof extractBodyForBubbles === 'function') {
+                var body = String(extractBodyForBubbles(s) || '');
+                if (body) s = body;
+            }
+        } catch (e) {}
+        if (!s) s = String(raw || '');
+        s = s
+            .replace(/<thinking[\s\S]*?<\/thinking>/gi, '')
+            .replace(/<think>[\s\S]*?<\/think>/gi, '')
+            .replace(/<miyavoice[\s\S]*?<\/miyavoice>/gi, '')
+            .replace(/<STATUSBAR_DATA>[\s\S]*?<\/STATUSBAR_DATA>/gi, '')
+            .replace(/<miyanextpush[\s\S]*?<\/miyanextpush>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .toLowerCase()
+            .replace(/[\s\u3000]+/g, '')
+            .replace(/[，。！？；：、·…—～“”‘’（）《》〈〉【】〔〕]/g, '')
+            .replace(/[,.;:!?"'`()\[\]{}<>|\/\\_\-~=+*&^%$#@！？]/g, '');
+        return s.slice(0, 2400);
+    }
+
+    /*
+     * 字符二元组（bigram）Dice 相似度，O(n)。
+     * 比 LCS 快得多（正文几百字时 LCS 是十万格级，这里线性），
+     * 对中文短文本的"复读"判定足够准：逐字复述 ≈ 1，
+     * 正常换向重写通常 < 0.5，同义改写在 0.6~0.8 之间。
+     */
+    function charBigramDice(a, b) {
+        a = String(a || '');
+        b = String(b || '');
+        if (!a || !b) return 0;
+        if (a === b) return 1;
+        if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
+        var map = Object.create(null);
+        var i;
+        for (i = 0; i < a.length - 1; i++) {
+            var k = a.substr(i, 2);
+            map[k] = (map[k] || 0) + 1;
+        }
+        var hit = 0;
+        var bTotal = 0;
+        for (i = 0; i < b.length - 1; i++) {
+            var k2 = b.substr(i, 2);
+            bTotal++;
+            var c = map[k2];
+            if (c) {
+                hit++;
+                map[k2] = c - 1;
+            }
+        }
+        var denom = a.length - 1 + bTotal;
+        return denom ? (2 * hit) / denom : 0;
+    }
+
+    /*
+     * 判定「这次重答是否与上一版雷同」。
+     * 三条命中任意一条即算雷同：
+     *   · 归一化后完全相等；
+     *   · Dice 相似度 ≥ 0.88；
+     *   · 较短一方 ≥ 24 字且被较长一方完整包含
+     *     （抓"旧文原样 + 尾巴上多补一句"的偷懒形态，此时 Dice 会偏低）。
+     */
+    function regenLooksIdentical(prevBody, rawNow) {
+        var prev = String(prevBody || '');
+        if (!prev) return false;
+        var now = normalizeReplyForRegenCompare(rawNow);
+        if (!now) return false;
+        if (now === prev) return true;
+        if (charBigramDice(prev, now) >= 0.88) return true;
+        var short = prev.length <= now.length ? prev : now;
+        var long = prev.length <= now.length ? now : prev;
+        if (short.length >= 24 && long.indexOf(short) >= 0) return true;
+        return false;
+    }
+
+    /*
+     * 查重未通过（重试）时附加的系统块。
+     * 比首轮 nudge 硬得多：直接告知"上一版没过查重、用户不会看到"，
+     * 并给出可执行的换向要求 + 新查重码。
+     */
+    function buildRegenRejectedBlock(attemptNo) {
+        return [
+            '【系统查重·上一版无效·这是第 ' + attemptNo + ' 次尝试】',
+            '你刚才生成的回复与被弃用的上一版高度雷同，未通过系统查重，用户不会看到那一版。',
+            '请重新生成本轮回复：必须换一个实质不同的演绎方向——不同的事件切入点、不同的动作与对白内容、不同的情绪落点；仅调整措辞、语序或段落仍视为无效。',
+            '角色的身份、性格、说话习惯、与用户的关系，以及世界书核心设定与格式规则保持不变；不要提及本次查重或「重新生成」等字眼。',
+            '（系统内部查重码：' + makeRegenNonce() + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
+        ].join('\n');
+    }
+
     function sendChat(chatId, userText, opts) {
         var store = global.miyaChatStore;
         var options = opts && typeof opts === 'object' ? opts : {};
@@ -4716,6 +4871,25 @@
                 }
             })
             .then(function () {
+            /*
+             * 重答防雷同（机制③的前置）：
+             * 在 buildApiMessages 之前先取走「上一版原文」。
+             *
+             * 为什么必须在这里取：readLastRawAssistantReply 的撤回快照
+             * 是「取一次即清」的——若让 nudge 在 buildApiMessages 里
+             * 自己去取，这里就拿不到了；反过来这里先取、再把原文
+             * 经 opts._regenCtx 递给 nudge，两边共用同一份，快照恰好
+             * 只被消费一次。
+             */
+            if (options.isRegenerate && !options._regenCtx) {
+                var prevRawForRegen = readLastRawAssistantReply(chatId);
+                options._regenCtx = {
+                    attempt: 1,
+                    nonce: makeRegenNonce(),
+                    prevRaw: prevRawForRegen
+                };
+                options._regenCtx.prevBody = normalizeReplyForRegenCompare(prevRawForRegen);
+            }
             var built = buildApiMessages(chatId, '', options);
             if (built.error) return Promise.reject(new Error(built.error));
 
@@ -4737,7 +4911,7 @@
             return pluginReady.then(function (ctxOut) {
             if (ctxOut && Array.isArray(ctxOut.messages)) built.messages = ctxOut.messages;
 
-            function callWithSlice(slice, usedSecondary) {
+            function callWithSlice(slice, usedSecondary, messagesOverride, regenAttemptNo, regenCtx) {
                 if (!slice.baseUrl || !slice.apiKey || !slice.model) {
                     return Promise.reject(new Error(usedSecondary ? 'secondary_api_not_configured' : 'api_not_configured'));
                 }
@@ -4749,7 +4923,26 @@
                 var stGen = getStGenerationSettings();
                 /* built.messages 上挂着 __src / __genSection 等本地来源标记，
                    是纯前端用于「Token 来源分布」的，绝不能进 request body —— 这里剥掉。 */
-                var apiSafeMessages = stripInternalFields(built.messages);
+                var apiSafeMessages = stripInternalFields(messagesOverride || built.messages);
+                /*
+                 * 重答防雷同·机制①：请求唯一化。
+                 * 每次重答请求（含查重重试）都带一个全请求唯一的「查重码」，
+                 * 保证请求体逐字节不同 —— 任何按 body 哈希做缓存的中转/网关
+                 * 都不可能再回放缓存的旧回复。
+                 */
+                if (regenAttemptNo > 0) {
+                    apiSafeMessages = apiSafeMessages.concat([
+                        {
+                            role: 'user',
+                            content:
+                                '（系统内部查重码：' +
+                                ((regenCtx && regenCtx.nonce) || makeRegenNonce()) +
+                                '-' +
+                                regenAttemptNo +
+                                '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
+                        }
+                    ]);
+                }
                 var reqPayload = {
                     model: slice.model,
                     messages: apiSafeMessages,
@@ -4760,6 +4953,23 @@
                 if (stGen.topP != null) reqPayload.top_p = Number(stGen.topP);
                 if (stGen.frequencyPenalty != null) reqPayload.frequency_penalty = Number(stGen.frequencyPenalty);
                 if (stGen.presencePenalty != null) reqPayload.presence_penalty = Number(stGen.presencePenalty);
+                /*
+                 * 重答防雷同·机制②：采样差异化（仅重答请求）。
+                 * 温度上浮 +0.15 × 尝试序号（上限 1.6），把「低温度 + 输入几乎
+                 * 相同」的贪心收敛打开。只作用于重答这一个请求、只往多样性
+                 * 方向推；普通发送的采样参数保持用户配置，一字不动。
+                 *
+                 * 刻意**不发 seed**：seed 是「可复现」，与重答要的「不可复现」
+                 * 正好相反；而且个别严格网关会对非预期字段报 400，得不偿失。
+                 */
+                if (regenAttemptNo > 0) {
+                    var regenTempBase = Number(reqPayload.temperature);
+                    if (!isFinite(regenTempBase)) regenTempBase = 1;
+                    reqPayload.temperature = Math.min(
+                        1.6,
+                        regenTempBase + 0.15 * regenAttemptNo
+                    );
+                }
                 /*
                  * ⚠️ 这里固定非流式，是**当前实现的限制**，不是有意设计。
                  *
@@ -4787,9 +4997,50 @@
             }
 
             var primarySlice = resolveChatApiSlice(cfg, false);
-            return callWithSlice(primarySlice, false).catch(function (err) {
+            /*
+             * 重答防雷同·机制③：输出查重闭环。
+             * 每次生成成功后，把新正文与上一版（撤回前快照）做归一化比对；
+             * 判定雷同就自动换向重试（附系统查重块 + 温度再上浮），最多 3 次。
+             * 这是唯一能真正保证「用户看到的和上一版不一样」的一层——
+             * 因为它验证的是**结果本身**，而不是指望模型听话。
+             */
+            function callSliceGuarded(slice, usedSecondary) {
+                if (!options.isRegenerate || !options._regenCtx) {
+                    return callWithSlice(slice, usedSecondary, null, 0, null);
+                }
+                var rctx = options._regenCtx;
+                var REGEN_MAX_TRIES = 3;
+                function tryOnce(no) {
+                    var msgsForTry = built.messages;
+                    if (no > 1) {
+                        msgsForTry = built.messages.concat([
+                            { role: 'system', content: buildRegenRejectedBlock(no) }
+                        ]);
+                    }
+                    return callWithSlice(slice, usedSecondary, msgsForTry, no, rctx).then(
+                        function (completion) {
+                            if (!rctx.prevBody || no >= REGEN_MAX_TRIES) return completion;
+                            if (!regenLooksIdentical(rctx.prevBody, completion.replyRaw)) {
+                                return completion;
+                            }
+                            try {
+                                if (global.console && console.warn) {
+                                    console.warn(
+                                        '[regen] 第 ' +
+                                            no +
+                                            ' 次重答与上一版雷同（查重未过），自动换向重试'
+                                    );
+                                }
+                            } catch (eLog) {}
+                            return tryOnce(no + 1);
+                        }
+                    );
+                }
+                return tryOnce(1);
+            }
+            return callSliceGuarded(primarySlice, false).catch(function (err) {
                 if (!cfg.fallbackToSecondary || !hasSecondaryApiConfigured(cfg)) throw err;
-                return callWithSlice(resolveChatApiSlice(cfg, true), true);
+                return callSliceGuarded(resolveChatApiSlice(cfg, true), true);
             }).then(function (completion) {
                 var data = completion.data;
                 var replyRawOriginal = String(completion.replyRaw || '');

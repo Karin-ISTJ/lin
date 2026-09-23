@@ -680,7 +680,123 @@
      * 位置与「元指令尾」同级（都在当前 user 之前、所有 system 之末），
      * 这样它离生成点最近，且不会插进历史中间破坏上下文连贯。
      */
-    function buildRegenerateHintBlock(attempt) {
+    /*
+     * ═══════════════════════════════════════════════════════════════
+     * 重答防雷同（三重机制）—— 线下版
+     *
+     * 前几轮修复（重答提示块 / 第 N 次重答计数 / attempt 计数器解耦）
+     * 全是**提示词层**的，它们有一个共同盲区：输出侧从来没有验证过
+     * 「新楼层是否真的和上一版不同」。提示词只是祈祷。
+     *
+     * 提示词压不住的两颗雷：
+     *   1. 中转站按请求体哈希缓存 completion —— 连续重答时若第 1 次就
+     *      与上一版雷同，后续请求的「重答提示块」引用语境几乎不变，
+     *      body 高度接近，短 TTL 缓存足以把同一份内容喂回来；
+     *   2. 采样参数零差异化 —— 温度取自用户预设，为 0~0.2 时
+     *      「输入几乎相同 + 贪心解码」在强人设锚定下可以逐字复现。
+     *
+     * 三层机制（与线上 miya-chat-engine.js 同构）：
+     *   ① 请求唯一化：每次重答请求注入唯一「查重码」，body 永不重复，
+     *      任何一层缓存都不可能命中；
+     *   ② 采样差异化：仅重答请求温度上浮（+0.15 × 尝试序号，上限 1.6）；
+     *   ③ 输出查重闭环：生成后与上一版（重答前快照）归一化比对，
+     *      雷同则**隐藏重试**（不往界面流式吐字，完成后一次性替换楼层），
+     *      最多 3 次。机制③验证的是结果本身，是唯一能兜底的保证。
+     * ═══════════════════════════════════════════════════════════════
+     */
+    function makeRegenNonce() {
+        return (
+            Date.now().toString(36) +
+            '-' +
+            Math.floor(Math.random() * 0xffffffff).toString(36)
+        );
+    }
+
+    /*
+     * 归一化两版正文用于比对：剥思维链与各功能标签，再去掉剩余标签、
+     * 全部空白与全半角标点，转小写。两边同一套规则，差的只有实义内容。
+     * （线下没有 extractBodyForBubbles，用本文件的 stripThinking 兜底。）
+     */
+    function normalizeReplyForRegenCompare(raw) {
+        var s = String(raw || '');
+        try {
+            s = stripThinking(s);
+        } catch (e) {}
+        if (!s) s = String(raw || '');
+        s = s
+            .replace(/<miyavoice[\s\S]*?<\/miyavoice>/gi, '')
+            .replace(/<STATUSBAR_DATA>[\s\S]*?<\/STATUSBAR_DATA>/gi, '')
+            .replace(/<miyanextpush[\s\S]*?<\/miyanextpush>/gi, '')
+            .replace(/<miyaplot[\s\S]*?<\/miyaplot>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .toLowerCase()
+            .replace(/[\s\u3000]+/g, '')
+            .replace(/[，。！？；：、·…—～“”‘’（）《》〈〉【】〔〕]/g, '')
+            .replace(/[,.;:!?"'`()\[\]{}<>|\/\\_\-~=+*&^%$#@！？]/g, '');
+        return s.slice(0, 2400);
+    }
+
+    /** 字符二元组 Dice 相似度（O(n)，中文短文本复读判定足够准）。 */
+    function charBigramDice(a, b) {
+        a = String(a || '');
+        b = String(b || '');
+        if (!a || !b) return 0;
+        if (a === b) return 1;
+        if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
+        var map = Object.create(null);
+        var i;
+        for (i = 0; i < a.length - 1; i++) {
+            var k = a.substr(i, 2);
+            map[k] = (map[k] || 0) + 1;
+        }
+        var hit = 0;
+        var bTotal = 0;
+        for (i = 0; i < b.length - 1; i++) {
+            var k2 = b.substr(i, 2);
+            bTotal++;
+            var c = map[k2];
+            if (c) {
+                hit++;
+                map[k2] = c - 1;
+            }
+        }
+        var denom = a.length - 1 + bTotal;
+        return denom ? (2 * hit) / denom : 0;
+    }
+
+    /*
+     * 雷同判定：完全相等 / Dice ≥ 0.88 / 短方 ≥ 24 字且被长方完整包含
+     * （最后一条抓「旧文原样 + 尾巴多补一句」的偷懒形态）。
+     */
+    function regenLooksIdentical(prevBody, rawNow) {
+        var prev = String(prevBody || '');
+        if (!prev) return false;
+        var now = normalizeReplyForRegenCompare(rawNow);
+        if (!now) return false;
+        if (now === prev) return true;
+        if (charBigramDice(prev, now) >= 0.88) return true;
+        var short = prev.length <= now.length ? prev : now;
+        var long = prev.length <= now.length ? now : prev;
+        if (short.length >= 24 && long.indexOf(short) >= 0) return true;
+        return false;
+    }
+
+    /*
+     * 查重未通过（隐藏重试）时附加的系统块。
+     * 直接告知「上一版没过查重、用户不会看到」，并给出可执行的
+     * 换向要求 + 新查重码。语气比首轮【重答要求】硬。
+     */
+    function buildRegenRejectedBlock(attemptNo) {
+        return [
+            '【系统查重·上一版无效·这是第 ' + attemptNo + ' 次尝试】',
+            '你刚才生成的内容与被弃用的上一版高度雷同，未通过系统查重，用户不会看到那一版。',
+            '请重新生成本轮内容：必须换一个实质不同的演绎方向——不同的事件切入点、不同的动作与对白、不同的叙事节奏；仅调整措辞、语序或段落划分仍视为无效。',
+            '角色的身份、性格、说话习惯、与用户的关系，以及世界书核心设定与格式规则保持不变；不要提及本次查重或「重新生成」等字眼。',
+            '（系统内部查重码：' + makeRegenNonce() + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
+        ].join('\n');
+    }
+
+    function buildRegenerateHintBlock(attempt, nonce) {
         var n = Math.floor(Number(attempt) || 0);
         var lines = [
             '【重答要求·本次为同一提问的重新生成】',
@@ -709,6 +825,16 @@
              * 把序号写进提示，至少让「再刷一次」这件事在输入侧是可区分的。
              */
             lines.push('这是同一提问的第 ' + String(n) + ' 次重答，请比上一次的差异更明显一些。');
+        }
+        if (nonce) {
+            /*
+             * 重答防雷同·机制①：请求唯一化。
+             * 每次重答请求带唯一查重码，保证请求体逐字节不同 ——
+             * 按请求体哈希缓存的中转/网关从此不可能回放旧回复。
+             */
+            lines.push(
+                '（系统内部查重码：' + nonce + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
+            );
         }
         return lines.join('\n');
     }
@@ -1499,7 +1625,7 @@
          * 只在重答路径注入，正常发送完全不受影响。
          */
         if (isRegenerateRun(opts)) {
-            var hintBlock = buildRegenerateHintBlock(opts.regenerateAttempt);
+            var hintBlock = buildRegenerateHintBlock(opts.regenerateAttempt, opts.regenNonce);
             var lastUserIdx = -1;
             for (var ui2 = apiMessages.length - 1; ui2 >= 0; ui2--) {
                 if (apiMessages[ui2] && apiMessages[ui2].role === 'user') {
@@ -2668,9 +2794,16 @@
 
         /* 先让「书写中」上屏，再拼 prompt，避免按发送瞬间卡死 */
         return yieldToPaint().then(function () {
+            /*
+             * 重答防雷同·机制①：每次重答请求生成唯一查重码，
+             * 随 opts 传进 buildApiMessages（进【重答要求】提示块），
+             * 保证请求体逐字节不同，任何一层 body 缓存都不可能命中。
+             */
+            var regenNonce = regenRun ? makeRegenNonce() : '';
             var built = buildApiMessages(chatId, sessionId, '', {
                 regenerate: regenRun,
-                regenerateAttempt: regenAttempt
+                regenerateAttempt: regenAttempt,
+                regenNonce: regenNonce
             });
             if (built.error) throw new Error(built.error);
             var url = baseUrl + '/chat/completions';
@@ -2691,7 +2824,103 @@
                （换模型/换中转站偶尔转好，只是因为对方默认值恰好兜住了缺失参数，
                并非用户的 Top P 设置真的生效了。） */
             applyStGenerationToPayload(payload, stGen);
+            /*
+             * 重答防雷同·机制②：采样差异化（仅重答请求）。
+             * 温度上浮 +0.15 × 尝试序号（上限 1.6），把「低温度 + 输入几乎
+             * 相同」的贪心收敛打开。只作用于重答请求、只往多样性方向推；
+             * 正常生成的采样参数保持用户配置，一字不动。
+             *
+             * 刻意**不发 seed**：seed 语义是「可复现」，与重答要的
+             * 「不可复现」正好相反；且个别严格网关对非预期字段报 400。
+             */
+            if (regenRun) {
+                var regenTempBase = Number(payload.temperature);
+                if (!isFinite(regenTempBase)) regenTempBase = 1;
+                payload.temperature = Math.min(
+                    1.6,
+                    regenTempBase + 0.15 * Math.max(1, regenAttempt)
+                );
+            }
             var useStream = appointmentStreamEnabled(cfg);
+            /*
+             * 重答防雷同·机制③：输出查重闭环。
+             *
+             * regenPrevBody 是「重答前那一版正文」的归一化形态，
+             * 由调用方经 handlers.prevFloorRaw 传入（regenerateAssistantFloor
+             * 在软删楼层之前抓的 m.content；› 键与长按重发同理）。
+             * 没传（如「我发的消息」刷新路径没有明确旧版）就跳过查重，
+             * 只保留机制①②。
+             *
+             * 查重未过时**隐藏重试**：
+             *   · 不再往界面流式吐字（onDelta/onLine 全部摘掉），改走
+             *     非流式一次性取回，完成后照常走楼层替换 —— 界面在收尾
+             *     patchStoryBody 时直接呈现新版，不会出现两段字叠着蹦；
+             *   · 请求附带【系统查重】块 + 温度再上浮 + 新查重码；
+             *   · 最多 3 次，全雷同就交付最后一版（至少机制①②已尽力）。
+             */
+            var REGEN_MAX_TRIES = 3;
+            var regenPrevBody = regenRun
+                ? normalizeReplyForRegenCompare(handlers.prevFloorRaw)
+                : '';
+            var regenTryNo = 0;
+            function regenFetchOnce(streamCbs, forceNonStream, extraBlocks, extraTemp) {
+                var sendPayload = payload;
+                if ((extraBlocks && extraBlocks.length) || extraTemp) {
+                    sendPayload = Object.assign({}, payload, {
+                        messages: (payload.messages || []).concat(extraBlocks || [])
+                    });
+                    if (extraTemp) {
+                        var bt2 = Number(sendPayload.temperature);
+                        if (!isFinite(bt2)) bt2 = 1;
+                        sendPayload.temperature = Math.min(1.6, bt2 + extraTemp);
+                    }
+                }
+                return fetchAppointmentCompletion(
+                    url,
+                    headers,
+                    sendPayload,
+                    streamCbs,
+                    forceNonStream ? false : useStream
+                );
+            }
+            function regenFetchGuarded() {
+                regenTryNo++;
+                var streamCbs = {
+                    onLine: handlers.onLine,
+                    onDelta: handlers.onDelta,
+                    onPartial: handlers.onPartial,
+                    signal: handlers.signal
+                };
+                var forceNonStream = false;
+                var extraBlocks = [];
+                var extraTemp = 0;
+                if (regenTryNo > 1) {
+                    streamCbs = { signal: handlers.signal };
+                    forceNonStream = true;
+                    extraBlocks = [{ role: 'system', content: buildRegenRejectedBlock(regenTryNo) }];
+                    extraTemp = 0.15;
+                }
+                return regenFetchOnce(streamCbs, forceNonStream, extraBlocks, extraTemp).then(
+                    function (completion) {
+                        if (!regenPrevBody || regenTryNo >= REGEN_MAX_TRIES) return completion;
+                        var rawNow =
+                            completion && completion.raw != null
+                                ? String(completion.raw)
+                                : String(completion || '');
+                        if (!regenLooksIdentical(regenPrevBody, rawNow)) return completion;
+                        try {
+                            if (global.console && console.warn) {
+                                console.warn(
+                                    '[offline regen] 第 ' +
+                                        regenTryNo +
+                                        ' 次重答与上一版雷同（查重未过），自动换向重试'
+                                );
+                            }
+                        } catch (eLog) {}
+                        return regenFetchGuarded();
+                    }
+                );
+            }
             var pluginCtx = {
                 scope: 'offline',
                 chatId: chatId,
@@ -2712,20 +2941,12 @@
                 built.messages = ctxOut.messages;
                 payload.messages = ctxOut.messages;
             }
-            return fetchAppointmentCompletion(
-                url,
-                headers,
-                payload,
-                {
-                    onLine: handlers.onLine,
-                    onDelta: handlers.onDelta,
-                    /* 把 onPartial 透传进流式读取层，
-                       断线/空闲超时后能通知上层「这段没写完」。 */
-                    onPartial: handlers.onPartial,
-                    signal: handlers.signal
-                },
-                useStream
-            ).then(function (completion) {
+            /*
+             * 走「重答防雷同」守卫后的请求：非重答路径行为与旧的
+             * fetchAppointmentCompletion 直调完全一致（查重基线为空，
+             * 只发一次，回调原样透传）；重答路径获得三重机制。
+             */
+            return regenFetchGuarded().then(function (completion) {
                 var fullRaw =
                     completion && completion.raw != null
                         ? String(completion.raw)
@@ -3163,6 +3384,17 @@
          * 这个数字只用于给模型一句「这是第 N 次重答，差异再明显一点」，
          * 不进任何持久化数据，也不改变写入目标楼层。
          */
+        /*
+         * 旧版正文快照（重答防雷同·机制③的比对基线）。
+         *
+         * 调用方（regenerateAssistantFloor / 长按重发）必须在**软删楼层之前**
+         * 把那一层的正文抓下来传进来 —— 软删会把 content 清空，晚了就没了。
+         * 拿到它，引擎才能在生成后做「新版 vs 旧版」查重，雷同就自动换向重试。
+         * 没传（如「我发的消息」刷新路径）就跳过查重，机制①②仍然生效。
+         */
+        if (regenOpts.prevContent != null && handlers.prevFloorRaw == null) {
+            handlers.prevFloorRaw = String(regenOpts.prevContent);
+        }
         if (handlers.regenerateAttempt == null) {
             handlers.regenerateAttempt = Math.max(1, Math.floor(Number(regenOpts.attempt) || 1));
         }

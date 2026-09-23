@@ -26,13 +26,21 @@
        未闭合兜底若一路吞到 $ 会连状态栏块一起吃掉 —— 用前瞻在 miyastatus 处刹住
        （全角 ＜miyastatus＞ 同防）。 */
     function blockRegex() {
-        return new RegExp('<' + TAG + '\\s*>([\\s\\S]*?)(?:<\\s*\\/\\s*' + TAG + '\\s*>|(?=<miyastatus|＜miyastatus)|$)', 'i');
+        /* 半角/全角开标均可开（中文语境模型爱输出 ＜plot＞），闭标同理；
+           未闭合兜底仍在 miyastatus（半/全角）处刹住。 */
+        return new RegExp(
+            '(?:<\\s*' + TAG + '\\s*>|＜\\s*' + TAG + '\\s*＞)' +
+            '([\\s\\S]*?)' +
+            '(?:<\\s*\\/\\s*' + TAG + '\\s*>|＜\\s*\\/\\s*' + TAG + '\\s*＞' +
+            '|(?=<miyastatus|＜miyastatus)|$)',
+            'i'
+        );
     }
 
     function hasPlotBlock(rawText) {
         var txt = String(rawText || '');
         if (!txt) return false;
-        return new RegExp('<\\s*' + TAG + '\\s*>', 'i').test(txt);
+        return new RegExp('(?:<\\s*' + TAG + '\\s*>|＜\\s*' + TAG + '\\s*＞)', 'i').test(txt);
     }
 
     /**
@@ -55,11 +63,13 @@
      */
     function stripPlot(rawText) {
         var txt = String(rawText || '');
-        if (!txt) return '';
+        if (!txt) return txt;
         if (!hasPlotBlock(txt)) return txt;
-        return txt.replace(new RegExp('<\\s*' + TAG + '\\s*>[\\s\\S]*?<\\s*\\/\\s*' + TAG + '\\s*>', 'gi'), ' ')
+        var OPEN = '(?:<\\s*' + TAG + '\\s*>|＜\\s*' + TAG + '\\s*＞)';
+        var CLOSE = '(?:<\\s*\\/\\s*' + TAG + '\\s*>|＜\\s*\\/\\s*' + TAG + '\\s*＞)';
+        return txt.replace(new RegExp(OPEN + '[\\s\\S]*?' + CLOSE, 'gi'), ' ')
             /* 未闭合：剥到结尾；但 <miyastatus> 之前必须刹住，别把状态栏一起剥掉 */
-            .replace(new RegExp('<\\s*' + TAG + '\\s*>[\\s\\S]*?(?=<miyastatus|＜miyastatus|$)', 'gi'), ' ')
+            .replace(new RegExp(OPEN + '[\\s\\S]*?(?=<miyastatus|＜miyastatus|$)', 'gi'), ' ')
             .replace(/\n{3,}/g, '\n\n')
             .trim();
     }
