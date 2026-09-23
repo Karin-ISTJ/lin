@@ -5,8 +5,14 @@ var CACHE = 'miya-v310-karin';
  * app.js 会在收到 SW 广播时比对两者：SW 比页面新 → 自动刷新一次页面。
  * 只增不减：每次改动 sw.js / 任何需要立刻生效的资源策略时 bump 尾号。
  */
-var BUILD = 'sw-69';
-var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './css/miya-offline.css', './css/miya-offline-themes.css', './css/miya-offline-card.css', './css/miya-offline-plot.css', './js1/app.js', './js1/miya-appointment-app.js', './js1/miya-appointment-engine.js', './js1/miya-appointment-store.js', './js2/miya-offline-plot.js', './audio/farmgame/farm-bgm-1.mp3', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
+var BUILD = 'sw-70';
+/* SWR 竞速超时：超过此时长未获网络响应就用缓存顶上（后台继续拉新版）。
+   本地/快服务器 304 协商远低于此值（行为同旧 networkFirst）；
+   慢服务器 200 个协商请求不再各等一个完整 RTT —— 首屏从分钟级回秒级。 */
+var NETWORK_TIMEOUT_MS = 400;
+var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './css/miya-offline.css', './css/miya-offline-themes.css', './css/miya-offline-card.css', './css/miya-offline-plot.css', './js1/app.js', './js1/miya-appointment-app.js', './js1/miya-appointment-engine.js', './js1/miya-appointment-store.js', './js2/miya-offline-plot.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
+/* BGM（farm-bgm-1.mp3, 1.9M）已从预缓存摘除：农场 BGM 走运行时 cacheFirst
+   （首次在线播放时拉取一次即永久缓存），不再拖慢 SW install/activate。 */
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */
 var STATIC_LIVE = /\.(?:html|css|js|webmanifest|json)$|\/$|miya-icon(?:-\d+)?\.png/;
 
@@ -169,26 +175,42 @@ self.addEventListener('fetch', function (e) {
   }
 
   function networkFirst(request) {
-    /* cache:'no-cache' —— 每次向服务器协商验证。
-       防的是 HTTP 层旧响应：?v= 不变时浏览器 HTTP 缓存在自身新鲜期内
-       仍可能返回旧文件，SW 会把这份旧内容当"网络成功"吞进缓存。
-       协商后 200 = 真新内容（put 覆盖同 key），304 = 与服务器一致。 */
-    return fetch(request, { cache: 'no-cache' }).then(function (res) {
+    /* SWR（stale-while-revalidate）策略：
+       ① 网络请求带 cache:'no-cache' 协商验证（防 HTTP 层旧响应吞缓存）；
+       ② 400ms 内网络回来 → 直接用网络响应（服务器支持 304 时协商极快，
+          保持"永远最新"）；
+       ③ 400ms 超时 → 立即用缓存顶上（慢服务器不再让 200 个请求各等一个
+          完整 RTT），网络在后台继续，成功后 put 覆盖归一 key——
+          下次打开就是新版。旧副本最多存活"一个刷新窗口"，可自愈。
+       ④ 无缓存且超时 → 继续等网络（首访没有缓存可顶）；
+       ⑤ 网络失败 → 归一 key 精确匹配兜底，仍无则 503。 */
+    var keyReq = cacheKeyRequest(request);
+    var network = fetch(request, { cache: 'no-cache' }).then(function (res) {
       if (res && res.ok) {
         var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(cacheKeyRequest(request), copy); }).catch(function () {});
+        caches.open(CACHE).then(function (c) { c.put(keyReq, copy); }).catch(function () {});
       }
       return res;
-    }).catch(function () {
-      /* 离线/网络失败：按归一 key 精确匹配。
-       这份副本 = 最后一次在线成功获取的版本 —— 不再按路径
-       翻任意 ?v= 的旧副本（旧机制正是"修复过几天又复发"的通道）。 */
-      return caches.open(CACHE).then(function (c) {
-        return c.match(cacheKeyRequest(request)).then(function (hit) {
-          return hit || new Response('', { status: 503, statusText: 'Offline' });
+    });
+    var race = new Promise(function (resolve) {
+      setTimeout(function () { resolve(null); }, NETWORK_TIMEOUT_MS);
+    });
+    return Promise.race([network.catch(function () { return null; }), race])
+      .then(function (res) {
+        if (res) return res;
+        return caches.open(CACHE).then(function (c) {
+          return c.match(keyReq).then(function (hit) {
+            return hit || network;
+          });
+        });
+      })
+      .catch(function () {
+        return caches.open(CACHE).then(function (c) {
+          return c.match(keyReq).then(function (hit) {
+            return hit || new Response('', { status: 503, statusText: 'Offline' });
+          });
         });
       });
-    });
   }
 
   if (STATIC_LIVE.test(path)) {
