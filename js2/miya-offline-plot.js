@@ -104,16 +104,17 @@
        因为内联样式的 !important 在层叠中优先级最高，
        而 CSS 文件里无论怎么堆选择器都追不平对家的 (0,10,1) 特异性。
 
-       这三个常量代表设计稿里的绝对值，集中放这里便于校对：
-         15px = 卡片根 / 中间容器的基准
-         12px = 「剧情建议」标题
-         14px = 每个选项按钮
+       这几个常量代表设计稿里的绝对值，集中放这里便于校对：
+         15px    = 卡片根 / 中间容器 / 选项按钮 / 文案列（.choice-text）的基准
+         12.5px  = 「剧情建议」标题（设计稿 .78em × 16px 基准 = 12.48px）
+         15.75px = 选项左侧 ◇ 图标（设计稿 1.05em，随 15px 按钮字号走）
        ──────────────────────────────────────────────────────── */
     var FIX_FS_15 = 'font-size:15px !important';
-    var FIX_FS_12 = 'font-size:12px !important';
+    var FIX_FS_TITLE = 'font-size:12.5px !important';
+    var FIX_FS_ICON = 'font-size:15.75px !important';
     /* 按钮字号对齐设计稿真实值：设计基准 16px，
-       宽屏 .94em = 15.04px、窄屏 .93em = 14.88px —— 两者只差 0.16px，
-       统一钉 15px。之前钉 14px/13.5px 是整卡比独立预览小一圈的原因之一。 */
+       宽屏 .95em = 15.2px、窄屏 .94em = 15.04px —— 两者只差 0.16px，
+       统一钉 15px。 */
     var FIX_FS_BTN = 'font-size:15px !important';
 
     /* ── 字体强绑定（防全局字体/字重覆盖）────────────────────────
@@ -196,16 +197,24 @@
     }
 
     /**
-     * 渲染「剧情建议」卡片。
+     * 渲染「剧情建议」卡片（v2 紫韵版）。
      *
-     * DOM 结构与用户在需求里给的片段逐字对齐：
-     *   .wrap  >  .sec  >  .sec-title（「剧情建议」）
-     *                  >  button.choice × N（左 ◇、右箭头）
+     * DOM 结构与用户 2026-09 给的设计稿片段逐字对齐：
+     *   .wrap  >  .sec  >  h4.sec-title（「剧情建议」，渐变竖条 + 渐隐线）
+     *                  >  .body
+     *                       >  button.choice × N
+     *                            >  span.choice-icon（◇）
+     *                            >  span.choice-text（文案）
      *
      * 与给定片段的唯一差别是外层多了 .xw-plot-card 作用域类：
      *   · 让这套「写死的外观」不干扰线下主题的其它元素；
      *   · 卡片自带一套局部 CSS 变量，任何主题下颜色一致。
      * 卡片内部的类名、层级、伪元素一个没动。
+     *
+     * ⚠️ 点击交互只认 button 上的 data-ap-plot-choice 属性
+     * （miya-appointment-app 的 bindFloorToolsDelegate 用 closest 找它，
+     * 测试钩子 click(i) 也按它索引）—— icon/text 只是视觉子元素，
+     * 改布局时别动这个属性。
      *
      * ⚠️ 内联的 font-size + !important 是必需的，别删也别简化成纯 CSS：
      *
@@ -224,6 +233,9 @@
      *   （10 个 :not(.class) + 1 个 :where(div)），
      *   CSS 文件里无论怎么堆选择器都追不平，
      *   而【内联样式 + !important】在层叠里是最高一级，必胜。
+     *
+     *   v2 新增的 .choice-icon / .choice-text 两个 span 同样被那条规则
+     *   命中（icon 的 1.05em 是相对值，必被改写），所以也逐个内联钉死。
      *
      *   副作用（刻意接受）：用户调线下字号时卡片不跟着变大。
      *   这张卡是成品设计，字号/字距/内边距是一套调好的整体，
@@ -248,7 +260,7 @@
 
         /*
          * 窄屏（≤420px）只收内距（CSS 媒体查询负责，见样式表），
-         * 字号不再分支：设计稿宽屏 .94em=15.04px、窄屏 .93em=14.88px，
+         * 字号不再分支：设计稿宽屏 .95em=15.2px、窄屏 .94em=15.04px，
          * 只差 0.16px，统一内联 15px。
          *
          * 之所以不在这里写媒体查询：字号是内联 !important，
@@ -269,7 +281,14 @@
                     ';' +
                     FIX_FW_400 +
                     '">' +
+                    '<span class="choice-icon" style="' +
+                    FIX_FS_ICON +
+                    '" aria-hidden="true">◇</span>' +
+                    '<span class="choice-text" style="' +
+                    FIX_FS_15 +
+                    '">' +
                     esc(text) +
+                    '</span>' +
                     '</button>'
                 );
             })
@@ -298,14 +317,16 @@
             ';' +
             FIX_FW_400 +
             '">' +
-            '<div class="sec-title" style="' +
-            FIX_FS_12 +
+            '<h4 class="sec-title" style="' +
+            FIX_FS_TITLE +
             ';' +
             FIX_FF +
             ';' +
             FIX_FW_600 +
-            '">剧情建议</div>' +
+            '">剧情建议</h4>' +
+            '<div class="body">' +
             choices +
+            '</div>' +
             '</div></div></div>'
         );
     }

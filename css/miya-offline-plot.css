@@ -1,31 +1,39 @@
-/* ── 线下正文底部 · 剧情建议卡 ──────────────────────────────────
+/* ── 线下正文底部 · 剧情建议卡（v2 紫韵版） ──────────────────────
    这张卡的外观是用户指定的成品，**不属于线下主题的一部分**：
    色值、间距、圆角、阴影一律按给定代码原样写死，
    不引用 --xw-* 主题变量，因此博物馆 / 手帐 / 自定义皮肤下长得完全一致。
 
+   v2 变化（对齐用户 2026-09 给的新设计稿）：
+     · .sec 换紫色渐变面板 + 18px 大圆角 + 新阴影组；
+     · 标题改 flex 排版：渐变竖条 / 字距 .20em / 深紫 --purple-d；
+     · 新增 .body 包裹层，选项间距从 margin 改为 flex gap；
+     · 选项按钮改为「◇ 图标 + 文案」双 span 的 flex 结构
+       （◇ 从伪元素升级为真元素 .choice-icon，可随 hover 变实放大），
+       右侧箭头仍是 ::after border 画法，hover 滑入；
+     · 按压态改为「压平 + 内阴影」语义（新设计稿原样），触屏直接可用。
+
    唯一的结构性调整是外面套了一层 .xw-plot-card 作用域，
-   让 .wrap / .sec / .choice 这些极通用的类名只在卡内生效，
+   让 .wrap / .sec / .body / .choice 这些极通用的类名只在卡内生效，
    不会误伤线下其它地方（.choice 这种名字在别处很容易撞车）。
-   卡片内部的类名、层级、伪元素、响应式规则一个没动。
+   卡片内部的类名、层级、伪元素与给定设计稿逐字对齐。
 
    ⚠️ 字号必须钉死（见文件末尾的「字号免疫」段）：
    css/style.css 里有一条 [data-miya-fs] 全局规则，会把 **所有后代元素**
    的 font-size 强行写成 calc(1em * var(--miya-font-size-scale)) !important。
    用户在线下设置里调过字号时，.miya-offline-app 会被打上 data-miya-fs，
-   于是卡片里每一层 div / button 都各乘一次倍率 —— 标题挤成一坨、
+   于是卡片里每一层 div / button / span 都各乘一次倍率 —— 标题挤成一坨、
    字距被拉爆、卡片高度失控，和独立 HTML 打开的效果天差地别。
    下面是给这条规则打的补丁。
    ──────────────────────────────────────────────────────────── */
 
 .xw-plot-card {
-  /* 局部变量：只在本卡作用域内生效，不污染全局也不受主题影响 */
-  --ink: #2A2436;
-  --soft: #7A7290;
-  --hair: rgba(107, 78, 158, .20);
-  --purple: #6B4E9E;
+  /* 局部变量：只在本卡作用域内生效，不污染全局也不受主题影响
+     （色值取自 v2 设计稿 :root，逐字一致） */
+  --ink:      #2A2033;
+  --soft:     #7A6E8A;
+  --purple:   #6B4E9E;
   --purple-l: #8B6FC4;
-  --gold: #C9A227;
-  --panel: #FCFAFF;
+  --purple-d: #4A2F7A;
 
   /* 卡片自身在正文里的落位：贴在正文最底部，与最后一层留出呼吸感 */
   display: block;
@@ -37,7 +45,10 @@
      且带 font-weight:300，不写死的话整张卡会变成「细黑体」，
      和独立打开设计 HTML 的观感完全两样（这是两者长不一样的头号原因）。
      真正压得住全局自定义字体规则（style.css 里 body :where(...) !important）
-     的内联版本由 js2/miya-offline-plot.js 输出，这里管继承与伪元素。 */
+     的内联版本由 js2/miya-offline-plot.js 输出，这里管继承与伪元素。
+     字体栈在设计稿 "Noto Serif CJK SC","Songti SC",serif 的基础上
+     多兜了 'Noto Serif SC' / 'Source Han Serif SC' 两个真机别名 ——
+     同一设备同一观感，只是兜底更稳。 */
   font-family: "Noto Serif CJK SC", "Noto Serif SC", "Songti SC", "Source Han Serif SC", serif;
   font-weight: 400;
   /* 局内字体取线下正文字体族，字号沿用外层，保证与正文同一语感 */
@@ -72,7 +83,7 @@
         加上 data-miya-fs，并用【内联样式】把 --miya-font-size-scale
         设成倍率（如 1.25）。
       · 它用 1em —— 相对值，且带 !important，命中【每一个后代标签】。
-      · 卡片有 .wrap / .sec / .sec-title / .choice 多层嵌套，
+      · 卡片有 .wrap / .sec / .sec-title / .choice / .choice-text 多层嵌套，
         每层都被这条规则重算一次，倍率沿层级反复累积。
       · 实测（headless Chromium，scale=1.25，修复前）：
           标题 12px    → 48.8281px
@@ -102,6 +113,10 @@
 
       两者缺一不可：只归零不写死，1em 仍会取到上游的放大值（20px 那次）。
 
+      v2 注意：.choice-icon / .choice-text 是新增的**真元素 span**，
+      同样被全局规则命中（尤其 icon 的 1.05em 是相对值，必被改写），
+      所以它们的字号也由 JS 内联钉死 —— 见 renderPlotCardHtml。
+
    ⑤ 副作用（刻意接受）
       用户调线下字号时，卡片不跟着变大。原因：这张卡是成品设计，
       字号 / 字距 / 内边距 / 圆角是一套调好的整体，跟着缩必然变形 ——
@@ -121,226 +136,201 @@
    所以正文字号在 js2/miya-offline-plot.js 的 renderPlotCardHtml 里
    以 style="font-size:XXpx !important" 直接写进元素。
 
-   本段只处理内联够不到的部分：伪元素（::before / ::after 无法内联）
-   和窄屏覆盖。伪元素跟随已钉死的父级 em 走，天然安全。 */
+   本段只处理内联够不到的部分：伪元素（::before / ::after 无法内联）。
+   伪元素不承载文字（竖条 / 渐隐线 / 箭头全是形状），字号归零天然安全。 */
 
-/* 标题两侧的竖线 / 横线是伪元素画的，不承载文字 */
 .xw-plot-card .sec-title::before,
-.xw-plot-card .sec-title::after {
-  font-size: 0;
-}
-
-/* 左 ◇ 符号：1.05em 随按钮字号走（设计稿如此，按钮 14px 时约 14.7px；
-   之前写死 13px 偏小一号，符号存在感不足） */
-.xw-plot-card .choice::before {
-  font-size: 1.05em;
-}
-
-/* 右箭头是 border 画的，没有文字 */
+.xw-plot-card .sec-title::after,
 .xw-plot-card .choice::after {
   font-size: 0;
 }
 
-/* 极窄屏的选项字号与宽屏统一 15px（设计稿 .93em=14.88 ≈ .94em=15.04，
-   差 0.16px 不值得分支），由 JS 内联输出；
-   窄屏只收内距，见文件末尾的媒体查询。 */
-
+/* .wrap 落位与设计稿一致（16px 14px） */
 .xw-plot-card .wrap {
   padding: 16px 14px;
 }
 
+/* ══ 分区外壳：紫色渐变面板 ══ */
 .xw-plot-card .sec {
-  position: relative;
-  padding: 10px 12px 12px;
-  border: 1px solid var(--hair);
-  border-radius: 12px;
-  background: var(--panel);
+  border: 1px solid rgba(107, 78, 158, .12);
+  border-radius: 18px;
+  padding: 13px 13px 15px;
+  background:
+    linear-gradient(160deg, #FDFBFF 0%, #F8F2FD 45%, #F1EAF9 100%);
   box-shadow:
-    0 1px 2px rgba(70, 50, 110, .04),
-    0 10px 28px -20px rgba(70, 50, 110, .30);
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    0 1px 2px rgba(70, 50, 110, .05),
+    0 20px 44px -26px rgba(70, 50, 110, .35);
 }
 
-/* 标题：左侧紫色竖线 + 字距 + 右侧渐隐横线 */
+/* 标题：紫色竖条（flex 项）+ 字距 + 渐隐线
+   （设计稿 .78em × 16px 基准 = 12.48px，与 JS 内联的 12.5px 保持一致） */
 .xw-plot-card .sec-title {
-  position: relative;
+  margin: 0 0 12px;
+  padding-left: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .20em;
+  color: var(--purple-d);
   display: flex;
   align-items: center;
-  padding-left: 11px;
-  margin-bottom: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .18em;
-  color: var(--purple);
-  line-height: 1;
+  gap: 9px;
 }
 
 .xw-plot-card .sec-title::before {
   content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
   width: 3px;
-  height: 12px;
-  margin-top: -6px;
+  height: 13px;
   border-radius: 2px;
-  background: var(--purple);
+  background: linear-gradient(180deg, var(--purple-l), var(--purple));
+  flex: 0 0 auto;
 }
 
 .xw-plot-card .sec-title::after {
   content: "";
-  flex: 1;
+  flex: 1 1 auto;
   height: 1px;
-  margin-left: 8px;
-  background: linear-gradient(90deg, var(--hair) 0%, rgba(107, 78, 158, .08) 60%, transparent 100%);
+  background: linear-gradient(90deg,
+    rgba(107, 78, 158, .22) 0%,
+    rgba(107, 78, 158, .06) 55%,
+    transparent 100%);
 }
 
-/* 选项按钮 */
+/* 选项容器：v2 新增，间距交给 flex gap（按钮自身 margin 归零） */
+.xw-plot-card .body {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+/* ══ 建议按钮：◇ 图标 + 文案 双 span flex 结构 ══ */
 .xw-plot-card .choice {
-  position: relative;
-  display: block;
-  width: 100%;
-  margin: 0 0 10px;
-  padding: 14px 40px 14px 44px;
-  border: 1px solid var(--hair);
-  border-radius: 12px;
-  /* 底色必须是「白渐变叠在面板色上」，不能写成纯 #fff：
-     纯白按钮衬着 #FCFAFF 淡紫面板，对比一强，
-     整张卡看起来就「更紫」，和设计 HTML 里微微泛紫、
-     与面板融合的按钮完全两样（App 截图偏薰衣草色的根源）。 */
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 70%),
-    var(--panel);
-  /* 默认态三层阴影 —— 设计稿质感的核心，之前一直漏写：
-     近影定边 + 远处弥散托底 + 顶部内高光，按钮才「浮」在面板上。
-     没有这条就是「死白一片」，正是预览 vs App 观感差距的最后一块。 */
-  box-shadow:
-    0 1px 1px rgba(70, 50, 110, .05),
-    0 6px 16px -12px rgba(70, 50, 110, .35),
-    inset 0 1px 0 rgba(255, 255, 255, .9);
-  color: var(--ink);
-  font: inherit;
-  /* 设计稿 .94em × 16px 基准 = 15.04px，与 JS 内联值保持一致 */
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1.55;
-  letter-spacing: .005em;
-  text-align: left;
-  cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 15px 38px 15px 18px;
+  text-align: left;
+  font: inherit;
+  /* 设计稿 .95em × 16px 基准 = 15.2px，与 JS 内联值保持一致 */
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: .005em;
+  color: var(--ink);
+
+  background:
+    linear-gradient(155deg,
+      #FFFFFF 0%,
+      #FCFAFF 50%,
+      #F7F1FC 100%);
+
+  border: 1px solid rgba(107, 78, 158, .10);
+  border-radius: 14px;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(107, 78, 158, .05),
+    0 1px 2px rgba(70, 50, 110, .05),
+    0 10px 22px -14px rgba(107, 78, 158, .30);
+
+  cursor: pointer;
   transition:
-    transform .22s cubic-bezier(.2, .8, .2, 1),
-    border-color .22s ease,
-    box-shadow .22s ease,
-    background-color .22s ease;
-}
-.xw-plot-card .choice:last-child {
-  margin-bottom: 0;
+    border-color .25s ease,
+    box-shadow .25s ease,
+    transform .25s cubic-bezier(.2, .8, .2, 1);
+
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
-/* 左侧 ◇ 紫色符号 */
-.xw-plot-card .choice::before {
-  content: "◇";
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+/* ◇ 图标：真元素 span（字号由 JS 内联钉死，防全局缩放） */
+.xw-plot-card .choice-icon {
+  flex: 0 0 auto;
+  font-size: 15.75px;
+  line-height: 1.55;
   color: var(--purple);
-  opacity: .55;
-  line-height: 1;
-  /* 按下 / 悬停时加深放大，opacity 与 transform 都要过渡才顺滑 */
-  transition: opacity .22s ease, transform .22s ease;
+  opacity: .6;
+  user-select: none;
+  transition: opacity .25s ease, transform .25s ease;
 }
 
-/* 右侧箭头：默认隐藏在 -3px 处，hover 滑入（设计稿机制） */
+/* 文案列 */
+.xw-plot-card .choice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 右侧箭头（::after border 画法，hover 滑入） */
 .xw-plot-card .choice::after {
   content: "";
   position: absolute;
-  right: 16px;
   top: 50%;
+  right: 16px;
   width: 6px;
   height: 6px;
   margin-top: -4px;
-  border-top: 1.5px solid var(--soft);
-  border-right: 1.5px solid var(--soft);
-  transform: translateX(-3px) rotate(45deg);
+  border-top: 1.5px solid var(--purple-l);
+  border-right: 1.5px solid var(--purple-l);
+  transform: translateX(-4px) rotate(45deg);
   opacity: 0;
-  transition:
-    transform .22s cubic-bezier(.2, .8, .2, 1),
-    opacity .22s ease,
-    border-color .22s ease;
+  transition: transform .25s ease, opacity .25s ease;
 }
 
+/* hover：微浮 + 阴影加深 + 符号变实 + 箭头滑入 */
 .xw-plot-card .choice:hover {
-  transform: translateY(-2px);
-  border-color: var(--purple-l);
+  border-color: rgba(107, 78, 158, .28);
+  transform: translateY(-1px);
   box-shadow:
-    0 2px 4px rgba(70, 50, 110, .08),
-    0 12px 26px -14px rgba(107, 78, 158, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .95);
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(107, 78, 158, .06),
+    0 2px 4px rgba(70, 50, 110, .06),
+    0 18px 36px -14px rgba(107, 78, 158, .45);
+}
+
+.xw-plot-card .choice:hover .choice-icon {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .xw-plot-card .choice:hover::after {
   opacity: 1;
-  border-color: var(--purple-l);
   transform: translateX(0) rotate(45deg);
 }
 
-.xw-plot-card .choice:hover::before {
-  opacity: 1;
-  transform: translateY(-50%) scale(1.08);
-}
-
-/* ── 按下反馈 ──────────────────────────────────────────────────
-   独立 HTML 里点下去会「浮起来 + 紫描边 + 紫调阴影」，
-   那是因为桌面鼠标同时命中了 :hover 和 :active。
-
-   触屏没有 hover，只靠原来那句 `.choice:active { transform: translateY(0);
-   box-shadow: none; }` 等于「把浮起取消」—— 按下去反而什么都不发生。
-
-   所以这里把 :active 补成一套完整的按下态：
-   描边转紫、浮起、紫调阴影、◇ 符号加深。
-   数值全部取自上面 :hover 那组，只是让它能在触屏独立演出来。
-   ──────────────────────────────────────────────────────────── */
+/* ── 按下反馈（v2 语义：压平 + 内阴影） ────────────────────────
+   新设计稿的 :active 自带完整按压态（浮起归零 + 凹陷内阴影），
+   触屏没有 hover 也能独立演出，不需要 v1 那套触屏补偿规则。 */
 .xw-plot-card .choice:active {
-  transform: translateY(-2px);
-  border-color: var(--purple-l);
+  transform: translateY(0);
   box-shadow:
-    0 2px 4px rgba(70, 50, 110, .08),
-    0 12px 26px -14px rgba(107, 78, 158, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .95);
-}
-
-.xw-plot-card .choice:active::before {
-  opacity: 1;
-  transform: translateY(-50%) scale(1.08);
+    inset 0 1px 2px rgba(107, 78, 158, .10),
+    0 2px 4px rgba(70, 50, 110, .06);
 }
 
 .xw-plot-card .choice:focus-visible {
-  outline: 2px solid var(--purple-l);
+  outline: 2px solid var(--purple);
   outline-offset: 2px;
 }
 
-/* 触屏：没有 hover，箭头不显示（保留 ◇ 作视觉锚点） */
+/* 触屏：没有 hover，箭头不显示（保留 ◇ 作视觉锚点），浮起态不误触发 */
 @media (hover: none) {
-  .xw-plot-card .choice {
-    padding-right: 20px;
-  }
-
   .xw-plot-card .choice::after {
     display: none;
   }
+
+  .xw-plot-card .choice:hover {
+    transform: none;
+  }
 }
 
-/* 极窄屏：只收选项内距与 ◇ 位置（与设计稿媒体查询逐字一致，
-   wrap / sec 的内距在任何屏宽下都不变，否则手机上卡片会比
-   独立 HTML 更瘦一圈，又是一处「长不一样」） */
+/* 极窄屏：只收选项内距（设计稿媒体查询逐字一致；字号由 JS 内联
+   统一钉 15px，设计稿宽窄屏 .95em/.94em 只差 0.32px，不值得分支） */
 @media (max-width: 420px) {
   .xw-plot-card .choice {
-    padding: 13px 34px 13px 40px;
-  }
-
-  .xw-plot-card .choice::before {
-    left: 14px;
+    padding: 14px 34px 14px 16px;
   }
 }
