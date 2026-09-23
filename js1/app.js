@@ -643,10 +643,13 @@
    * 修复后的代码在网络抖动时被旧版本顶掉，用户看到的就是「改完好、过几天又出现」。
    *
    * 哨兵职责：SW 接管/广播构建号时与本页 <meta name="miya-sw-build"> 比对，
-   * **SW 比页面新**才自动刷新一次页面 —— 磁盘已是新版、当前页面还捧着
+   * **SW 比页面新**才走刷新流程 —— 磁盘已是新版、当前页面还捧着
    * 旧副本的窗口期由此关闭。方向判断防住镜像场景（页面新、SW 旧）：
    * 那种情况刷新反而可能在离线时回退到旧缓存页，所以只在 SW 更新时刷。
-   * sessionStorage 防循环：一次会话最多自动刷新一次。
+   * 刷新是「确认式」的：先让 SW 把最新 index.html 拉进缓存并回执，
+   * 确认真的拿到了更新的文档才 reload（详见 miyaHandleSwBuild）——
+   * 弱网下拉不到就不刷，修掉了「每个新会话首开都白刷一次」的老毛病。
+   * sessionStorage 防循环：一次会话最多尝试一次。
    */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     function miyaSwBuildNum(s) {
@@ -660,8 +663,34 @@
         var pageBuild = meta ? String(meta.getAttribute('content') || '').trim() : '';
         if (!pageBuild) return;
         if (miyaSwBuildNum(swBuild) <= miyaSwBuildNum(pageBuild)) return; /* SW 不比页面新，不刷 */
-        sessionStorage.setItem('miya-sw-build-reloaded', '1');
-        location.reload();
+        /* 确认式刷新（修「网页老是自动刷新」）：
+           旧版这里直接 reload —— 但慢网下页面 HTML 本来就是缓存旧版顶上的
+           （networkFirst 400ms 超时），盲刷后拿到的还是旧 HTML（meta 依旧
+           落后），而 reload 又掐断了后台正在写缓存的网络请求，缓存永远
+           更新不了 → 每个新会话首开都白刷一次。
+           现在改成两步握手：先让 SW 把最新 index.html 拉进缓存并回执
+           「确实拉到了更新的文档」，才刷新；拉不到（离线/慢网）本会话
+           安静放弃（写标记），等网络好的那次导航后台自然补齐。
+           资源本体不依赖这次刷新：SW 缓存 key 剥查询串，旧 HTML 引用的
+           JS/CSS 命中的已经是磁盘新内容。 */
+        var ctl = navigator.serviceWorker.controller;
+        if (!ctl) { sessionStorage.setItem('miya-sw-build-reloaded', '1'); return; }
+        var onReady = function (event) {
+          var d2 = event && event.data;
+          if (!d2 || d2.type !== 'miya-reload-ready') return;
+          navigator.serviceWorker.removeEventListener('message', onReady);
+          clearTimeout(giveUp);
+          /* 无论刷不刷成都写会话标记：失败重试大概率同样失败，安静要紧。
+             下个会话网络好转时自然一次到位。 */
+          try { sessionStorage.setItem('miya-sw-build-reloaded', '1'); } catch (e4) {}
+          if (miyaSwBuildNum(d2.meta) > miyaSwBuildNum(pageBuild)) location.reload();
+        };
+        var giveUp = setTimeout(function () {
+          navigator.serviceWorker.removeEventListener('message', onReady);
+          try { sessionStorage.setItem('miya-sw-build-reloaded', '1'); } catch (e5) {}
+        }, 8000);
+        navigator.serviceWorker.addEventListener('message', onReady);
+        ctl.postMessage({ type: 'miya-prepare-reload' });
       } catch (e) { /* 无痕/禁存储环境静默放弃，不影响功能 */ }
     }
     navigator.serviceWorker.addEventListener('message', function (event) {

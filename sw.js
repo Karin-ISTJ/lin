@@ -5,7 +5,7 @@ var CACHE = 'miya-v311-karin';
  * app.js 会在收到 SW 广播时比对两者：SW 比页面新 → 自动刷新一次页面。
  * 只增不减：每次改动 sw.js / 任何需要立刻生效的资源策略时 bump 尾号。
  */
-var BUILD = 'sw-76';
+var BUILD = 'sw-77';
 /* SWR 竞速超时：超过此时长未获网络响应就用缓存顶上（后台继续拉新版）。
    本地/快服务器 304 协商远低于此值（行为同旧 networkFirst）；
    慢服务器 200 个协商请求不再各等一个完整 RTT —— 首屏从分钟级回秒级。 */
@@ -111,6 +111,49 @@ self.addEventListener('message', function (event) {
   var d = event && event.data;
   if (d && d.type === 'miya-get-build' && event.source) {
     try { event.source.postMessage({ type: 'miya-sw-build', build: BUILD, cache: CACHE }); } catch (e) {}
+  }
+  /* 预刷新握手（修「网页老是自动刷新」）：
+     旧哨兵发现 SW 比页面新就直接 reload，但慢网下页面 HTML 本来就是
+     缓存旧版顶上的 —— 刷新后拿到的还是旧 HTML（meta 依旧落后），
+     而那次 reload 还会掐断后台正在写缓存的网络请求，于是缓存永远
+     更新不了，每个新会话首开都要白刷一次。
+     现在改成：页面先发 miya-prepare-reload，由 SW 把最新 index.html
+     拉下来（SW 内 fetch 不经过本 fetch handler，是直连网络）、
+     【等 put 落盘后】回执页面 —— 页面只有确认缓存里已是更新的文档
+     才刷新，刷新必到位；拉不到（离线/慢网）就安静等下次导航的
+     后台 revalidate，一个会话都不骚扰。 */
+  if (d && d.type === 'miya-prepare-reload' && event.source) {
+    var src = event.source;
+    var htmlUrl, htmlKey;
+    try {
+      htmlUrl = new URL('./index.html', self.location.href).toString();
+      htmlKey = normalizeCacheUrl(htmlUrl);
+    } catch (eU) { htmlUrl = ''; }
+    if (!htmlUrl) {
+      try { src.postMessage({ type: 'miya-reload-ready', meta: 0 }); } catch (eU2) {}
+      return;
+    }
+    fetch(htmlUrl, { cache: 'no-cache' })
+      .then(function (res) {
+        if (!res || !res.ok) return 0;
+        return res.text().then(function (t) {
+          var m = /name=["']miya-sw-build["'][^>]*content=["']sw-?(\d+)/i.exec(t);
+          if (!m) return 0;
+          /* put 必须等完成：页面收到回执马上 reload，慢半拍缓存里还是旧的 */
+          return caches.open(CACHE).then(function (c) {
+            return c.put(
+              new Request(htmlKey),
+              new Response(t, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+            ).then(function () { return Number(m[1]); });
+          });
+        });
+      })
+      .then(function (metaNum) {
+        try { src.postMessage({ type: 'miya-reload-ready', meta: metaNum || 0 }); } catch (eR) {}
+      })
+      .catch(function () {
+        try { src.postMessage({ type: 'miya-reload-ready', meta: 0 }); } catch (eC) {}
+      });
   }
 });
 
