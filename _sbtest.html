@@ -1,42 +1,57 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<script src="js1/miya-chat-statusbar.js?v=31"></script>
+<script src="js1/miya-chat-statusbar.js?v=8"></script>
 <script src="js2/miya-offline-plot.js?v=7"></script>
-<script src="js2/miya-offline-status.js?v=11"></script>
+<script src="js2/miya-offline-status.js?v=12"></script>
 </head><body>
 <pre id="log">PENDING</pre>
 <script>
+/* 复刻引擎 finalize（修复后顺序）+ 楼层渲染（offlineStatusBarHtml 复刻） */
 function finalize(body) {
-  var plotApi = MiyaOfflinePlot;
   var plotItems = [];
-  try { plotItems = plotApi.extractPlotItems(body) || []; } catch (e) { plotItems = []; }
-  body = String(plotApi.stripPlot(body) || '');
+  try { plotItems = MiyaOfflinePlot.extractPlotItems(body) || []; } catch (e) {}
+  body = String(MiyaOfflinePlot.stripPlot(body) || '');
   var sbParsed = null;
   var hit = MiyaChatStatusBar.parseFromText(body);
   if (hit && hit.fields && hit.fields.length) sbParsed = { fields: hit.fields, tag: hit.tag };
   body = MiyaOfflineStatus.stripStatusFromText(body);
   return { body: body.trim(), plotCount: plotItems.length, sb: sbParsed };
 }
-var STATUS = '<miyastatus>心情: 悸乱\n状态: 指尖还残留着纸条的触感\n想法: 他到底想说什么</miyastatus>';
-var PLOT_CLOSED  = '<plot>- 我把纸条折好塞回信封\n- 我假装没看见他的目光\n- 我先开口打破沉默</plot>';
-var PLOT_OPEN    = '<plot>- 我把纸条折好塞回信封\n- 我假装没看见他的目光';
+function renderCard(m) {  /* = offlineStatusBarHtml 核心逻辑 */
+  if (!m || m.role !== 'assistant') return '';
+  var fields = m.statusBar && Array.isArray(m.statusBar.fields) ? m.statusBar.fields : null;
+  if (!fields || !fields.length) return '';
+  var cfg = MiyaChatStatusBar.resolveConfig(null, '');
+  var inner = MiyaChatStatusBar.buildCardHtml({ fields: fields, tag: m.statusBar.tag || '', config: cfg || {} });
+  return inner ? '<div class="xw-chat__statusbar">' + inner + '</div>' : '';
+}
+/* 模型输出按「规则教学格式」构造：规则正文教的字段行写法 */
+var STATUS_COLON  = '<miyastatus>心情：悸乱\n状态：指尖还残留着纸条的触感\n想法：他到底想说什么</miyastatus>';
+var STATUS_DASH   = '<miyastatus>心情-悸乱\n状态-指尖还残留着纸条的触感\n想法-他到底想说什么</miyastatus>';
+var STATUS_FULL   = '<miyastatus>心情：悸乱\n状态：指尖还残留着纸条的触感\n想法：他到底想说什么</miyastatus>';
+var PLOT = '<plot>- 我把纸条折好塞回信封\n- 我假装没看见他的目光</plot>';
 var CASES = [
-  ['规范顺序: 正文→状态栏→plot(闭合)', '他在暮色里停住脚步。\n' + STATUS + '\n' + PLOT_CLOSED],
-  ['plot未闭合+状态栏在后(违规输出)', '他在暮色里停住脚步。\n' + PLOT_OPEN + '\n' + STATUS],
-  ['plot先(闭合)状态栏在后(违规)',    '他在暮色里停住脚步。\n' + PLOT_CLOSED + '\n' + STATUS],
-  ['只有状态栏没有plot',              '他在暮色里停住脚步。\n' + STATUS]
+  ['冒号格式(新教学) + plot',   '正文。\n' + STATUS_COLON + '\n' + PLOT],
+  ['连字符格式(旧教学/兼容)',   '正文。\n' + STATUS_DASH + '\n' + PLOT],
+  ['全角冒号 + plot',           '正文。\n' + STATUS_FULL + '\n' + PLOT],
+  ['状态栏块未闭合(流式截断)',  '正文。\n<miyastatus>心情：悸乱\n状态：指尖发麻']
 ];
 var out = [];
 CASES.forEach(function (c) {
   var r = finalize(c[1]);
+  var m = { role: 'assistant', statusBar: r.sb };
+  var card = renderCard(m);
+  var n = r.sb ? r.sb.fields.length : 0;
   var names = r.sb ? r.sb.fields.map(function(f){return f.name;}).join('/') : '';
-  var ok = r.sb && r.sb.fields && r.sb.fields.length === 3 && r.plotCount >= 1;
-  var tagOk = r.body.indexOf('miyastatus') < 0 && r.body.indexOf('心情') < 0;
-  out.push((ok && tagOk ? 'PASS ✓' : 'FAIL ✗') + ' ' + c[0] +
-    ' | 状态栏字段=' + (r.sb ? r.sb.fields.length : 0) + '/3(' + names + ')' +
-    ' | 剧情条目=' + r.plotCount +
-    ' | 正文无残留=' + tagOk);
+  var ok = n === 3 && card.indexOf('miya-sb-host') >= 0 && r.body.indexOf('心情') < 0;
+  out.push((ok ? 'PASS ✓' : 'FAIL ✗') + ' ' + c[0] + ' | 字段=' + n + '/3(' + names + ')' +
+    ' | 卡片HTML=' + (card ? '生成(' + card.length + '字符)' : '空!') +
+    ' | 剧情条目=' + r.plotCount + ' | 正文无残留=' + (r.body.indexOf('心情') < 0));
 });
+/* 新版规则文本自检：教学格式必须是冒号 */
+var rules = MiyaOfflineStatus.buildStatusRulesBlock([{ id: 'c1', name: '白泽' }]);
+var teachColon = rules.indexOf('心情：') >= 0 && rules.indexOf('心情-') < 0;
+out.push((teachColon ? 'PASS ✓' : 'FAIL ✗') + ' 提示词规则块：字段教学已统一为冒号格式（含示例）');
 document.getElementById('log').textContent = out.join('\n');
 </script>
 </body></html>

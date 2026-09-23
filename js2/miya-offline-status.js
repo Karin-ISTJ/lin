@@ -344,14 +344,20 @@
             names.forEach(function (nm) {
                 lines.push('### ' + nm);
                 fieldNames.forEach(function (fn) {
-                    lines.push(fn + '-（写' + nm + '的本字段）');
+                    /* 字段行统一「字段名：内容」（冒号分隔）——
+                       楼层状态卡片的解析器按冒号切分，示例若用连字符，
+                       模型会照抄连字符写法，导致解析落空、卡片消失。 */
+                    lines.push(fn + '：（写' + nm + '的本字段）');
                 });
             });
             lines.push('</miyastatus>');
             lines.push('自检：### 标题数量必须等于 ' + String(names.length) + '，且每人字段齐全。');
         } else {
             var rn = names[0] || '角色';
-            lines.push('本场角色：' + rn + '。段内须写满以下 ' + n + ' 个字段：');
+            lines.push(
+                '本场角色：' + rn + '。段内须写满以下 ' + n +
+                ' 个字段，每行格式为「字段名：内容」（中文冒号或英文冒号均可）：'
+            );
         }
         if (preset) {
             var customPrompt = String(preset.customPrompt || '').trim();
@@ -365,15 +371,15 @@
                         .replace(/心声/g, '状态')
                 );
             }
-            lines.push('【字段说明·须全部输出】');
+            lines.push('【字段说明·须全部输出】（字段行用「字段名：内容」冒号格式）');
             (preset.fields || []).forEach(function (f) {
                 var req = String((f && f.requirement) || '').trim() || '按人设与当下情境填写';
-                lines.push(String(f.name) + '-' + req);
+                lines.push(String(f.name) + '：' + req);
             });
         } else {
-            lines.push('【字段说明·须全部输出】（内置简约）');
+            lines.push('【字段说明·须全部输出】（内置简约；字段行用「字段名：内容」冒号格式）');
             BUILTIN_FIELDS.forEach(function (f) {
-                lines.push(f.name + '-' + f.requirement);
+                lines.push(f.name + '：' + f.requirement);
             });
         }
         lines.push('发出前自检：字段是否写满并正确闭合 </miyastatus>；不足则补全。');

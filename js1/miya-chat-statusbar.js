@@ -135,10 +135,14 @@
      *   两边会互相剥离正文 —— 线下状态栏会凭空消失，或者同一段内容被渲染两次。
      *   所以本模块只认「不属于任何既有系统」的标签。
      */
-    /* miyastatus：线下楼层的正式状态栏标记（见引擎【线下格式规则·状态栏】与
-       appointment-app 的剥离注释——「本项目状态栏认的是 <miyastatus>」）。
-       旧表里只有 ST 预设惯用的 STATUSBAR_DATA 系列，线下提示词让模型输出
-       <miyastatus>、解析器却不认，状态栏因此整块消失。 */
+    /*
+     * 识别的标签名白名单。
+     *
+     * ⚠️ 剥离权归属：miyastatus / miyavoice 的**剥离**统一由 MiyaOfflineStatus.stripStatusFromText
+     *    在引擎 finalize 里做（只剥一次）；本模块 parseFromText **只读不删**，
+     *    因此不会出现旧注释担心的「两边互相剥离正文」。线下楼层卡片的解析走这里，
+     *    必须认识 miyastatus —— 否则提示词教的标记解析器不认，状态栏整块消失。
+     */
     var KNOWN_TAGS = ['STATUSBAR_DATA', 'statusbar_data', 'StatusBar_Data', '状态栏', 'miyastatus'];
 
     var RE_FIELD_LINE = /^\s*([^:：\n]{1,40})\s*[:：]\s*(.*)$/;
@@ -155,6 +159,13 @@
             var t = trim(line);
             if (!t) return;
             var m = t.match(RE_FIELD_LINE);
+            if (!m) {
+                /* 连字符兜底：旧版格式规则曾教模型「字段名-内容」（连字符），
+                   历史楼层与不听新规则的模型都会输出这种写法；
+                   解析层兼容之，避免状态栏因分隔符习惯差异整块消失。
+                   排除 ### 分节标题行。 */
+                m = t.match(/^\s*([^:\-—#\n]{1,40})\s*[-—]\s*(.+)$/);
+            }
             if (!m) return;
             var name = trim(m[1]);
             var value = trim(m[2]);
