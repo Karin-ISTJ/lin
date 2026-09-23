@@ -2617,8 +2617,10 @@
         var paraCount = lines.length;
         var existing = mount.querySelectorAll('[data-ap-stream]');
 
-        if (paraCount > streamUi.paraCount) {
-            for (var i = streamUi.paraCount; i < paraCount; i++) {
+        /* 数量对齐以真实 DOM 为准（existing.length），不再依赖记忆计数 ——
+           DOM 是事实源，任何状态漂移都会在下一帧自动纠正。 */
+        if (paraCount > existing.length) {
+            for (var i = existing.length; i < paraCount; i++) {
                 var p = document.createElement('p');
                 var isLive = i === paraCount - 1;
                 p.className =
@@ -2628,26 +2630,44 @@
                 p.innerHTML = formatStreamParaHtml(lines[i]);
                 mount.appendChild(p);
             }
-            streamUi.paraCount = paraCount;
-        } else if (paraCount < streamUi.paraCount) {
+        } else if (paraCount < existing.length) {
             for (var j = existing.length - 1; j >= paraCount; j--) {
                 if (existing[j] && existing[j].parentNode) existing[j].parentNode.removeChild(existing[j]);
             }
-            streamUi.paraCount = paraCount;
         }
 
         patchStreamWait(mount);
 
+        /* 逐段内容对齐（修「流式时缺几个字，生成完才显示完整」）：
+         *
+         * 旧实现只更新最后一段（live），前面的段落 append 后永不改写。
+         * 但段落切分的边界会随流式增长而后移 —— splitDisplayParagraphs
+         * 有一条降级规则：「按双换行只切出 1 段时，改按单换行切」。
+         * 于是模型补出第一个空行的瞬间，切分整体跳变：
+         *   之前  ["甲段。", "乙"]            （单换行降级）
+         *   之后  ["甲段。\n乙", "丙段。"]    （空行出现，双换行生效）
+         * 段落数都是 2，旧 diff 按数量对齐就认为「没变化」，只有 live 被
+         * 更新 —— 倒数第二段停在旧内容，「乙」两个字一直缺到生成结束，
+         * 楼层全量重建才回来。任何边界后移（空行补写、时间线剥除窗口
+         * 变化）都会触发同类缺字。
+         *
+         * 现在每帧把每一段的期望 HTML 与现有 innerHTML 对比，变了才写：
+         * 段落通常不到几十个、rAF 每帧步进 2~24 字，逐段对比成本可忽略；
+         * 而「变了才写」保住 DOM 复用 —— 不重建节点，无白闪、滚动不跳。 */
         if (paraCount > 0) {
-            var live = mount.querySelector('[data-ap-stream="' + String(paraCount - 1) + '"]');
-            if (live) {
-                live.classList.add('is-stream-live');
-                var nextHtml = formatStreamParaHtml(lines[paraCount - 1]);
-                if (live.innerHTML !== nextHtml) live.innerHTML = nextHtml;
+            var nodes = mount.querySelectorAll('[data-ap-stream]');
+            for (var k = 0; k < paraCount; k++) {
+                var node = nodes[k];
+                if (!node) continue;
+                var idxAttr = String(k);
+                if (node.getAttribute('data-ap-stream') !== idxAttr) {
+                    node.setAttribute('data-ap-stream', idxAttr);
+                }
+                var nextHtml = formatStreamParaHtml(lines[k]);
+                if (node.innerHTML !== nextHtml) node.innerHTML = nextHtml;
+                if (k === paraCount - 1) node.classList.add('is-stream-live');
+                else node.classList.remove('is-stream-live');
             }
-            mount.querySelectorAll('[data-ap-stream]').forEach(function (node, idx) {
-                if (idx < paraCount - 1) node.classList.remove('is-stream-live');
-            });
         }
 
         scheduleStreamScroll();
