@@ -158,6 +158,9 @@
         lines.forEach(function (line) {
             var t = trim(line);
             if (!t) return;
+            /* 行首列表符号先剥：模型爱把字段行写成「- 心情：悸乱」，
+               不剥的话连字符兜底正则的 name 段排除了「-」，整行会漏掉 */
+            t = t.replace(/^[-•*·]\s+/, '');
             var m = t.match(RE_FIELD_LINE);
             if (!m) {
                 /* 连字符兜底：旧版格式规则曾教模型「字段名-内容」（连字符），
@@ -169,6 +172,16 @@
             if (!m) return;
             var name = trim(m[1]);
             var value = trim(m[2]);
+            /* 清洗模型常见杂质：字段名前的列表符号（- 心情）、
+               【】/[] 包裹（【心情】）、加粗星号（**心情**）——
+               不清洗的话模板 {{心情}} 精确匹配不上，值全部落空，卡片只剩壳子。 */
+            name = name
+                .replace(/^[\s\-–—•*·]+/, '')
+                .replace(/^[【\[]\s*/, '')
+                .replace(/\s*[】\]]$/, '')
+                .replace(/\*+\s*$/, '')
+                .trim();
+            value = value.replace(/^[【\[]\s*/, '').replace(/\s*[】\]]$/, '').trim();
             if (!name) return;
             if (name.length > 40) return;
             out.push({ name: name, value: value.slice(0, MAX_VALUE_LEN) });

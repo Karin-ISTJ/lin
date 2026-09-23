@@ -323,6 +323,27 @@
         var multi = names.length > 1;
         var preset = resolveStatusPreset();
         var fieldNames = resolveFieldNames(preset);
+        /* 楼层卡片模板字段优先：线下楼层卡片（m.statusBar → MiyaChatStatusBar.buildCardHtml）
+           渲染用的模板取自状态栏设置（resolveConfig），占位符字段名必须与教学字段一致——
+           否则模型按教学输出「心情/状态/想法」，模板里却是 {{好感度}} 等自定义占位符，
+           一个都填不进，卡片只剩壳子（模板没有 AI 内容的故障即此）。
+           模板是 {{字段列表}} 型（自动渲染任意字段）或提取不到字段时，退回 preset/BUILTIN。 */
+        var sbMod = global.MiyaChatStatusBar;
+        if (
+            sbMod &&
+            typeof sbMod.resolveConfig === 'function' &&
+            typeof sbMod.extractTemplateFields === 'function' &&
+            typeof sbMod.usesFieldList === 'function'
+        ) {
+            try {
+                var sbCfg = sbMod.resolveConfig(global.miyaChatStore, '');
+                var tpl = sbCfg && sbCfg.template;
+                if (tpl && !sbMod.usesFieldList(tpl)) {
+                    var tplFields = sbMod.extractTemplateFields(tpl);
+                    if (tplFields && tplFields.length) fieldNames = tplFields;
+                }
+            } catch (eTpl) {}
+        }
         var n = fieldNames.length;
         var lines = [
             '【线下格式规则·状态栏】',
@@ -371,17 +392,25 @@
                         .replace(/心声/g, '状态')
                 );
             }
-            lines.push('【字段说明·须全部输出】（字段行用「字段名：内容」冒号格式）');
-            (preset.fields || []).forEach(function (f) {
-                var req = String((f && f.requirement) || '').trim() || '按人设与当下情境填写';
-                lines.push(String(f.name) + '：' + req);
-            });
-        } else {
-            lines.push('【字段说明·须全部输出】（内置简约；字段行用「字段名：内容」冒号格式）');
-            BUILTIN_FIELDS.forEach(function (f) {
-                lines.push(f.name + '：' + f.requirement);
-            });
         }
+        lines.push('【字段说明·须全部输出】（字段行用「字段名：内容」冒号格式）');
+        /* 说明行必须遍历 fieldNames（模板字段优先后的最终名单）——
+           不能遍历 preset.fields/BUILTIN_FIELDS：那会让教学字段与楼层卡片模板错位，
+           卡片占位符一个都填不上。同名字段沿用原说明，模板自创字段用通用说明。 */
+        var reqMap = {};
+        var reqSrc =
+            preset && Array.isArray(preset.fields) && preset.fields.length
+                ? preset.fields
+                : BUILTIN_FIELDS;
+        reqSrc.forEach(function (f) {
+            if (f && f.name) {
+                reqMap[String(f.name).trim()] =
+                    String((f && f.requirement) || '').trim() || '按人设与当下情境填写';
+            }
+        });
+        fieldNames.forEach(function (fn) {
+            lines.push(fn + '：' + (reqMap[fn] || '按人设与当下情境填写'));
+        });
         lines.push('发出前自检：字段是否写满并正确闭合 </miyastatus>；不足则补全。');
         return lines.join('\n');
     }

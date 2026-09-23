@@ -1,57 +1,48 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<script src="js1/miya-chat-statusbar.js?v=8"></script>
+<script src="js1/miya-chat-statusbar.js?v=9"></script>
 <script src="js2/miya-offline-plot.js?v=7"></script>
-<script src="js2/miya-offline-status.js?v=12"></script>
+<script src="js2/miya-offline-status.js?v=13"></script>
 </head><body>
 <pre id="log">PENDING</pre>
 <script>
-/* 复刻引擎 finalize（修复后顺序）+ 楼层渲染（offlineStatusBarHtml 复刻） */
-function finalize(body) {
-  var plotItems = [];
-  try { plotItems = MiyaOfflinePlot.extractPlotItems(body) || []; } catch (e) {}
-  body = String(MiyaOfflinePlot.stripPlot(body) || '');
-  var sbParsed = null;
-  var hit = MiyaChatStatusBar.parseFromText(body);
-  if (hit && hit.fields && hit.fields.length) sbParsed = { fields: hit.fields, tag: hit.tag };
-  body = MiyaOfflineStatus.stripStatusFromText(body);
-  return { body: body.trim(), plotCount: plotItems.length, sb: sbParsed };
-}
-function renderCard(m) {  /* = offlineStatusBarHtml 核心逻辑 */
-  if (!m || m.role !== 'assistant') return '';
-  var fields = m.statusBar && Array.isArray(m.statusBar.fields) ? m.statusBar.fields : null;
-  if (!fields || !fields.length) return '';
-  var cfg = MiyaChatStatusBar.resolveConfig(null, '');
-  var inner = MiyaChatStatusBar.buildCardHtml({ fields: fields, tag: m.statusBar.tag || '', config: cfg || {} });
-  return inner ? '<div class="xw-chat__statusbar">' + inner + '</div>' : '';
-}
-/* 模型输出按「规则教学格式」构造：规则正文教的字段行写法 */
-var STATUS_COLON  = '<miyastatus>心情：悸乱\n状态：指尖还残留着纸条的触感\n想法：他到底想说什么</miyastatus>';
-var STATUS_DASH   = '<miyastatus>心情-悸乱\n状态-指尖还残留着纸条的触感\n想法-他到底想说什么</miyastatus>';
-var STATUS_FULL   = '<miyastatus>心情：悸乱\n状态：指尖还残留着纸条的触感\n想法：他到底想说什么</miyastatus>';
-var PLOT = '<plot>- 我把纸条折好塞回信封\n- 我假装没看见他的目光</plot>';
-var CASES = [
-  ['冒号格式(新教学) + plot',   '正文。\n' + STATUS_COLON + '\n' + PLOT],
-  ['连字符格式(旧教学/兼容)',   '正文。\n' + STATUS_DASH + '\n' + PLOT],
-  ['全角冒号 + plot',           '正文。\n' + STATUS_FULL + '\n' + PLOT],
-  ['状态栏块未闭合(流式截断)',  '正文。\n<miyastatus>心情：悸乱\n状态：指尖发麻']
-];
 var out = [];
-CASES.forEach(function (c) {
-  var r = finalize(c[1]);
-  var m = { role: 'assistant', statusBar: r.sb };
-  var card = renderCard(m);
-  var n = r.sb ? r.sb.fields.length : 0;
-  var names = r.sb ? r.sb.fields.map(function(f){return f.name;}).join('/') : '';
-  var ok = n === 3 && card.indexOf('miya-sb-host') >= 0 && r.body.indexOf('心情') < 0;
-  out.push((ok ? 'PASS ✓' : 'FAIL ✗') + ' ' + c[0] + ' | 字段=' + n + '/3(' + names + ')' +
-    ' | 卡片HTML=' + (card ? '生成(' + card.length + '字符)' : '空!') +
-    ' | 剧情条目=' + r.plotCount + ' | 正文无残留=' + (r.body.indexOf('心情') < 0));
-});
-/* 新版规则文本自检：教学格式必须是冒号 */
+/* ── 场景①：自定义模板 → 教学跟随模板字段 → 渲染闭环 ── */
+window.miyaChatGlobalSettings = { getState: function(){ return { global: { backgroundMessage: { statusBar: {
+  template: '<div class="c">{{好感度}}</div><div class="c">{{欲望值}}</div><div class="c">{{内心想法}}</div>'
+} } } }; } };
 var rules = MiyaOfflineStatus.buildStatusRulesBlock([{ id: 'c1', name: '白泽' }]);
-var teachColon = rules.indexOf('心情：') >= 0 && rules.indexOf('心情-') < 0;
-out.push((teachColon ? 'PASS ✓' : 'FAIL ✗') + ' 提示词规则块：字段教学已统一为冒号格式（含示例）');
+var taught = ['好感度','欲望值','内心想法'].every(function(f){ return rules.indexOf(f + '：') >= 0; });
+var notBuiltin = rules.indexOf('心情：') < 0;
+out.push((taught && notBuiltin ? 'PASS ✓' : 'FAIL ✗') + ' ①教学字段跟随模板占位符（好感度/欲望值/内心想法）');
+var reply1 = '<miyastatus>好感度：72\n欲望值：平静\n内心想法：他今天有点反常</miyastatus>';
+var f1 = MiyaChatStatusBar.parseFromText(reply1);
+var cfg1 = MiyaChatStatusBar.resolveConfig(null, '');
+var card1 = MiyaChatStatusBar.fillTemplate(cfg1.template, f1.fields, '状态栏');
+var hit1 = card1.indexOf('72') >= 0 && card1.indexOf('平静') >= 0 && card1.indexOf('反常') >= 0;
+out.push((hit1 ? 'PASS ✓' : 'FAIL ✗') + ' ①渲染闭环：三个占位符全部填入 AI 内容');
+delete window.miyaChatGlobalSettings;
+/* ── 场景②：默认模板（{{字段列表}}）→ 教学 BUILTIN ── */
+var rules2 = MiyaOfflineStatus.buildStatusRulesBlock([{ id: 'c1', name: '白泽' }]);
+out.push((rules2.indexOf('心情：') >= 0 ? 'PASS ✓' : 'FAIL ✗') + ' ②默认模板：教学退回内置字段');
+/* ── 场景③：杂质清洗 ── */
+var dirty = '<miyastatus>- 心情：悸乱\n【状态】：指尖发麻\n- 想法-想逃\n**好感度**：72</miyastatus>';
+var f3 = MiyaChatStatusBar.parseFromText(dirty);
+var names3 = f3.fields.map(function(f){ return f.name; }).join('|');
+var vals3 = f3.fields.map(function(f){ return f.value; }).join('|');
+out.push(((names3 === '心情|状态|想法|好感度' && vals3 === '悸乱|指尖发麻|想逃|72') ? 'PASS ✓' : 'FAIL ✗') + ' ③杂质清洗：' + names3 + ' / ' + vals3);
+/* ── 场景④：完整端到端（自定义模板 + 教学输出 + plot 并存）── */
+window.miyaChatGlobalSettings = { getState: function(){ return { global: { backgroundMessage: { statusBar: {
+  template: '<div>{{好感度}}</div><div>{{欲望值}}</div><div>{{内心想法}}</div>'
+} } } }; } };
+var raw4 = '正文叙事。\n<miyastatus>好感度：72\n欲望值：平静\n内心想法：想逃</miyastatus>\n<plot>- 我递过去</plot>';
+var plotItems = MiyaOfflinePlot.extractPlotItems(raw4);
+var body = MiyaOfflinePlot.stripPlot(raw4);
+var f4 = MiyaChatStatusBar.parseFromText(body);
+var body2 = MiyaOfflineStatus.stripStatusFromText(body);
+var card4 = MiyaChatStatusBar.fillTemplate(MiyaChatStatusBar.resolveConfig(null,'').template, f4.fields, '状态栏');
+var ok4 = f4.fields.length === 3 && card4.indexOf('72') >= 0 && plotItems.length === 1 && body2.indexOf('miyastatus') < 0;
+out.push((ok4 ? 'PASS ✓' : 'FAIL ✗') + ' ④端到端：状态栏3字段全填值 + 剧情卡正常 + 正文无残留');
 document.getElementById('log').textContent = out.join('\n');
 </script>
 </body></html>
