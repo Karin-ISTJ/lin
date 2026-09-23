@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<link rel="stylesheet" href="css/miya-farmgame.css?v=11">
+<link rel="stylesheet" href="css/miya-farmgame.css?v=12">
 <style>body{margin:0}</style>
 </head><body>
   <div class="farmgame-app" id="miya-farmgame-app" hidden aria-hidden="true">
@@ -38,9 +38,9 @@
       <!-- 动作区 -->
       <section class="fg-actions" aria-label="农事动作">
         <div class="fg-actions__row">
-          <button type="button" class="fg-act" id="fg-act-sow" data-fg-act="sow">🌱 播种</button>
-          <button type="button" class="fg-act" id="fg-act-water" data-fg-act="water">💧 浇水</button>
-          <button type="button" class="fg-act" id="fg-act-fert" data-fg-act="fert">✨ 施肥</button>
+          <button type="button" class="fg-act fg-act--sow" id="fg-act-sow" data-fg-act="sow">🌱 播种</button>
+          <button type="button" class="fg-act fg-act--water" id="fg-act-water" data-fg-act="water">💧 浇水</button>
+          <button type="button" class="fg-act fg-act--fert" id="fg-act-fert" data-fg-act="fert">✨ 施肥</button>
           <button type="button" class="fg-act fg-act--hoe" id="fg-act-hoe" data-fg-act="hoe">⛏ 锄头</button>
           <button type="button" class="fg-act fg-act--bulk" id="fg-act-bulk" data-fg-bulk><span>✨ 一键收获</span></button>
         </div>
@@ -78,5 +78,18 @@
   </div>
 
 <script src="js2/miya-farmgame-store.js?v=5"></script>
-<script src="js2/miya-farmgame-app.js?v=10"></script>
+<script src="js2/miya-farmgame-app.js?v=12"></script>
+<script>
+window.addEventListener('load', function(){
+  MiyaFarmGame.open();
+  setTimeout(function(){
+    var st = MiyaFarmGameStore.getState();
+    st.level = 5;
+    st.plots[0] = { crop: 'strawberry', stage: 2, watered: true, fert: false };
+    st.plots[1] = { crop: 'pea', stage: 0, watered: false, fert: false };
+    st.plots[2] = { crop: 'pea', stage: 0, watered: false, fert: true };
+    MiyaFarmGame.open();
+  }, 400);
+});
+</script>
 </body></html>

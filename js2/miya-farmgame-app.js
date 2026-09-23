@@ -304,7 +304,7 @@
       inner =
         '<span class="fg-plot__crop' + (mature ? ' fg-plot__crop--mature' : '') + '">' + c.stages[p.stage] + '</span>' +
         (p.fertToday ? '<span class="fg-plot__fert">✨</span>' : '') +
-        (mature ? '<span class="fg-plot__shine" aria-hidden="true"></span>' : '');
+        (mature ? '<span class="fg-plot__shine" aria-hidden="true"><i>✨</i><i>✨</i><i>✨</i></span>' : '');
     } else {
       cls += ' is-empty';
       inner = '<span class="fg-plot__plus">+</span>';
@@ -392,7 +392,7 @@
     renderHead(s);
     closeSheet();
     renderAll();
-    toast('🌱 播下' + c.name + '种子 ×' + m);
+    toast('🌱 播下' + c.name + '种子');
   }
 
   /* 浇水（单块） */
@@ -429,9 +429,9 @@
     targets.forEach(function (i) { s.plots[i].watered = true; });
     STORE.save();
     renderHead(s);
-    toast('💧 一键浇水 ' + m + ' 块…');
     wave(targets, BULK_STEP_MS, BULK_STAGGER_MS, function (i) {
       renderPlotCell(i);
+      toast('💧 ' + nextWater());
     });
   }
 
@@ -470,9 +470,9 @@
     targets.forEach(function (i) { s.plots[i].fert = true; s.plots[i].fertToday = true; });
     STORE.save();
     renderHead(s);
-    toast('✨ 一键施肥 ' + m + ' 块…');
     wave(targets, BULK_STEP_MS, BULK_STAGGER_MS, function (i) {
       renderPlotCell(i);
+      toast('✨ ' + nextFert());
     });
   }
 
@@ -580,11 +580,9 @@
       setTimeout(function () {
         renderPlotCell(m.i);
         gainFx(m.i, m.icon, m.y);
+        toast('✨ 收获' + m.name + ' +' + m.y);
       }, k * HARVEST_STAGGER_MS);
     });
-    var names = Object.keys(crops).map(function (k) { return STORE.CROPS[k].name + '×' + crops[k]; }).join('、');
-    setTimeout(function () { toast('🧺 收入仓库：' + names + '（+' + expSum + ' 经验）'); },
-      meta.length * HARVEST_STAGGER_MS + 300);
     announceLevelUps(ups);
   }
 

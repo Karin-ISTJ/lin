@@ -225,9 +225,12 @@
   background: linear-gradient(135deg, #f79bc0, #ef6fa6);
   box-shadow: 0 4px 12px rgba(239, 111, 166, 0.4);
 }
+.fg-act--sow   { background: linear-gradient(180deg, #97d48b, #67bd66); }
+.fg-act--water { background: linear-gradient(180deg, #93c6f2, #5e9ee2); }
+.fg-act--fert  { background: linear-gradient(180deg, #eba9e2, #d383cc); }
 .fg-act--hoe { background: #a9825f; order: 5; }
 .fg-act--hoe.is-active { background: linear-gradient(135deg, #f79bc0, #ef6fa6); }
-.fg-act--bulk { grid-column: span 2; order: 4; background: #d9cfc2; }
+.fg-act--bulk { grid-column: span 2; order: 4; background: linear-gradient(180deg, #ffdd8a, #f2b62e); color: #7a5b30; }
 .fg-act--bulk.is-locked { opacity: 0.62; }
 .fg-act.is-locked { opacity: 0.62; }
 .fg-act.is-tired { filter: saturate(0.55); opacity: 0.72; }
@@ -324,30 +327,30 @@
 .fg-plot.is-mature {
   box-shadow: 0 4px 12px rgba(240, 170, 80, 0.38);
 }
-/* ── 成熟：✨ 沿地块两侧缓缓升起渐隐（循环、错开相位；避开中心作物，不遮挡） ── */
+/* ── 成熟：三颗 ✨ 从作物两侧与头顶依次升起渐隐（循环；避开作物本体不遮挡） ── */
 .fg-plot__shine {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
 }
-.fg-plot__shine::before,
-.fg-plot__shine::after {
-  content: "✨";
+.fg-plot__shine i {
   position: absolute;
+  font-style: normal;
   font-size: 12px;
   line-height: 1;
-  filter: drop-shadow(0 0 3px rgba(255, 219, 130, 0.85));
+  filter: drop-shadow(0 0 3px rgba(255, 219, 130, 0.9));
   opacity: 0;
   animation: fg-shine-rise 2.2s ease-out infinite;
 }
-.fg-plot__shine::before { left: 25%; bottom: 16%; }
-.fg-plot__shine::after  { right: 25%; bottom: 26%; animation-delay: 0.25s; }
+.fg-plot__shine i:nth-child(1) { left: 21%; bottom: 14%; animation-delay: 0s; }
+.fg-plot__shine i:nth-child(2) { left: 50%; margin-left: -7px; bottom: 58%; font-size: 13px; animation-delay: 0.28s; }
+.fg-plot__shine i:nth-child(3) { right: 21%; bottom: 14%; animation-delay: 0.5s; }
 @keyframes fg-shine-rise {
   0%   { transform: translateY(6px) scale(0.7); opacity: 0; }
   20%  { opacity: 0.95; }
   65%  { opacity: 0.75; }
-  100% { transform: translateY(-48px) scale(1); opacity: 0; }
+  100% { transform: translateY(-44px) scale(1); opacity: 0; }
 }
 
 /* ── 主按钮 ── */

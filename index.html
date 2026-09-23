@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-63">
+  <meta name="miya-sw-build" content="sw-65">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=53" type="image/png">
@@ -2944,9 +2944,9 @@
       <!-- 动作区 -->
       <section class="fg-actions" aria-label="农事动作">
         <div class="fg-actions__row">
-          <button type="button" class="fg-act" id="fg-act-sow" data-fg-act="sow">🌱 播种</button>
-          <button type="button" class="fg-act" id="fg-act-water" data-fg-act="water">💧 浇水</button>
-          <button type="button" class="fg-act" id="fg-act-fert" data-fg-act="fert">✨ 施肥</button>
+          <button type="button" class="fg-act fg-act--sow" id="fg-act-sow" data-fg-act="sow">🌱 播种</button>
+          <button type="button" class="fg-act fg-act--water" id="fg-act-water" data-fg-act="water">💧 浇水</button>
+          <button type="button" class="fg-act fg-act--fert" id="fg-act-fert" data-fg-act="fert">✨ 施肥</button>
           <button type="button" class="fg-act fg-act--hoe" id="fg-act-hoe" data-fg-act="hoe">⛏ 锄头</button>
           <button type="button" class="fg-act fg-act--bulk" id="fg-act-bulk" data-fg-bulk><span>✨ 一键收获</span></button>
         </div>
