@@ -764,7 +764,7 @@
         return !!o.regenerate;
     }
 
-    function finalizeAppointmentAssistantBody(parsed, htmlMode) {
+    function finalizeAppointmentAssistantBody(parsed, htmlMode, chatId) {
         var body = String((parsed && parsed.content) || '').trim();
         if (!body) return { content: '', lines: [], renderAsHtml: false };
 
@@ -810,7 +810,7 @@
         if (sbMod && typeof sbMod.parseFromText === 'function') {
             try {
                 var sbCfg = typeof sbMod.resolveConfig === 'function'
-                    ? sbMod.resolveConfig(global.miyaChatStore, '')
+                    ? sbMod.resolveConfig(global.miyaChatStore, chatId || '')
                     : null;
                 if (!sbCfg || sbCfg.enabled !== false) {
                     var hit = sbMod.parseFromText(body);
@@ -1094,7 +1094,9 @@
             statusApi.isEnabled() &&
             typeof statusApi.buildStatusRulesBlock === 'function'
         ) {
-            var statusRules = statusApi.buildStatusRulesBlock(castContacts);
+            /* 传 chatId：教学取模板须与楼层卡片渲染同层级（聊天级 > 全局级），
+               否则聊天级模板的字段与教学字段错位，卡片只剩壳子。 */
+            var statusRules = statusApi.buildStatusRulesBlock(castContacts, chatId);
             if (statusRules) parts.push(statusRules);
         }
         return parts.filter(Boolean).join('\n\n');
@@ -2772,9 +2774,9 @@
                 var parsed = parseAppointmentResponse(fullRaw, apiData);
                 var thinking = String(parsed.thinking || '').trim();
                 var htmlMode = !!built.htmlMode;
-                var finalized = finalizeAppointmentAssistantBody(parsed, htmlMode);
+                var finalized = finalizeAppointmentAssistantBody(parsed, htmlMode, chatId);
                 if (!finalized.lines.length && htmlMode) {
-                    finalized = finalizeAppointmentAssistantBody(parsed, false);
+                    finalized = finalizeAppointmentAssistantBody(parsed, false, chatId);
                 }
                 var lines = finalized.lines || [];
                 if (!lines.length) throw new Error('empty_reply');

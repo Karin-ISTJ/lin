@@ -5,7 +5,7 @@ var CACHE = 'miya-v310-karin';
  * app.js 会在收到 SW 广播时比对两者：SW 比页面新 → 自动刷新一次页面。
  * 只增不减：每次改动 sw.js / 任何需要立刻生效的资源策略时 bump 尾号。
  */
-var BUILD = 'sw-68';
+var BUILD = 'sw-69';
 var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './css/miya-offline.css', './css/miya-offline-themes.css', './css/miya-offline-card.css', './css/miya-offline-plot.css', './js1/app.js', './js1/miya-appointment-app.js', './js1/miya-appointment-engine.js', './js1/miya-appointment-store.js', './js2/miya-offline-plot.js', './audio/farmgame/farm-bgm-1.mp3', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */
 var STATIC_LIVE = /\.(?:html|css|js|webmanifest|json)$|\/$|miya-icon(?:-\d+)?\.png/;

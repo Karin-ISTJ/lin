@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>状态栏诊断 · statusbar-diagnose</title>
+<!--
+  状态栏"模板壳子"诊断页（只读，不改任何数据）。
+  打开本页后把生成的一屏报告复制发给维护者，即可一次看清断在哪一层：
+    ① 版本层：sw.js BUILD / index.html 哨兵 / 三条脚本 ?v= 是否对齐
+    ② 模块层：四个全局对象是否加载成功
+    ③ 配置层：全局级 vs 聊天级 状态栏模板是否错层（本次修复的核心）
+    ④ 教学层：buildStatusRulesBlock 现场输出（字段名单）
+    ⑤ 落库层：最近线下 assistant 楼层的 m.statusBar 字段数 + 正文残留标记
+    ⑥ 渲染层：教学输出 → parseFromText → fillTemplate 端到端演练 + 占位符命中率
+-->
+<style>
+  :root {
+    --bg: #12141a; --card: #1b1e27; --line: #2a2f3d;
+    --tx: #d8dce6; --dim: #8b93a5;
+    --ok: #3ecf8e; --warn: #f5b544; --fail: #ff6b6b; --info: #6aa6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 14px 90px; background: var(--bg); color: var(--tx);
+    font: 14px/1.65 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  h1 { font-size: 18px; margin: 4px 0 2px; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 14px; }
+  section {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 12px;
+  }
+  section h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600; }
+  .b-ok   { background: rgba(62,207,142,.15); color: var(--ok); }
+  .b-warn { background: rgba(245,181,68,.15); color: var(--warn); }
+  .b-fail { background: rgba(255,107,107,.15); color: var(--fail); }
+  .b-info { background: rgba(106,166,255,.15); color: var(--info); }
+  pre {
+    margin: 6px 0 0; padding: 10px; background: #0d0f14; border: 1px solid var(--line);
+    border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+    font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #c3c9d6;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; white-space: nowrap; }
+  .kv b { color: var(--info); font-weight: 600; }
+  .warn-tx { color: var(--warn); } .fail-tx { color: var(--fail); } .ok-tx { color: var(--ok); }
+  .chatblock { border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 10px; }
+  .chatblock:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .chatname { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  #copybar {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 14px;
+    background: rgba(18,20,26,.92); backdrop-filter: blur(8px); border-top: 1px solid var(--line);
+    display: flex; gap: 10px; align-items: center;
+  }
+  #copybar button {
+    flex: 1; padding: 11px 0; border: 0; border-radius: 10px; font-size: 14px; font-weight: 700;
+    background: var(--info); color: #fff;
+  }
+  #copybar button.ghost { flex: 0 0 auto; padding: 11px 16px; background: var(--line); color: var(--tx); }
+  .hint { color: var(--dim); font-size: 12px; }
+  .pill { display: inline-block; padding: 0 7px; border-radius: 6px; background: #0d0f14; border: 1px solid var(--line); font-size: 11px; margin: 1px 2px 1px 0; }
+</style>
+</head>
+<body>
+<h1>状态栏诊断</h1>
+<div class="sub">只读工具：定位"线下楼层状态栏只有模板壳子"断在哪一层。测试完成后可关闭本页。</div>
+<div id="root"><div class="sub">正在诊断…</div></div>
+
+<div id="copybar">
+  <button id="btn-copy">📋 复制完整报告</button>
+  <button class="ghost" id="btn-rerun">重跑</button>
+</div>
+
+<script defer src="js2/miya-storage.js"></script>
+<script defer src="js1/miya-chat-store.js"></script>
+<script defer src="js1/miya-chat-statusbar.js"></script>
+<script defer src="js1/miya-appointment-store.js"></script>
+<script defer src="js2/miya-offline-status.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  var REPORT = { time: '', env: {}, checks: [], chats: [] };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function trunc(s, n) {
+    s = String(s == null ? '' : s);
+    return s.length > n ? s.slice(0, n) + '…(共' + s.length + '字)' : s;
+  }
+
+  /* ── 抓取网络实际服务的 sw.js BUILD 与 index.html 哨兵/脚本版本 ── */
+  async function fetchVersions() {
+    var out = { swBuild: null, swCache: null, indexMeta: null, scripts: {}, errors: [] };
+    try {
+      var r1 = await fetch('sw.js?_diag=' + Date.now(), { cache: 'no-store' });
+      var t1 = await r1.text();
+      var m1 = t1.match(/var\s+BUILD\s*=\s*'([^']+)'/);
+      var m1c = t1.match(/var\s+CACHE\s*=\s*'([^']+)'/);
+      out.swBuild = m1 ? m1[1] : '(未匹配到)';
+      out.swCache = m1c ? m1c[1] : '(未匹配到)';
+    } catch (e) { out.errors.push('sw.js: ' + e.message); }
+    try {
+      var r2 = await fetch('index.html?_diag=' + Date.now(), { cache: 'no-store' });
+      var t2 = await r2.text();
+      var m2 = t2.match(/<meta\s+name="miya-sw-build"\s+content="([^"]+)"/);
+      out.indexMeta = m2 ? m2[1] : '(未匹配到)';
+      ['miya-chat-statusbar.js', 'miya-appointment-engine.js', 'miya-offline-status.js', 'miya-appointment-app.js']
+        .forEach(function (name) {
+          var re = new RegExp('src="[^"]*' + name.replace('.', '\\.') + '\\?v=([^"]+)"');
+          var m = t2.match(re);
+          out.scripts[name] = m ? m[1] : '(无?v=)';
+        });
+    } catch (e) { out.errors.push('index.html: ' + e.message); }
+    return out;
+  }
+
+  async function swInfo() {
+    var info = { supported: 'serviceWorker' in navigator, controller: null, registrations: [], caches: [] };
+    try {
+      if (info.supported) {
+        info.controller = navigator.serviceWorker.controller
+          ? String(navigator.serviceWorker.controller.scriptURL) : '(无 controller)';
+        var regs = await navigator.serviceWorker.getRegistrations();
+        info.registrations = regs.map(function (r) {
+          return String(r.active && r.active.scriptURL || r.installing && r.installing.scriptURL || '?');
+        });
+      }
+      if (window.caches && caches.keys) {
+        info.caches = await caches.keys();
+      }
+    } catch (e) { info.error = e.message; }
+    return info;
+  }
+
+  /* 从教学块提取字段名（演练用）。
+     多人场景：教学块带 <miyastatus> 完整示例，从示例行提取；
+     单人场景：无示例块，从「【字段说明·须全部输出】」段逐行提取。 */
+  function extractFieldNamesFromRules(rulesText) {
+    var m = rulesText.match(/<miyastatus>([\s\S]*?)<\/miyastatus>/);
+    var names = [];
+    if (m) {
+      m[1].split('\n').forEach(function (line) {
+        var t = line.trim();
+        if (!t || t.indexOf('###') === 0) return;
+        var fm = t.match(/^([^：:]{1,40})[：:]/);
+        if (fm) {
+          var nm = fm[1].replace(/^[-•*·\s]+/, '').trim();
+          if (nm && names.indexOf(nm) < 0) names.push(nm);
+        }
+      });
+    }
+    if (names.length) return names;
+    var HEAD = '【字段说明·须全部输出】';
+    var i = rulesText.indexOf(HEAD);
+    if (i < 0) return [];
+    var seg = rulesText.slice(i + HEAD.length);
+    var nl = seg.indexOf('\n');
+    if (nl >= 0) seg = seg.slice(nl + 1); /* 跳过标题行尾巴（字段行用「字段名：内容」冒号格式） */
+    seg.split('\n').forEach(function (line) {
+      var t = line.trim();
+      if (!t || t.indexOf('发出前自检') === 0 || t.charAt(0) === '【') return;
+      var fm = t.match(/^([^：:]{1,40})[：:]/);
+      if (fm) {
+        var nm = fm[1].replace(/^[-•*·\s]+/, '').trim();
+        if (nm && names.indexOf(nm) < 0) names.push(nm);
+      }
+    });
+    return names;
+  }
+
+  function badge(ok, warn, fail) {
+    if (fail) return '<span class="badge b-fail">FAIL</span>';
+    if (warn) return '<span class="badge b-warn">WARN</span>';
+    if (ok) return '<span class="badge b-ok">OK</span>';
+    return '<span class="badge b-info">信息</span>';
+  }
+
+  function section(title, badgeHtml, bodyHtml) {
+    return '<section><h2>' + esc(title) + badgeHtml + '</h2>' + bodyHtml + '</section>';
+  }
+
+  async function run() {
+    var root = $('root');
+    var html = '';
+    REPORT = { time: new Date().toLocaleString(), env: {}, checks: [], chats: [] };
+    REPORT.env.ua = navigator.userAgent;
+    REPORT.env.protocol = location.protocol;
+    REPORT.env.href = location.href;
+
+    /* ── ① 版本层 ── */
+    var ver = await fetchVersions();
+    var swi = await swInfo();
+    REPORT.versions = ver; REPORT.sw = swi;
+    var verRows =
+      '<table>' +
+      '<tr><th>sw.js BUILD（网络实际服务）</th><td>' + esc(ver.swBuild) + '</td></tr>' +
+      '<tr><th>index.html 哨兵（网络实际服务）</th><td>' + esc(ver.indexMeta) + '</td></tr>' +
+      '<tr><th>SW controller</th><td>' + esc(swi.controller) + '</td></tr>' +
+      '<tr><th>缓存名单</th><td>' + esc((swi.caches || []).join('、')) + '</td></tr>' +
+      '</table><table>' +
+      '<tr><th>index.html 引用</th><th>?v=</th></tr>';
+    Object.keys(ver.scripts).forEach(function (k) {
+      verRows += '<tr><td>' + esc(k) + '</td><td>' + esc(ver.scripts[k]) + '</td></tr>';
+    });
+    verRows += '</table>';
+    var verMismatch =
+      ver.swBuild && ver.indexMeta && ver.swBuild !== ver.indexMeta;
+    html += section('① 版本与缓存（网络实际服务的内容）',
+      badge(true, verMismatch, !!ver.errors.length),
+      verRows + (ver.errors.length ? '<pre>抓取失败：' + esc(ver.errors.join('；')) + '</pre>' : '') +
+      (verMismatch
+        ? '<div class="warn-tx">⚠ sw.js BUILD 与 index.html 哨兵不一致：浏览器会反复刷新或跑到旧版脚本。发版后先整页刷新一次。</div>'
+        : ''));
+
+    /* ── ② 模块层 ── */
+    var mods = {
+      miyaChatStore: !!window.miyaChatStore,
+      MiyaChatStatusBar: !!window.MiyaChatStatusBar,
+      MiyaAppointmentStore: !!window.MiyaAppointmentStore,
+      MiyaOfflineStatus: !!window.MiyaOfflineStatus
+    };
+    REPORT.modules = mods;
+    var modHtml = Object.keys(mods).map(function (k) {
+      return '<span class="pill">' + (mods[k] ? '<span class="ok-tx">✔</span>' : '<span class="fail-tx">✘ 未加载</span>') + ' ' + esc(k) + '</span>';
+    }).join('');
+    var modsAllOk = mods.miyaChatStore && mods.MiyaChatStatusBar && mods.MiyaAppointmentStore && mods.MiyaOfflineStatus;
+    if (!modsAllOk) {
+      html += section('② 模块加载', badge(false, false, true),
+        modHtml + '<div class="fail-tx">模块缺失：请确认通过 http(s) 访问（勿用 file:// 直接打开），且刷新后重试。</div>');
+      root.innerHTML = html;
+      return;
+    }
+    html += section('② 模块加载', badge(true), modHtml);
+
+    /* ── 水合 ── */
+    var hyd = { storeInit: false, apReady: false, err: '' };
+    try {
+      await window.miyaChatStore.init();
+      hyd.storeInit = true;
+    } catch (e) { hyd.err += 'store.init: ' + e.message + ' '; }
+    try {
+      await window.MiyaAppointmentStore.whenReady();
+      hyd.apReady = true;
+    } catch (e) { hyd.err += 'apStore.whenReady: ' + e.message; }
+    REPORT.hydrate = hyd;
+    if (!hyd.storeInit || !hyd.apReady) {
+      html += section('数据水合', badge(false, false, true),
+        '<div class="fail-tx">水合失败：' + esc(hyd.err) + '</div>');
+      root.innerHTML = html;
+      return;
+    }
+
+    var sb = window.MiyaChatStatusBar;
+    var st = window.miyaChatStore;
+    var aps = window.MiyaAppointmentStore;
+
+    /* ── ③ 配置层级 ── */
+    var globCfg = sb.resolveConfig(st, '');
+    var chats = st.getChats ? st.getChats('all') : [];
+    var offlineChats = [];
+    (chats || []).forEach(function (ch) {
+      try {
+        var sess = aps.getSessions(ch.id);
+        if (sess && sess.length) offlineChats.push({ chat: ch, sessions: sess });
+      } catch (e) {}
+    });
+    REPORT.globalConfig = {
+      enabled: globCfg.enabled,
+      usingDefaultTemplate: globCfg.usingDefaultTemplate,
+      template: globCfg.template,
+      templateFields: sb.usesFieldList(globCfg.template) ? '(字段列表型)' : sb.extractTemplateFields(globCfg.template)
+    };
+    var cfgHtml =
+      '<div class="kv"><b>全局级</b>：enabled=' + globCfg.enabled +
+      '，模板' + (globCfg.usingDefaultTemplate ? '＝内置默认' : '＝自定义') +
+      '，类型＝' + (sb.usesFieldList(globCfg.template) ? '{{字段列表}}（自动渲染）' : '固定占位符') + '</div>' +
+      '<pre>模板原文：' + esc(trunc(globCfg.template, 300)) + '</pre>' +
+      (globCfg.usingDefaultTemplate ? '' :
+        '<pre>模板提取字段：' + esc(JSON.stringify(sb.usesFieldList(globCfg.template) ? '(字段列表型)' : sb.extractTemplateFields(globCfg.template))) + '</pre>');
+
+    if (!offlineChats.length) {
+      html += section('③ 状态栏配置（全局级）', badge(true), cfgHtml);
+      html += section('④ 线下聊天', badge(false, true),
+        '<div class="warn-tx">未发现任何线下聊天（所有聊天的线下会话均为空）。请先进入某个联系人的线下模式跑一轮剧情，再打开本页。</div>');
+      root.innerHTML = html;
+      bindBar();
+      return;
+    }
+
+    /* ── ④⑤ 每个线下聊天：配置对比 + 教学输出 + 落库体检 + 演练 ── */
+    var chatBlocks = '';
+    offlineChats.forEach(function (oc) {
+      var ch = oc.chat;
+      var chatId = ch.id;
+      var chatCfg = sb.resolveConfig(st, chatId);
+      var layerNote = '';
+      var layered = !chatCfg.usingDefaultTemplate &&
+        chatCfg.template !== globCfg.template;
+      if (layered) layerNote = '<span class="warn-tx">（聊天级模板与全局不同 → 教学必须跟随聊天级，本次修复即针对此）</span>';
+
+      var contact = st.findContact ? st.findContact(ch.contactId) : null;
+      var cast = [contact || { id: '_diag', name: '测试角色' }];
+
+      /* 教学输出 */
+      var rules = '';
+      var rulesErr = '';
+      try {
+        rules = window.MiyaOfflineStatus.buildStatusRulesBlock(cast, chatId) || '';
+      } catch (e) { rulesErr = e.message; }
+      var fieldNames = rules ? extractFieldNamesFromRules(rules) : [];
+
+      /* 落库体检：最新会话最新 assistant 楼层 */
+      var sess0 = oc.sessions[0];
+      var msgs = aps.getSessionMessages(chatId, sess0.id);
+      var assists = msgs.filter(function (m) { return m && m.role === 'assistant'; });
+      var recent = assists.slice(-5).reverse();
+      var rows = '';
+      var anyFloored = false, anyResidue = false, anyEmptyShell = false;
+      recent.forEach(function (m) {
+        var sbf = m.statusBar && Array.isArray(m.statusBar.fields) ? m.statusBar.fields : null;
+        var n = sbf ? sbf.length : 0;
+        if (n > 0) anyFloored = true;
+        var residue = /<\s*miyastatus|＜\s*miyastatus|STATUSBAR_DATA|状态栏/i.test(String(m.content || ''));
+        if (residue) anyResidue = true;
+        var emptyShell = n === 0;
+        if (emptyShell) anyEmptyShell = true;
+        rows += '<tr>' +
+          '<td>' + esc(trunc(m.content || '', 24)) + '</td>' +
+          '<td>' + (n > 0 ? '<span class="ok-tx">' + n + ' 个字段</span>' : '<span class="fail-tx">无落库</span>') + '</td>' +
+          '<td>' + esc(m.statusBar && m.statusBar.tag || '-') + '</td>' +
+          '<td>' + (residue ? '<span class="warn-tx">有残留</span>' : '干净') + '</td>' +
+          '</tr>';
+      });
+      var bodyCls = anyEmptyShell || anyResidue ? badge(true, anyResidue, false) : badge(true);
+
+      /* 端到端演练 */
+      var drill = '';
+      var drillErr = '';
+      try {
+        if (rules && fieldNames.length) {
+          var sim = '<miyastatus>\n' + fieldNames.map(function (fn) {
+            return fn + '：演练内容·' + fn;
+          }).join('\n') + '\n</miyastatus>';
+          var parsed = sb.parseFromText(sim);
+          var hit = 0, missList = [];
+          if (parsed && parsed.fields) {
+            var have = {};
+            parsed.fields.forEach(function (f) { have[f.name] = f.value; });
+            if (sb.usesFieldList(chatCfg.template)) {
+              hit = parsed.fields.length;
+            } else {
+              (sb.extractTemplateFields(chatCfg.template) || []).forEach(function (fn) {
+                if (have[fn] != null) hit++; else missList.push(fn);
+              });
+            }
+          }
+          var cfg2 = chatCfg;
+          var card = sb.buildCardHtml({ fields: parsed && parsed.fields, tag: parsed && parsed.tag, config: cfg2 });
+          drill =
+            '<div class="kv">演练结果：解析到 <b>' + (parsed && parsed.fields ? parsed.fields.length : 0) +
+            '</b> 个字段；模板占位符命中 <b>' + hit + '</b> 个' +
+            (missList.length ? '，<span class="fail-tx">未命中：' + esc(missList.join('、')) + '（这些占位符会渲染成空）</span>' : '，<span class="ok-tx">无缺漏</span>') +
+            '</div>' +
+            '<pre>卡片 HTML（前 400 字）：' + esc(trunc(card, 400)) + '</pre>';
+          REPORT.lastDrill = { parsedFields: parsed && parsed.fields, hit: hit, miss: missList };
+        } else {
+          drill = '<div class="warn-tx">教学块为空或未提取到字段，跳过演练。</div>';
+        }
+      } catch (e) { drillErr = e.message; }
+
+      chatBlocks += '<div class="chatblock">' +
+        '<div class="chatname">' + esc(ch.name || chatId) + ' <span class="hint">(' + esc(chatId) + '，' + oc.sessions.length + ' 个会话)</span></div>' +
+        '<div class="kv"><b>聊天级配置</b>：enabled=' + chatCfg.enabled +
+        '，模板' + (chatCfg.usingDefaultTemplate ? '＝内置默认' : '＝自定义') +
+        '，类型＝' + (sb.usesFieldList(chatCfg.template) ? '{{字段列表}}' : '固定占位符') +
+        layerNote + '</div>' +
+        (chatCfg.usingDefaultTemplate ? '' :
+          '<pre>聊天级模板：' + esc(trunc(chatCfg.template, 300)) + '</pre>') +
+        '<div class="kv" style="margin-top:6px"><b>教学输出（buildStatusRulesBlock 现场生成）</b>' +
+        (rulesErr ? ' <span class="fail-tx">生成失败：' + esc(rulesErr) + '</span>' : '') + '</div>' +
+        '<pre>' + esc(trunc(rules, 700)) + '</pre>' +
+        '<div class="kv"><b>教学字段名单</b>：' + (fieldNames.length ? fieldNames.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') : '<span class="fail-tx">(空)</span>') + '</div>' +
+        '<div class="kv" style="margin-top:6px"><b>落库体检（最新会话最近 5 条 AI 楼层）</b></div>' +
+        (recent.length ?
+          '<table><tr><th>楼层开头</th><th>statusBar 落库</th><th>tag</th><th>正文残留</th></tr>' + rows + '</table>' +
+          (anyEmptyShell && !anyFloored ? '<div class="fail-tx">最新楼层全部无落库 → AI 回复里没带 miyastatus 块，或解析落空。结合教学字段名单与正文残留列判断。</div>' : '') +
+          (anyResidue ? '<div class="warn-tx">正文有残留标记 → 剥离逻辑异常（旧版本行为）。</div>' : '')
+          : '<div class="hint">最新会话没有 assistant 楼层。</div>') +
+        '<div class="kv" style="margin-top:6px"><b>端到端演练（教学字段 → 模拟回复 → 解析 → 渲染）</b></div>' +
+        drill + (drillErr ? '<pre class="fail-tx">演练失败：' + esc(drillErr) + '</pre>' : '') +
+        '</div>';
+
+      REPORT.chats.push({
+        chatId: chatId,
+        name: ch.name || '',
+        chatTemplate: chatCfg.template,
+        chatUsingDefault: chatCfg.usingDefaultTemplate,
+        chatEnabled: chatCfg.enabled,
+        rulesText: rules,
+        fieldNames: fieldNames,
+        recentFloors: recent.map(function (m) {
+          return {
+            statusBarFields: m.statusBar && m.statusBar.fields || null,
+            residue: /<\s*miyastatus|＜\s*miyastatus|STATUSBAR_DATA|状态栏/i.test(String(m.content || ''))
+          };
+        })
+      });
+    });
+
+    html += section('③ 状态栏配置（全局级）', badge(true), cfgHtml);
+    html += section('④⑤ 各线下聊天：配置对比 · 教学输出 · 落库体检 · 端到端演练', badge(true), chatBlocks);
+
+    var summary =
+      '<div class="kv">看这份报告只需要回答三个问题：</div>' +
+      '<ol style="margin:6px 0 0 18px; padding:0">' +
+      '<li>①里 sw.js BUILD 与 index.html 哨兵是否一致？不一致 = 浏览器在跑旧脚本，先刷新。</li>' +
+      '<li>④里聊天级模板与教学字段名单是否一致？不一致 = 教学与模板错层（本次已修复，若仍出现说明 SW 未更新）。</li>' +
+      '<li>⑤落库体检里最新楼层"statusBar 落库"是否为 0？为 0 = AI 没输出状态块或解析落空；有落库但卡片没内容 = 渲染层问题。</li>' +
+      '</ol>';
+    html += section('⑥ 怎么读这份报告', badge(false, false, false), summary);
+
+    root.innerHTML = html;
+    bindBar();
+  }
+
+  function bindBar() {
+    $('btn-copy').onclick = function () {
+      var text = JSON.stringify(REPORT, null, 2);
+      var done = function () {
+        var b = $('btn-copy');
+        b.textContent = '✅ 已复制，去粘贴给维护者';
+        setTimeout(function () { b.textContent = '📋 复制完整报告'; }, 2500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+      } else fallbackCopy(text, done);
+    };
+    $('btn-rerun').onclick = function () {
+      $('root').innerHTML = '<div class="sub">正在诊断…</div>';
+      setTimeout(run, 30);
+    };
+  }
+  function fallbackCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { alert('复制失败，请手动截图本页'); }
+    document.body.removeChild(ta);
+  }
+
+  if (document.readyState === 'complete') setTimeout(run, 50);
+  else window.addEventListener('load', function () { setTimeout(run, 50); });
+})();
+</script>
+</body>
+</html>

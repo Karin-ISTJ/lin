@@ -312,7 +312,11 @@
         return builtinFieldNames();
     }
 
-    function buildStatusRulesBlock(castContacts) {
+    /* chatId：当前线下会话的聊天 ID。教学必须与渲染同层级取模板——
+       楼层卡片（offlineStatusBarHtml）按「聊天级 > 全局级」取模板（resolveConfig(store, ui.chatId)），
+       教学若只读全局（resolveConfig(store, '')），一旦用户只在聊天级设置了模板，
+       教学的字段与卡片占位符就会错位，卡片只剩壳子。 */
+    function buildStatusRulesBlock(castContacts, chatId) {
         if (!isEnabled()) return '';
         var list = Array.isArray(castContacts) && castContacts.length ? castContacts : [];
         var names = list
@@ -336,7 +340,7 @@
             typeof sbMod.usesFieldList === 'function'
         ) {
             try {
-                var sbCfg = sbMod.resolveConfig(global.miyaChatStore, '');
+                var sbCfg = sbMod.resolveConfig(global.miyaChatStore, chatId || '');
                 var tpl = sbCfg && sbCfg.template;
                 if (tpl && !sbMod.usesFieldList(tpl)) {
                     var tplFields = sbMod.extractTemplateFields(tpl);
