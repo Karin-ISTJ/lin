@@ -786,12 +786,39 @@
      * 直接告知「上一版没过查重、用户不会看到」，并给出可执行的
      * 换向要求 + 新查重码。语气比首轮【重答要求】硬。
      */
+    /*
+     * 重答防雷同·附带修复（记忆表格回归）：
+     * 重答请求尾部新增的查重码/查重块会分走模型注意力，实测容易把
+     * system 区里离得很远的记忆表收尾要求（正文后追加 <tableEdit>）
+     * 整个丢掉 —— 表现就是「重答之后记忆表格不生成了」。
+     * 这里在重答专用提示里显式补一条「格式保持」。
+     *
+     * 记忆表开关关闭时不点名 tableEdit，避免让模型找一个不存在的规则。
+     */
+    function memoryTableWriteEnabled() {
+        var st = global.MiyaMemoryTableStore;
+        if (!st || typeof st.loadSettings !== 'function') return false;
+        try {
+            var s = st.loadSettings();
+            return !!(s && s.enabled !== false && s.isAiWrite !== false);
+        } catch (eMt) {
+            return false;
+        }
+    }
+
+    function buildRegenFormatReminder() {
+        return memoryTableWriteEnabled()
+            ? '另外：本轮回复的输出格式要求与此前完全一致，必须完整执行——正文写完后，仍须按【记忆增强表格·长期记忆】块的写入规则，在回复最末尾追加 <tableEdit> 记忆写入（若本轮确有需要记录的信息），不得省略。'
+            : '另外：本轮回复的输出格式要求与此前完全一致，必须完整执行，不要省略任何收尾内容。';
+    }
+
     function buildRegenRejectedBlock(attemptNo) {
         return [
             '【系统查重·上一版无效·这是第 ' + attemptNo + ' 次尝试】',
             '你刚才生成的内容与被弃用的上一版高度雷同，未通过系统查重，用户不会看到那一版。',
             '请重新生成本轮内容：必须换一个实质不同的演绎方向——不同的事件切入点、不同的动作与对白、不同的叙事节奏；仅调整措辞、语序或段落划分仍视为无效。',
             '角色的身份、性格、说话习惯、与用户的关系，以及世界书核心设定与格式规则保持不变；不要提及本次查重或「重新生成」等字眼。',
+            buildRegenFormatReminder(),
             '（系统内部查重码：' + makeRegenNonce() + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
         ].join('\n');
     }
@@ -833,7 +860,9 @@
              * 按请求体哈希缓存的中转/网关从此不可能回放旧回复。
              */
             lines.push(
-                '（系统内部查重码：' + nonce + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
+                '（系统内部查重码：' + nonce + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。' +
+                buildRegenFormatReminder() +
+                '）'
             );
         }
         return lines.join('\n');
@@ -2324,9 +2353,11 @@
         s = s.replace(/<think(?:ing)?>[\s\S]*$/gi, '');
         s = s.replace(/<\/think(?:ing)?>/gi, '');
         s = s.replace(/```[\s\S]*?```/g, '');
-        /* 记忆表格写操作：不该出现在摘要里 */
-        s = s.replace(/<tableEdit>[\s\S]*?<\/tableEdit>/gi, '');
-        s = s.replace(/<\/?tableEdit>/gi, '');
+        /* 记忆表格写操作：不该出现在摘要里。
+         * 与记忆表引擎的全角兼容同一口径：历史楼层可能残留全角形态的
+         * ＜tableEdit＞（v9 之前生成的数据），摘要输入/输出都要剥干净。 */
+        s = s.replace(/[<＜]\s*tableEdit\s*[>＞][\s\S]*?[<＜]\s*\/\s*tableEdit\s*[>＞]/gi, '');
+        s = s.replace(/[<＜]\s*\/?\s*tableEdit\s*[>＞]/gi, '');
         /* 未替换的宏占位符（{{name}} / {name} / <user_input> 这类） */
         s = s.replace(/\{\{[\s\S]*?\}\}/g, '');
         s = s.replace(/<user_input>[\s\S]*?<\/user_input>/gi, '');

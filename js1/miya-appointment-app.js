@@ -5711,10 +5711,11 @@ function renderWriter() {
         content = stripTagBlock(content, 'STATUSBAR_DATA');
         content = stripTagBlock(content, 'statusbar_data');
 
-        /* ⑤ 兜底：清掉这些块常有残留的零碎标签与多余的星号围栏 */
+        /* ⑤ 兜底：清掉这些块常有残留的零碎标签与多余的星号围栏。
+              半角/全角尖括号（含同一标签内混合，如 ＜tableEdit>）一并覆盖 ——
+              与记忆表引擎 findTableEditRange 的混合兼容口径一致 */
         content = content
-            .replace(/<\/?(?:electric|Test_DS|thinking|content|tableEdit|STATUSBAR_DATA)\s*>/gi, '')
-            .replace(/＜\/?(?:electric|Test_DS|thinking|content|tableEdit|STATUSBAR_DATA)\s*＞/gi, '')
+            .replace(/[<＜]\/?(?:electric|Test_DS|thinking|content|tableEdit|STATUSBAR_DATA)\s*[>＞]/gi, '')
             .trim();
 
         return { thinking: String(thinking || '').trim(), content: content };

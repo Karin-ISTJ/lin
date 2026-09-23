@@ -2,7 +2,8 @@
  *
  * 视觉：对标小红书"星露谷 Lite"海报 —— 奶粉橙渐变背景、奶白圆角卡片、
  * 暖棕文字、胶囊动作按钮（选中态粉色高亮）、贴图地块。
- * 贴图：img/farmgame/banner.jpg（顶部小屋横幅）、plot-soil-2.png（地块）。
+ * 贴图：img/farmgame/banner.jpg（顶部小屋横幅）、plot-soil-1.png（地块·浇水前干土）、
+ *       plot-soil-2.png（地块·浇水后湿土，is-watered 时切换）。
  */
 
 .farmgame-app {
@@ -285,7 +286,8 @@
   border: none;
   padding: 0;
   border-radius: 18px;
-  background: url("../img/farmgame/plot-soil-2.png") center / 100% 100% no-repeat, #e8d5bd;
+  /* 浇水前（干土）：浅色土壤贴图；浇水后切到 plot-soil-2 的深色湿土贴图 */
+  background: url("../img/farmgame/plot-soil-1.png") center / 100% 100% no-repeat, #e8d5bd;
   box-shadow: 0 4px 10px rgba(150, 110, 80, 0.16);
   cursor: pointer;
   transition: transform 0.12s ease;
@@ -531,14 +533,11 @@
  * ═══════════════════════════════════════════════════════════ */
 
 /* ── 浇过水的土地：整块轻微变深（湿土色），无 💧 角标 ── */
-.fg-plot.is-watered::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(74, 46, 24, 0.14), rgba(52, 32, 16, 0.24));
-  mix-blend-mode: multiply;
-  pointer-events: none;
+/* 浇水后：整块换成深色湿土贴图（plot-soil-2）。
+   旧实现是往同一张贴图上叠 multiply 深色渐变；现在干/湿各有专属贴图，
+   对比更直观，叠加层随之退役。 */
+.fg-plot.is-watered {
+  background-image: url("../img/farmgame/plot-soil-2.png");
 }
 
 /* ── 劳作中：土地保持静止（进度条已足够表达），不再脉动 ── */

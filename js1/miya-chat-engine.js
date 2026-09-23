@@ -4758,12 +4758,39 @@
      * 比首轮 nudge 硬得多：直接告知"上一版没过查重、用户不会看到"，
      * 并给出可执行的换向要求 + 新查重码。
      */
+    /*
+     * 重答防雷同·附带修复（记忆表格回归）：
+     * 重答请求的尾部多了「查重码」「查重块」这些新指令，模型的注意力
+     * 会被它们分走，实测容易把 system 区里离得很远的记忆表收尾要求
+     * （正文后追加 <tableEdit>）整个丢掉 —— 表现就是「重答之后记忆
+     * 表格不生成了」。这里在重答专用提示里显式补一条「格式保持」。
+     *
+     * 记忆表开关关闭时不点名 tableEdit，避免让模型找一个不存在的规则。
+     */
+    function memoryTableWriteEnabled() {
+        var st = global.MiyaMemoryTableStore;
+        if (!st || typeof st.loadSettings !== 'function') return false;
+        try {
+            var s = st.loadSettings();
+            return !!(s && s.enabled !== false && s.isAiWrite !== false);
+        } catch (eMt) {
+            return false;
+        }
+    }
+
+    function buildRegenFormatReminder() {
+        return memoryTableWriteEnabled()
+            ? '另外：本轮回复的输出格式要求与此前完全一致，必须完整执行——正文写完后，仍须按【记忆增强表格·长期记忆】块的写入规则，在回复最末尾追加 <tableEdit> 记忆写入（若本轮确有需要记录的信息），不得省略。'
+            : '另外：本轮回复的输出格式要求与此前完全一致，必须完整执行，不要省略任何收尾内容。';
+    }
+
     function buildRegenRejectedBlock(attemptNo) {
         return [
             '【系统查重·上一版无效·这是第 ' + attemptNo + ' 次尝试】',
             '你刚才生成的回复与被弃用的上一版高度雷同，未通过系统查重，用户不会看到那一版。',
             '请重新生成本轮回复：必须换一个实质不同的演绎方向——不同的事件切入点、不同的动作与对白内容、不同的情绪落点；仅调整措辞、语序或段落仍视为无效。',
             '角色的身份、性格、说话习惯、与用户的关系，以及世界书核心设定与格式规则保持不变；不要提及本次查重或「重新生成」等字眼。',
+            buildRegenFormatReminder(),
             '（系统内部查重码：' + makeRegenNonce() + '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
         ].join('\n');
     }
@@ -4939,7 +4966,9 @@
                                 ((regenCtx && regenCtx.nonce) || makeRegenNonce()) +
                                 '-' +
                                 regenAttemptNo +
-                                '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。）'
+                                '。仅供系统区分请求，与剧情无关；禁止回应本条，禁止在回复中提及或输出该编号。' +
+                                buildRegenFormatReminder() +
+                                '）'
                         }
                     ]);
                 }

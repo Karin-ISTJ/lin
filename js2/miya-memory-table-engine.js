@@ -221,11 +221,19 @@
    *          无闭合标签时为文本长度
    */
   function findTableEditRange(s) {
-    var openRe = /<tableEdit>/i;
+    /*
+     * 标签匹配兼容半角与全角尖括号（＜tableEdit＞）。
+     *
+     * 与 miyaplot 的全角兼容修复同一病根：中转/模型把输出整体全角化时，
+     * 标签也会变成全角形态。旧实现只认半角 < >，后果是**双重失败**——
+     * 既解析不出动作（不落库），也剥离不掉标签（全角标签残留在正文里，
+     * 下一轮被当成历史送回去，模型开始照着模仿）。
+     */
+    var openRe = /[<＜]\s*tableEdit\s*[>＞]/i;
     var om = openRe.exec(s);
     if (!om) return null;
     var contentStart = om.index + om[0].length;
-    var closeRe = /<\/tableEdit>/i;
+    var closeRe = /[<＜]\s*\/\s*tableEdit\s*[>＞]/i;
     closeRe.lastIndex = contentStart;
     var cm = closeRe.exec(s);
     return {
@@ -250,8 +258,8 @@
       if (!range) break;
       s = (s.slice(0, range.start) + ' ' + s.slice(range.end)).replace(/\n{3,}/g, '\n\n');
     }
-    /* 兜底：清掉可能残留的孤立标记（模型写错大小写、多打半个标签等） */
-    s = s.replace(/<\/?tableEdit>/gi, '');
+    /* 兜底：清掉可能残留的孤立标记（模型写错大小写、多打半个标签、全角尖括号等） */
+    s = s.replace(/[<＜]\s*\/?\s*tableEdit\s*[>＞]/gi, '');
     return s.trim();
   }
 
@@ -260,7 +268,13 @@
     var range = findTableEditRange(s);
     if (!range) return [];
     var body = s.slice(range.contentStart, range.contentEnd);
-    body = body.replace(/<!--([\s\S]*?)-->/g, '$1');
+    /*
+     * 注释剥离同样兼容全角尖括号（＜!-- --＞）。
+     * 这步不只是清理：动作正则的结尾 lookahead（$ | ; | \n | ,）依赖
+     * 「) 之后没有别的字符」—— 全角注释符残留时，) 后面紧跟着 --＞，
+     * lookahead 撞上 ＜ 直接失败，整条动作被丢弃。
+     */
+    body = body.replace(/[<＜]!--([\s\S]*?)--[>＞]/g, '$1');
     /*
      * 无闭合标签时，body 会一直延伸到文末，可能带上正文。
      * 这里再切一刀：只保留到最后一个动作的右括号为止，
@@ -335,10 +349,25 @@
    * 实现上逐字符扫描，跟踪是否处于引号内，避免误改单元格正文
    * （例如 "他说：好的" 里的中文冒号必须保留）。
    */
+  /*
+   * 全角引号配对表：开引号 → 闭引号。
+   *
+   * ⚠️ 为什么必须处理（记忆表格「又不生成」的实锤根因之一）：
+   * 不少中转/模型会把回复整体「全角化」——本包此前的「剧情建议全角兼容」
+   * 修的就是同一病根打在 plot 标签上的情形。全角化落到 tableEdit 上时，
+   * 字符串边界会被写成 “ ” ‘ ’。旧实现只认半角 " '，
+   * 于是 insertRow(1，{0：“XX”}) 这类输出在参数层整条解析失败
+   * （failures 里 reason:'args'），动作不落库 —— 表现恰好就是
+   * 「模型明明在正文后面写了记忆格式，记忆表格却一行都没进」。
+   */
+  var CJK_QUOTE_PAIR = { '“': '”', '‘': '’' };
+
   function normalizeCjkPunct(src) {
     var s = String(src || '');
     var out = '';
     var quote = '';
+    /* quote 的半角形态：全角开引号被归一为半角后，闭合时也统一输出半角 */
+    var quoteHalf = '';
     for (var i = 0; i < s.length; i += 1) {
       var ch = s[i];
       if (quote) {
@@ -348,13 +377,35 @@
           if (i + 1 < s.length) { out += s[i + 1]; i += 1; }
           continue;
         }
-        if (ch === quote) quote = '';
+        /*
+         * 闭合判定：同种引号，或该全角开引号对应的闭引号
+         * （“ 开的串由 ” 闭合，半角 " 开的串由 " 闭合）。
+         * 闭合输出一律用半角形态，后续 readString 无需感知全角。
+         */
+        if (ch === quote || (CJK_QUOTE_PAIR[quote] && ch === CJK_QUOTE_PAIR[quote])) {
+          quote = '';
+          out += quoteHalf || ch;
+          quoteHalf = '';
+          continue;
+        }
         out += ch;
         continue;
       }
       if (ch === '"' || ch === "'") {
         quote = ch;
+        quoteHalf = ch;
         out += ch;
+        continue;
+      }
+      if (CJK_QUOTE_PAIR[ch]) {
+        /*
+         * 引号外遇到全角开引号：视为字符串边界（被全角化的 " ）。
+         * 归一为半角边界。注意只认「开引号」——孤立的闭引号（正文引用
+         * 残片）不当作边界，原样保留，避免误吞结构。
+         */
+        quote = ch;
+        quoteHalf = ch === '“' ? '"' : "'";
+        out += quoteHalf;
         continue;
       }
       if (ch === '：') { out += ':'; continue; }
@@ -910,7 +961,10 @@
        * 一轮回复里可能出现多段 <tableEdit>（正文写一次、旁白再写一次），
        * 只取首尾会漏掉中间的 —— 直接用全局匹配把所有段都留下来。
        */
-      var allBlocks = String(replyText).match(/<tableEdit>[\s\S]*?<\/tableEdit>/gi) || [];
+      var allBlocks =
+        String(replyText).match(
+          /[<＜]\s*tableEdit\s*[>＞][\s\S]*?[<＜]\s*\/\s*tableEdit\s*[>＞]/gi
+        ) || [];
       return {
         text: clean,
         applied: false,

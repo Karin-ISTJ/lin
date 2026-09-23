@@ -485,7 +485,8 @@
        * 因此这里只收集正文里真的出现 tableEdit 的消息。
        */
       assistantMsgs.forEach(function (m) {
-        if (/<tableEdit>/i.test(String(m.content || ''))) collectIds([m]);
+        /* 全角兼容：与引擎 findTableEditRange 同一口径（＜tableEdit＞ 也算） */
+        if (/[<＜]\s*tableEdit\s*[>＞]/i.test(String(m.content || ''))) collectIds([m]);
       });
       if (!sourceMsgIds.length) collectIds(assistantMsgs);
     } else if (ctx.result.messages) {
@@ -497,7 +498,7 @@
         .map(function (m) { return String(m.content); })
         .join('\n');
       msgs.forEach(function (m) {
-        if (/<tableEdit>/i.test(String(m.content || ''))) collectIds([m]);
+        if (/[<＜]\s*tableEdit\s*[>＞]/i.test(String(m.content || ''))) collectIds([m]);
       });
       if (!sourceMsgIds.length) collectIds(msgs);
     } else if (ctx.result.reply) {
