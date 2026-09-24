@@ -197,15 +197,29 @@
 
     /**
      * 在文本里找「成对标签」并取出内容。
-     * 支持半角 <> 与全角 ＜＞；未闭合时剥到结尾（同 stripTagBlock 的容错）。
+     * 支持三形态标记（Gemini 适配，与剧情建议/线下状态栏同一套规则）：
+     *   ① 半角：<tag>、<tag type="x">（允许属性）、</tag >
+     *   ② 全角：＜tag＞、＜／tag＞（闭标同时认全角斜杠 ／）
+     *   ③ HTML 实体：&lt;tag&gt;、&lt;/tag&gt;
+     * 未闭合时剥到结尾（同 stripTagBlock 的容错）。
      * 取「最后一个闭合之前」的内容，兼容模型偶发的嵌套/重复输出。
      */
     function grabBlock(text, tag) {
         var src = String(text || '');
         var t = escRe(tag);
         var pairs = [
-            { open: new RegExp('<' + t + '\\s*>', 'gi'), close: new RegExp('<\\/' + t + '\\s*>', 'gi') },
-            { open: new RegExp('＜' + t + '\\s*＞', 'gi'), close: new RegExp('＜[／/]' + t + '\\s*＞', 'gi') }
+            {
+                open: new RegExp('<' + t + '(?:\\s[^<>]*)?\\s*>', 'gi'),
+                close: new RegExp('<\\/' + t + '(?:\\s[^<>]*)?\\s*>', 'gi')
+            },
+            {
+                open: new RegExp('＜' + t + '(?:\\s[^＜＞]*)?\\s*＞', 'gi'),
+                close: new RegExp('＜\\s*[／/]\\s*' + t + '(?:\\s[^＜＞]*)?\\s*＞', 'gi')
+            },
+            {
+                open: new RegExp('&lt;\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;', 'gi'),
+                close: new RegExp('&lt;\\s*\\/\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;', 'gi')
+            }
         ];
         for (var pi = 0; pi < pairs.length; pi++) {
             pairs[pi].open.lastIndex = 0;
@@ -249,16 +263,31 @@
         return null;
     }
 
-    /** 去掉正文里的状态栏块（保证卡片不会被当成正文再渲染一遍） */
+    /** 去掉正文里的状态栏块（保证卡片不会被当成正文再渲染一遍）。
+     *  与 grabBlock 同一套三形态宽容标记（半角含属性 / 全角含全角斜杠 / 实体）。 */
     function stripFromText(text) {
         var out = String(text || '');
         KNOWN_TAGS.forEach(function (tag) {
             var t = escRe(tag);
-            out = out.replace(new RegExp('<' + t + '\\s*>[\\s\\S]*?<\\/' + t + '\\s*>', 'gi'), '');
-            out = out.replace(new RegExp('＜' + t + '\\s*＞[\\s\\S]*?＜[／/]' + t + '\\s*＞', 'gi'), '');
-            /* 未闭合：剥到结尾 */
-            out = out.replace(new RegExp('<' + t + '\\s*>[\\s\\S]*$', 'gi'), '');
-            out = out.replace(new RegExp('＜' + t + '\\s*＞[\\s\\S]*$', 'gi'), '');
+            /* 半角（开标允许属性；闭标允许尾随空格/属性） */
+            out = out.replace(
+                new RegExp('<' + t + '(?:\\s[^<>]*)?\\s*>[\\s\\S]*?<\\/' + t + '(?:\\s[^<>]*)?\\s*>', 'gi'),
+                ''
+            );
+            /* 全角（闭标斜杠认 ／ 与 /） */
+            out = out.replace(
+                new RegExp('＜' + t + '(?:\\s[^＜＞]*)?\\s*＞[\\s\\S]*?＜\\s*[／/]\\s*' + t + '(?:\\s[^＜＞]*)?\\s*＞', 'gi'),
+                ''
+            );
+            /* HTML 实体 */
+            out = out.replace(
+                new RegExp('&lt;\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;[\\s\\S]*?&lt;\\s*\\/\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;', 'gi'),
+                ''
+            );
+            /* 未闭合：各形态分别剥到结尾 */
+            out = out.replace(new RegExp('<' + t + '(?:\\s[^<>]*)?\\s*>[\\s\\S]*$', 'gi'), '');
+            out = out.replace(new RegExp('＜' + t + '(?:\\s[^＜＞]*)?\\s*＞[\\s\\S]*$', 'gi'), '');
+            out = out.replace(new RegExp('&lt;\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;[\\s\\S]*$', 'gi'), '');
         });
         return trim(out);
     }

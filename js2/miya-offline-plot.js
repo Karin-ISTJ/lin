@@ -21,18 +21,51 @@
 
     var TAG = 'plot';
 
+    /* ── 标记形态兼容（Gemini 适配）─────────────────────────────
+       换 Gemini 后出现过「卡片内容不更新」：渲染层会向前沿用
+       「最后一条带建议楼层」的建议（点击建议后的缓动设计），
+       一旦新楼层解析落空，卡片就永远停在旧内容上。
+       落空的根源是 Gemini 输出 <plot> 时的变体写法，旧正则只认
+       「半角裸标 / 全角标」两种。现在三形态并收：
+         ① 半角：<plot>、< plot >、<plot lang="zh">（允许属性）、</plot >
+         ② 全角：＜plot＞、＜／plot＞ 等
+         ③ HTML 实体：&lt;plot&gt;、&lt;/plot&gt;
+           （Gemini 偶尔把 XML 标签按"正文转义"输出，部分中转站也会转义）
+       标签名额外接受中文别名「剧情建议」——模型偶尔自作主张换标签名，
+       与其赌它听话不如直接认。'i' 标志覆盖大小写（<PLOT> 也认）。
+       ⚠️ 属性段要求以空白开头：<plots>、<plotted> 这类「贴着标签名
+       的其它词」不会误匹配，只有 <plot xxx="y"> 这种真属性才放行。
+       ──────────────────────────────────────────────────────── */
+
+    /* 标签名的可选拼写：plot（大小写由 flags 'i' 覆盖）+ 中文别名 */
+    var NAME_SRC = '(?:' + TAG + '|剧情建议)';
+
+    /* 开标（三种形态） */
+    var OPEN_SRC =
+        '(?:<\\s*' + NAME_SRC + '(?:\\s[^<>]*)?\\s*>' +
+        '|＜\\s*' + NAME_SRC + '(?:\\s[^＜＞]*)?\\s*＞' +
+        '|&lt;\\s*' + NAME_SRC + '(?:\\s[^<&]*)?\\s*&gt;)';
+
+    /* 闭标（三种形态，同样允许尾随属性/空格）。
+       ⚠️ 全角分支的斜杠要同时认 ／（U+FF0F 全角斜杠）和 /：
+       模型输出全角闭标 ＜／plot＞ 时用的是全角斜杠 —— 旧正则只认半角 /，
+       闭标永远匹配不上，一直靠「未闭合兜底」勉强解析，
+       闭标行还会被当成一条建议混进卡片（实测踩过）。 */
+    var CLOSE_SRC =
+        '(?:<\\s*\\/\\s*' + NAME_SRC + '(?:\\s[^<>]*)?\\s*>' +
+        '|＜\\s*(?:\\/|／)\\s*' + NAME_SRC + '(?:\\s[^＜＞]*)?\\s*＞' +
+        '|&lt;\\s*\\/\\s*' + NAME_SRC + '(?:\\s[^<&]*)?\\s*&gt;)';
+
     /* 允许 </plot> 缺失（流式截断时常见），用 $ 锚住尾部兜底。
        ⚠️ 但不能吞到 <miyastatus>：模型偶尔不按规则把状态栏写在 plot 之后，
        未闭合兜底若一路吞到 $ 会连状态栏块一起吃掉 —— 用前瞻在 miyastatus 处刹住
-       （全角 ＜miyastatus＞ 同防）。 */
+       （全角 ＜miyastatus＞ 与实体转义形态同防）。 */
     function blockRegex() {
-        /* 半角/全角开标均可开（中文语境模型爱输出 ＜plot＞），闭标同理；
-           未闭合兜底仍在 miyastatus（半/全角）处刹住。 */
         return new RegExp(
-            '(?:<\\s*' + TAG + '\\s*>|＜\\s*' + TAG + '\\s*＞)' +
+            OPEN_SRC +
             '([\\s\\S]*?)' +
-            '(?:<\\s*\\/\\s*' + TAG + '\\s*>|＜\\s*\\/\\s*' + TAG + '\\s*＞' +
-            '|(?=<miyastatus|＜miyastatus)|$)',
+            '(?:' + CLOSE_SRC +
+            '|(?=<miyastatus|＜miyastatus|&lt;miyastatus)|$)',
             'i'
         );
     }
@@ -40,7 +73,7 @@
     function hasPlotBlock(rawText) {
         var txt = String(rawText || '');
         if (!txt) return false;
-        return new RegExp('(?:<\\s*' + TAG + '\\s*>|＜\\s*' + TAG + '\\s*＞)', 'i').test(txt);
+        return new RegExp(OPEN_SRC, 'i').test(txt);
     }
 
     /**
@@ -65,11 +98,12 @@
         var txt = String(rawText || '');
         if (!txt) return txt;
         if (!hasPlotBlock(txt)) return txt;
-        var OPEN = '(?:<\\s*' + TAG + '\\s*>|＜\\s*' + TAG + '\\s*＞)';
-        var CLOSE = '(?:<\\s*\\/\\s*' + TAG + '\\s*>|＜\\s*\\/\\s*' + TAG + '\\s*＞)';
-        return txt.replace(new RegExp(OPEN + '[\\s\\S]*?' + CLOSE, 'gi'), ' ')
-            /* 未闭合：剥到结尾；但 <miyastatus> 之前必须刹住，别把状态栏一起剥掉 */
-            .replace(new RegExp(OPEN + '[\\s\\S]*?(?=<miyastatus|＜miyastatus|$)', 'gi'), ' ')
+        /* 与 blockRegex 同一套三形态标记（半角/全角/HTML 实体），
+           闭合与未闭合两把刷子各来一遍 —— 标记可能整段残留也可能只剩开标。 */
+        return txt.replace(new RegExp(OPEN_SRC + '[\\s\\S]*?' + CLOSE_SRC, 'gi'), ' ')
+            /* 未闭合：剥到结尾；但 miyastatus（半/全角/实体）之前必须刹住，
+               别把状态栏一起剥掉 */
+            .replace(new RegExp(OPEN_SRC + '[\\s\\S]*?(?=<miyastatus|＜miyastatus|&lt;miyastatus|$)', 'gi'), ' ')
             .replace(/\n{3,}/g, '\n\n')
             .trim();
     }

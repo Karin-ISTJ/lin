@@ -523,6 +523,28 @@
     }
   }
 
+  /*
+   * 声音的「该不该响」判定。
+   *
+   * 【2026-09 行为变更：聊天界面内也响】
+   * 这里原来有一条「聊天室开着且在前台 ⇒ 静音」的规则
+   * （调 MiyaChatNotify.isChatRoomForeground，命中即 return false），
+   * 本意是「用户正盯着聊天看，新消息不必响铃」。
+   * 实际用下来用户的感受正相反：开着聊天室等回复，回复到了反而没声，
+   * 倒是退出聊天界面、停在别的页时才响 —— 等于「在哪儿等，哪儿不响」。
+   * 用户明确要求改成聊天界面内也响，故整条判定移除。
+   *
+   * 现在声音只受两个通道控制（与线下反馈音对齐）：
+   *   1. 提示音总开关（settings.enabled）；
+   *   2. 该聊天的免打扰（muteNotifications）。
+   *
+   * 不影响其它通道：
+   *   · 应用内横幅（shouldInAppBanner）与系统通知（shouldSystemNotify）
+   *     各自有前台/可见性判定，仍在 miya-chat-notify.js 里，
+   *     isChatRoomForeground 函数保留，继续为横幅服务；
+   *   · 调用频率：引擎一轮回复只调一次 notifyAssistantMessages
+   *     （整批 msgs），所以前台放开后一轮最多响一声，不会连环响。
+   */
   function shouldPlayForChat(chatId) {
     if (!settings.enabled) return false;
     if (!chatId) return false;
@@ -530,13 +552,6 @@
     if (store) {
       var chatSettings = store.getChatSettings(chatId);
       if (chatSettings && chatSettings.muteNotifications) return false;
-    }
-    if (
-      global.MiyaChatNotify &&
-      typeof global.MiyaChatNotify.isChatRoomForeground === 'function' &&
-      global.MiyaChatNotify.isChatRoomForeground(chatId)
-    ) {
-      return false;
     }
     return true;
   }

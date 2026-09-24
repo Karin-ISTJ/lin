@@ -419,34 +419,71 @@
         return lines.join('\n');
     }
 
+    /* ── 宽容标记匹配（Gemini 适配）─────────────────────────────
+       换 Gemini 后状态栏不显示，与剧情建议同一类根因：模型输出的
+       <miyastatus> 写成变体形态，旧正则只认「半角裸标 / 全角标」，
+       解析落空且剥离也落空（标记裸留在正文里）。
+       现在三形态并收：
+         ① 半角：<miyastatus>、<miyastatus type="x">（允许属性）、</miyastatus >
+         ② 全角：＜miyastatus＞、＜／miyastatus＞（闭标同时认全角斜杠 ／）
+         ③ HTML 实体：&lt;miyastatus&gt;（Gemini 偶发自转义，部分中转站也转）
+       'i' 标志覆盖大小写。属性段要求以空白开头，<miyastatusX> 不误匹配。 */
+
+    /* 开标源串（三形态） */
+    function tagOpenSrc(t) {
+        return '(?:<\\s*' + t + '(?:\\s[^<>]*)?\\s*>' +
+            '|＜\\s*' + t + '(?:\\s[^＜＞]*)?\\s*＞' +
+            '|&lt;\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;)';
+    }
+
+    /* 闭标源串（三形态；全角分支的斜杠同时认 ／ 与 /） */
+    function tagCloseSrc(t) {
+        return '(?:<\\s*\\/\\s*' + t + '(?:\\s[^<>]*)?\\s*>' +
+            '|＜\\s*(?:\\/|／)\\s*' + t + '(?:\\s[^＜＞]*)?\\s*＞' +
+            '|&lt;\\s*\\/\\s*' + t + '(?:\\s[^<&]*)?\\s*&gt;)';
+    }
+
+    /* miyavoice 系闭标：原本就放宽到 miyav[\w]*（模型爱写变体名），三形态同扩 */
+    function tagCloseVoiceSrc(t) {
+        var stem = t.slice(0, 5); /* miyav */
+        return '(?:<\\s*\\/\\s*' + stem + '[\\w]*\\s*>' +
+            '|＜\\s*(?:\\/|／)\\s*' + stem + '[\\w]*\\s*＞' +
+            '|&lt;\\s*\\/\\s*' + stem + '[\\w]*\\s*&gt;)';
+    }
+
     function extractStatusBlock(rawText) {
         var src = String(rawText || '');
+        var OPEN = tagOpenSrc('miyastatus');
+        var CLOSE = tagCloseSrc('miyastatus');
+        var OPEN_V = tagOpenSrc('miyavoice');
+        var CLOSE_V = tagCloseVoiceSrc('miyavoice');
         var patterns = [
-            /<miyastatus>([\s\S]*?)<\/miyastatus\s*>/i,
-            /＜miyastatus＞([\s\S]*?)＜\/miyastatus＞/i,
-            /<miyavoice>([\s\S]*?)<\/miyav[\w]*\s*>/i,
-            /＜miyavoice＞([\s\S]*?)＜\/miyav[\w]*＞/i
+            new RegExp(OPEN + '([\\s\\S]*?)' + CLOSE, 'i'),
+            new RegExp(OPEN_V + '([\\s\\S]*?)' + CLOSE_V, 'i')
         ];
         var i;
         for (i = 0; i < patterns.length; i++) {
             var m = src.match(patterns[i]);
             if (m && m[1] && String(m[1]).trim()) return String(m[1]).trim();
         }
-        var tail = src.match(/<miyastatus>([\s\S]*)$/i) || src.match(/＜miyastatus＞([\s\S]*)$/i);
+        /* 未闭合兜底：半角 / 全角 / 实体开标，剥到结尾 */
+        var tail =
+            src.match(new RegExp(OPEN + '([\\s\\S]*)$', 'i')) ||
+            src.match(new RegExp(OPEN_V + '([\\s\\S]*)$', 'i'));
         if (tail && tail[1] && String(tail[1]).trim()) return String(tail[1]).trim();
         return '';
     }
 
     function stripStatusFromText(rawText) {
+        var OPEN = tagOpenSrc('miyastatus');
+        var CLOSE = tagCloseSrc('miyastatus');
+        var OPEN_V = tagOpenSrc('miyavoice');
+        var CLOSE_V = tagCloseVoiceSrc('miyavoice');
         return String(rawText || '')
-            .replace(/<miyastatus>[\s\S]*?<\/miyastatus\s*>/gi, '')
-            .replace(/＜miyastatus＞[\s\S]*?＜\/miyastatus＞/gi, '')
-            .replace(/<miyastatus>[\s\S]*$/gi, '')
-            .replace(/＜miyastatus＞[\s\S]*$/gi, '')
-            .replace(/<miyavoice>[\s\S]*?<\/miyav[\w]*\s*>/gi, '')
-            .replace(/＜miyavoice＞[\s\S]*?＜\/miyav[\w]*＞/gi, '')
-            .replace(/<miyavoice>[\s\S]*$/gi, '')
-            .replace(/＜miyavoice＞[\s\S]*$/gi, '')
+            .replace(new RegExp(OPEN + '[\\s\\S]*?' + CLOSE, 'gi'), '')
+            .replace(new RegExp(OPEN + '[\\s\\S]*$', 'gi'), '')
+            .replace(new RegExp(OPEN_V + '[\\s\\S]*?' + CLOSE_V, 'gi'), '')
+            .replace(new RegExp(OPEN_V + '[\\s\\S]*$', 'gi'), '')
             .trim();
     }
 

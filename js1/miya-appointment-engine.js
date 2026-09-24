@@ -944,6 +944,15 @@
             } catch (ePlot) {
                 plotItems = [];
             }
+            /* 【Gemini 兜底诊断】正文里明明出现 plot 字样、却一条建议都没解析出来，
+             * 大概率是模型又发明了新的标签写法（解析层已兼容：带属性 / 全角 /
+             * HTML 实体转义 / 中文别名「剧情建议」）。留一条 warn，
+             * 用户在控制台看到就能定位「卡片不更新」是哪层落空的。 */
+            if (!plotItems.length && /plot/i.test(body)) {
+                try {
+                    console.warn('[miya] 剧情建议：本轮回复含 plot 字样但未解析出建议（模型标签写法新变体？）');
+                } catch (eWarn) {}
+            }
             if (typeof plotApi.stripPlot === 'function') {
                 body = String(plotApi.stripPlot(body) || '');
             }
@@ -974,6 +983,14 @@
                     }
                 }
             } catch (eSb) {}
+            /* 【Gemini 兜底诊断】正文里出现状态栏标记字样却没解析出字段，
+             * 多半是模型又换了新标签写法（解析层已兼容：带属性 / 全角 /
+             * 全角斜杠闭标 / HTML 实体）。留 warn 方便定位「状态栏不显示」。 */
+            if (!sbParsed && /miyastatus|statusbar_data|状态栏/i.test(body)) {
+                try {
+                    console.warn('[miya] 状态栏：本轮回复含状态栏标记字样但未解析出字段（模型标签写法新变体？）');
+                } catch (eWarn2) {}
+            }
         }
         if (statusApi && typeof statusApi.stripStatusFromText === 'function') {
             body = statusApi.stripStatusFromText(body);
