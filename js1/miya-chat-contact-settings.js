@@ -6,7 +6,7 @@
 
   var store = null;
   var pageEl = null;
-  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null, apiPresetPick: '', apiModelPick: '', apiModel2Pick: '', apiModelPickBase: null, apiModel2PickBase: null };
+  var state = { chatId: null, formDraft: null, wbSortOpen: false, zoneOpen: {}, subView: null, apiPresetPick: '', apiModelPick: '', apiModelPickBase: null };
   var DEFAULT_ZONE_OPEN = { basic: false };
   var renderRaf = 0;
   var ctxUsageGen = 0;
@@ -2489,32 +2489,19 @@
       var el = pageEl.querySelector(sel);
       return el ? String(el.value || '').trim() : '';
     }
-    function on(sel) {
-      var el = pageEl.querySelector(sel);
-      return !!(el && el.classList.contains('is-on'));
-    }
     if (key === 'api-chat') {
       var temp = parseFloat(val('#mq-api-temp'));
-      var temp2 = parseFloat(val('#mq-api2-temp'));
       var patch = {
         baseUrl: val('#mq-api-base'),
         apiKey: val('#mq-api-key'),
-        model: val('#mq-api-model'),
-        fallbackBaseUrl: val('#mq-api2-base'),
-        fallbackApiKey: val('#mq-api2-key'),
-        fallbackModel: val('#mq-api2-model'),
-        fallbackEnabled: on('#mq-api-fallback')
+        model: val('#mq-api-model')
       };
       if (Number.isFinite(temp)) patch.temperature = temp;
-      /* 副线路温度：原版面板有这个字段，压缩重写时丢了 —— 补回 */
-      if (Number.isFinite(temp2)) patch.fallbackTemperature = temp2;
       if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig(patch);
       /* 草稿对齐刚落盘的值（基线同步 = 草稿继续有效且等于配置）：
          避免下一次重绘把旧草稿回填成「没保存的模型」 */
       state.apiModelPick = patch.model || '';
       state.apiModelPickBase = String(patch.model || '');
-      state.apiModel2Pick = patch.fallbackModel || '';
-      state.apiModel2PickBase = String(patch.fallbackModel || '');
       toast('对话 API 已保存');
       return;
     }
@@ -2681,9 +2668,9 @@
     function num(v, d) { return v == null || v === '' ? d : v; }
     /*
      * 模型缓存按「表单里的线路」分桶（base + 密钥尾4位）。
-     * 重绘时正式配置可能是**保存前**的旧值 —— 典型：用户在副线路里
-     * 手填了网关和密钥、点了 ⟳ 拉到列表、还没点保存，一次重绘过来
-     * cfg.fallbackBaseUrl 仍是空的，按配置找桶必然落空。
+     * 重绘时正式配置可能是**保存前**的旧值 —— 典型：用户手填了网关和
+     * 密钥、点了 ⟳ 拉到列表、还没点保存，一次重绘过来 cfg.baseUrl
+     * 仍是空的，按配置找桶必然落空。
      * 而此刻**旧 DOM 还没被换掉**（renderSubView 的返回值还没写进
      * innerHTML），先把旧表单里的线路值抓出来当桶键；旧节点不存在
      * （首次渲染）才退回正式配置。
@@ -2694,24 +2681,21 @@
     }
     var prevBase = prevVal('#mq-api-base');
     var prevKey = prevVal('#mq-api-key');
-    var prev2Base = prevVal('#mq-api2-base');
-    var prev2Key = prevVal('#mq-api2-key');
     var mainBase = prevBase != null ? prevBase : (cfg.baseUrl || '');
     var mainKey = prevKey != null ? prevKey : (cfg.apiKey || '');
-    var fbBase = prev2Base != null ? prev2Base : (cfg.fallbackBaseUrl || '');
-    var fbKey = prev2Key != null ? prev2Key : (cfg.fallbackApiKey || '');
     /*
      * 结构与字段严格对齐「桌面设置 App → 对话」面板（迁移前的原版），
-     * 分三段：接口预设 → 主线路 → 副线路。
+     * 分两段：接口预设 → 主线路。（副线路已按需求整体移除 ——
+     * 其 fallback 链路因配置字段名断裂（UI 存 fallbackEnabled、
+     * 引擎读 secondaryApi/fallbackToSecondary）从未真正生效过。）
      *
-     * 合并进聊天设置时这三段被压缩重写，丢了四处东西：
+     * 合并进聊天设置时这两段被压缩重写，丢了四处东西：
      *   1. 整个「接口预设」区（下拉 + 命名 + 保存/删除）；
-     *   2. 主线路、副线路的「拉取模型」⟳ 按钮的事件绑定；
-     *   3. 副线路的温度滑块（原版主副线路各有一条）；
-     *   4. 温度滑块与数字标签的实时联动。
+     *   2. 主线路的「拉取模型」⟳ 按钮的事件绑定；
+     *   3. 温度滑块与数字标签的实时联动。
      * 现按原版逐一补回，字段名沿用 mq-* 前缀以免与生图面板撞 id。
      */
-    return subShell('对话 API', '对话模型服务端点与密钥。主线路失败时可自动切到副线路。',
+    return subShell('对话 API', '对话模型服务端点与密钥。',
 
       /* ── 接口预设（原版第一段）── */
       '<div class="st-form-card ins-form-block mi-set-subview__card">' +
@@ -2723,10 +2707,10 @@
         '</div>' +
         '<label class="ins-field-label" for="mq-api-preset-name">预设名称</label>' +
         '<div class="ins-inline-field">' +
-          '<input type="text" class="ins-text-input" id="mq-api-preset-name" placeholder="例如：备用线路" maxlength="64">' +
+          '<input type="text" class="ins-text-input" id="mq-api-preset-name" placeholder="例如：我的线路" maxlength="64">' +
           '<button type="button" class="ins-icon-btn" id="mq-api-preset-save" title="保存预设">✓</button>' +
         '</div>' +
-        '<p class="st-form-hint">保存主线路与副线路的全部字段；同名预设自动覆盖。选中下拉里的预设立即生效。</p>' +
+        '<p class="st-form-hint">保存主线路的全部字段；同名预设自动覆盖。选中下拉里的预设立即生效。</p>' +
         /*
          * 导出 / 导入。预设是用户一行行手打出来的线路配置，但此前只活在
          * 这台设备的浏览器存储里 —— 清一次站点数据就全没了。
@@ -2756,27 +2740,6 @@
           modelDraftPick(state.apiModelPick, state.apiModelPickBase, cfg.model)) +
         '<label class="ins-field-label">温度 <span id="mq-api-temp-lbl">' + esc(num(cfg.temperature, 1)) + '</span></label>' +
         '<input type="range" class="ins-range" id="mq-api-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.temperature, 1)) + '">' +
-      '</div>' +
-
-      /* ── 副线路（原版第三段）── */
-      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
-        '<h4 class="st-form-section__title">副线路</h4>' +
-        '<label class="ins-field-label" for="mq-api2-base">网关地址</label>' +
-        '<input type="text" class="ins-text-input" id="mq-api2-base" placeholder="备用网关" autocomplete="off" spellcheck="false" value="' + esc(cfg.fallbackBaseUrl || '') + '">' +
-        '<label class="ins-field-label" for="mq-api2-key">密钥</label>' +
-        '<div class="ins-inline-field">' +
-          '<input type="password" class="ins-text-input" id="mq-api2-key" placeholder="sk-…" autocomplete="off" value="' + esc(cfg.fallbackApiKey || '') + '">' +
-          '<button type="button" class="ins-icon-btn" id="mq-api2-fetch" title="拉取模型">⟳</button>' +
-        '</div>' +
-        '<label class="ins-field-label" for="mq-api2-model">模型</label>' +
-        modelSelectHtml('mq-api2-model', cfg.fallbackModel, fbBase, fbKey,
-          modelDraftPick(state.apiModel2Pick, state.apiModel2PickBase, cfg.fallbackModel)) +
-        '<label class="ins-field-label">温度 <span id="mq-api2-temp-lbl">' + esc(num(cfg.fallbackTemperature, 1)) + '</span></label>' +
-        '<input type="range" class="ins-range" id="mq-api2-temp" min="0" max="2" step="0.1" value="' + esc(num(cfg.fallbackTemperature, 1)) + '">' +
-        '<div class="st-toggle-in-form">' +
-          '<strong>主线路失败时自动切换副线路</strong>' +
-          '<button type="button" class="ins-toggle' + (cfg.fallbackEnabled ? ' is-on' : '') + '" id="mq-api-fallback" role="switch" aria-checked="' + (cfg.fallbackEnabled ? 'true' : 'false') + '"></button>' +
-        '</div>' +
       '</div>' +
       '<p class="st-form-hint">改完点右上角「保存」生效。</p>'
     );
@@ -2902,29 +2865,19 @@
     }
   }
 
-  /* 从表单读一份完整快照（主 + 副线路） */
+  /* 从表单读一份完整快照（主线路） */
   function readApiFormSnapshot() {
     if (!pageEl) return null;
     function val(sel) {
       var el = pageEl.querySelector(sel);
       return el ? String(el.value || '').trim() : '';
     }
-    function on(sel) {
-      var el = pageEl.querySelector(sel);
-      return !!(el && el.classList.contains('is-on'));
-    }
     var temp = parseFloat(val('#mq-api-temp'));
-    var temp2 = parseFloat(val('#mq-api2-temp'));
     return {
       baseUrl: val('#mq-api-base'),
       apiKey: val('#mq-api-key'),
       model: val('#mq-api-model'),
-      temperature: Number.isFinite(temp) ? temp : 1,
-      fallbackBaseUrl: val('#mq-api2-base'),
-      fallbackApiKey: val('#mq-api2-key'),
-      fallbackModel: val('#mq-api2-model'),
-      fallbackTemperature: Number.isFinite(temp2) ? temp2 : 1,
-      fallbackEnabled: on('#mq-api-fallback')
+      temperature: Number.isFinite(temp) ? temp : 1
     };
   }
 
@@ -2970,25 +2923,11 @@
     set('#mq-api-key', p.apiKey);
     /* 模型是 <select>：option 不存在时赋值静默失败 → 先补 option（见上方说明） */
     setSelectValueKeepingOption('#mq-api-model', p.model);
-    set('#mq-api2-base', p.fallbackBaseUrl);
-    set('#mq-api2-key', p.fallbackApiKey);
-    setSelectValueKeepingOption('#mq-api2-model', p.fallbackModel);
-    var fb = pageEl.querySelector('#mq-api-fallback');
-    if (fb) {
-      fb.classList.toggle('is-on', !!p.fallbackEnabled);
-      fb.setAttribute('aria-checked', p.fallbackEnabled ? 'true' : 'false');
-    }
     if (p.temperature != null) {
       var t = pageEl.querySelector('#mq-api-temp');
       if (t) t.value = String(p.temperature);
       var lbl = pageEl.querySelector('#mq-api-temp-lbl');
       if (lbl) lbl.textContent = String(p.temperature);
-    }
-    if (p.fallbackTemperature != null) {
-      var t2 = pageEl.querySelector('#mq-api2-temp');
-      if (t2) t2.value = String(p.fallbackTemperature);
-      var lbl2 = pageEl.querySelector('#mq-api2-temp-lbl');
-      if (lbl2) lbl2.textContent = String(p.fallbackTemperature);
     }
   }
 
@@ -3027,15 +2966,12 @@
       }
       applyApiPresetToForm(p);
       syncTempLabel('#mq-api-temp', '#mq-api-temp-lbl');
-      syncTempLabel('#mq-api2-temp', '#mq-api2-temp-lbl');
       /* 选中项也记进 state：重绘后 <select> 是新的，靠它回填 */
       state.apiPresetPick = name;
       /* 模型草稿同步成预设里的值（基线一并对齐，配置此刻已等于预设值）
          —— 否则下一次重绘会用旧草稿把刚载入的模型选中态覆盖回旧模型 */
       state.apiModelPick = p.model != null ? String(p.model) : '';
       state.apiModelPickBase = state.apiModelPick;
-      state.apiModel2Pick = p.fallbackModel != null ? String(p.fallbackModel) : '';
-      state.apiModel2PickBase = state.apiModel2Pick;
       var nameEl = pageEl && pageEl.querySelector('#mq-api-preset-name');
       if (nameEl) nameEl.value = name;
       toast('已载入：' + name);
@@ -3053,11 +2989,6 @@
     if (p.apiKey != null) out.apiKey = String(p.apiKey);
     if (p.model != null) out.model = String(p.model);
     if (p.temperature != null) out.temperature = p.temperature;
-    if (p.fallbackBaseUrl != null) out.fallbackBaseUrl = String(p.fallbackBaseUrl);
-    if (p.fallbackApiKey != null) out.fallbackApiKey = String(p.fallbackApiKey);
-    if (p.fallbackModel != null) out.fallbackModel = String(p.fallbackModel);
-    if (p.fallbackTemperature != null) out.fallbackTemperature = p.fallbackTemperature;
-    out.fallbackEnabled = !!p.fallbackEnabled;
     return out;
   }
 
@@ -3179,7 +3110,6 @@
       if (current) selEl.value = current;
     }
     fill('#mq-api-model', '#mq-api-base', '#mq-api-key');
-    fill('#mq-api2-model', '#mq-api2-base', '#mq-api2-key');
   }
 
   /* ── 对话 API · 拉取模型 ──────────────────────────────────────
@@ -3190,19 +3120,16 @@
    * 结果同时写进 miyaApiModelCache（按 `baseUrl|密钥尾4位` 分桶），
    * 下次进来能先出缓存，不必再点一次 ⟳ —— 这正是那个缓存模块
    * 当初存在的理由，只是设置 App 删除后没人再调用它。
-   *
-   * which: 'main' | 'fallback'，分别对应主线路与副线路。
    */
-  function fetchChatModels(which) {
+  function fetchChatModels() {
     if (!pageEl) return;
-    var isMain = which !== 'fallback';
     function val(sel) {
       var el = pageEl.querySelector(sel);
       return el ? String(el.value || '').trim() : '';
     }
-    var base = val(isMain ? '#mq-api-base' : '#mq-api2-base');
-    var key = val(isMain ? '#mq-api-key' : '#mq-api2-key');
-    var selEl = pageEl.querySelector(isMain ? '#mq-api-model' : '#mq-api2-model');
+    var base = val('#mq-api-base');
+    var key = val('#mq-api-key');
+    var selEl = pageEl.querySelector('#mq-api-model');
     if (!selEl) return;
 
     if (typeof global.miyaOpenAiApiRoot !== 'function') {
@@ -3212,7 +3139,7 @@
     var root = global.miyaOpenAiApiRoot(base);
     if (!root) { toast('请先填写网关地址'); return; }
 
-    var btn = pageEl.querySelector(isMain ? '#mq-api-fetch' : '#mq-api2-fetch');
+    var btn = pageEl.querySelector('#mq-api-fetch');
     if (btn) btn.disabled = true;
 
     function applyOptions(ids) {
@@ -3232,25 +3159,18 @@
       toast('已获取 ' + ids.length + ' 个模型');
     }
 
-    /* 先出缓存 —— 点一下立刻有东西，网络结果回来再覆盖。
+    /*
+     * 【双渲染闪烁根治】旧实现是 stale-while-revalidate：点 ⟳ 先用缓存
+     * applyOptions 重写一次下拉（还弹一次 toast），网络结果回来再重写
+     * 一次（再弹一次）—— 用户每次点 ⟳ 都看到下拉闪一下、toast 连弹两次。
+     * 纯属多余：进入面板时 modelSelectHtml 已经用同一份缓存把列表填进
+     * 下拉了，点 ⟳ 前屏幕上本来就有列表，预渲染等于把同样的列表连写两遍。
      *
-     * ⚠️ 参数形状必须是 (base, key)：read/write 内部自己算分桶
-     * （openAiCompatibleApiRoot(base) + '|' + 密钥尾4位）。
-     * 原先这里写成 cache.read(cache.bucket(base, key)) /
-     * cache.write(cache.bucket(base, key), ids) —— 把算好的桶串
-     * 当 base 传进去，函数内部会再归一化一次（还会拼出
-     * `…/v1|aaaa/v1` 这种废 key），write 那侧更直接：
-     * 第二个参数（被当成 key）是 ids 数组，真正的 ids 参数是
-     * undefined，`!ids` 一挡就 return —— **缓存从未写入过**。
-     * 表现：点 ⟳ 当场有列表，任何一次重绘后列表必丢（渲染层
-     * 读到的缓存永远是空的），模型下拉退化成只剩当前模型一个
-     * 选项，用户切换的模型随之被抹回旧值 —— 「保存不了」。 */
+     * 现在只渲染一次：网络成功 → 渲染 + toast；失败 → 缓存列表本来就
+     * 在下拉里，只提示一句，不再动 DOM。
+     */
     var cache = global.miyaApiModelCache;
-    var cachedIds = null;
-    if (cache && cache.read) {
-      cachedIds = (cache.read(base, key) || null);
-      if (cachedIds && cachedIds.length) applyOptions(cachedIds);
-    }
+    var cachedIds = cache && cache.read ? (cache.read(base, key) || null) : null;
 
     fetch(root + '/models', {
       method: 'GET',
@@ -3266,8 +3186,10 @@
       if (cache && cache.write) cache.write(base, key, ids);
       applyOptions(ids);
     }).catch(function (err) {
-      /* 有缓存就先别打扰用户 —— 屏幕上已经有可选模型了 */
-      if (cachedIds && cachedIds.length) return;
+      if (cachedIds && cachedIds.length) {
+        toast('获取失败，已保留现有列表');
+        return;
+      }
       toast('获取失败：' + (err && err.message ? err.message : '网络错误'));
     }).then(function () {
       if (btn) btn.disabled = false;
@@ -3631,8 +3553,6 @@
     state.apiPresetPick = '';
     state.apiModelPick = '';
     state.apiModelPickBase = null;
-    state.apiModel2Pick = '';
-    state.apiModel2PickBase = null;
     ensurePage();
     pageEl.hidden = false;
     pageEl.classList.add('is-open');
@@ -3690,8 +3610,6 @@
     state.apiPresetPick = '';
     state.apiModelPick = '';
     state.apiModelPickBase = null;
-    state.apiModel2Pick = '';
-    state.apiModel2PickBase = null;
     if (pageEl) {
       pageEl.classList.remove('is-open');
       pageEl.hidden = true;
@@ -3744,8 +3662,7 @@
         triggerFileInput(pageEl.querySelector('#mq-api-preset-file'));
         return;
       }
-      if (e.target.closest('#mq-api-fetch')) { fetchChatModels('main'); return; }
-      if (e.target.closest('#mq-api2-fetch')) { fetchChatModels('fallback'); return; }
+      if (e.target.closest('#mq-api-fetch')) { fetchChatModels(); return; }
 
       var bkExport = e.target.closest('[data-mq-set-backup-export]');
       if (bkExport) {
@@ -4165,11 +4082,6 @@
         state.apiModelPickBase = String((global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) ? (global.miyaGetApiConfigCached().model || '') : '');
         return;
       }
-      if (e.target.matches('#mq-api2-model')) {
-        state.apiModel2Pick = String(e.target.value || '');
-        state.apiModel2PickBase = String((global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) ? (global.miyaGetApiConfigCached().fallbackModel || '') : '');
-        return;
-      }
 
       /* 预设导入：选完文件就立刻读，不留着等用户再点一次 */
       if (e.target.matches('#mq-api-preset-file')) {
@@ -4196,11 +4108,6 @@
       if (e.target && e.target.id === 'mq-api-temp') {
         var lbl = pageEl.querySelector('#mq-api-temp-lbl');
         if (lbl) lbl.textContent = String(e.target.value);
-        return;
-      }
-      if (e.target && e.target.id === 'mq-api2-temp') {
-        var lb2 = pageEl.querySelector('#mq-api2-temp-lbl');
-        if (lb2) lb2.textContent = String(e.target.value);
         return;
       }
       if (e.target && e.target.id === 'mq-voice-speed') {

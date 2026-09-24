@@ -3,29 +3,75 @@
 
     var HISTORY_LIMIT = 40;
     var USER_MSG_JOIN = ' / ';
-    var THINKING_EXTRACT_SEQ = [
-        /<thinking>([\s\S]*?)<\/thinking>/i,
-        /＜thinking＞([\s\S]*?)＜\/thinking＞/i,
-        /\<think\>([\s\S]*?)<\/think>/i,
-        /<think>([\s\S]*?)<\/think>/i,
-        /<think>([\s\S]*?)<\/redacted_thinking>/i,
-        /<redacted_thinking>([\s\S]*?)<\/think>/i,
-        /＜think＞([\s\S]*?)＜\/think＞/i,
-        /<reasoning>([\s\S]*?)<\/reasoning>/i
+    /*
+     * 【线上思维链气泡泄漏根治】标签变体系统
+     *
+     * 老实现只认 <thinking>/<think> 等「严格无属性、无空格」的写法。换模型后，
+     * 新模型的思维链只要有一点格式偏差——带属性（<think type="deep">）、
+     * 标签内空格（<think >）、别名（<Thought>/<analysis>/<scratchpad>）、
+     * ◁think▷/【思考】/［thinking］包裹、```think markdown 围栏、
+     * 或干脆用 <reasoning_content> 当标签——剥离就整体失效，
+     * 整条思维链原样进入 splitBubbles 按行拆成几十个气泡。
+     *
+     * 这里改为「别名 × 包裹符」统一生成开/闭正则，一次覆盖所有已知变体。
+     * ⚠️ 别名表故意不含 miyavoice/heartvoice/心声 —— 那是本项目合法功能标签，
+     *    绝不能进思维链剥离，否则心声模块会被整块吃掉。
+     */
+    var THINK_TAG_ALIASES = [
+        'thinking', 'think', 'redacted_thinking',
+        'reasoning', 'reasoning_content',
+        'thought', 'thought_process', 'thoughtprocess',
+        'analysis', 'scratchpad', 'reflection', 'cot',
+        '内心独白', '内心', '思考', '思考过程', '心理', '心理活动'
     ];
+    /* markdown 围栏形态的思维链：```think … ``` / ```thinking … ```（截断时允许无闭合） */
+    var THINK_FENCE_OPEN_RE = /```(?:think|thinking|reasoning|thought|analysis|scratchpad|reflection)\b[^\n]*\n?/i;
+    var THINK_FENCE_CLOSED_RE = /```(?:think|thinking|reasoning|thought|analysis|scratchpad|reflection)\b[^\n]*\n[\s\S]*?(?:```|$)/gi;
 
-    var THINKING_CLOSE_PATTERNS = [
-        /<\/thinking>/gi,
-        /＜\/thinking＞/gi,
-        /\[\/thinking\]/gi,
-        /［\/thinking］/gi,
-        /【\/thinking】/gi,
-        /<\/think>/gi,
-        /＜\/think＞/gi,
-        /\[\/think\]/gi,
-        /<\/redacted_thinking>/gi,
-        /<\/reasoning>/gi
-    ];
+    /** 思维链别名表的「正则安全」交替串（依赖本文件内 escapeRegExp 的声明提升） */
+    function thinkAliasAlt() {
+        return THINK_TAG_ALIASES.map(escapeRegExp).join('|');
+    }
+
+    /** 成对思维链块提取（带捕获组 1 = 思维链内容），用于展示思维链；由 initThinkingPatterns() 填充 */
+    var THINKING_EXTRACT_SEQ = [];
+
+    /* 思维链「闭合标签」定位（找最后一个闭合点，正文取其后）——首次使用前由
+       initThinkingPatterns() 填充（escapeRegExp 为函数声明，存在提升，但
+       别名表较长，统一在 IIFE 内先建好，避免每个调用点重复构造）。 */
+    var THINKING_CLOSE_PATTERNS = [];
+
+    function initThinkingPatterns() {
+        var alt = thinkAliasAlt();
+        /* 半角 + 全角尖括号家族（＜think＞ 是旧版已覆盖的形态，绝不能丢） */
+        var angleOpen = '<\\s*(?:' + alt + ')(?:\\s[^<>]*)?>';
+        var angleClose = '<\\s*[\\/／]\\s*(?:' + alt + ')\\s*>';
+        var angleOpenFw = '＜\\s*(?:' + alt + ')(?:\\s[^＜＞]*)?＞';
+        var angleCloseFw = '＜\\s*[\\/／]\\s*(?:' + alt + ')\\s*＞';
+        var triClose = '◁\\s*[\\/／]\\s*(?:' + alt + ')\\s*▷';
+        var sqClose = '【\\s*[\\/／]\\s*(?:' + alt + ')\\s*】';
+        var bkClose = '[［\\[]\\s*[\\/／]\\s*(?:' + alt + ')\\s*[］\\]]';
+
+        /* 成对提取：<开 …>内容< /闭>，四种包裹符（半角/全角）+ 围栏 */
+        THINKING_EXTRACT_SEQ = [
+            new RegExp('(?:' + angleOpen + '|' + angleOpenFw + ')\\s*([\\s\\S]*?)(?:' + angleClose + '|' + angleCloseFw + ')', 'i'),
+            new RegExp('◁\\s*(?:' + alt + ')\\s*▷\\s*([\\s\\S]*?)' + triClose, 'i'),
+            new RegExp('【\\s*(?:' + alt + ')\\s*】\\s*([\\s\\S]*?)' + sqClose, 'i'),
+            new RegExp('[［\\[]\\s*(?:' + alt + ')\\s*[］\\]]\\s*([\\s\\S]*?)' + bkClose, 'i'),
+            /```(?:think|thinking|reasoning|thought|analysis|scratchpad|reflection)\b[^\n]*\n([\s\S]*?)(?:```|$)/i
+        ];
+
+        /* 闭合定位：任意别名闭标签（</think>、</redacted_thinking>、< /thinking>、＜/think＞等）。
+           ⚠️ 围栏 ``` 不能进这里 —— 它是通用代码围栏，会把普通代码块误当思维链闭合。 */
+        THINKING_CLOSE_PATTERNS = [
+            new RegExp(angleClose, 'gi'),
+            new RegExp(angleCloseFw, 'gi'),
+            new RegExp(triClose, 'gi'),
+            new RegExp(sqClose, 'g'),
+            new RegExp(bkClose, 'g')
+        ];
+    }
+    initThinkingPatterns();
 
     function isSemanticAutoTranslate(s) {
         return !!(s && s.autoTranslate);
@@ -1951,12 +1997,15 @@
             var m = src.match(THINKING_EXTRACT_SEQ[i]);
             if (m && m[1] && String(m[1]).trim()) return String(m[1]).trim();
         }
+        /* 未闭合变体：从开标签（或围栏头）吃到文本末尾 —— 截断场景思维链照样可提取展示 */
+        var altTail = thinkAliasAlt();
         var tailPatterns = [
-            /<thinking>([\s\S]*)$/i,
-            /＜thinking＞([\s\S]*)$/i,
-            /\<think\>([\s\S]*)$/i,
-            /＜think＞([\s\S]*)$/i,
-            /<think>([\s\S]*)$/i
+            new RegExp('<\\s*(?:' + altTail + ')(?:\\s[^<>]*)?>\\s*([\\s\\S]*)$', 'i'),
+            new RegExp('＜\\s*(?:' + altTail + ')(?:\\s[^＜＞]*)?＞\\s*([\\s\\S]*)$', 'i'),
+            new RegExp('◁\\s*(?:' + altTail + ')\\s*▷\\s*([\\s\\S]*)$', 'i'),
+            new RegExp('【\\s*(?:' + altTail + ')\\s*】\\s*([\\s\\S]*)$', 'i'),
+            new RegExp('[［\\[]\\s*(?:' + altTail + ')\\s*[］\\]]\\s*([\\s\\S]*)$', 'i'),
+            /```(?:think|thinking|reasoning|thought|analysis|scratchpad|reflection)\b[^\n]*\n?([\s\S]*)$/i
         ];
         for (i = 0; i < tailPatterns.length; i++) {
             var t = src.match(tailPatterns[i]);
@@ -2007,16 +2056,61 @@
         return out.join('\n').trim();
     }
 
+    /**
+     * 判定一段文本是否"像线上正文"（对白/动作浓度）。
+     *
+     * 用途：stripUnclosedThinkingTail 的截断兜底 —— 未闭合思维标签 + 无心声时，
+     * 旧逻辑只剥到第一个空行，思维链后半（成段含空行）全保留 → 按行拆成几十个气泡。
+     * 现在取"第一个空行之后"的内容做正文判定：
+     *   - 短段（≤2 行）保守视为正文保留；
+     *   - 长段需达到对白/动作特征浓度（行首/行尾引号、*动作*、（旁白））才算正文，
+     *     否则视为思维链残留整段剥掉。
+     * 只在「未闭合思维标签」这种异常分支生效，正常闭合的输出完全不走这里。
+     */
+    function looksLikeOnlineBody(text) {
+        var t = String(text || '').trim();
+        if (!t) return false;
+        /*
+         * 线上正文的输出格式是「每行一气泡」，段与段之间不允许空行
+         * （提示词硬性要求）。残余段内部若还有空行（多段结构），
+         * 只能是分段的思维链，直接判非正文。
+         */
+        if (/\n\s*\n/.test(t)) return false;
+        var lines = t.split(/\n/).filter(function (l) { return l.trim(); });
+        if (!lines.length) return false;
+        if (lines.length <= 2) return true;
+        var hits = 0;
+        lines.forEach(function (l) {
+            if (
+                /^\s*[「『"'“‘]/.test(l) ||
+                /[」』"'”’]\s*[。！？!~～]?\s*$/.test(l) ||
+                /^\s*\*[^*\n]+\*\s*$/.test(l) ||
+                /^\s*[（(][^）)\n]{0,30}[）)]$/.test(l)
+            ) hits += 1;
+        });
+        return hits / lines.length >= 0.25;
+    }
+
     /** 未闭合 thinking 时勿吞掉正文/心声：仅剥思维段，保留其后内容 */
     function stripUnclosedThinkingTail(text) {
         var out = String(text || '');
+        var alt = thinkAliasAlt();
+        /*
+         * markers 分两档：
+         *   - 尖括号/围栏（真思维链标签，正文几乎不会出现 <think> 字样）：
+         *     未闭合时按「截断泄漏」处理 —— 剥掉残余段，仅当其后内容像线上正文
+         *     （对白/动作浓度达标）才保留；
+         *   - 【】/[]/◁▷ 装饰性包裹符：正文里合法出现的概率远高于尖括号
+         *     （如正文行 "[思考]" 前缀），未闭合时只剥标签本身，绝不全段剥 ——
+         *     成对出现（【思考】…【/思考】）时由 closedRegs 整块剥，不受影响。
+         */
         var markers = [
-            { open: /<thinking>/i, close: /<\/thinking>/i },
-            { open: /＜thinking＞/i, close: /＜\/thinking＞/i },
-            { open: /\<think\>/i, close: /<\/think>/i },
-            { open: /＜think＞/i, close: /＜\/think＞/i },
-            { open: /<think>/i, close: /<\/redacted_thinking>|<\/think>/i },
-            { open: /<reasoning>/i, close: /<\/reasoning>/i }
+            { open: new RegExp('<\\s*(?:' + alt + ')(?:\\s[^<>]*)?>', 'i'), close: new RegExp('<\\s*[\\/／]\\s*(?:' + alt + ')\\s*>', 'i') },
+            { open: new RegExp('＜\\s*(?:' + alt + ')(?:\\s[^＜＞]*)?＞', 'i'), close: new RegExp('＜\\s*[\\/／]\\s*(?:' + alt + ')\\s*＞', 'i') },
+            { open: THINK_FENCE_OPEN_RE, close: /```/i },
+            { open: new RegExp('◁\\s*(?:' + alt + ')\\s*▷', 'i'), close: new RegExp('◁\\s*[\\/／]\\s*(?:' + alt + ')\\s*▷', 'i'), stripTagOnly: true },
+            { open: new RegExp('【\\s*(?:' + alt + ')\\s*】', 'i'), close: new RegExp('【\\s*[\\/／]\\s*(?:' + alt + ')\\s*】', 'i'), stripTagOnly: true },
+            { open: new RegExp('[［\\[]\\s*(?:' + alt + ')\\s*[］\\]]', 'i'), close: new RegExp('[［\\[]\\s*[\\/／]\\s*(?:' + alt + ')\\s*[］\\]]', 'i'), stripTagOnly: true }
         ];
         var guard = 0;
         while (guard < 6) {
@@ -2027,28 +2121,31 @@
                 if (!m || m.index == null) return;
                 var tail = out.slice(m.index);
                 if (mk.close.test(tail)) return;
-                var inner = tail.replace(mk.open, '');
+                if (mk.stripTagOnly) {
+                    /* 装饰性包裹符：只摘标签本身，保留其后内容 */
+                    out = (out.slice(0, m.index) + tail.slice(m[0].length)).trim();
+                    changed = true;
+                    return;
+                }
+                var inner = tail.slice(m[0].length);
                 var hvIdx = inner.search(/<miyavoice|＜miyavoice|<heartvoice|＜heartvoice|<心声|＜心声/i);
                 if (hvIdx >= 0) {
                     out = out.slice(0, m.index) + inner.slice(hvIdx);
                     changed = true;
                     return;
                 }
-                var para = inner.search(/\n\s*\n/);
                 /*
-                 * ⚠️ 这里必须是 x.trim()，不能写成 trim(x)。
+                 * 【截断泄漏根治】旧逻辑：找到第一个空行就把其后内容全当正文保留。
+                 * 思维链本身常多段（段间空行），截断场景（思维链输出到 max_tokens
+                 * 耗尽、正文根本没开始）下后半条思维链被整体保留 → 几十个气泡。
                  *
-                 * 本文件从未定义过名为 trim 的全局函数，写成 trim(...)
-                 * 会直接抛 ReferenceError: trim is not defined。
-                 *
-                 * 为什么这个错误能潜伏很久：它只在「未闭合 thinking」这条
-                 * 分支里执行 —— 即某一层开了 <thinking> 却没闭合。
-                 * 常规聊天里思维段都是成对的，走不到这里；一旦遇到
-                 * 只有思维段、正文为空的那种楼层（ST 导入很常见），
-                 * 异常就会在渲染期爆出来，表现为「界面刷新出错」。
+                 * 新逻辑：先取"第一个空行之后"的候选，再用 looksLikeOnlineBody
+                 * 判定 —— 像正文（含对白/动作特征）才保留，像思维链残留就整段剥掉。
                  */
-                if (para >= 0 && inner.slice(para).trim()) {
-                    out = out.slice(0, m.index) + inner.slice(para).trim();
+                var para = inner.search(/\n\s*\n/);
+                var keep = para >= 0 ? inner.slice(para).trim() : '';
+                if (keep && looksLikeOnlineBody(keep)) {
+                    out = out.slice(0, m.index) + keep;
                 } else {
                     out = out.slice(0, m.index).trim();
                 }
@@ -2061,15 +2158,21 @@
 
     function stripThinkingBlocks(text) {
         var out = String(text || '');
+        var alt = thinkAliasAlt();
         var closedRegs = [
-            /<thinking>[\s\S]*?(?:<\/thinking>|\[\/thinking\]|＜\/thinking＞|［\/thinking］|【\/thinking】)/gi,
-            /＜thinking＞[\s\S]*?(?:＜\/thinking＞|\[\/thinking\]|［\/thinking］)/gi,
-            /\[thinking\][\s\S]*?\[\/thinking\]/gi,
-            /\<think\>[\s\S]*?(?:<\/think>|\[\/think\])/gi,
-            /＜think＞[\s\S]*?＜\/think＞/gi,
-            /<think>[\s\S]*?<\/redacted_thinking>/gi,
-            /<think>[\s\S]*?<\/think>/gi,
-            /<reasoning>[\s\S]*?<\/reasoning>/gi
+            /* 尖括号家族（半角+全角）：<think type="x">…</think>、<thinking>…</thinking>、
+               <think>…</redacted_thinking>（开闭别名各自独立匹配，天然支持交叉闭合）、
+               < think >、＜think＞…＜/think＞ —— 旧正则只认严格写法，这里是泄漏重灾区 */
+            new RegExp('<\\s*(?:' + alt + ')(?:\\s[^<>]*)?>[\\s\\S]*?<\\s*[\\/／]\\s*(?:' + alt + ')\\s*>', 'gi'),
+            new RegExp('＜\\s*(?:' + alt + ')(?:\\s[^＜＞]*)?＞[\\s\\S]*?＜\\s*[\\/／]\\s*(?:' + alt + ')\\s*＞', 'gi'),
+            /* ◁think▷ … ◁/think▷（含 ／ 斜杠变体） */
+            new RegExp('◁\\s*(?:' + alt + ')\\s*▷[\\s\\S]*?◁\\s*[\\/／]\\s*(?:' + alt + ')\\s*▷', 'gi'),
+            /* 【思考】…【/思考】、【thinking】…【/thinking】 */
+            new RegExp('【\\s*(?:' + alt + ')\\s*】[\\s\\S]*?【\\s*\\/\\s*(?:' + alt + ')\\s*】', 'g'),
+            /* [thinking]…[/thinking]、［think］…［/think］ */
+            new RegExp('[［\\[]\\s*(?:' + alt + ')\\s*[］\\]][\\s\\S]*?[［\\[]\\s*\\/\\s*(?:' + alt + ')\\s*[］\\]]', 'g'),
+            /* ```think … ``` markdown 围栏（截断无闭合时允许吃到结尾） */
+            THINK_FENCE_CLOSED_RE
         ];
         var prev;
         var guard = 0;
@@ -2077,6 +2180,7 @@
             prev = out;
             guard += 1;
             closedRegs.forEach(function (re) {
+                re.lastIndex = 0;
                 out = out.replace(re, '');
             });
             out = out.trim();
@@ -4027,38 +4131,32 @@
     }
 
     function buildSalvageBubbleText(replyRaw) {
-        var s = stripHeartVoiceTags(stripThinkingBlocks(String(replyRaw || ''))).trim();
+        var raw = String(replyRaw || '');
+        var s = stripHeartVoiceTags(stripThinkingBlocks(raw)).trim();
         if (s) return s;
-        var bare = String(replyRaw || '')
+        /*
+         * 【兜底后门封堵】bare 兜底过去直接把 replyRaw 全文剥标签裸化——
+         * 截断场景（思维链输出到 max_tokens 耗尽、正文不存在）下，
+         * stripThinkingBlocks 剥完为空，裸化却把整条思维链捞回来，
+         * 照样拆成几十个气泡。bare 前必须再过一次"未闭合思维段剥离"，
+         * 剥完仍为空就返回空串，让上层按 empty_reply 重试/报错。
+         */
+        var bare = stripHeartVoiceTagFragments(stripUnclosedThinkingTail(stripHeartVoiceTagFragments(raw)))
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
-        return bare.slice(0, 2000);
+        return bare ? bare.slice(0, 2000) : '';
     }
 
     var CHAT_COMPLETION_MAX_ATTEMPTS = 3;
 
-    function resolveChatApiSlice(cfg, useSecondary) {
-        if (useSecondary) {
-            var sec = cfg.secondaryApi && typeof cfg.secondaryApi === 'object' ? cfg.secondaryApi : {};
-            return {
-                baseUrl: normalizeBaseUrl(sec.baseUrl),
-                apiKey: String(sec.apiKey || '').trim(),
-                model: String(sec.model || '').trim(),
-                temperature: sec.temperature != null ? Number(sec.temperature) : (cfg.temperature != null ? Number(cfg.temperature) : 1)
-            };
-        }
+    function resolveChatApiSlice(cfg) {
         return {
             baseUrl: normalizeBaseUrl(cfg.baseUrl),
             apiKey: String(cfg.apiKey || '').trim(),
             model: String(cfg.model || '').trim(),
             temperature: cfg.temperature != null ? Number(cfg.temperature) : 1
         };
-    }
-
-    function hasSecondaryApiConfigured(cfg) {
-        var sec = cfg.secondaryApi && typeof cfg.secondaryApi === 'object' ? cfg.secondaryApi : {};
-        return !!(normalizeBaseUrl(sec.baseUrl) && String(sec.apiKey || '').trim() && String(sec.model || '').trim());
     }
 
     function fetchChatCompletion(url, headers, payload, attempt, signal) {
@@ -4109,6 +4207,29 @@
         return raw.trim();
     }
 
+    /**
+     * 孤立思维标签残行：整行只是一个思维链开/闭标签（可带属性/空格/别名包裹符），
+     * 或 ```think 类围栏头。典型来源：闭标签兜底截取（extractBodyAfterThinkingClose）
+     * 之后的异常残片、变体标签剥离后的余屑。这类行成泡只会变成一个空壳气泡。
+     */
+    function isOrphanThinkTagLine(line) {
+        var t = trimLine(line);
+        if (!t) return false;
+        var alt = thinkAliasAlt();
+        var orphan = new RegExp(
+            '^\\s*(?:' +
+                '<\\s*\\/?(?:' + alt + ')(?:\\s[^<>]*)?>' +
+                '|＜\\s*[\\/／]?(?:' + alt + ')(?:\\s[^＜＞]*)?＞' +
+                '|◁\\s*[\\/／]?(?:' + alt + ')\\s*▷' +
+                '|【\\s*[\\/／]?(?:' + alt + ')\\s*】' +
+                '|[［\\[]\\s*[\\/／]?(?:' + alt + ')\\s*[］\\]]' +
+                '|```(?:think|thinking|reasoning|thought|analysis|scratchpad|reflection)\\b[^\\n]*' +
+            ')\\s*$',
+            'i'
+        );
+        return orphan.test(t);
+    }
+
     function splitBubbles(text) {
         var raw = stripStructuralMarkerLines(stripHeartVoiceTags(stripThinkingBlocks(String(text || '')))).trim();
         if (!raw) return [];
@@ -4127,7 +4248,10 @@
             .map(function (s) {
                 return s.trim();
             })
-            .filter(Boolean);
+            .filter(Boolean)
+            .filter(function (line) {
+                return !isOrphanThinkTagLine(line);
+            });
         var aw = global.MiyaChatAwareness;
         if (aw && typeof aw.splitCollapsedTimelineSegments === 'function') {
             var expanded = [];
@@ -4938,9 +5062,9 @@
             return pluginReady.then(function (ctxOut) {
             if (ctxOut && Array.isArray(ctxOut.messages)) built.messages = ctxOut.messages;
 
-            function callWithSlice(slice, usedSecondary, messagesOverride, regenAttemptNo, regenCtx) {
+            function callWithSlice(slice, messagesOverride, regenAttemptNo, regenCtx) {
                 if (!slice.baseUrl || !slice.apiKey || !slice.model) {
-                    return Promise.reject(new Error(usedSecondary ? 'secondary_api_not_configured' : 'api_not_configured'));
+                    return Promise.reject(new Error('api_not_configured'));
                 }
                 var url = slice.baseUrl + '/chat/completions';
                 var reqHeaders = {
@@ -5020,12 +5144,11 @@
                 reqPayload.stream = false;
                 return fetchChatCompletion(url, reqHeaders, reqPayload, 1, genSignal).then(function (completion) {
                     if (!completion.replyRaw) throw new Error('empty_reply');
-                    completion._usedSecondaryApi = !!usedSecondary;
                     return completion;
                 });
             }
 
-            var primarySlice = resolveChatApiSlice(cfg, false);
+            var primarySlice = resolveChatApiSlice(cfg);
             /*
              * 重答防雷同·机制③：输出查重闭环。
              * 每次生成成功后，把新正文与上一版（撤回前快照）做归一化比对；
@@ -5033,9 +5156,9 @@
              * 这是唯一能真正保证「用户看到的和上一版不一样」的一层——
              * 因为它验证的是**结果本身**，而不是指望模型听话。
              */
-            function callSliceGuarded(slice, usedSecondary) {
+            function callSliceGuarded(slice) {
                 if (!options.isRegenerate || !options._regenCtx) {
-                    return callWithSlice(slice, usedSecondary, null, 0, null);
+                    return callWithSlice(slice, null, 0, null);
                 }
                 var rctx = options._regenCtx;
                 var REGEN_MAX_TRIES = 3;
@@ -5046,7 +5169,7 @@
                             { role: 'system', content: buildRegenRejectedBlock(no) }
                         ]);
                     }
-                    return callWithSlice(slice, usedSecondary, msgsForTry, no, rctx).then(
+                    return callWithSlice(slice, msgsForTry, no, rctx).then(
                         function (completion) {
                             if (!rctx.prevBody || no >= REGEN_MAX_TRIES) return completion;
                             if (!regenLooksIdentical(rctx.prevBody, completion.replyRaw)) {
@@ -5067,10 +5190,7 @@
                 }
                 return tryOnce(1);
             }
-            return callSliceGuarded(primarySlice, false).catch(function (err) {
-                if (!cfg.fallbackToSecondary || !hasSecondaryApiConfigured(cfg)) throw err;
-                return callSliceGuarded(resolveChatApiSlice(cfg, true), true);
-            }).then(function (completion) {
+            return callSliceGuarded(primarySlice).then(function (completion) {
                 var data = completion.data;
                 var replyRawOriginal = String(completion.replyRaw || '');
                 var replyRaw = replyRawOriginal;

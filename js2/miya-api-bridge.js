@@ -112,19 +112,6 @@
     };
   }
 
-  function resolveSecondaryApiConfig(cfg) {
-    cfg = cfg && typeof cfg === 'object' ? cfg : getApiCfg();
-    var sec = cfg.secondaryApi && typeof cfg.secondaryApi === 'object' ? cfg.secondaryApi : {};
-    var temp = sec.temperature != null ? Number(sec.temperature) : (cfg.temperature != null ? Number(cfg.temperature) : 1);
-    if (!Number.isFinite(temp)) temp = 1;
-    return {
-      baseUrl: String(sec.baseUrl || '').trim(),
-      apiKey: String(sec.apiKey || '').trim(),
-      model: String(sec.model || '').trim(),
-      temperature: temp
-    };
-  }
-
   function apiSliceKey(slice) {
     if (!slice) return '';
     return [slice.baseUrl, slice.apiKey, slice.model].join('\0');
@@ -744,7 +731,6 @@
     callItineraryCompletionsRaw: callItineraryCompletionsRaw,
     resolveItineraryApiConfig: resolveItineraryApiConfig,
     resolveChatApiConfig: resolveChatApiConfig,
-    resolveSecondaryApiConfig: resolveSecondaryApiConfig,
     extractJsonObject: extractJsonObject
   };
 })(window);

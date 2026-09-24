@@ -33,27 +33,13 @@
     }
   }
 
-  function resolveApiSlice(cfg, useSecondary) {
-    if (useSecondary) {
-      var sec = cfg.secondaryApi && typeof cfg.secondaryApi === 'object' ? cfg.secondaryApi : {};
-      return {
-        baseUrl: normalizeBaseUrl(sec.baseUrl),
-        apiKey: trim(sec.apiKey),
-        model: trim(sec.model),
-        temperature: sec.temperature != null ? Number(sec.temperature) : (cfg.temperature != null ? Number(cfg.temperature) : 1)
-      };
-    }
+  function resolveApiSlice(cfg) {
     return {
       baseUrl: normalizeBaseUrl(cfg.baseUrl),
       apiKey: trim(cfg.apiKey),
       model: trim(cfg.model),
       temperature: cfg.temperature != null ? Number(cfg.temperature) : 1
     };
-  }
-
-  function hasSecondaryApi(cfg) {
-    var sec = cfg.secondaryApi && typeof cfg.secondaryApi === 'object' ? cfg.secondaryApi : {};
-    return !!(normalizeBaseUrl(sec.baseUrl) && trim(sec.apiKey) && trim(sec.model));
   }
 
   function fetchCompletion(url, headers, payload, attempt) {
@@ -338,9 +324,9 @@
       }
 
       var cfg = getApiConfig();
-      function callWithSlice(slice, usedSecondary) {
+      function callWithSlice(slice) {
         if (!slice.baseUrl || !slice.apiKey || !slice.model) {
-          return Promise.reject(new Error(usedSecondary ? 'secondary_api_not_configured' : 'api_not_configured'));
+          return Promise.reject(new Error('api_not_configured'));
         }
         var url = slice.baseUrl + '/chat/completions';
         var headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + slice.apiKey };
@@ -350,11 +336,7 @@
 
       function attempt(isOpening, tryNo) {
         tryNo = tryNo || 1;
-        return callWithSlice(resolveApiSlice(cfg, false), false)
-          .catch(function (err) {
-            if (!cfg.fallbackToSecondary || !hasSecondaryApi(cfg)) throw err;
-            return callWithSlice(resolveApiSlice(cfg, true), true);
-          })
+        return callWithSlice(resolveApiSlice(cfg))
           .then(function (completion) {
             var charName = trim(built.contact && built.contact.name) || '角色';
             var parsed = parseWhisperReply(completion.replyRaw, charName);
@@ -372,7 +354,7 @@
 
   function fmtApiErr(err) {
     var m = err && err.message ? err.message : '';
-    if (m === 'api_not_configured' || m === 'secondary_api_not_configured') {
+    if (m === 'api_not_configured') {
       return '请先在系统设置中配置 API';
     }
     if (m === 'empty_reply') return '生成失败，请重试';

@@ -8,7 +8,7 @@
 
   var GROUPS = {
     apiCore: {
-      js: ['js2/miya-api-bridge.js?v=2']
+      js: ['js2/miya-api-bridge.js?v=3']
     },
     coupleUi: {
       css: [
@@ -21,7 +21,7 @@
         'js1/miya-couple-timeline.js?v=8',
         'js1/miya-couple-board.js?v=1',
         'js1/miya-couple-whisper-store.js?v=2',
-        'js1/miya-couple-whisper-engine.js?v=3',
+        'js1/miya-couple-whisper-engine.js?v=4',
         'js1/miya-couple-whisper.js?v=4',
         'js1/miya-couple-photos.js?v=5',
         'js1/miya-couple-app.js?v=11'
@@ -41,7 +41,7 @@
     weatherUi: {
       css: ['css/miya-weather.css?v=9'],
       js: [
-        'js2/miya-api-bridge.js?v=2',
+        'js2/miya-api-bridge.js?v=3',
         'js2/miya-weather-app.js?v=13'
       ]
     },
@@ -52,7 +52,7 @@
     funUi: {
       css: ['css/miya-fun.css?v=3', 'css/miya-fun-sayguess.css?v=5'],
       js: [
-        'js2/miya-api-bridge.js?v=2',
+        'js2/miya-api-bridge.js?v=3',
         'js2/miya-fun-sayguess-store.js?v=3',
         'js2/miya-fun-sayguess-bridge.js?v=6',
         'js2/miya-fun-sayguess-app.js?v=10',
