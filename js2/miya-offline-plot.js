@@ -104,18 +104,16 @@
        因为内联样式的 !important 在层叠中优先级最高，
        而 CSS 文件里无论怎么堆选择器都追不平对家的 (0,10,1) 特异性。
 
-       这几个常量代表设计稿里的绝对值，集中放这里便于校对：
-         15px    = 卡片根 / 中间容器 / 选项按钮 / 文案列（.choice-text）的基准
-         12.5px  = 「剧情建议」标题（设计稿 .78em × 16px 基准 = 12.48px）
-         15.75px = 选项左侧 ◇ 图标（设计稿 1.05em，随 15px 按钮字号走）
+       这几个常量代表设计稿（v3 紧凑紫韵版）里的绝对值，集中放这里便于校对：
+         13px    = 卡片根 / 中间容器 / 选项按钮 / 文案列（.choice-text）的基准
+         11px    = 「剧情建议」标题
+         11px    = 选项左侧 ◇ 图标（line-height 1.9 让它对齐 13px×1.6 的首行中线）
        ──────────────────────────────────────────────────────── */
-    var FIX_FS_15 = 'font-size:15px !important';
-    var FIX_FS_TITLE = 'font-size:12.5px !important';
-    var FIX_FS_ICON = 'font-size:15.75px !important';
-    /* 按钮字号对齐设计稿真实值：设计基准 16px，
-       宽屏 .95em = 15.2px、窄屏 .94em = 15.04px —— 两者只差 0.16px，
-       统一钉 15px。 */
-    var FIX_FS_BTN = 'font-size:15px !important';
+    var FIX_FS_13 = 'font-size:13px !important';
+    var FIX_FS_TITLE = 'font-size:11px !important';
+    var FIX_FS_ICON = 'font-size:11px !important';
+    /* 按钮字号：设计稿单值 13px，无宽窄屏分支（v3 已删窄屏媒体查询） */
+    var FIX_FS_BTN = 'font-size:13px !important';
 
     /* ── 字体强绑定（防全局字体/字重覆盖）────────────────────────
        和上面的字号是同一类问题，两条全局规则会改掉卡片字形：
@@ -197,9 +195,9 @@
     }
 
     /**
-     * 渲染「剧情建议」卡片（v2 紫韵版）。
+     * 渲染「剧情建议」卡片（v3 紧凑紫韵版）。
      *
-     * DOM 结构与用户 2026-09 给的设计稿片段逐字对齐：
+     * DOM 结构与用户 2026-09 给的最新设计稿片段逐字对齐：
      *   .wrap  >  .sec  >  h4.sec-title（「剧情建议」，渐变竖条 + 渐隐线）
      *                  >  .body
      *                       >  button.choice × N
@@ -235,7 +233,7 @@
      *   而【内联样式 + !important】在层叠里是最高一级，必胜。
      *
      *   v2 新增的 .choice-icon / .choice-text 两个 span 同样被那条规则
-     *   命中（icon 的 1.05em 是相对值，必被改写），所以也逐个内联钉死。
+     *   命中，所以也逐个内联钉死（v3：图标 11px / 文案 13px）。
      *
      *   副作用（刻意接受）：用户调线下字号时卡片不跟着变大。
      *   这张卡是成品设计，字号/字距/内边距是一套调好的整体，
@@ -259,9 +257,8 @@
         if (!list.length) return '';
 
         /*
-         * 窄屏（≤420px）只收内距（CSS 媒体查询负责，见样式表），
-         * 字号不再分支：设计稿宽屏 .95em=15.2px、窄屏 .94em=15.04px，
-         * 只差 0.16px，统一内联 15px。
+         * v3 设计稿是单值 13px，无宽窄屏字号分支（窄屏媒体查询已随
+         * 设计稿一起移除，见样式表）。
          *
          * 之所以不在这里写媒体查询：字号是内联 !important，
          * 样式表里的媒体查询永远赢不了它 —— 分支没有意义。
@@ -285,7 +282,7 @@
                     FIX_FS_ICON +
                     '" aria-hidden="true">◇</span>' +
                     '<span class="choice-text" style="' +
-                    FIX_FS_15 +
+                    FIX_FS_13 +
                     '">' +
                     esc(text) +
                     '</span>' +
@@ -297,21 +294,21 @@
         return (
             '<div class="xw-plot-card" data-ap-plot-card="1"' +
             ' style="--miya-font-size-scale:1;' +
-            FIX_FS_15 +
+            FIX_FS_13 +
             ';' +
             FIX_FF +
             ';' +
             FIX_FW_400 +
             '">' +
             '<div class="wrap" style="' +
-            FIX_FS_15 +
+            FIX_FS_13 +
             ';' +
             FIX_FF +
             ';' +
             FIX_FW_400 +
             '">' +
             '<div class="sec" style="' +
-            FIX_FS_15 +
+            FIX_FS_13 +
             ';' +
             FIX_FF +
             ';' +
