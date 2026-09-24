@@ -159,6 +159,14 @@
     }
 
     function isChatRoomForeground(chatId) {
+        /*
+         * 【线上提示音修复】页面不可见（切到别的 App / 锁屏 / 切后台标签）时
+         * 绝不算"前台"。此前只看 DOM 状态：聊天室开着，哪怕用户早就切走了，
+         * 这里依然返回 true —— MiyaMsgSound.shouldPlayForChat 据此静音，
+         * 表现就是「开着聊天室等回复，切出去/锁屏，回复到了却没有提示音」。
+         * 前台静音的本意是"用户正看着，不必响"，用户根本没看着就必须响。
+         */
+        if (document.hidden) return false;
         if (!isRoomOpenForChat(chatId)) return false;
         var app = document.getElementById('miya-chat-app');
         var room = document.getElementById('qq-room');

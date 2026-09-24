@@ -1,10 +1,19 @@
 /**
- * miya-image-gen.js — 生图 API（OpenAI 兼容 / NovelAI）、预设、聊天与朋友圈集成
+ * miya-image-gen.js — 生图 API（OpenAI 兼容 / NovelAI）、提示词预设、聊天与朋友圈集成
  */
 (function (global) {
   'use strict';
 
-  var PRESETS_KEY = 'miya-image-gen-presets-v1';
+  /*
+   * ── 提示词预设存储 ────────────────────────────────────────────
+   * v4.12 起预设语义收窄：只保存「正向 + 反向提示词」，不再整套打包
+   * 接口/密钥/尺寸等配置（接口有独立的「接口预设」，见 OA_PRESETS_KEY）。
+   * 换新 key 是因为行结构变了（{name, positivePrompt, negativePrompt}）；
+   * 旧 key 的整套配置预设会在首次加载时自动迁移出提示词部分（见
+   * loadPresetsArr），迁移完旧 key 原样保留、不再读取。
+   */
+  var PRESETS_KEY = 'miya-image-gen-prompt-presets-v1';
+  var LEGACY_PRESETS_KEY = 'miya-image-gen-presets-v1';
   var MAX_PRESETS = 24;
 
   /*
@@ -2516,7 +2525,30 @@
         raw = [];
       }
     }
-    return raw.map(normalizePresetRow).filter(Boolean);
+    var list = raw.map(normalizePresetRow).filter(Boolean);
+    /*
+     * 【旧整套预设迁移】v4.11 及之前预设存的是整套生图配置。
+     * 新 key 尚无任何数据时，尝试从旧 key 把提示词部分提取出来，
+     * 一次性迁移进新 key —— 用户以前存的预设不会凭空丢掉。
+     * 迁移只发生一次：新 key 一旦有数据，旧 key 永不再读。
+     */
+    if (!raw.length) {
+      var legacy = [];
+      try {
+        var legacyRaw = typeof global.miyaReadLsJsonKey === 'function'
+          ? await global.miyaReadLsJsonKey(LEGACY_PRESETS_KEY, [])
+          : JSON.parse(localStorage.getItem(LEGACY_PRESETS_KEY) || '[]');
+        legacy = Array.isArray(legacyRaw) ? legacyRaw : [];
+      } catch (e) {
+        legacy = [];
+      }
+      var migrated = legacy.map(normalizePresetRow).filter(Boolean);
+      if (migrated.length) {
+        await savePresetsArr(migrated);
+        list = migrated;
+      }
+    }
+    return list;
   }
 
   async function savePresetsArr(arr) {
@@ -2555,9 +2587,17 @@
     if (!raw || typeof raw !== 'object') return null;
     var name = trim(raw.name);
     if (!name) return null;
+    /*
+     * 新行结构是 {name, positivePrompt, negativePrompt, savedAt}；
+     * 旧版整套预设的行是 {name, config, savedAt} —— config 里带着
+     * 提示词等全部配置。读取时统一从「提示词来源」取值：有 config
+     * 就用 config（迁移路径），否则用行本身（新结构）。
+     */
+    var src = raw.config && typeof raw.config === 'object' ? raw.config : raw;
     return {
       name: name,
-      config: normalizeImageGenConfig(raw.config),
+      positivePrompt: trim(src.positivePrompt).slice(0, 4000),
+      negativePrompt: trim(src.negativePrompt).slice(0, 4000),
       savedAt: raw.savedAt || Date.now()
     };
   }
@@ -2575,7 +2615,7 @@
     var namesKey = names.join('\0');
     if (pick.dataset.presetNames === namesKey) return;
     var current = pick.value;
-    pick.innerHTML = '<option value="">选择已存预设</option>';
+    pick.innerHTML = '<option value="">选择已存提示词预设</option>';
     names.forEach(function (name) {
       var opt = document.createElement('option');
       opt.value = name;
@@ -2592,8 +2632,16 @@
   }
 
   function applyImageGenPreset(preset) {
-    if (!preset || !preset.config) return false;
-    saveImageGenConfig(preset.config);
+    if (!preset) return false;
+    /*
+     * 【提示词预设】只把正向/反向提示词 merge 进当前配置，
+     * 接口、密钥、尺寸等一概不碰 —— 那些归「接口预设」和表单本身管。
+     * merge patch 后全量刷一遍表单，让两个文本框立刻反映预设内容。
+     */
+    saveImageGenConfig({
+      positivePrompt: preset.positivePrompt || '',
+      negativePrompt: preset.negativePrompt || ''
+    });
     syncSettingsFormFromConfig();
     syncPresetNameInput(preset.name);
     return true;
@@ -2614,10 +2662,7 @@
       applyImageGenPreset(pr);
       var pick = document.getElementById('miya-st-ig-preset-pick');
       if (pick) pick.value = pickName;
-      if (global.miyaSettingsApp && typeof global.miyaSettingsApp.markIgPresetActive === 'function') {
-        global.miyaSettingsApp.markIgPresetActive(pickName);
-      }
-      toast('已读取「' + pickName + '」');
+      toast('已载入提示词「' + pickName + '」');
       return true;
     });
   }
@@ -2628,14 +2673,23 @@
       toast('请输入预设名称');
       return Promise.resolve(false);
     }
-    var snap = readSettingsForm();
+    var form = readSettingsForm();
+    if (!form.positivePrompt && !form.negativePrompt) {
+      toast('当前提示词为空，先在上方填写一些再保存');
+      return Promise.resolve(false);
+    }
     return ensurePresetsReady().then(function (list) {
       var next = (list || []).filter(function (x) { return x && x.name !== label; });
       if (next.length >= MAX_PRESETS && !findPresetByName(list, label)) {
         toast('预设最多 ' + MAX_PRESETS + ' 个');
         return false;
       }
-      var row = normalizePresetRow({ name: label, config: snap, savedAt: Date.now() });
+      var row = normalizePresetRow({
+        name: label,
+        positivePrompt: form.positivePrompt,
+        negativePrompt: form.negativePrompt,
+        savedAt: Date.now()
+      });
       if (!row) return false;
       next.push(row);
       return savePresetsArr(next).then(function (ok) {
@@ -2648,7 +2702,7 @@
       var pick = document.getElementById('miya-st-ig-preset-pick');
       if (pick) pick.value = label;
       syncPresetNameInput(label);
-      toast('预设已保存');
+      toast('提示词预设已保存');
       return true;
     }).catch(function () {
       toast('预设保存失败');
