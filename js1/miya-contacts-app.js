@@ -145,31 +145,108 @@
   }
 
   function renderVolumes() {
-    var rail = $('miya-ct-volumes');
-    if (!rail) return;
-    /* 全卷 / 分卷标签已全部移除，只保留右侧导入、建档按钮 */
-    rail.innerHTML = '';
+    /* 分卷标签栏已随清爽蓝版式移除；保留空实现以兼容调用点 */
+  }
+
+  /* ── 记忆统计：档案角色 → 聊天会话的记忆沉淀 ──
+   *
+   * 清爽蓝名册把「已立忆」的角色置顶为横幅签，需要知道每个角色的
+   * 记忆存量。链路：档案角色 →(characterId / chronicleId)→ 聊天联系人
+   * → 私聊会话 → 会话设置里的 summaryList（分镜）/ megaSummaryList
+   * （合卷）/ charMemoryList（角色记忆片段）。
+   * 这些全是同步 API，依赖 miyaChatStore 已 init（openContactsApp 里等待）。
+   * 任一环节缺失都安静返回零值 —— 名册不能因为聊天数据没就绪就不渲染。
+   */
+  function memoryStatsFor(row) {
+    var out = { rounds: 0, fragments: 0, has: false };
+    try {
+      var st = global.miyaChatStore;
+      if (!st || !st.findContactByArchiveCharacter) return out;
+      var contact = st.findContactByArchiveCharacter(row);
+      if (!contact) return out;
+      var chat = st.findChatByContact ? st.findChatByContact(contact.id) : null;
+      if (!chat) return out;
+      var s = st.getChatSettings ? st.getChatSettings(chat.id) : null;
+      if (!s) return out;
+      out.rounds = (s.summaryList || []).length + (s.megaSummaryList || []).length;
+      out.fragments = (s.charMemoryList || []).length;
+      out.has = out.rounds > 0 || out.fragments > 0;
+    } catch (e) { /* 兜底：读不到记忆数据就按未立忆渲染 */ }
+    return out;
+  }
+
+  /* 99 以内的数字转中文（横幅签用「八」「一」标注存忆量） */
+  function toCnNum(n) {
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    if (n > 99) return String(n);
+    var d = '零一二三四五六七八九';
+    if (n < 10) return d[n];
+    var t = Math.floor(n / 10);
+    var u = n % 10;
+    return (t > 1 ? d[t] : '') + '十' + (u ? d[u] : '');
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  var CHEV_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
+  var PLUS_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+  /*
+   * 横幅签：已立忆角色的置顶大卡。
+   * 左侧蓝竖条 + 字脸/头像（右上蓝点）+「已立忆」标签 + 名字 + 存忆量。
+   */
+  function bannerHtml(c, stats) {
+    var face = c.avatar
+      ? '<img src="' + esc(c.avatar) + '" alt="" loading="lazy" decoding="async"><i class="mn-b-dot"></i>'
+      : esc(monogram(c.name)) + '<i class="mn-b-dot"></i>';
+    return (
+      '<button type="button" class="mn-banner" data-ct-id="' + esc(c.id) + '"' +
+      ' aria-label="' + esc(c.name) + '，已立忆">' +
+      '<span class="mn-b-face" aria-hidden="true">' + face + '</span>' +
+      '<span class="mn-b-main">' +
+      '<span class="mn-b-tag"><i></i>已立忆</span>' +
+      '<span class="mn-b-name">' + esc(c.name) + '</span>' +
+      '<span class="mn-b-sub">存忆 <b>' + esc(toCnNum(stats.rounds)) + '</b> 轮 · 纪念片段 <b>' +
+      esc(toCnNum(stats.fragments)) + '</b> 段</span>' +
+      '</span>' +
+      '<span class="mn-b-go" aria-hidden="true">' + CHEV_SVG + '</span>' +
+      '</button>'
+    );
   }
 
   /*
-   * 一行一个角色。
-   *
-   * 只有 头像 + 名字 + 行尾箭头 —— 不显示副标题、不显示「典x」角标。
-   * 曾试过自动从人设里抽一句摘要做副标题，但导入卡的人设常常是原始
-   * JSON / XML（`{ "character": …` / `<CardIntro>…`），抽出来全是噪音，
-   * 索性去掉这一行，行高更矮、一屏能看更多人。
+   * 双列名签：未立忆角色。编号沿用全册序号（横幅签占号但不出号），
+   * 右上字章位置有头像时显示头像。
    */
-  function panelHtml(c, wbCounts) {
-    var portrait = c.avatar
+  function tagCardHtml(c, no) {
+    var stamp = c.avatar
       ? '<img src="' + esc(c.avatar) + '" alt="" loading="lazy" decoding="async">'
-      : '<div class="mn-panel__mono">' + esc(monogram(c.name)) + '</div>';
+      : esc(monogram(c.name));
     return (
-      '<button type="button" class="mn-panel" data-ct-id="' + esc(c.id) + '">' +
-      '<div class="mn-panel__frame">' + portrait + '<span class="mn-panel__speed" aria-hidden="true"></span></div>' +
-      '<div class="mn-panel__body">' +
-      '<p class="mn-panel__name">' + esc(c.name) + '</p>' +
-      '</div>' +
-      '<i class="mn-panel__chevron" aria-hidden="true"></i>' +
+      '<button type="button" class="mn-tag" data-ct-id="' + esc(c.id) + '">' +
+      '<span class="mn-tc-top">' +
+      '<span class="mn-tc-no">NO.' + pad2(no) + '</span>' +
+      '<span class="mn-tc-stamp" aria-hidden="true">' + stamp + '</span>' +
+      '</span>' +
+      '<span class="mn-tc-name">' + esc(c.name) + '</span>' +
+      '<span class="mn-tc-sub">名签待录</span>' +
+      '<span class="mn-tc-foot">' +
+      '<span class="mn-tc-state">未立忆</span>' +
+      '<span class="mn-tc-arrow" aria-hidden="true">' + CHEV_SVG + '</span>' +
+      '</span>' +
+      '</button>'
+    );
+  }
+
+  /* 空白签：名册末尾的快捷建档入口 */
+  function blankCardHtml() {
+    return (
+      '<button type="button" class="mn-tag mn-tag--blank" data-ct-new="1" aria-label="新建档案">' +
+      '<span class="mn-blank-plus" aria-hidden="true">' + PLUS_SVG + '</span>' +
+      '<span class="mn-blank-t">新建名签</span>' +
+      '<span class="mn-blank-s">BLANK</span>' +
       '</button>'
     );
   }
@@ -202,52 +279,72 @@
 
   function renderGrid() {
     var grid = $('miya-ct-grid');
-    var countEl = $('miya-ct-count');
     if (!grid) return;
     var rows = filteredCharacters();
-    if (countEl) countEl.textContent = String(rows.length);
     var gen = ++gridRenderGen;
 
-    if (!rows.length) {
-      grid.innerHTML =
-        '<div class="mn-empty">' +
-        '<strong>空白分镜</strong>' +
-        '<span>点「建档」创建角色<br>或「导入」酒馆卡（PNG / JSON）<br>编辑时可从 docx/txt 填入人设 · 与世界书典籍联动</span>' +
-        '</div>';
-      renderVolumeFooter();
-      return;
+    /* 版头统计：录入位数 / 已立忆位数 / 记忆轮数合计 */
+    var stats = rows.map(memoryStatsFor);
+    var remembered = 0;
+    var rounds = 0;
+    stats.forEach(function (s) {
+      if (s.has) remembered++;
+      rounds += s.rounds;
+    });
+    var metaEl = $('miya-ct-meta');
+    if (metaEl) {
+      metaEl.innerHTML =
+        '录入 <b>' + rows.length + '</b> 位 · 已立忆 <b>' + remembered + '</b> 位 · 计 <b>' + rounds + '</b> 轮';
     }
-
-    var wbCounts = store.countWorldbookBindingsMap
-      ? store.countWorldbookBindingsMap(rows.map(function (c) { return c.id; }))
-      : null;
 
     function finishGrid() {
       renderVolumeFooter();
     }
 
-    var chunk = resolveGridChunk();
-    if (rows.length <= chunk) {
-      grid.innerHTML = rows.map(function (c) { return panelHtml(c, wbCounts); }).join('');
+    if (!rows.length) {
+      grid.innerHTML =
+        '<div class="mn-empty">' +
+        '<strong>名册空白</strong>' +
+        '<span>点「建档」创建角色<br>或「导入」酒馆卡（PNG / JSON）<br>编辑时可从 docx/txt 填入人设 · 与世界书典籍联动</span>' +
+        '</div>' +
+        '<div class="mn-book-gap"></div>' +
+        '<div class="mn-tags">' + blankCardHtml() + '</div>';
       finishGrid();
       return;
     }
 
-    grid.innerHTML = '';
-    var idx = 0;
-    function appendChunk() {
-      if (gen !== gridRenderGen) return;
-      var slice = rows.slice(idx, idx + chunk);
-      if (!slice.length) {
-        finishGrid();
-        return;
-      }
-      grid.insertAdjacentHTML('beforeend', slice.map(function (c) { return panelHtml(c, wbCounts); }).join(''));
-      idx += chunk;
-      if (idx < rows.length) requestAnimationFrame(appendChunk);
-      else finishGrid();
+    /* 已立忆 → 置顶横幅签；未立忆 → 双列名签（末尾追加空白签） */
+    var bannersHtml = '';
+    var cardItems = [];
+    rows.forEach(function (c, i) {
+      if (stats[i].has) bannersHtml += bannerHtml(c, stats[i]);
+      else cardItems.push(tagCardHtml(c, i + 1));
+    });
+    cardItems.push(blankCardHtml());
+
+    grid.innerHTML =
+      (bannersHtml
+        ? '<div class="mn-banners">' + bannersHtml + '</div><div class="mn-book-gap"></div>'
+        : '') +
+      '<div class="mn-tags" id="miya-ct-tags"></div>';
+    var tags = $('miya-ct-tags');
+
+    /* 名签量大时按帧分块插入，避免一次性 innerHTML 卡顿 */
+    var chunk = resolveGridChunk();
+    if (cardItems.length <= chunk) {
+      tags.innerHTML = cardItems.join('');
+      finishGrid();
+      return;
     }
-    requestAnimationFrame(appendChunk);
+    var idx = 0;
+    (function appendChunk() {
+      if (gen !== gridRenderGen) return;
+      var slice = cardItems.slice(idx, idx + chunk);
+      tags.insertAdjacentHTML('beforeend', slice.join(''));
+      idx += chunk;
+      if (idx < cardItems.length) requestAnimationFrame(appendChunk);
+      else finishGrid();
+    })();
   }
 
   function renderList() {
@@ -680,6 +777,10 @@
     });
 
     $('miya-ct-back').addEventListener('click', closeContactsApp);
+    $('miya-ct-refresh').addEventListener('click', function () {
+      if (Date.now() < openGuardUntil) return;
+      renderList();
+    });
     $('miya-ct-add').addEventListener('click', function () {
       if (Date.now() < openGuardUntil) return;
       clearPendingImport();
@@ -774,6 +875,13 @@
         promptNewGroup();
         return;
       }
+      /* 空白签：名册末尾的快捷建档入口 */
+      if (e.target.closest('[data-ct-new]')) {
+        if (Date.now() < openGuardUntil) return;
+        clearPendingImport();
+        fillEditor(null);
+        return;
+      }
       var delGroupBtn = e.target.closest('[data-ct-group-del]');
       if (delGroupBtn) {
         promptDeleteGroup(delGroupBtn.getAttribute('data-ct-group-del'));
@@ -794,7 +902,12 @@
     openGuardUntil = Date.now() + 450;
     Promise.all([
       store.whenReady(),
-      relStore ? relStore.whenReady() : Promise.resolve()
+      relStore ? relStore.whenReady() : Promise.resolve(),
+      /* 名册要读每个角色的记忆沉淀（已立忆/存忆轮数），等聊天库就绪；
+         失败也不阻塞 —— memoryStatsFor 自带零值兜底 */
+      global.miyaChatStore && global.miyaChatStore.init
+        ? Promise.resolve(global.miyaChatStore.init()).catch(function () {})
+        : Promise.resolve()
     ]).then(function () {
       bindEvents();
       closeEditor();

@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-86">
+  <meta name="miya-sw-build" content="sw-87">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=53" type="image/png">
@@ -38,7 +38,7 @@
   <link rel="stylesheet" href="css/miya-settings.css?v=37">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=15">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=3">
-  <link rel="stylesheet" href="css/miya-contacts.css?v=7">
+  <link rel="stylesheet" href="css/miya-contacts.css?v=8">
   <link rel="stylesheet" href="css/miya-chat.css?v=63">
   <link rel="stylesheet" href="css/miya-chat-group.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=6">
@@ -897,41 +897,60 @@
     <input type="file" class="ins-file" id="miya-wb-doc-file" accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
   </div>
 
-  <!-- 联系人 · 黑白漫画档案 -->
+  <!-- 联系人 · 清爽蓝名册 -->
   <div class="miya-contacts-app" id="miya-contacts-app" aria-hidden="true">
-    <div class="mn-veil" aria-hidden="true"></div>
-
-    <header class="mn-top">
-      <button type="button" class="mn-back" id="miya-ct-back" aria-label="返回">←</button>
-      <div class="mn-title-block">
-        <span class="mn-kicker">Archive · Personae</span>
-        <h1 class="mn-title">联系人档案</h1>
+    <header class="mn-topbar">
+      <button type="button" class="mn-icon-btn" id="miya-ct-back" aria-label="返回">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="mn-brand">
+        <span class="mn-seal" aria-hidden="true">K</span>
+        <span class="mn-brand-name">Karin</span>
       </div>
+      <button type="button" class="mn-icon-btn" id="miya-ct-refresh" aria-label="刷新名册">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 3.5v4.8h-4.8"/><path d="M20.5 15a8.7 8.7 0 1 1-2.1-9.1l2.1 2.4"/></svg>
+      </button>
     </header>
 
-    <div class="mn-body">
-      <div class="mn-volumes-row">
-        <nav class="mn-volumes" id="miya-ct-volumes" aria-label="分卷"></nav>
-        <div class="mn-top-actions">
-          <button type="button" class="mn-btn" id="miya-ct-card-import">导入</button>
-          <button type="button" class="mn-btn mn-btn--fill" id="miya-ct-add">建档</button>
+    <div class="mn-page" id="miya-ct-list-scroll">
+      <div class="mn-page-inner">
+        <section class="mn-head">
+          <p class="mn-kicker">名册 · ROSTER</p>
+          <h1 class="mn-h1">联系人档案</h1>
+          <p class="mn-suben">CONTACTS · SOFT · PAGES</p>
+          <p class="mn-head-meta" id="miya-ct-meta">录入 <b>0</b> 位 · 已立忆 <b>0</b> 位 · 计 <b>0</b> 轮</p>
+        </section>
+
+        <div class="mn-actions">
+          <button type="button" class="mn-btn mn-btn--sub" id="miya-ct-card-import">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/></svg>
+            导入
+          </button>
+          <button type="button" class="mn-btn mn-btn--main" id="miya-ct-add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            建档
+          </button>
         </div>
-      </div>
-      <div class="mn-stage">
-        <div class="mn-scroll">
-          <div class="mn-grid" id="miya-ct-grid"></div>
+
+        <section class="mn-book" aria-label="角色名签">
+          <div id="miya-ct-grid"></div>
           <div class="mn-vol-foot" id="miya-ct-vol-foot" hidden></div>
-        </div>
+        </section>
+
+        <footer class="mn-colophon" aria-hidden="true"><i></i>KARIN · 名册<i></i></footer>
       </div>
     </div>
 
     <div class="mn-editor" id="miya-ct-editor" aria-hidden="true">
-      <header class="mn-top">
-        <button type="button" class="mn-back" id="miya-ct-editor-back" aria-label="返回列表">←</button>
-        <div class="mn-title-block">
-          <span class="mn-kicker">Dossier</span>
-          <h1 class="mn-title" id="miya-ct-editor-title">新建档案</h1>
+      <header class="mn-topbar">
+        <button type="button" class="mn-icon-btn" id="miya-ct-editor-back" aria-label="返回列表">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="mn-brand">
+          <span class="mn-seal" aria-hidden="true">D</span>
+          <h1 class="mn-brand-name" id="miya-ct-editor-title">新建档案</h1>
         </div>
+        <span class="mn-icon-btn" aria-hidden="true"></span>
       </header>
       <div class="mn-editor-scroll" id="miya-ct-editor-scroll">
         <div class="mn-dossier">
@@ -3449,7 +3468,7 @@
             <path d="M44 91v7M100 91v7" stroke="#8f8a9d" stroke-width="1.7"/>
             <rect x="110" y="64" width="10" height="14" rx="3" stroke="#b0aab8" stroke-width="1.7"/>
             <circle cx="126" cy="71" r="4" stroke="#b0aab8" stroke-width="1.7"/>
-            <g stroke="#d4b57c" stroke-width="1.7" stroke-dasharray="0.1 6" opacity="0.75">
+            <g stroke="#c9b8ff" stroke-width="1.7" stroke-dasharray="0.1 6" opacity="0.75">
               <path d="M132 65L192 45"/>
               <path d="M133 71L192 71"/>
               <path d="M132 77L192 97"/>
@@ -3561,7 +3580,7 @@
   <script defer src="js2/miya-worldbook-doc-import.js?v=6"></script>
   <script defer src="js1/miya-beautify-doc-import.js?v=4"></script>
   <script defer src="js2/miya-tavern-card-import.js?v=6"></script>
-  <script defer src="js1/miya-contacts-app.js?v=13"></script>
+  <script defer src="js1/miya-contacts-app.js?v=14"></script>
   <script defer src="js2/miya-worldbook-st.js?v=13"></script>
   <script defer src="js2/miya-worldbook-store.js?v=20"></script>
   <script defer src="js2/miya-worldbook-matcher.js?v=9"></script>

@@ -1,31 +1,30 @@
 /* ============================================================
-   记忆阅览室 · v12「暗色放映厅」
-   设计令牌与结构移植自 preview-v12t.html：
-   深炭底、暖白文字、琥珀金唯一强调色；胶片孔 + 撕票线 + 票号票根；
-   银幕面板放映时亮起。
+   记忆阅览室 · v13「液态紫玻璃」
+   由 v12「暗色放映厅」换肤而来：结构与交互不变。
+   深紫黑底 + 两层柔和紫光斑；票根/银幕为 backdrop-filter 毛玻璃；
+   淡紫为全页唯一强调色。
    注意：手机系统状态栏（时间/信号/电量）与底部手势条由真实设备
    提供，本样式表不渲染、也不预留其位置。
    ============================================================ */
 .miya-memory-app {
-  --mm-bg: #17161f;            /* 深炭底（忌纯黑） */
-  --mm-bg-deep: #121118;       /* 更深一档 */
-  --mm-surface: #1b1a26;       /* 银幕面板 */
-  --mm-surface-lit: #222132;   /* 放映中的银幕 */
-  --mm-card: #252335;          /* 票根卡面 */
-  --mm-card-lit: #2a2840;      /* 选中票根卡面 */
-  --mm-hole: #101017;          /* 胶片孔（暗于卡面） */
-  --mm-ink: #f0ebdf;           /* 暖白主文字 */
-  --mm-ink-soft: #dcd6ca;      /* 次级文字 */
-  --mm-muted: #b3adbe;         /* 弱文字 */
-  --mm-dim: #9a95a8;           /* 0 值暗淡（对卡面 AA 达标） */
-  --mm-champagne: #d4b57c;         /* 琥珀金（全页唯一强调色） */
-  --mm-champagne-bright: #e2c68e;  /* 亮琥珀（选中态） */
-  --mm-champagne-text: #d0b27a;    /* 小号琥珀文字 */
-  --mm-champagne-dim: #bfa878;     /* 票号默认金墨 */
-  --mm-amber-deep: #241a09;        /* 琥珀按钮深字 */
-  --mm-danger: #c9867c;            /* 删除等警示（降饱和暖红，暗底可读） */
-  --mm-hairline: rgba(240, 235, 223, 0.09);
-  --mm-hairline-strong: rgba(212, 181, 124, 0.22);
+  --mm-bg: #0d0a16;            /* 深紫黑底 */
+  --mm-bg-deep: #0a0812;       /* 更深一档 */
+  --mm-surface: rgba(255, 255, 255, 0.055);       /* 银幕面板（毛玻璃底） */
+  --mm-surface-lit: rgba(255, 255, 255, 0.09);    /* 放映中的银幕 */
+  --mm-hole: rgba(8, 6, 16, 0.62);                /* 胶片孔（玻璃上的暗孔） */
+  --mm-ink: #f2effa;           /* 主文字（暖白偏紫） */
+  --mm-ink-soft: #ddd7ee;      /* 次级文字 */
+  --mm-muted: #b9b1d4;         /* 弱文字 */
+  --mm-dim: #948cab;           /* 0 值暗淡 */
+  --mm-accent: #c9b8ff;            /* 淡紫（全页唯一强调色） */
+  --mm-accent-bright: #dcd0ff;     /* 亮紫（选中态） */
+  --mm-accent-text: #cabcff;       /* 小号紫文字 */
+  --mm-accent-dim: #a897d8;        /* 票号默认紫墨 */
+  --mm-accent-deep: #171129;       /* 紫按钮深字 */
+  --mm-danger: #d98a9e;            /* 删除等警示（紫环境下的玫红） */
+  --mm-hairline: rgba(255, 255, 255, 0.10);
+  --mm-hairline-strong: rgba(201, 184, 255, 0.32);
+  --mm-glass-blur: blur(22px) saturate(1.3);
   --mm-font-sans: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --mm-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
   --mm-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -36,8 +35,10 @@
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(120% 380px at 50% -80px, rgba(212, 181, 124, 0.10), rgba(212, 181, 124, 0.035) 55%, transparent 78%),
-    linear-gradient(180deg, #1a1926 0%, var(--mm-bg) 45%, #14131d 100%);
+    radial-gradient(560px 420px at 16% 6%, rgba(139, 109, 255, 0.26), transparent 65%),
+    radial-gradient(680px 560px at 88% 88%, rgba(96, 64, 190, 0.20), transparent 62%),
+    radial-gradient(420px 320px at 80% 30%, rgba(70, 50, 140, 0.12), transparent 70%),
+    linear-gradient(180deg, #120e1e 0%, var(--mm-bg) 50%, var(--mm-bg-deep) 100%);
   color: var(--mm-ink);
   font-family: var(--mm-font-sans);
   -webkit-font-smoothing: antialiased;
@@ -73,7 +74,7 @@
   background-size: 180px 180px;
 }
 
-.miya-memory-app ::selection { background: rgba(212, 181, 124, 0.35); }
+.miya-memory-app ::selection { background: rgba(139, 109, 255, 0.35); }
 .miya-memory-app button {
   font-family: inherit;
   border: 0;
@@ -84,7 +85,7 @@
 }
 .miya-memory-app button:focus-visible,
 .miya-memory-app .mm-ticket:focus-visible {
-  outline: 2px solid rgba(226, 198, 142, 0.85);
+  outline: 2px solid rgba(220, 208, 255, 0.85);
   outline-offset: 2px;
 }
 
@@ -109,7 +110,7 @@
 .miya-memory-app .mm-brand svg {
   width: 22px;
   height: 22px;
-  color: var(--mm-champagne);
+  color: var(--mm-accent);
   transform: rotate(90deg);   /* 胶片格竖放，像一格格画幅 */
 }
 .miya-memory-app .mm-brand-name {
@@ -140,8 +141,8 @@
 .miya-memory-app .mm-back:active,
 .miya-memory-app .mm-icon-btn:active {
   transform: scale(0.9);
-  background: rgba(240, 235, 223, 0.06);
-  color: var(--mm-champagne-bright);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--mm-accent-bright);
 }
 
 /* ========== 主内容（宽屏居中兜底） ========== */
@@ -222,13 +223,12 @@
 }
 .miya-memory-app .mm-reel-counter b {
   font-weight: 700;
-  color: var(--mm-champagne-text);
+  color: var(--mm-accent-text);
 }
 
 /* 计数器栈：宽度按票号位数由 JS 内联设定（2 位=2ch，3 位=3ch…）。
    用 inline-grid 把所有数字叠进同一格 —— 数字留在正常行内流里，
-   基线与「/ 06」天然对齐（原 absolute + vertical-align 手调方案
-   在不同设备字体下会出现 02 高一截的不对齐） */
+   基线与「/ 06」天然对齐。 */
 .miya-memory-app .mm-cnt-stack {
   display: inline-grid;
   width: 2ch;
@@ -239,7 +239,7 @@
   font-style: normal;
   font-weight: 700;
   line-height: 1;
-  color: var(--mm-champagne-text);
+  color: var(--mm-accent-text);
   transition: opacity 0.2s var(--mm-ease);
 }
 
@@ -279,21 +279,21 @@
   width: 100%;
 }
 
-/* 右侧渐隐遮罩（滑到底自动隐去） */
+/* 右侧渐隐遮罩（滑到底自动隐去）：颜色与票根带处的背景匹配 */
 .miya-memory-app .mm-strip-fade {
   position: absolute;
   top: 14px;
   right: 0;
   bottom: 20px;
   width: 40px;
-  background: linear-gradient(90deg, rgba(23, 22, 31, 0), #17161f 82%);
+  background: linear-gradient(90deg, rgba(13, 10, 22, 0), #100d1a 82%);
   pointer-events: none;
   transition: opacity 0.3s;
   z-index: 1;
 }
 .miya-memory-app .mm-strip-fade.mm-off { opacity: 0; }
 
-/* ========== 票根 ========== */
+/* ========== 票根（毛玻璃） ========== */
 .miya-memory-app .mm-ticket {
   position: relative;
   flex: 0 0 auto;
@@ -302,41 +302,41 @@
   border-radius: 14px;
   text-align: left;
   background:
-    radial-gradient(140% 90% at 22% -12%, rgba(240, 235, 223, 0.055), transparent 52%),
-    linear-gradient(180deg, #292739 0%, var(--mm-card) 58%, #201e2d 100%);
-  border: 1px solid rgba(212, 181, 124, 0.26);
+    linear-gradient(160deg, rgba(160, 140, 255, 0.10), rgba(255, 255, 255, 0.05) 55%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow:
-    inset 0 1px 0 rgba(240, 235, 223, 0.06),
-    0 10px 22px -14px rgba(8, 7, 14, 0.8);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 14px 34px -16px rgba(0, 0, 0, 0.85);
+  -webkit-backdrop-filter: var(--mm-glass-blur);
+  backdrop-filter: var(--mm-glass-blur);
   transition: border-color 0.2s, background 0.2s, box-shadow 0.24s, transform 0.2s var(--mm-ease);
   -webkit-tap-highlight-color: transparent;
 }
-/* 纸张噪点：只铺在票面，营造纸感 */
+/* 纸张噪点：只铺在票面 */
 .miya-memory-app .mm-grain {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  opacity: 0.07;
+  opacity: 0.06;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23t)'/%3E%3C/svg%3E");
   background-size: 120px 120px;
 }
-.miya-memory-app .mm-ticket:active { border-color: rgba(226, 198, 142, 0.6); }
+.miya-memory-app .mm-ticket:active { border-color: rgba(220, 208, 255, 0.45); }
 
 .miya-memory-app .mm-ticket.selected {
   transform: translateY(-4px);
   background:
-    radial-gradient(140% 90% at 22% -12%, rgba(226, 198, 142, 0.07), transparent 52%),
-    linear-gradient(180deg, #2f2d43 0%, var(--mm-card-lit) 56%, #252335 100%);
-  border-color: rgba(226, 198, 142, 0.75);
+    linear-gradient(160deg, rgba(170, 150, 255, 0.17), rgba(255, 255, 255, 0.08) 55%);
+  border-color: rgba(201, 184, 255, 0.65);
   box-shadow:
-    inset 0 1px 0 rgba(240, 235, 223, 0.08),
-    0 16px 30px -14px rgba(8, 7, 14, 0.85),
-    0 6px 22px -10px rgba(212, 181, 124, 0.22);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 18px 40px -16px rgba(0, 0, 0, 0.9),
+    0 6px 26px -10px rgba(139, 109, 255, 0.35);
 }
-.miya-memory-app .mm-ticket.selected:active { border-color: rgba(226, 198, 142, 0.9); }
+.miya-memory-app .mm-ticket.selected:active { border-color: rgba(220, 208, 255, 0.8); }
 
-/* 卡顶胶片冲孔：真冲孔质感 —— 亮缘透出 + 内阴影压痕 */
+/* 卡顶胶片冲孔：玻璃上的暗孔 */
 .miya-memory-app .mm-film-holes {
   position: absolute;
   top: 8px;
@@ -352,12 +352,10 @@
   width: 13px;
   height: 9px;
   border-radius: 2.5px;
-  background:
-    linear-gradient(180deg, rgba(240, 235, 223, 0.16), rgba(240, 235, 223, 0.05) 45%),
-    linear-gradient(180deg, #1a1926, var(--mm-hole) 70%);
+  background: var(--mm-hole);
   box-shadow:
-    inset 0 2px 3px rgba(5, 4, 10, 0.9),
-    inset 0 -1px 1px rgba(240, 235, 223, 0.10);
+    inset 0 2px 3px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.08);
 }
 
 /* 左侧撕票线：齿孔质感 */
@@ -367,7 +365,7 @@
   top: 0;
   bottom: 0;
   width: 46px;
-  background: linear-gradient(180deg, rgba(240, 235, 223, 0.028), transparent 30%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%);
   pointer-events: none;
 }
 .miya-memory-app .mm-ticket-stub::after {
@@ -377,7 +375,7 @@
   top: 3px;
   bottom: 3px;
   width: 2px;
-  background-image: radial-gradient(circle at 1px 3.5px, rgba(240, 235, 223, 0.22) 1.1px, transparent 1.6px);
+  background-image: radial-gradient(circle at 1px 3.5px, rgba(255, 255, 255, 0.28) 1.1px, transparent 1.6px);
   background-size: 2px 7px;
   background-repeat: repeat-y;
 }
@@ -391,8 +389,8 @@
   height: 14px;
   margin-left: -7px;
   border-radius: 50%;
-  background: var(--mm-bg);
-  box-shadow: inset 0 1px 2px rgba(5, 4, 10, 0.5);
+  background: #0f0c19;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
   z-index: 2;
   pointer-events: none;
 }
@@ -432,11 +430,11 @@
   font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: var(--mm-champagne-dim);
+  color: var(--mm-accent-dim);
   transition: color 0.2s;
   white-space: nowrap;
 }
-.miya-memory-app .mm-ticket.selected .mm-ticket-no { color: var(--mm-champagne-bright); }
+.miya-memory-app .mm-ticket.selected .mm-ticket-no { color: var(--mm-accent-bright); }
 .miya-memory-app .mm-ticket-name {
   margin-top: 5px;
   font-size: 22px;
@@ -467,7 +465,7 @@
   color: var(--mm-dim);
   font-style: normal;
 }
-.miya-memory-app .mm-ticket.has-memo .mm-memo-num { color: var(--mm-champagne-bright); }
+.miya-memory-app .mm-ticket.has-memo .mm-memo-num { color: var(--mm-accent-bright); }
 .miya-memory-app .mm-ticket-tags {
   margin-top: auto;
   display: flex;
@@ -483,7 +481,7 @@
   font-style: normal;
   color: var(--mm-dim);
 }
-.miya-memory-app .mm-ticket-tags b.on { color: var(--mm-champagne-text); }
+.miya-memory-app .mm-ticket-tags b.on { color: var(--mm-accent-text); }
 
 /* ========== 滑动进度条 ========== */
 .miya-memory-app .mm-dots {
@@ -499,7 +497,7 @@
   height: 3px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: rgba(240, 235, 223, 0.14);
+  background: rgba(255, 255, 255, 0.16);
 }
 .miya-memory-app .mm-dots-fill {
   position: absolute;
@@ -508,8 +506,8 @@
   width: 8%;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--mm-champagne-bright);
-  box-shadow: 0 0 6px rgba(226, 198, 142, 0.35);
+  background: var(--mm-accent-bright);
+  box-shadow: 0 0 6px rgba(201, 184, 255, 0.5);
 }
 .miya-memory-app .mm-dot-btn {
   position: absolute;
@@ -525,18 +523,21 @@
   width: 5px;
   height: 5px;
   border-radius: 3px;
-  background: rgba(240, 235, 223, 0.35);
+  background: rgba(255, 255, 255, 0.38);
   transition: background 0.2s;
 }
-.miya-memory-app .mm-dot-btn:active i { background: var(--mm-champagne-bright); }
+.miya-memory-app .mm-dot-btn:active i { background: var(--mm-accent-bright); }
 
-/* ========== 银幕面板（空态 / 放映详情共用） ========== */
+/* ========== 银幕面板（空态 / 放映详情共用，毛玻璃） ========== */
 .miya-memory-app .mm-screen {
   position: relative;
   margin: 10px 20px 0;
   border-radius: 18px;
-  border: 1px solid rgba(212, 181, 124, 0.22);
+  border: 1px solid rgba(201, 184, 255, 0.26);
   background: var(--mm-surface);
+  -webkit-backdrop-filter: var(--mm-glass-blur);
+  backdrop-filter: var(--mm-glass-blur);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
   overflow: hidden;
   transition: background 0.45s, border-color 0.45s;
 }
@@ -545,16 +546,16 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(180deg, rgba(240, 235, 223, 0.028) 0 1px, transparent 1px 4px);
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 4px);
   pointer-events: none;
   z-index: 1;
 }
-/* 放映时银幕顶部透出的暖光 */
+/* 放映时银幕顶部透出的紫光 */
 .miya-memory-app .mm-screen::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 62% at 50% -12%, rgba(212, 181, 124, 0.10), transparent 62%);
+  background: radial-gradient(120% 62% at 50% -12%, rgba(139, 109, 255, 0.16), transparent 62%);
   opacity: 0;
   transition: opacity 0.5s;
   pointer-events: none;
@@ -562,11 +563,11 @@
 }
 .miya-memory-app .mm-screen.lit {
   background: var(--mm-surface-lit);
-  border-color: rgba(212, 181, 124, 0.42);
+  border-color: rgba(201, 184, 255, 0.5);
 }
 .miya-memory-app .mm-screen.lit::after { opacity: 1; }
 
-/* 空态：灯还亮着 */
+/* 空态：放映机待机 */
 .miya-memory-app .mm-screen-empty {
   position: relative;
   z-index: 2;
@@ -610,7 +611,7 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.24em;
-  color: var(--mm-champagne-text);
+  color: var(--mm-accent-text);
 }
 .miya-memory-app .mm-eyebrow.live::before {
   content: '';
@@ -620,7 +621,7 @@
   margin-right: 7px;
   margin-bottom: 1px;
   border-radius: 50%;
-  background: var(--mm-champagne-bright);
+  background: var(--mm-accent-bright);
 }
 .miya-memory-app .mm-detail-ticket-no {
   font-family: var(--mm-font-mono);
@@ -650,13 +651,13 @@
   overflow: hidden;
 }
 .miya-memory-app .mm-cell {
-  background: var(--mm-surface);
+  background: rgba(255, 255, 255, 0.045);
   padding: 12px 14px 11px;
   display: flex;
   flex-direction: column;
   transition: background 0.45s;
 }
-.miya-memory-app .mm-screen.lit .mm-cell { background: var(--mm-surface-lit); }
+.miya-memory-app .mm-screen.lit .mm-cell { background: rgba(255, 255, 255, 0.07); }
 .miya-memory-app .mm-cell-key {
   font-family: var(--mm-font-mono);
   font-size: 10px;
@@ -686,9 +687,9 @@
   letter-spacing: 0.04em;
   color: var(--mm-dim);
 }
-.miya-memory-app .mm-cell.on .mm-cell-key { color: var(--mm-champagne-text); }
-.miya-memory-app .mm-cell.on .mm-cell-num { color: var(--mm-champagne-bright); }
-.miya-memory-app .mm-cell.on .mm-cell-num .mm-unit { color: var(--mm-champagne-text); }
+.miya-memory-app .mm-cell.on .mm-cell-key { color: var(--mm-accent-text); }
+.miya-memory-app .mm-cell.on .mm-cell-num { color: var(--mm-accent-bright); }
+.miya-memory-app .mm-cell.on .mm-cell-num .mm-unit { color: var(--mm-accent-text); }
 .miya-memory-app .mm-cell.on .mm-cell-label { color: var(--mm-muted); }
 
 /* ========== 控制台（角色记忆提炼 / 提炼台） ========== */
@@ -697,7 +698,7 @@
   padding: 14px 14px 13px;
   border: 1px solid var(--mm-hairline);
   border-radius: 12px;
-  background: rgba(240, 235, 223, 0.02);
+  background: rgba(255, 255, 255, 0.03);
 }
 .miya-memory-app .mm-console__row {
   margin-top: 11px;
@@ -727,7 +728,7 @@
 .miya-memory-app .mm-console input[type="number"] {
   width: 78px;
   padding: 8px 10px;
-  background: var(--mm-bg-deep);
+  background: rgba(10, 8, 18, 0.6);
   border: 1px solid var(--mm-hairline);
   border-radius: 10px;
   color: var(--mm-ink);
@@ -739,7 +740,7 @@
 }
 .miya-memory-app .mm-console input[type="number"]:focus {
   outline: none;
-  border-color: rgba(226, 198, 142, 0.6);
+  border-color: rgba(201, 184, 255, 0.6);
 }
 
 /* 通用小按钮 */
@@ -751,8 +752,8 @@
   padding: 9px 16px;
   border: 1px solid var(--mm-hairline-strong);
   border-radius: 12px;
-  background: transparent;
-  color: var(--mm-champagne-text);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--mm-accent-text);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -764,33 +765,33 @@
 }
 .miya-memory-app .mm-btn:active {
   transform: scale(0.97);
-  background: rgba(212, 181, 124, 0.1);
+  background: rgba(139, 109, 255, 0.16);
 }
 .miya-memory-app .mm-btn--fill {
-  background: var(--mm-champagne);
-  border-color: var(--mm-champagne);
-  color: var(--mm-amber-deep);
-  box-shadow: inset 0 1px 0 rgba(255, 248, 235, 0.32);
+  background: var(--mm-accent);
+  border-color: var(--mm-accent);
+  color: var(--mm-accent-deep);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .miya-memory-app .mm-btn--fill:active {
-  background: var(--mm-champagne-bright);
+  background: var(--mm-accent-bright);
 }
 .miya-memory-app .mm-btn:disabled {
-  background: rgba(212, 181, 124, 0.12);
+  background: rgba(201, 184, 255, 0.12);
   border-color: transparent;
-  color: #8f8462;
+  color: #6f6790;
   cursor: not-allowed;
   transform: none;
 }
 
-/* ========== 开始放映主按钮（琥珀底深字） ========== */
+/* ========== 开始放映主按钮（紫底深字） ========== */
 .miya-memory-app .mm-play-btn {
   margin-top: 16px;
   width: 100%;
   min-height: 52px;
   border-radius: 14px;
-  background: var(--mm-champagne);
-  color: var(--mm-amber-deep);
+  background: var(--mm-accent);
+  color: var(--mm-accent-deep);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -800,8 +801,8 @@
   letter-spacing: 0.2em;
   text-indent: 0.2em;
   box-shadow:
-    0 10px 24px -12px rgba(212, 181, 124, 0.4),
-    inset 0 1px 0 rgba(255, 248, 235, 0.32);
+    0 10px 26px -12px rgba(139, 109, 255, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
   transition: transform 0.14s var(--mm-ease), filter 0.2s, background 0.3s, color 0.3s, box-shadow 0.3s;
   -webkit-tap-highlight-color: transparent;
 }
@@ -812,15 +813,15 @@
   filter: brightness(1.06);
 }
 .miya-memory-app .mm-play-btn.playing {
-  background: transparent;
-  border: 1px solid rgba(212, 181, 124, 0.55);
-  color: var(--mm-champagne-bright);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(201, 184, 255, 0.55);
+  color: var(--mm-accent-bright);
   box-shadow: none;
   text-indent: 0;
 }
 .miya-memory-app .mm-play-btn:disabled {
-  background: rgba(212, 181, 124, 0.12);
-  color: #8f8462;
+  background: rgba(201, 184, 255, 0.12);
+  color: #6f6790;
   box-shadow: none;
   cursor: not-allowed;
   letter-spacing: 0.12em;
@@ -849,7 +850,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--mm-champagne-text);
+  color: var(--mm-accent-text);
   line-height: 1;
 }
 .miya-memory-app .mm-chapter__title {
@@ -884,22 +885,22 @@
   padding: 12px 13px 11px;
   border: 1px solid var(--mm-hairline);
   border-radius: 13px;
-  background: rgba(240, 235, 223, 0.025);
+  background: rgba(255, 255, 255, 0.04);
   text-align: left;
 }
 .miya-memory-app .mm-clip--mega {
-  border-color: rgba(212, 181, 124, 0.3);
-  background: rgba(212, 181, 124, 0.05);
+  border-color: rgba(201, 184, 255, 0.35);
+  background: rgba(139, 109, 255, 0.10);
 }
 .miya-memory-app .mm-clip--char {
-  border-color: rgba(212, 181, 124, 0.18);
+  border-color: rgba(201, 184, 255, 0.18);
 }
 .miya-memory-app .mm-clip__connector {
   display: block;
   width: 1px;
   height: 12px;
   margin-left: 22px;
-  background: linear-gradient(180deg, rgba(212, 181, 124, 0.4), rgba(212, 181, 124, 0.12));
+  background: linear-gradient(180deg, rgba(201, 184, 255, 0.45), rgba(201, 184, 255, 0.12));
 }
 .miya-memory-app .mm-clip__head {
   display: flex;
@@ -912,7 +913,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  color: var(--mm-champagne-text);
+  color: var(--mm-accent-text);
 }
 .miya-memory-app .mm-tag {
   font-style: normal;
@@ -920,8 +921,8 @@
   letter-spacing: 0.06em;
   padding: 2px 7px;
   border-radius: 99px;
-  border: 1px solid rgba(212, 181, 124, 0.35);
-  color: var(--mm-champagne-text);
+  border: 1px solid rgba(201, 184, 255, 0.4);
+  color: var(--mm-accent-text);
 }
 .miya-memory-app .mm-clip__acts {
   margin-left: auto;
@@ -940,8 +941,8 @@
   transition: color 0.2s, background 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
-.miya-memory-app .mm-clip__edit:active { color: var(--mm-champagne-bright); background: rgba(212, 181, 124, 0.08); }
-.miya-memory-app .mm-clip__del:active { color: var(--mm-danger); background: rgba(201, 134, 124, 0.08); }
+.miya-memory-app .mm-clip__edit:active { color: var(--mm-accent-bright); background: rgba(139, 109, 255, 0.14); }
+.miya-memory-app .mm-clip__del:active { color: var(--mm-danger); background: rgba(217, 138, 158, 0.12); }
 .miya-memory-app .mm-clip__body {
   margin-top: 8px;
   font-size: 13px;
@@ -955,7 +956,7 @@
   width: 100%;
   min-height: 120px;
   padding: 10px 12px;
-  background: var(--mm-bg-deep);
+  background: rgba(10, 8, 18, 0.6);
   border: 1px solid var(--mm-hairline);
   border-radius: 10px;
   color: var(--mm-ink);
@@ -967,7 +968,7 @@
 }
 .miya-memory-app .mm-clip__textarea:focus {
   outline: none;
-  border-color: rgba(226, 198, 142, 0.6);
+  border-color: rgba(201, 184, 255, 0.6);
 }
 .miya-memory-app .mm-clip__edit-actions {
   margin-top: 9px;
@@ -986,9 +987,9 @@
   max-width: min(82vw, 420px);
   padding: 11px 18px;
   border-radius: 99px;
-  background: rgba(37, 35, 53, 0.96);
-  border: 1px solid rgba(212, 181, 124, 0.4);
-  box-shadow: 0 14px 34px -14px rgba(8, 7, 14, 0.9);
+  background: rgba(30, 24, 48, 0.95);
+  border: 1px solid rgba(201, 184, 255, 0.4);
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.9);
   color: var(--mm-ink-soft);
   font-size: 12.5px;
   letter-spacing: 0.04em;
