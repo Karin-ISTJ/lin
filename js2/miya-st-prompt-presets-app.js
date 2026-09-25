@@ -56,12 +56,28 @@
           (p.id === activeId ? ' selected' : '') +
           '>' +
           esc(p.name) +
-          '（' +
-          (p.entries ? p.entries.length : 0) +
-          '）</option>'
+          '</option>'
         );
       })
       .join('');
+  }
+
+  /* 六点拖拽手柄 / 垃圾桶（内联 SVG，颜色走 currentColor） */
+  var GRIP_SVG =
+    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
+  var TRASH_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>';
+
+  /* 版头统计：共 N 项 · 已启用 N 项 */
+  function renderHeadMeta(entries) {
+    var totalEl = $('stp-meta-total');
+    var onEl = $('stp-meta-on');
+    if (totalEl) totalEl.textContent = String(entries.length);
+    if (onEl) {
+      var onCount = 0;
+      entries.forEach(function (e) { if (e.enabled) onCount++; });
+      onEl.textContent = String(onCount);
+    }
   }
 
   function renderList() {
@@ -70,22 +86,31 @@
     if (!box || !st) return;
     renderPackSelect();
     var entries = st.listEntries();
+    renderHeadMeta(entries);
     if (!entries.length) {
-      box.innerHTML = '<div class="stp-empty">当前预设包没有条目。<br/>点「＋新增条目」手动创建，或点「导入」添加一套。</div>';
+      box.innerHTML = '<div class="stp-empty">当前预设包没有条目。<br/>点上方「＋」手动创建，或点「导入」添加一套。</div>';
       return;
     }
+    /*
+     * 行结构（清爽蓝）：六点把手 + 蓝色开关 + 名称 + 垃圾桶。
+     * - 启用行加 is-on（左缘蓝竖线），停用行加 is-off（半透明）；
+     * - 旧版行内的「system · Relative」meta 小字已按需求删除，
+     *   仅 assistant 身份保留一枚小徽标做区分；
+     * - 行的间隔尺寸由 CSS 锁死沿用旧紧凑版，这里不要加任何
+     *   margin/padding —— 间隔一变条目就难翻了。
+     */
     box.innerHTML = entries.map(function (e) {
+      var on = !!e.enabled;
+      var isAssistant = String(e.role || 'system') === 'assistant';
       return (
-        '<div class="stp-row' + (e.enabled ? '' : ' is-off') + '" data-id="' + esc(e.id) + '" draggable="true">' +
-        '<button type="button" class="stp-row__drag" data-act="drag" aria-label="拖动排序" title="拖动排序">⋮⋮</button>' +
-        '<label class="stp-switch" title="启用"><input type="checkbox" data-act="toggle" ' + (e.enabled ? 'checked' : '') + ' /><span></span></label>' +
+        '<div class="stp-row ' + (on ? 'is-on' : 'is-off') + '" data-id="' + esc(e.id) + '">' +
+        '<button type="button" class="stp-row__drag" data-act="drag" aria-label="拖动排序" title="拖动排序">' + GRIP_SVG + '</button>' +
+        '<label class="stp-switch" title="启用"><input type="checkbox" data-act="toggle" ' + (on ? 'checked' : '') + ' /><span></span></label>' +
         '<button type="button" class="stp-row__edit" data-act="edit" title="编辑条目">' +
-          '<span class="stp-row__name" title="' + esc(e.identifier || e.name) + '">' + esc(e.name) + '</span>' +
-          '<span class="stp-row__meta">' + esc(e.role || 'system') + ' · ' + (Number(e.injection_position) === 1 ? 'In-chat' : 'Relative') + '</span>' +
+          '<span class="stp-row__name" title="' + esc(e.identifier || e.name) + '">' + esc(e.name) +
+          (isAssistant ? '<i class="stp-row__tag">assistant</i>' : '') + '</span>' +
         '</button>' +
-        '<button type="button" class="stp-row__del" data-act="del" aria-label="删除" title="删除">' +
-          '<img src="img/icons/trash-01.svg" alt="" width="16" height="16">' +
-        '</button>' +
+        '<button type="button" class="stp-row__del" data-act="del" aria-label="删除" title="删除">' + TRASH_SVG + '</button>' +
         '</div>'
       );
     }).join('');
@@ -472,6 +497,12 @@
           return;
         }
         row.classList.toggle('is-off', !e.target.checked);
+        row.classList.toggle('is-on', e.target.checked);
+        /* 版头「已启用 N 项」同步刷新 */
+        var onEl = $('stp-meta-on');
+        if (onEl) {
+          onEl.textContent = String(document.querySelectorAll('#stp-list .stp-row.is-on').length);
+        }
       });
     }
 

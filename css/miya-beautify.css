@@ -1,0 +1,669 @@
+/* ═══════════════════════════════════════════════════════════════
+   miya · 美化界面 — 清爽蓝
+
+   设计稿：锁屏与安全 · 清爽蓝（v4.21）
+   令牌：--bg #F5F8FC / --card #FFF / --ink #1C2026
+         --blue #4B8BF5（浅蓝：开关轨道 · tab 下划线）
+         --blue-ink #2D6BD9（深蓝：蓝字 + 主按钮底）
+         --blue-deep #2559C7（按下态）/ --border #E5EAF0
+   标题：Noto Serif SC 700（链接中无 700，浏览器就近取 600）
+
+   ⚠ 本文件所有规则均限定 .miya-beautify-app 作用域，
+     重映射的 --ins-* 令牌只在该全屏层内生效，
+     不影响共用 miya-apps.css 的设置/世界书/聊天等模块。
+   ⚠ 引入顺序：必须排在 miya-apps.css / miya-desk-wg-custom.css 之后。
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 令牌 ── */
+.miya-beautify-app {
+  /* 清爽蓝基础盘 */
+  --bf-bg: #F5F8FC;
+  --bf-card: #FFFFFF;
+  --bf-ink: #1C2026;
+  --bf-ink-soft: #4A525C;
+  --bf-muted: #67707C;   /* 12px 及以下正文 · 对底 4.71:1 / 对白卡 5.02:1 */
+  --bf-border: #E5EAF0;
+  --bf-blue: #4B8BF5;    /* 浅蓝：开关轨道、tab 下划线（非文字载体，3:1 即达标） */
+  --bf-blue-ink: #2D6BD9;/* 深蓝：蓝字 + 主按钮底（白字 4.98:1，蓝字对底 4.68:1） */
+  --bf-blue-deep: #2559C7;
+  --bf-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --bf-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --bf-shadow: 0 1px 2px rgba(28, 32, 38, 0.03), 0 4px 12px -6px rgba(28, 32, 38, 0.06);
+  --bf-blue-shadow: 0 8px 18px -10px rgba(45, 107, 217, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+  /* --ins-* 令牌重映射：让 miya-apps.css 里的既有组件自动换色。
+     （--ins-gold 在本层内承担「控件主色」：滑块拇指 / accent-color；
+       field-label、frame-corner 等另有专项覆盖。） */
+  --ins-ink: #1C2026;
+  --ins-ink-dim: #67707C;
+  --ins-rose: #67707C;
+  --ins-rose-deep: #2D6BD9;
+  --ins-gold: #2D6BD9;
+  --ins-gold-soft: rgba(75, 139, 245, 0.22);
+  --ins-accent: #2D6BD9;
+  --ins-accent-deep: #2559C7;
+  --ins-surface: #FFFFFF;
+  --ins-display: 'Noto Serif SC', 'Songti SC', serif;
+  --ins-ui: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --ins-shadow: var(--bf-shadow);
+
+  background: var(--bf-bg);
+  color: var(--bf-ink);
+  font-family: var(--bf-sans);
+}
+
+/* ── 装饰层：噪声纹理与金线退场，只留极淡蓝晕 ── */
+.miya-beautify-app .ins-atelier-grain,
+.miya-beautify-app .ins-atelier-line {
+  display: none;
+}
+
+.miya-beautify-app .ins-atelier-orb--a {
+  background: radial-gradient(circle, rgba(75, 139, 245, 0.10) 0%, transparent 70%);
+}
+
+.miya-beautify-app .ins-atelier-orb--b {
+  background: radial-gradient(circle, rgba(75, 139, 245, 0.07) 0%, transparent 70%);
+}
+
+/* ══ 顶部 tabs（壁纸 / 图标 / 组件 / 字体 / 方案）══
+   设计稿：纯文字 + 16px 蓝下划线，无底色无图标。 */
+.miya-beautify-app .ins-atelier-rail {
+  border-bottom: 1px solid var(--bf-border);
+  background: var(--bf-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.miya-beautify-app .ins-atelier-tab {
+  flex-direction: column;
+  gap: 0;
+  padding: 13px 2px 11px;
+  background: transparent;
+  color: var(--bf-muted);
+  border-radius: 0;
+  box-shadow: none;
+  transition: color 0.18s ease;
+  position: relative;
+}
+
+.miya-beautify-app .ins-atelier-tab-glyph {
+  display: none;
+}
+
+.miya-beautify-app .ins-atelier-tab-txt {
+  font-size: 12.5px;
+  letter-spacing: 0.10em;
+}
+
+.miya-beautify-app .ins-atelier-tab.is-active {
+  background: transparent;
+  color: var(--bf-ink);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+/* tab 激活态：文字下方 16×2 圆角蓝条（非文字载体，3:1 达标） */
+.miya-beautify-app .ins-atelier-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 4px;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--bf-blue);
+}
+
+/* ══ 退出按钮：白卡药丸 + 圆圈图标 ══ */
+.miya-beautify-app .ins-atelier-dismiss {
+  height: 34px;
+  padding: 0 16px 0 12px;
+  gap: 6px;
+  border: 1px solid var(--bf-border);
+  border-radius: 999px;
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+  color: var(--bf-ink-soft);
+  font-size: 12.5px;
+  letter-spacing: 0.10em;
+  font-weight: 600;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background 0.18s ease, transform 0.14s ease;
+}
+
+.miya-beautify-app .ins-atelier-dismiss:active {
+  background: #F4F7FB;
+  transform: scale(0.96);
+}
+
+/* 8px 金环 → 13px 圆圈图标（对应设计稿 exit 的 circle svg） */
+.miya-beautify-app .ins-atelier-dismiss-ring {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--bf-ink-soft);
+  background: transparent;
+}
+
+/* ══ 版头：kicker 蓝字 + 衬线大标题 + muted 描述 ══ */
+.miya-beautify-app .ins-atelier-panel-kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.34em;
+  color: var(--bf-blue-ink);
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+.miya-beautify-app .ins-atelier-panel-title {
+  margin: 8px 0 0;
+  font-family: var(--bf-serif);
+  font-size: clamp(26px, 7.4vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.16;
+}
+
+.miya-beautify-app .ins-atelier-panel-desc {
+  margin-top: 10px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  line-height: 1.7;
+  color: var(--bf-muted);
+}
+
+.miya-beautify-app .ins-atelier-panel-desc--tight {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* 小节标签（主屏文字颜色 / 字体预览 / 已存预设…）：muted 灰蓝 */
+.miya-beautify-app .ins-field-label {
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  color: var(--bf-muted);
+  font-weight: 600;
+}
+
+/* ══ 壁纸预览行：132px 9:19 预览框 + tag 徽标 / 44px 高按钮列 ══ */
+.miya-beautify-app .ins-atelier-showcase {
+  gap: 14px;
+  margin-top: 18px;
+}
+
+@media (min-width: 360px) {
+  .miya-beautify-app .ins-atelier-showcase {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+}
+
+/* 窄屏单列：预览框定宽居中，按钮列随后 */
+.miya-beautify-app .ins-atelier-frame {
+  width: 132px;
+  max-width: 100%;
+  justify-self: center;
+  padding: 0;
+  border-radius: 14px;
+  background: #DCE6F1;
+  box-shadow: var(--bf-shadow);
+  overflow: hidden;
+}
+
+.miya-beautify-app .ins-atelier-frame-notch,
+.miya-beautify-app .ins-atelier-frame-corner {
+  display: none;
+}
+
+.miya-beautify-app .ins-atelier-frame-screen {
+  aspect-ratio: 9 / 19;
+  max-height: none;
+  height: auto;
+  border-radius: 0;
+  background: #DCE6F1;
+}
+
+.miya-beautify-app .ins-atelier-frame-screen::after {
+  content: none;
+}
+
+/* 左下 tag 徽标：「点击上传壁纸」→ 半透黑底白字圆角签 */
+.miya-beautify-app .ins-atelier-frame-label {
+  left: 8px;
+  bottom: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.95);
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(15, 23, 32, 0.38);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 1;
+}
+
+.miya-beautify-app .ins-atelier-showcase-side {
+  justify-content: center;
+  gap: 10px;
+}
+
+/* ══ 按钮体系：chip → 清爽蓝主/幽灵按钮 ══ */
+.miya-beautify-app .ins-chip {
+  border: 1px solid var(--bf-border);
+  background: var(--bf-card);
+  color: var(--bf-ink-soft);
+  box-shadow: var(--bf-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  letter-spacing: 0.10em;
+  font-weight: 600;
+  padding: 0 16px;
+  min-height: 40px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.14s ease;
+}
+
+.miya-beautify-app .ins-chip:active {
+  background: #F4F7FB;
+  transform: scale(0.97);
+}
+
+.miya-beautify-app .ins-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 主按钮：深蓝底白字（对应设计稿 .btn-primary） */
+.miya-beautify-app .ins-chip--gold {
+  border: 1px solid transparent;
+  background: var(--bf-blue-ink);
+  color: #FFFFFF;
+  box-shadow: var(--bf-blue-shadow);
+}
+
+.miya-beautify-app .ins-chip--gold:active {
+  background: var(--bf-blue-deep);
+}
+
+/* 强调 chip（原黑边白底）：维持幽灵形态，文字加深 */
+.miya-beautify-app .ins-chip--rose {
+  border: 1px solid var(--bf-border);
+  background: var(--bf-card);
+  color: var(--bf-ink-soft);
+}
+
+.miya-beautify-app .ins-chip--dim {
+  opacity: 1;
+  color: var(--bf-muted);
+}
+
+/* 壁纸区两颗主操作：44px 高（对应设计稿 .btn） */
+.miya-beautify-app .ins-atelier-showcase-side .ins-chip {
+  min-height: 44px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ══ 开关卡：白卡圆角 14 + 衬线标题 + 44×25 开关 ══ */
+.miya-beautify-app .ins-atelier-splash-pill {
+  margin-top: 14px;
+  padding: 14px 16px;
+  gap: 14px;
+  border: 1px solid var(--bf-border);
+  border-left: 1px solid var(--bf-border);
+  border-radius: 14px;
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 壁纸预览行之后的首张卡拉开距离 */
+.miya-beautify-app .ins-atelier-lock-card .ins-atelier-splash-pill:first-child {
+  margin-top: 18px;
+}
+
+.miya-beautify-app .ins-atelier-splash-pill strong {
+  font-family: var(--bf-serif);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.miya-beautify-app .ins-atelier-splash-pill span {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--bf-muted);
+}
+
+/* 开关：44×25 · 关闭态 #8A94A3（对白卡 3.07:1）· 开启态浅蓝 */
+.miya-beautify-app .ins-toggle {
+  width: 44px;
+  height: 25px;
+  border: none;
+  border-radius: 13px;
+  background: #8A94A3;
+  box-shadow: none;
+}
+
+.miya-beautify-app .ins-toggle::after {
+  top: 2.5px;
+  left: 2.5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;   /* 原 ::after 无圆角（方形滑块），对齐设计稿圆形 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.miya-beautify-app .ins-toggle.is-on {
+  background: var(--bf-blue);
+  border-color: var(--bf-blue);
+}
+
+.miya-beautify-app .ins-toggle.is-on::after {
+  transform: translateX(19px);
+}
+
+/* ══ 锁屏壁纸 mini 预览：120px 9:19 圆角卡（对应设计稿 .mini）══ */
+.miya-beautify-app .ins-atelier-lock-preview {
+  justify-content: flex-start;
+  margin: 16px 0 12px;
+}
+
+.miya-beautify-app .ins-atelier-lock-preview__screen {
+  width: 120px;
+  max-width: 120px;
+  aspect-ratio: 9 / 19;
+  padding: 10px;
+  border: 1px solid var(--bf-border);
+  border-radius: 12px;
+  background: #DCE6F1 center / cover no-repeat;
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-atelier-lock-preview__placeholder {
+  font-size: 11px;
+  color: var(--bf-muted);
+}
+
+.miya-beautify-app .ins-atelier-lock-preview__time {
+  font-size: 28px;
+  font-weight: 400;
+  color: rgba(28, 32, 38, 0.9);
+}
+
+.miya-beautify-app .ins-atelier-lock-preview__date {
+  font-size: 10.5px;
+  color: var(--bf-ink-soft);
+}
+
+/* 已传壁纸：白字 + 投影（沿用 JS 的 .has-image 标记） */
+.miya-beautify-app .ins-atelier-lock-preview__screen.has-image {
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.miya-beautify-app .ins-atelier-lock-preview__screen.has-image .ins-atelier-lock-preview__time,
+.miya-beautify-app .ins-atelier-lock-preview__screen.has-image .ins-atelier-lock-preview__date,
+.miya-beautify-app .ins-atelier-lock-preview__screen.has-image .ins-atelier-lock-preview__placeholder {
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* 锁屏操作按钮组（上传/清除、更改/关闭密码） */
+.miya-beautify-app .ins-atelier-lock-actions,
+.miya-beautify-app .ins-atelier-lock-pass-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.miya-beautify-app .ins-atelier-lock-note {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--bf-muted);
+}
+
+/* ══ 图标面板 · icon-pick 网格 ══ */
+.miya-beautify-app .ins-icon-pick {
+  border: 1px solid var(--bf-border);
+  border-radius: 14px;
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-icon-pick.is-selected {
+  border-color: var(--bf-blue);
+  box-shadow: 0 0 0 1px var(--bf-blue);
+}
+
+.miya-beautify-app .ins-icon-pick__preview {
+  border-radius: 12px;
+  background: #EEF3FA;
+}
+
+.miya-beautify-app .ins-icon-pick__name {
+  color: var(--bf-muted);
+}
+
+.miya-beautify-app .ins-icon-pick__glyph {
+  color: var(--bf-muted);
+}
+
+/* ══ 组件面板 · 自定义组件展示卡（原米色渐变 → 白卡）══ */
+.miya-beautify-app .ins-custom-wg-showcase__card {
+  border: 1px solid var(--bf-border);
+  border-radius: 14px;
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-custom-wg-showcase__name {
+  color: var(--bf-ink-soft);
+}
+
+.miya-beautify-app .ins-custom-wg-showcase__stage {
+  background: #EEF3FA;
+}
+
+/* ══ 字体面板 · 白卡分区 ══ */
+.miya-beautify-app .ins-atelier-type-card {
+  border: 1px solid var(--bf-border);
+  border-radius: 14px;
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.miya-beautify-app .ins-atelier-type-card--specimen {
+  border-color: var(--bf-border);
+  background: var(--bf-card);
+}
+
+.miya-beautify-app .ins-specimen-head em {
+  font-style: normal;
+  letter-spacing: 0.08em;
+  color: var(--bf-blue-ink);
+}
+
+/* 引文块：金左线 → 蓝左线，底色改淡蓝 */
+.miya-beautify-app .ins-specimen-quote {
+  border-left: 2px solid var(--bf-blue);
+  background: #F2F7FE;
+  border-radius: 0 10px 10px 0;
+  color: var(--bf-ink);
+}
+
+/* 字体行卡 / 预设列表项 */
+.miya-beautify-app .ins-app-font-row {
+  border: 1px solid var(--bf-border);
+  border-radius: 12px;
+  background: #FAFCFE;
+}
+
+.miya-beautify-app .ins-app-font-row.is-custom {
+  border-color: #D3DDEA;
+  background: var(--bf-card);
+}
+
+.miya-beautify-app .ins-app-font-row__reset {
+  background: #EEF3FA;
+  color: var(--bf-ink-soft);
+  border: none;
+}
+
+/* ══ 方案 / 预设列表项：白卡圆角 ══ */
+.miya-beautify-app .ins-archive-item {
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--bf-border);
+  border-left: 1px solid var(--bf-border);
+  border-radius: 12px;
+  background: var(--bf-card);
+  box-shadow: none;
+}
+
+.miya-beautify-app .ins-archive-item strong {
+  font-family: var(--bf-serif);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.miya-beautify-app .ins-archive-item small {
+  font-size: 10.5px;
+  color: var(--bf-muted);
+}
+
+.miya-beautify-app .ins-archive-list--font .ins-archive-actions .ins-chip {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  border-radius: 10px;
+}
+
+.miya-beautify-app .ins-chip--danger {
+  color: #B42318;
+  border-color: rgba(180, 35, 24, 0.25);
+}
+
+/* ══ 表单控件 ══ */
+.miya-beautify-app .ins-text-input,
+.miya-beautify-app .ins-select,
+.miya-beautify-app .ins-textarea {
+  border: 1px solid var(--bf-border);
+  border-radius: 12px;
+  background: var(--bf-card);
+  color: var(--bf-ink);
+  box-shadow: none;
+  font-family: inherit;
+}
+
+.miya-beautify-app .ins-text-input:focus,
+.miya-beautify-app .ins-textarea:focus,
+.miya-beautify-app .ins-select:focus {
+  outline: 2px solid var(--bf-blue);
+  outline-offset: 1px;
+}
+
+/* 主屏文字色卡：白卡 + 激活蓝 ring */
+.miya-beautify-app .ins-text-swatch {
+  border: 1px solid var(--bf-border);
+  border-radius: 12px;
+  background: var(--bf-card);
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-text-swatch.is-active {
+  border-color: var(--bf-blue);
+  box-shadow: 0 0 0 2px var(--ins-gold-soft), var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-text-swatch--white {
+  background: linear-gradient(145deg, #4A525C 0%, #1C2026 100%);
+}
+
+/* 图标小方钮（组件 tile 内） */
+.miya-beautify-app .ins-ico-btn {
+  border: 1px solid var(--bf-border);
+  border-radius: 10px;
+  background: var(--bf-card);
+  color: var(--bf-ink-soft);
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-ico-btn--gold {
+  border-color: var(--bf-blue-ink);
+  color: var(--bf-blue-ink);
+}
+
+/* ══ 子页（自定义小组件编辑）：米色渐变 → 清爽蓝 ══ */
+.miya-beautify-app .ins-atelier-subpage {
+  background: var(--bf-bg);
+}
+
+.miya-beautify-app .ins-atelier-subpage__head {
+  border-bottom: 1px solid var(--bf-border);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.miya-beautify-app .ins-atelier-subpage__back {
+  background: var(--bf-card);
+  border: 1px solid var(--bf-border);
+  color: var(--bf-ink-soft);
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .ins-atelier-subpage__title {
+  color: var(--bf-ink);
+}
+
+/* ══ toast：白卡蓝调 ══ */
+.miya-beautify-app ~ .ins-toast {
+  border: 1px solid var(--bf-border);
+  box-shadow: var(--bf-shadow);
+}
+
+/* ══ 分隔线：金线 → 浅蓝灰 ══ */
+.miya-beautify-app .ins-font-presets,
+.miya-beautify-app .ins-font-preview-block {
+  border-top: 1px solid var(--bf-border);
+}
+
+/* ══ 子页编辑器按钮（mi-btn）：黑主钮 → 蓝主钮，ghost → 白卡 ══
+   原样式来自 miya-chat-settings.css（.mi-btn--dark 黑底）与
+   miya-desk-wg-custom.css（.mi-cwg-tpl .mi-btn--dark）；本文件
+   引入靠后且特异性同为 0,2,0，可稳定覆盖。 */
+.miya-beautify-app .mi-btn {
+  font-family: inherit;
+}
+
+.miya-beautify-app .mi-btn--ghost {
+  background: var(--bf-card);
+  color: var(--bf-ink-soft);
+  border: 1px solid var(--bf-border);
+  box-shadow: var(--bf-shadow);
+}
+
+.miya-beautify-app .mi-btn--dark {
+  background: var(--bf-blue-ink);
+  color: #FFFFFF;
+  box-shadow: var(--bf-blue-shadow);
+}
+
+.miya-beautify-app .mi-btn--dark:active {
+  background: var(--bf-blue-deep);
+}

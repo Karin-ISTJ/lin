@@ -1142,117 +1142,194 @@ html.miya-app-open .miya-couple-app .cp-shell {
   padding: calc(env(safe-area-inset-top, 0px) + 56px) 20px calc(env(safe-area-inset-bottom, 0px) + 28px);
 }
 
-/* Gate */
+/* Gate · 暖粉编辑部（Love Space 入口）
+   设计令牌：纯暖粉底 #FBF2F2 + 白卡无边框 + 黑 accent + Cormorant italic 大标题。
+   只作用于入口视图（.cp-view-gate），空间主页 / onboarding / 子页不受影响。 */
+.cp-view-gate {
+  --cpg-bg: #FBF2F2;
+  --cpg-card: #FFFFFF;
+  --cpg-ink: #2A211C;
+  --cpg-ink-soft: #544A42;
+  --cpg-muted: #857E78;
+  --cpg-faint: #9C9691;
+  --cpg-accent: #1F1B19;
+  --cpg-accent-deep: #000000;
+  --cpg-line: #F1EBE6;
+  --cpg-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --cpg-script: 'Cormorant Garamond', Georgia, serif;
+  --cpg-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 6px 18px -10px rgba(0, 0, 0, .08);
+  background: var(--cpg-bg);
+}
+
+/* 内容起点避开返回键，与设计稿 topbar(58) + head(22) 的节奏一致 */
+.cp-view-gate .cp-gate-scroll {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 64px);
+}
+
+/* gate 内返回键：去掉玻璃圆钮，换成无底框方块，按下才有灰底 */
+.cp-view-gate .cp-back {
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--cpg-ink-soft);
+  transition: background .18s ease;
+}
+
+.cp-view-gate .cp-back:active {
+  background: rgba(0, 0, 0, .05);
+}
+
 .cp-gate-hero {
   position: relative;
   text-align: center;
-  padding: 24px 0 32px;
-}
-
-.cp-gate-hero__stroke {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 120px;
-  height: 80px;
-  border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(232, 196, 208, 0.25), transparent 70%);
-  pointer-events: none;
+  padding: 22px 0 0;
 }
 
 .cp-gate-hero__vol {
-  font-size: 10px;
-  letter-spacing: 0.2em;
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: .42em;
   text-transform: uppercase;
-  color: var(--cp-ink-muted);
-  margin: 0 0 12px;
+  color: var(--cpg-accent);
+  font-weight: 600;
 }
 
 .cp-gate-hero__title {
-  margin: 0;
-  font-size: 42px;
-  font-weight: 300;
-  line-height: 0.95;
-  letter-spacing: -0.02em;
+  margin: 24px 0 0;
+  font-family: var(--cpg-script);
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(52px, 14vw, 64px);
+  line-height: .92;
+  letter-spacing: .01em;
+  color: var(--cpg-ink);
 }
 
 .cp-gate-hero__title em {
-  font-family: 'Instrument Serif', Georgia, serif;
   font-style: italic;
-  font-weight: 400;
+  font-weight: inherit;
+}
+
+.cp-gate-hero__line2 {
+  display: block;
+  margin-top: 2px;
+}
+
+.cp-gate-hero__rule {
+  margin: 22px auto 0;
+  width: 64px;
+  height: 1px;
+  background: var(--cpg-accent);
+  opacity: .45;
 }
 
 .cp-gate-hero__sub {
-  margin: 14px 0 0;
+  margin: 18px 0 0;
   font-size: 13px;
-  color: var(--cp-ink-soft);
-  font-weight: 300;
+  letter-spacing: .14em;
+  color: var(--cpg-ink-soft);
 }
 
+/* 开通按钮：白卡 + 左对齐文案 + 右缘垂直居中黑圆箭头 */
 .cp-gate-cta {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  display: block;
   width: 100%;
-  padding: 22px 20px;
-  border: 1px solid rgba(201, 154, 170, 0.28);
-  border-radius: 20px;
-  background: linear-gradient(145deg, rgba(253, 250, 248, 0.95), rgba(244, 228, 234, 0.45));
-  box-shadow: 0 8px 28px rgba(44, 36, 40, 0.06);
-  cursor: pointer;
-  color: var(--cp-ink);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-top: 36px;
+  text-align: left;
+  padding: 20px;
+  border: 0;
+  background: var(--cpg-card);
+  border-radius: 16px;
+  box-shadow: var(--cpg-shadow);
+  color: var(--cpg-ink);
+  overflow: hidden;
+  transition: transform .16s ease, box-shadow .2s ease;
 }
 
-.cp-gate-cta:active { transform: scale(0.98); }
-
-.cp-gate-cta__ring {
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px dashed rgba(201, 154, 170, 0.4);
+.cp-gate-cta:active {
+  transform: scale(.99);
 }
 
 .cp-gate-cta__label {
-  font-size: 16px;
-  font-weight: 400;
-  letter-spacing: 0.04em;
+  display: block;
+  font-family: var(--cpg-serif);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--cpg-ink);
 }
 
 .cp-gate-cta__hint {
-  font-size: 11px;
-  color: var(--cp-ink-muted);
-  font-weight: 300;
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--cpg-muted);
 }
 
-.cp-gate-list { margin-top: 36px; }
+.cp-gate-cta__ring {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  margin-top: -17px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--cpg-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  box-shadow: 0 6px 14px -6px rgba(0, 0, 0, .4);
+  transition: transform .16s ease, background .18s ease;
+}
+
+.cp-gate-cta:active .cp-gate-cta__ring {
+  transform: scale(.94);
+  background: var(--cpg-accent-deep);
+}
+
+.cp-gate-cta__ring svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.cp-gate-list {
+  margin-top: 42px;
+}
 
 .cp-gate-list__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
   margin-bottom: 14px;
+  border-bottom: 1px solid var(--cpg-line);
 }
 
 .cp-gate-list__head h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: 0.06em;
+  font-family: var(--cpg-serif);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .10em;
+  color: var(--cpg-ink);
 }
 
 .cp-gate-list__head span {
-  font-size: 9px;
-  letter-spacing: 0.16em;
-  color: var(--cp-ink-muted);
+  font-size: 10px;
+  letter-spacing: .32em;
+  color: var(--cpg-faint);
+  text-transform: uppercase;
 }
 
+/* 已开启的空间卡：白卡无边框，与开通按钮同一张卡语言 */
 .cp-gate-card {
   display: flex;
   align-items: center;
@@ -1260,14 +1337,20 @@ html.miya-app-open .miya-couple-app .cp-shell {
   width: 100%;
   padding: 14px 16px;
   margin-bottom: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 0;
   border-radius: 16px;
-  background: var(--cp-glass);
-  backdrop-filter: blur(16px);
+  background: var(--cpg-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   cursor: pointer;
   text-align: left;
-  color: var(--cp-ink);
-  box-shadow: 0 4px 16px rgba(44, 36, 40, 0.04);
+  color: var(--cpg-ink);
+  box-shadow: var(--cpg-shadow);
+  transition: transform .16s ease;
+}
+
+.cp-gate-card:active {
+  transform: scale(.99);
 }
 
 .cp-gate-card__avas {
@@ -1280,14 +1363,14 @@ html.miya-app-open .miya-couple-app .cp-shell {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 2px solid var(--cp-ivory);
-  background: var(--cp-blush);
+  border: 2px solid var(--cpg-bg);
+  background: #F6E7EC;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  color: var(--cp-rose-deep);
+  color: var(--cpg-ink-soft);
 }
 
 .cp-gate-card__ava--b { margin-left: -10px; }
@@ -1297,7 +1380,7 @@ html.miya-app-open .miya-couple-app .cp-shell {
 
 .cp-gate-card__names {
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   margin: 0 0 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -1307,35 +1390,75 @@ html.miya-app-open .miya-couple-app .cp-shell {
 .cp-gate-card__meta {
   margin: 0;
   font-size: 11px;
-  color: var(--cp-ink-muted);
+  color: var(--cpg-muted);
 }
 
 .cp-gate-card__badge {
   font-size: 8px;
-  letter-spacing: 0.14em;
+  letter-spacing: .14em;
   padding: 4px 8px;
   border-radius: 12px;
-  background: rgba(232, 196, 208, 0.25);
-  color: var(--cp-rose-deep);
+  background: #F5E7ED;
+  color: var(--cpg-ink-soft);
   flex-shrink: 0;
 }
 
 .cp-gate-card__badge--pending {
-  background: rgba(184, 208, 228, 0.3);
-  color: var(--cp-sky-deep);
+  background: #E9F0F6;
+  color: #6C88A3;
 }
 
 .cp-gate-card__badge--declined {
-  background: rgba(154, 142, 150, 0.15);
-  color: var(--cp-ink-muted);
+  background: #F1ECE8;
+  color: var(--cpg-faint);
 }
 
+/* 空态基础（onboarding 里两处单行提示复用此类，给中性兜底） */
 .cp-gate-empty {
   text-align: center;
   padding: 28px 12px;
   color: var(--cp-ink-muted);
   font-size: 12px;
   line-height: 1.6;
+}
+
+.cp-gate-empty p {
+  margin: 0;
+}
+
+/* 入口页空态：心形饰纹 + 衬线主句 + 弱化副句 */
+.cp-view-gate .cp-gate-empty {
+  padding: 52px 20px 40px;
+}
+
+.cp-view-gate .cp-gate-empty p {
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--cpg-faint);
+  line-height: 1.75;
+}
+
+.cp-view-gate .cp-gate-empty__orn {
+  margin: 0 auto 22px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cpg-accent);
+  opacity: .75;
+}
+
+.cp-view-gate .cp-gate-empty__orn svg {
+  width: 26px;
+  height: 26px;
+}
+
+.cp-view-gate .cp-gate-empty p.cp-gate-empty__line1 {
+  font-family: var(--cpg-serif);
+  font-size: 15px;
+  letter-spacing: .12em;
+  color: var(--cpg-ink-soft);
 }
 
 /* Onboard */

@@ -1,176 +1,91 @@
-/* miya · 世界书 — 与设置一致的暖色玻璃刊面 */
+/* miya · 世界书 — 清爽蓝
+   设计语言：冷灰蓝底 #F5F8FC + 白卡 + 唯一强调蓝 #4B8BF5 + Noto Serif SC 衬线标题。
+   令牌挂在 .miya-worldbook-app 根上 —— 编辑器层（.ins-wb-editor）也在根内，
+   变量全层级联，不存在 ST 预设那种「兄弟节点拿不到变量」的问题。 */
 
 .miya-worldbook-app {
-  --st-bg: #F5F3EF;
-  --st-bg-warm: #F0EDE7;
-  --st-card-bg: rgba(255, 255, 255, 0.72);
-  --st-card-bg-hover: rgba(255, 255, 255, 0.88);
-  --st-text-primary: #1A1A1A;
-  --st-text-secondary: #6B6B6B;
-  --st-text-tertiary: #999999;
-  --st-text-muted: #B8B5B0;
-  --st-accent: #007AFF;
-  --st-accent-soft: rgba(0, 122, 255, 0.08);
-  --st-accent-warm: #E85D4C;
-  --st-accent-warm-soft: rgba(232, 93, 76, 0.08);
-  --st-border: rgba(0, 0, 0, 0.04);
-  --st-border-strong: rgba(0, 0, 0, 0.08);
-  --st-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --st-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.03);
-  --st-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(0, 0, 0, 0.04);
-  font-family: 'Noto Serif SC', 'Inter', serif;
-  color: var(--st-text-primary);
-  background: var(--st-bg) !important;
-  flex-direction: column;
-  -webkit-font-smoothing: antialiased;
+  --wb-bg: #F5F8FC;
+  --wb-card: #FFFFFF;
+  --wb-ink: #1C2026;
+  --wb-ink-soft: #4A525C;
+  --wb-muted: #6B7480;
+  --wb-faint: #939CA6;
+  --wb-border: #E5EAF0;
+  --wb-line: #F0F3F7;
+
+  --wb-blue: #4B8BF5;
+  --wb-blue-deep: #2D6BD9;
+  --wb-blue-tint: rgba(75, 139, 245, .08);
+  --wb-blue-soft: rgba(75, 139, 245, .16);
+
+  --wb-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --wb-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+
+  --wb-shadow: 0 1px 2px rgba(28, 32, 38, .03), 0 4px 12px -6px rgba(28, 32, 38, .06);
+
+  font-family: var(--wb-sans);
+  color: var(--wb-ink);
+  background: var(--wb-bg) !important;
   position: fixed;
   inset: 0;
-  overflow: hidden;
-}
-
-/* ─── Ambient & Deco ─── */
-.miya-worldbook-app .st-ambient-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.miya-worldbook-app .st-ambient-bg::before {
-  content: '';
-  position: absolute;
-  top: -20%;
-  right: -10%;
-  width: 70%;
-  height: 70%;
-  background: radial-gradient(circle, rgba(0, 122, 255, 0.04) 0%, transparent 70%);
-  animation: stAmbientDrift 20s ease-in-out infinite;
-}
-
-.miya-worldbook-app .st-ambient-bg::after {
-  content: '';
-  position: absolute;
-  bottom: -10%;
-  left: -15%;
-  width: 60%;
-  height: 60%;
-  background: radial-gradient(circle, rgba(232, 93, 76, 0.03) 0%, transparent 70%);
-  animation: stAmbientDrift 25s ease-in-out infinite reverse;
-}
-
-.miya-worldbook-app .st-deco-ornament {
-  position: absolute;
-  font-family: 'Playfair Display', serif;
-  color: var(--st-text-muted);
-  opacity: 0.06;
-  font-size: 120px;
-  line-height: 1;
-  user-select: none;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* ─── Navbar ─── */
-.miya-worldbook-app .st-navbar {
-  position: relative;
-  z-index: 5;
-  flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) 20px 10px;
-  background: linear-gradient(180deg, rgba(245, 243, 239, 0.96) 0%, rgba(245, 243, 239, 0) 100%);
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-.miya-worldbook-app .st-navback {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px 8px 8px;
-  border: 1px solid var(--st-border-strong);
-  border-radius: 14px;
-  background: var(--st-card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: var(--st-text-primary);
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
+/* 本文件给根节点设了 display:flex —— 必须显式兜住 [hidden]，
+   否则 closed 状态（页面加载时）会被顶开、白屏一块浮在最底层。 */
+.miya-worldbook-app[hidden] {
+  display: none !important;
+}
+
+.miya-worldbook-app.is-open {
+  z-index: 520;
+}
+
+.miya-worldbook-app button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
   cursor: pointer;
-  box-shadow: var(--st-shadow-sm);
-  transition: all 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.miya-worldbook-app .st-navback:active {
-  transform: scale(0.97);
+.miya-worldbook-app input[type="checkbox"] {
+  accent-color: var(--wb-blue);
 }
 
-.miya-worldbook-app .st-navback svg {
-  flex-shrink: 0;
+/* ─── Toast（挂在 body 上，拿不到 --wb-*，用字面量） ─── */
+.mw-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  max-width: 78vw;
+  background: #FFFFFF;
+  color: #1C2026;
+  border: 1px solid #E5EAF0;
+  box-shadow: 0 10px 28px -10px rgba(28, 32, 38, .25);
+  padding: 9px 18px;
+  border-radius: 99px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 12.5px;
+  letter-spacing: .04em;
+  z-index: 2147483000;
+  animation: mwToastIn .22s ease;
 }
 
-.miya-worldbook-app .st-navtitle {
-  flex: 1;
-  margin: 0;
-  font-family: 'Noto Serif SC', serif;
-  font-size: 16px;
-  font-weight: 500;
-  text-align: center;
-  letter-spacing: 0.3px;
+@keyframes mwToastIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
-.miya-worldbook-app .st-navspacer {
-  width: 72px;
-  flex-shrink: 0;
-}
-
-.miya-worldbook-app .st-wb-add-btn {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--st-border-strong);
-  border-radius: 14px;
-  background: var(--st-card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: var(--st-text-primary);
-  font-family: 'Inter', sans-serif;
-  font-size: 20px;
-  font-weight: 300;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: var(--st-shadow-sm);
-  transition: all 0.3s ease;
-}
-
-.miya-worldbook-app .st-wb-add-btn:active {
-  transform: scale(0.95);
-}
-
-/*
- * ⚠️ 编辑器打开时，必须把「＋ 新建片段」藏掉。
- *
- * 原先这条规则认的是 .st-wb-add-btn（刊头右上角那个浮在绝对定位上的按钮）。
- * 列表页改成标准导航栏后，该按钮换成了 .ins-wb-navsave，
- * 类名不对这条规则就不再生效 —— 表现为：点开某个条目编辑，
- * 编辑器划进来之后，「＋」还浮在导航栏右侧，看起来像是编辑页上的按钮。
- * 所以新类名也必须一并纳入隐藏规则。
- *
- * （.ins-wb-add-btn 是更早一版的类名，HTML 里已无引用，保留仅为兜底。）
- */
-.miya-worldbook-app.has-editor .st-wb-add-btn,
-.miya-worldbook-app.has-editor .ins-wb-navsave {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* ─── Scroll / Container ─── */
-.miya-worldbook-app .ins-wb-stage {
+/* ══ 列表页 ══ */
+.miya-worldbook-app .wb-stage {
   position: relative;
-  z-index: 1;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -178,9 +93,86 @@
   overflow: hidden;
 }
 
-.miya-worldbook-app .st-scroll {
-  position: relative;
-  z-index: 1;
+/* ── 顶栏：药丸返回 + 衬线标题 + 圆形蓝加号 ── */
+.miya-worldbook-app .wb-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
+  background: var(--wb-bg);
+}
+
+.miya-worldbook-app .wb-back {
+  flex: none;
+  height: 38px;
+  padding: 0 14px 0 10px;
+  border-radius: 19px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  box-shadow: var(--wb-shadow);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--wb-ink-soft);
+  letter-spacing: .06em;
+  transition: background .18s ease, transform .14s ease;
+}
+
+.miya-worldbook-app .wb-back:active {
+  background: #F4F7FB;
+  transform: scale(.97);
+}
+
+.miya-worldbook-app .wb-back svg {
+  width: 15px;
+  height: 15px;
+}
+
+.miya-worldbook-app .wb-title {
+  flex: 1 1 auto;
+  margin: 0;
+  text-align: center;
+  font-family: var(--wb-serif);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  color: var(--wb-ink);
+}
+
+.miya-worldbook-app .wb-add {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--wb-blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 14px -8px rgba(75, 139, 245, .55), inset 0 1px 0 rgba(255, 255, 255, .32);
+  transition: transform .14s ease, background .2s ease, opacity .2s ease;
+}
+
+.miya-worldbook-app .wb-add:active {
+  transform: scale(.94);
+  background: var(--wb-blue-deep);
+}
+
+.miya-worldbook-app .wb-add svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* 编辑器划入时藏掉「＋」，否则它浮在编辑页顶栏右侧像个幽灵按钮 */
+.miya-worldbook-app.has-editor .wb-add {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── 滚动区 ── */
+.miya-worldbook-app .wb-scroll {
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
@@ -188,637 +180,441 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: none;
   touch-action: pan-y;
-  padding: 0 0 calc(40px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
 }
 
-.miya-worldbook-app .st-container {
-  position: relative;
-  max-width: 100%;
-  overflow-x: hidden;
-  padding: 0 20px 24px;
+.miya-worldbook-app .wb-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4.6vw, 22px);
 }
 
-/* ─── Header ─── */
-/*
- * 列表页顶栏已从「刊头」换成标准导航栏（.st-navbar.mi-set-navbar），
- * 与「联系人聊天设置」观感一致。
- *
- * 下面这条 .st-header 规则保留着，是给【条目编辑页】用的
- * （编辑页的 <header class="st-navbar"> 在 .ins-wb-editor 内，
- *   另有 .miya-worldbook-app .ins-wb-editor .st-navbar 覆盖）。
- * ⚠️ 列表页已不再有 .st-header 节点，这条规则在列表页不再生效。
- */
-.miya-worldbook-app .st-header {
-  padding-top: 8px;
-  padding-bottom: 28px;
-  position: relative;
-}
-
-/* ─── 列表页顶栏（标准导航栏版）─── */
-/*
- * 基础样式（.st-navbar / .st-navback / .st-navtitle）已在上面的
- * 「Navbar」段落里按 .miya-worldbook-app 命名空间定义好了，
- * 结构直接生效，这里只覆盖世界书列表页需要的三处差异：
- *
- *   1. 不透明底 + 底部分隔线。
- *      原来顶栏是「(245,243,239) 渐变到全透明」的，滚动时列表内容
- *      会从底下透上来，看起来像两层文字叠在一起。
- *      联系人设置那边用的是 var(--st-bg) 纯色底，这里跟它对齐。
- *
- *   2. 左右内边距 20px → 14px。
- *      和「联系人聊天设置」的 14px 一致，返回键因此比原来靠边一点。
- *      注意这里不跟 .st-container 的 20px 对齐 —— 顶栏比正文略微外扩
- *      是有意的，让返回键在视觉上更靠边、更像一个「系统级」返回。
- *
- *   3. gap 12px → 10px，与联系人设置一致。
- *
- * 高度不用管：两者都靠 .st-navback 的内边距撑起来，尺寸自然相同。
- */
-.miya-worldbook-app .ins-wb-navbar {
-  background: var(--st-bg);
-  border-bottom: 1px solid var(--st-border);
-  gap: 10px;
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 8px;
-}
-
-/*
- * 右侧「＋ 新建片段」。
- * 就是个图标按钮，所以给正方形比例（不是保存键那种带文字的胶囊），
- * 但**配色与阴影完全照抄**「联系人聊天设置」的保存键
- * （同款 --st-accent → #5AC8FA 渐变 + 蓝色投影），
- * 这样两个页面的顶栏右侧看起来是同一套东西。
- * 尺寸取 34px，比 .st-navback 的高度略小一点点，
- * 避免它顶得比返回键高、把导航栏撑起来。
- */
-.miya-worldbook-app .ins-wb-navsave {
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
-  color: #fff;
-  font-family: 'Inter', sans-serif;
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.25);
-  transition: transform 0.15s ease;
-}
-
-.miya-worldbook-app .ins-wb-navsave:active {
-  transform: scale(0.94);
-}
-
-.miya-worldbook-app .st-header-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--st-text-tertiary);
-  margin-bottom: 16px;
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.miya-worldbook-app .st-header--wb {
-  position: relative;
-  padding-right: 56px;
-}
-
-.miya-worldbook-app .st-header--topnav {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-}
-
-.miya-worldbook-app .st-header-badge::before {
-  content: '';
-  width: 24px;
-  height: 1px;
-  background: var(--st-text-muted);
-}
-
-.miya-worldbook-app .st-header--wb .st-wb-add-btn {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
-  right: 0;
-  margin: 0;
-}
-
-.miya-worldbook-app .st-header h2 {
-  font-family: 'Playfair Display', serif;
-  font-size: clamp(32px, 8vw, 38px);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: -0.5px;
-  color: var(--st-text-primary);
-  margin-bottom: 10px;
-}
-
-.miya-worldbook-app .st-header h2 em {
-  font-style: italic;
-  font-weight: 400;
-  color: var(--st-text-secondary);
-}
-
-.miya-worldbook-app .st-header-sub {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 16px;
-  font-weight: 300;
-  font-style: italic;
-  color: var(--st-text-tertiary);
-  letter-spacing: 0.5px;
-  line-height: 1.6;
-}
-
-/* ─── Section Labels ─── */
-.miya-worldbook-app .st-section-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  color: var(--st-text-tertiary);
-  margin: 24px 0 12px 4px;
+/* ── 工具条：4 个 38×38 方块 ── */
+.miya-worldbook-app .wb-toolbar {
+  margin-top: 14px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-.miya-worldbook-app .st-section-label::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--st-border-strong), transparent);
+.miya-worldbook-app .wb-tool {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  box-shadow: var(--wb-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wb-ink-soft);
+  transition: background .18s ease, transform .14s ease;
+}
+
+.miya-worldbook-app .wb-tool:active {
+  background: #F4F7FB;
+  transform: scale(.96);
+}
+
+.miya-worldbook-app .wb-tool svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ── 调试面板 ── */
+.miya-worldbook-app .wb-debug {
+  margin-top: 12px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  border-radius: 14px;
+  box-shadow: var(--wb-shadow);
+  padding: 12px;
+}
+
+.miya-worldbook-app .wb-debug .ins-textarea {
+  min-height: 0;
+}
+
+.miya-worldbook-app .wb-debug pre {
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  margin-top: 10px;
+  padding: 10px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #F6F9FE;
+  color: var(--wb-ink-soft);
+}
+
+.miya-worldbook-app .wb-debug-run {
+  margin-top: 8px;
+}
+
+/* ── Tabs 胶囊 ── */
+.miya-worldbook-app .wb-tabs {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.miya-worldbook-app .wb-tab {
+  flex: none;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  box-shadow: var(--wb-shadow);
+  color: var(--wb-ink-soft);
+  font-size: 12.5px;
+  letter-spacing: .10em;
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+
+.miya-worldbook-app .wb-tab.is-active {
+  background: var(--wb-blue);
+  color: #fff;
+  border-color: var(--wb-blue);
+  box-shadow: 0 6px 14px -8px rgba(75, 139, 245, .5);
+}
+
+.miya-worldbook-app .wb-tabs-right {
+  margin-left: auto;
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  color: var(--wb-muted);
+  white-space: nowrap;
+}
+
+.miya-worldbook-app .wb-tabs-right b {
+  font-family: var(--wb-serif);
+  color: var(--wb-blue-deep);
+  font-weight: 600;
+  font-size: 14px;
   margin-left: 4px;
 }
 
-/* ─── Search ─── */
-.miya-worldbook-app .st-card {
-  background: var(--st-card-bg);
-  border-radius: 24px;
-  padding: 4px 16px;
-  margin-bottom: 12px;
-  backdrop-filter: blur(40px) saturate(1.8);
-  -webkit-backdrop-filter: blur(40px) saturate(1.8);
-  border: 1px solid var(--st-border);
-  box-shadow: var(--st-shadow-md);
-}
-
-/* ─── Group Chips ─── */
-.miya-worldbook-app .st-wb-group-bar {
-  margin-bottom: 4px;
-}
-
-.miya-worldbook-app .ins-wb-group-rail {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x;
-  padding: 2px 0 6px;
-  scrollbar-width: none;
-}
-
-.miya-worldbook-app .ins-wb-group-rail::-webkit-scrollbar {
-  display: none;
-}
-
-.miya-worldbook-app .ins-wb-group-chip {
-  flex-shrink: 0;
-  border: 1px solid var(--st-border);
-  border-radius: 20px;
-  background: var(--st-card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  padding: 8px 14px;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  color: var(--st-text-secondary);
-  cursor: pointer;
-  box-shadow: var(--st-shadow-sm);
-  transition: all 0.25s ease;
-}
-
-.miya-worldbook-app .ins-wb-group-chip i {
-  font-style: normal;
-  margin-left: 6px;
-  font-size: 10px;
-  color: var(--st-text-muted);
-}
-
-.miya-worldbook-app .ins-wb-group-chip.is-active {
-  background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.25);
-}
-
-.miya-worldbook-app .ins-wb-group-chip.is-active i {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.miya-worldbook-app .ins-wb-group-chip--add {
-  color: var(--st-text-primary);
-  font-size: 16px;
-  font-weight: 300;
-  padding: 8px 16px;
-}
-
-/* ─── Filters ─── */
-.miya-worldbook-app .ins-wb-filters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 16px 0 20px;
-  padding: 0;
-}
-
-.miya-worldbook-app .ins-wb-filter {
-  border: 1px solid var(--st-border);
-  border-radius: 20px;
-  background: var(--st-card-bg);
-  padding: 8px 16px;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  color: var(--st-text-tertiary);
-  cursor: pointer;
-  box-shadow: var(--st-shadow-sm);
-  transition: all 0.25s ease;
-}
-
-.miya-worldbook-app .ins-wb-filter.is-active {
-  background: var(--st-text-primary);
-  border-color: var(--st-text-primary);
-  color: #fff;
-}
-
-.miya-worldbook-app .ins-wb-stats {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--st-text-muted);
-}
-
-.miya-worldbook-app .ins-wb-stats em {
-  font-family: 'Playfair Display', serif;
-  font-size: 22px;
-  font-style: normal;
-  font-weight: 500;
-  color: var(--st-text-primary);
-}
-
-/* ─── List & Cards ─── */
-.miya-worldbook-app .ins-wb-list {
+/* ══ 世界书列表 ══ */
+.miya-worldbook-app .wb-list {
+  margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.miya-worldbook-app .ins-wb-card {
+/* ── 一册世界书 = 一行 ── */
+.miya-worldbook-app .wb-row {
   position: relative;
-  padding: 18px 18px 14px;
-  border: 1px solid var(--st-border);
-  border-radius: 24px;
-  background: var(--st-card-bg);
-  backdrop-filter: blur(40px) saturate(1.8);
-  -webkit-backdrop-filter: blur(40px) saturate(1.8);
-  box-shadow: var(--st-shadow-md);
-  transition: all 0.3s ease;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+  padding: 12px 12px 12px 8px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  border-radius: 14px;
+  box-shadow: var(--wb-shadow);
+  overflow: hidden;
+  transition: border-color .18s ease, transform .14s ease;
 }
 
-.miya-worldbook-app .ins-wb-card::before {
+/* 展开态才允许换行：row-body 要独占一整行 */
+.miya-worldbook-app .wb-row.is-open {
+  flex-wrap: wrap;
+}
+
+.miya-worldbook-app .wb-row:active {
+  transform: scale(.995);
+}
+
+/* 启用中：左缘一条蓝竖线 */
+.miya-worldbook-app .wb-row.is-on::before {
   content: '';
   position: absolute;
-  top: 0;
   left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
-  pointer-events: none;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--wb-blue);
 }
 
-.miya-worldbook-app .ins-wb-card:active {
-  transform: scale(0.995);
-  background: var(--st-card-bg-hover);
-}
-
-.miya-worldbook-app .ins-wb-card.is-off {
-  opacity: 0.55;
-}
-
-.miya-worldbook-app .ins-wb-card__idx {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  font-family: 'Playfair Display', serif;
-  font-size: 11px;
-  font-style: italic;
-  color: var(--st-text-muted);
-  opacity: 0.5;
-}
-
-.miya-worldbook-app .ins-wb-card-head {
+/* 展开箭头 */
+.miya-worldbook-app .wb-exp {
+  flex: none;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  justify-content: center;
+  color: var(--wb-faint);
+  transition: transform .2s ease;
 }
 
-.miya-worldbook-app .ins-wb-card-tags {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.miya-worldbook-app .ins-wb-scope {
-  display: inline-flex;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  border: 1px solid var(--st-border);
-  background: rgba(0, 0, 0, 0.02);
-  color: var(--st-text-tertiary);
-}
-
-.miya-worldbook-app .ins-wb-scope--global {
-  background: var(--st-accent-soft);
-  color: var(--st-accent);
-  border-color: transparent;
-}
-
-.miya-worldbook-app .ins-wb-scope--local {
-  background: var(--st-accent-warm-soft);
-  color: var(--st-accent-warm);
-  border-color: transparent;
-}
-
-.miya-worldbook-app .ins-wb-depth {
-  display: inline-flex;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  border: 1px solid var(--st-border);
-  background: rgba(0, 0, 0, 0.02);
-  color: var(--st-text-tertiary);
-}
-
-.miya-worldbook-app .ins-wb-depth--front {
-  color: #2f6f4e;
-  background: rgba(47, 111, 78, 0.1);
-  border-color: transparent;
-}
-
-.miya-worldbook-app .ins-wb-depth--middle {
-  color: var(--st-text-secondary);
-  background: rgba(0, 0, 0, 0.04);
-  border-color: transparent;
-}
-
-.miya-worldbook-app .ins-wb-depth--back {
-  color: #8a5a2b;
-  background: rgba(138, 90, 43, 0.12);
-  border-color: transparent;
-}
-
-.miya-worldbook-app .ins-wb-card-title {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 17px;
-  font-weight: 500;
-  color: var(--st-text-primary);
-  letter-spacing: 0.3px;
-  margin: 0 0 6px;
-  padding-right: 28px;
-}
-
-.miya-worldbook-app .ins-wb-card-keys {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: var(--st-text-tertiary);
-  line-height: 1.5;
-  margin: 0 0 10px;
-}
-
-.miya-worldbook-app .ins-wb-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 10px;
-  border-top: 1px solid var(--st-border);
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: var(--st-text-muted);
-}
-
-.miya-worldbook-app .ins-wb-link {
-  border: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--st-accent);
-  cursor: pointer;
-  padding: 4px 0;
-}
-
-/* ─── Group Blocks ─── */
-.miya-worldbook-app .ins-wb-group-block {
-  margin-bottom: 20px;
-}
-
-.miya-worldbook-app .ins-wb-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.miya-worldbook-app .ins-wb-group-head-toggle {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-}
-
-.miya-worldbook-app .ins-wb-group-head-title {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--st-text-primary);
-}
-
-.miya-worldbook-app .ins-wb-group-head-meta {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: var(--st-text-muted);
-}
-
-.miya-worldbook-app .ins-wb-group-head-arrow {
-  font-size: 10px;
-  color: var(--st-text-muted);
-}
-
-.miya-worldbook-app .ins-wb-group-head-ops {
-  display: flex;
-  gap: 6px;
-}
-
-.miya-worldbook-app .ins-wb-group-op {
-  border: 1px solid var(--st-border);
-  border-radius: 12px;
-  background: var(--st-card-bg);
-  padding: 4px 10px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: var(--st-text-secondary);
-  cursor: pointer;
-}
-
-.miya-worldbook-app .ins-wb-group-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* ─── Empty State ─── */
-.miya-worldbook-app .ins-wb-empty {
-  padding: 40px 20px;
-  text-align: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--st-text-tertiary);
-}
-
-.miya-worldbook-app .ins-wb-empty strong {
+.miya-worldbook-app .wb-exp svg {
+  width: 12px;
+  height: 12px;
   display: block;
-  font-family: 'Noto Serif SC', serif;
-  font-size: 18px;
-  font-weight: 500;
-  color: var(--st-text-primary);
-  margin-bottom: 8px;
 }
 
-/* ─── Footer ─── */
-/*
- * ⚠️ 页脚已被删除（index.html 里 <footer class="st-footer"> 整块移除）。
- * 下面三条 .st-footer / .st-footer-brand / .st-footer-version 规则
- * 因此【在世界书页面不再有节点可命中】。
- *
- * 之所以留着不删：这类「装饰性文本块」的样式很容易在别处被复用，
- * 且它们本身就带 .miya-worldbook-app 前缀，不会污染全局。
- * 若确认长期不用，可连同 index.html 里那段注释一起清理。
- */
-.miya-worldbook-app .st-footer {
-  margin-top: 36px;
-  text-align: center;
-  padding-bottom: 16px;
+.miya-worldbook-app .wb-row.is-open .wb-exp {
+  transform: rotate(90deg);
 }
 
-.miya-worldbook-app .st-footer-brand {
-  font-family: 'Playfair Display', serif;
-  font-size: 14px;
-  font-style: italic;
-  color: var(--st-text-muted);
-  letter-spacing: 1px;
+/* 书名 —— flex-basis 必须是 0：auto 基准按内容算假想宽度，
+   长书名会把行尾的开关/按钮挤到第二行（换行判定发生在收缩之前） */
+.miya-worldbook-app .wb-row-name {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
+  font-size: 13.5px;
+  color: var(--wb-ink);
+  letter-spacing: .02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.miya-worldbook-app .st-footer-version {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  color: var(--st-text-muted);
-  margin-top: 6px;
-  letter-spacing: 1px;
+/* 整组关闭：书名降饱和 + 划线 */
+.miya-worldbook-app .wb-row.is-group-off .wb-row-name {
+  color: var(--wb-faint);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }
 
-/* ─── Toggle ─── */
-.miya-worldbook-app .ins-toggle {
-  width: 44px;
-  height: 26px;
-  border-radius: 99px;
-  border: 1px solid var(--st-border-strong);
-  background: rgba(0, 0, 0, 0.06);
+/* 状态标签 */
+.miya-worldbook-app .wb-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: var(--wb-muted);
+  background: #F1F3F7;
+}
+
+.miya-worldbook-app .wb-chip.on {
+  color: var(--wb-blue-deep);
+  background: var(--wb-blue-tint);
+}
+
+/* 条数 */
+.miya-worldbook-app .wb-count {
+  flex: none;
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  color: var(--wb-faint);
+  font-family: var(--wb-serif);
+  font-weight: 600;
+  min-width: 30px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 开关（iOS 风蓝） */
+.miya-worldbook-app .wb-switch {
+  flex: none;
   position: relative;
+  width: 36px;
+  height: 21px;
+  border-radius: 11px;
+  background: #D9DEE5;
+  transition: background .2s ease;
   cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.25s ease, border-color 0.25s ease;
 }
 
-.miya-worldbook-app .ins-toggle::after {
+.miya-worldbook-app .wb-switch::after {
   content: '';
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: var(--st-shadow-sm);
-  transition: transform 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+  transition: transform .2s ease;
 }
 
-.miya-worldbook-app .ins-toggle.is-on {
-  background: var(--st-accent);
-  border-color: var(--st-accent);
+.miya-worldbook-app .wb-switch.is-on {
+  background: var(--wb-blue);
 }
 
-.miya-worldbook-app .ins-toggle.is-on::after {
-  transform: translateX(18px);
+.miya-worldbook-app .wb-switch.is-on::after {
+  transform: translateX(15px);
 }
 
-/* ─── Editor ─── */
+.miya-worldbook-app .wb-switch:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+/* 编辑 / 删除 */
+.miya-worldbook-app .wb-act {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wb-ink-soft);
+  transition: background .18s ease, color .18s ease;
+}
+
+.miya-worldbook-app .wb-act:active {
+  background: #F1F4F8;
+}
+
+.miya-worldbook-app .wb-act--del:active {
+  background: rgba(200, 60, 60, .10);
+  color: #C33;
+}
+
+.miya-worldbook-app .wb-act svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 展开后的内容区 */
+.miya-worldbook-app .wb-row-body {
+  display: none;
+  flex: 1 1 100%;
+}
+
+.miya-worldbook-app .wb-row.is-open .wb-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--wb-line);
+}
+
+/* ── 行内词条 ── */
+.miya-worldbook-app .wb-entry {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px 9px 8px;
+  background: #F8FAFD;
+  border: 1px solid var(--wb-line);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .18s ease, transform .14s ease;
+}
+
+.miya-worldbook-app .wb-entry:active {
+  transform: scale(.995);
+}
+
+.miya-worldbook-app .wb-entry.is-on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--wb-blue);
+}
+
+.miya-worldbook-app .wb-entry-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.miya-worldbook-app .wb-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.miya-worldbook-app .wb-entry-name {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--wb-ink);
+  letter-spacing: .02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miya-worldbook-app .wb-entry:not(.is-on) .wb-entry-name {
+  color: var(--wb-muted);
+}
+
+.miya-worldbook-app .wb-entry-chip {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  letter-spacing: .06em;
+  color: var(--wb-muted);
+  background: #EEF1F6;
+  white-space: nowrap;
+}
+
+.miya-worldbook-app .wb-entry-keys,
+.miya-worldbook-app .wb-entry-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--wb-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miya-worldbook-app .wb-entry-meta {
+  font-size: 10.5px;
+  color: var(--wb-faint);
+}
+
+.miya-worldbook-app .wb-entry-ops {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── 空态 ── */
+.miya-worldbook-app .wb-empty {
+  padding: 44px 20px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--wb-muted);
+}
+
+.miya-worldbook-app .wb-empty strong {
+  display: block;
+  font-family: var(--wb-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--wb-ink);
+  margin-bottom: 8px;
+}
+
+/* ══ 编辑器层 ══ */
 .miya-worldbook-app .ins-wb-editor {
   position: absolute;
   inset: 0;
   z-index: 8;
   display: flex;
   flex-direction: column;
-  background: var(--st-bg);
+  background: var(--wb-bg);
   opacity: 0;
   pointer-events: none;
   transform: translateX(100%);
-  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+  transition: transform .42s cubic-bezier(0.22, 1, 0.36, 1), opacity .3s ease;
 }
 
 .miya-worldbook-app.has-editor .ins-wb-editor {
@@ -830,99 +626,210 @@
 .miya-worldbook-app .ins-wb-editor-scroll {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
+.miya-worldbook-app .miya-wb-st-editor {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 2px 16px 8px;
+}
+
+/* 编辑器顶栏 */
+.miya-worldbook-app .wb-editor-nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px;
+  background: var(--wb-bg);
+  border-bottom: 1px solid var(--wb-border);
+}
+
+/* 顶栏「诊断」入口 */
+.miya-worldbook-app .miya-wb-diagbtn {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  box-shadow: var(--wb-shadow);
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--wb-ink-soft);
+  transition: background .18s ease, transform .14s ease;
+}
+
+.miya-worldbook-app .miya-wb-diagbtn:active {
+  transform: scale(.97);
+  background: #F4F7FB;
+}
+
+/* ── 表单基础 ── */
 .miya-worldbook-app .ins-field-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  display: block;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--st-text-tertiary);
-  margin: 16px 0 8px;
+  letter-spacing: 1px;
+  color: var(--wb-muted);
+  margin: 6px 0 3px;
 }
 
 .miya-worldbook-app .ins-text-input,
 .miya-worldbook-app .ins-select,
 .miya-worldbook-app .ins-textarea {
   width: 100%;
-  background: rgba(0, 0, 0, 0.02);
-  border: 1px solid var(--st-border);
-  border-radius: 16px;
-  padding: 12px 14px;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: var(--st-text-primary);
-  box-shadow: var(--st-shadow-sm);
-  transition: border-color 0.2s ease;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+  border-radius: 12px;
+  padding: 7px 10px;
+  font-family: var(--wb-sans);
+  font-size: 13px;
+  color: var(--wb-ink);
+  transition: border-color .2s ease;
 }
 
 .miya-worldbook-app .ins-text-input:focus,
 .miya-worldbook-app .ins-select:focus,
 .miya-worldbook-app .ins-textarea:focus {
   outline: none;
-  border-color: var(--st-accent);
+  border-color: var(--wb-blue);
 }
 
 .miya-worldbook-app .ins-textarea {
-  min-height: 160px;
+  min-height: 120px;
   resize: vertical;
   line-height: 1.6;
+  padding: 10px 12px;
 }
 
+.miya-worldbook-app .st-form-hint {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--wb-faint);
+  margin: 2px 0 0;
+}
+
+/* ── ST 风格字段栅格（保持既有紧凑间距） ── */
+.miya-wb-st-editor .miya-wb-row5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.miya-wb-st-editor .miya-wb-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.miya-wb-st-editor .miya-wb-field {
+  min-width: 0;
+}
+
+.miya-wb-st-editor .miya-wb-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: flex-end;
+  padding-bottom: 0;
+}
+
+.miya-worldbook-app .miya-wb-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--wb-ink-soft);
+}
+
+.miya-worldbook-app .miya-wb-advanced {
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-border);
+}
+
+.miya-worldbook-app .miya-wb-advanced > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--wb-ink-soft);
+  list-style: none;
+}
+
+.miya-worldbook-app .miya-wb-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.miya-worldbook-app .miya-wb-advanced[open] > summary {
+  margin-bottom: 6px;
+  color: var(--wb-ink);
+}
+
+@media (max-width: 720px) {
+  .miya-wb-st-editor .miya-wb-row5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .miya-wb-st-editor .miya-wb-row2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ── 范围 / 生效场景选择卡 ── */
 .miya-worldbook-app .ins-wb-scope-pick,
 .miya-worldbook-app .ins-wb-reach-pick,
 .miya-worldbook-app .ins-wb-depth-pick {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 8px 0 16px;
-}
-
-.miya-worldbook-app .ins-wb-depth-pick {
-  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin: 4px 0 8px;
 }
 
 .miya-worldbook-app .ins-wb-scope-opt,
 .miya-worldbook-app .ins-wb-reach-opt,
 .miya-worldbook-app .ins-wb-depth-opt {
-  padding: 14px 12px;
-  border: 1px solid var(--st-border);
-  border-radius: 20px;
-  background: var(--st-card-bg);
+  padding: 6px 8px;
+  border: 1px solid var(--wb-border);
+  border-radius: 12px;
+  background: var(--wb-card);
   text-align: left;
-  cursor: pointer;
-  color: inherit;
-  box-shadow: var(--st-shadow-sm);
-  transition: all 0.25s ease;
+  transition: border-color .2s ease, background .2s ease;
 }
 
 .miya-worldbook-app .ins-wb-scope-opt strong,
 .miya-worldbook-app .ins-wb-reach-opt strong,
 .miya-worldbook-app .ins-wb-depth-opt strong {
   display: block;
-  font-family: 'Noto Serif SC', serif;
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  color: var(--st-text-primary);
+  font-family: var(--wb-serif);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+  color: var(--wb-ink);
 }
 
 .miya-worldbook-app .ins-wb-scope-opt span,
 .miya-worldbook-app .ins-wb-reach-opt span,
 .miya-worldbook-app .ins-wb-depth-opt span {
-  font-family: 'Inter', sans-serif;
   font-size: 10px;
   line-height: 1.5;
-  color: var(--st-text-tertiary);
+  color: var(--wb-faint);
 }
 
 .miya-worldbook-app .ins-wb-scope-opt.is-active,
 .miya-worldbook-app .ins-wb-reach-opt.is-active,
 .miya-worldbook-app .ins-wb-depth-opt.is-active {
-  border-color: var(--st-accent);
-  background: var(--st-accent-soft);
-  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.12);
+  border-color: var(--wb-blue);
+  background: var(--wb-blue-tint);
 }
 
 .miya-worldbook-app .ins-wb-body-head {
@@ -930,102 +837,103 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .miya-worldbook-app .ins-wb-body-head .ins-field-label {
   margin: 0;
 }
 
+/* ── 通用小按钮（从文件填入 / 运行扫描 / 保存） ── */
 .miya-worldbook-app .ins-chip {
-  border: 1px solid var(--st-border);
-  border-radius: 14px;
-  background: var(--st-card-bg);
-  padding: 8px 14px;
-  font-family: 'Inter', sans-serif;
+  border: 1px solid var(--wb-border);
+  border-radius: 12px;
+  background: var(--wb-card);
+  padding: 7px 14px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--st-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
+  color: var(--wb-ink-soft);
+  transition: transform .14s ease, background .2s ease;
+}
+
+.miya-worldbook-app .ins-chip:active {
+  transform: scale(.97);
 }
 
 .miya-worldbook-app .ins-chip--dim {
-  color: var(--st-text-tertiary);
+  color: var(--wb-faint);
 }
 
+.miya-worldbook-app .ins-chip--gold {
+  background: var(--wb-blue);
+  border-color: var(--wb-blue);
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(75, 139, 245, .55);
+}
+
+.miya-worldbook-app .ins-chip--rose {
+  background: var(--wb-card);
+  color: #C0392B;
+  border-color: rgba(192, 57, 43, .25);
+}
+
+/* ── 编辑器底栏 ── */
 .miya-worldbook-app .ins-wb-editor-foot {
-  flex-shrink: 0;
+  flex: none;
   display: flex;
-  gap: 10px;
-  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--st-border);
-  background: linear-gradient(180deg, rgba(245, 243, 239, 0) 0%, rgba(245, 243, 239, 0.96) 30%);
+  gap: 8px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--wb-border);
+  background: var(--wb-bg);
 }
 
 .miya-worldbook-app .ins-wb-editor-foot .ins-chip {
   flex: 1;
-  padding: 14px;
+  padding: 12px;
   text-align: center;
-  border-radius: 16px;
+  border-radius: 14px;
 }
 
-.miya-worldbook-app .ins-chip--gold {
-  background: linear-gradient(135deg, var(--st-accent), #5AC8FA);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.25);
-}
-
-.miya-worldbook-app .ins-chip--rose {
-  background: var(--st-card-bg);
-  color: var(--st-accent-warm);
-  border-color: var(--st-accent-warm-soft);
-}
-
-/* ─── Role Picker ─── */
+/* ── 绑定联系人选择卡 ── */
 .miya-worldbook-app .ins-wb-role-empty,
 .miya-worldbook-app .ins-wb-role-hint {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: var(--st-text-tertiary);
+  font-size: 11.5px;
+  color: var(--wb-muted);
   line-height: 1.5;
+  margin: 4px 0;
 }
 
 .miya-worldbook-app .ins-wb-role-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .miya-worldbook-app .ins-wb-role-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--st-border);
-  border-radius: 18px;
-  background: var(--st-card-bg);
-  cursor: pointer;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--wb-border);
+  border-radius: 12px;
+  background: var(--wb-card);
   text-align: left;
-  color: inherit;
-  box-shadow: var(--st-shadow-sm);
-  transition: all 0.2s ease;
+  transition: border-color .2s ease, background .2s ease;
 }
 
 .miya-worldbook-app .ins-wb-role-card.is-selected {
-  border-color: var(--st-accent);
-  background: var(--st-accent-soft);
+  border-color: var(--wb-blue);
+  background: var(--wb-blue-tint);
 }
 
 .miya-worldbook-app .ins-wb-role-portrait {
-  width: 32px;
-  height: 32px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #E8E4DF, #D5D0CA);
+  background: linear-gradient(135deg, #E8EDF4, #D9E2EE);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1038,42 +946,39 @@
 }
 
 .miya-worldbook-app .ins-wb-role-portrait--mono {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 14px;
-  color: var(--st-text-secondary);
+  font-family: var(--wb-serif);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wb-ink-soft);
 }
 
 .miya-worldbook-app .ins-wb-role-card-name {
-  font-family: 'Inter', sans-serif;
   font-size: 12px;
   font-weight: 500;
-  color: var(--st-text-primary);
+  color: var(--wb-ink);
 }
 
 .miya-worldbook-app .ins-wb-role-tag {
   font-size: 9px;
-  color: var(--st-text-muted);
+  color: var(--wb-faint);
 }
 
-/* ── 已失效的角色绑定 ──
-   该绑定指向的联系人已被删除，只剩一个孤立 ID。
-   以前它以裸 ID 当名字显示（ct_mtxj2rfh_a1ek7s），用户看不懂也无从判断。
-   现在：卡片降饱和 + 「已失效」红标签 + 小字还原原 ID，一眼可辨、可取消。 */
+/* 已失效的角色绑定：降饱和 + 红标 */
 .miya-worldbook-app .ins-wb-role-tag--orphan {
-  color: #b4543f;
-  background: rgba(180, 84, 63, 0.1);
+  color: #B4543F;
+  background: rgba(180, 84, 63, .1);
   border-radius: 4px;
   padding: 0 4px;
 }
 
 .miya-worldbook-app .ins-wb-role-card.is-orphan {
   border-style: dashed;
-  opacity: 0.85;
+  opacity: .85;
 }
 
 .miya-worldbook-app .ins-wb-role-card.is-orphan .ins-wb-role-portrait {
   filter: grayscale(1);
-  opacity: 0.6;
+  opacity: .6;
 }
 
 .miya-worldbook-app .ins-wb-role-card-hint {
@@ -1081,458 +986,12 @@
   margin-top: 2px;
   font-size: 9px;
   line-height: 1.3;
-  color: var(--st-text-muted);
+  color: var(--wb-faint);
   word-break: break-all;
-  opacity: 0.75;
+  opacity: .75;
 }
 
-.miya-worldbook-app.is-open {
-  z-index: 520;
-}
-
-/* ── 世界书编辑器 · ST 风格顶栏 ── */
-.miya-wb-st-editor .miya-wb-row5 {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.miya-wb-st-editor .miya-wb-row2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.miya-wb-st-editor .miya-wb-field {
-  min-width: 0;
-}
-.miya-wb-st-editor .miya-wb-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  justify-content: flex-end;
-  padding-bottom: 4px;
-}
-.miya-wb-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #555;
-}
-.miya-wb-advanced {
-  margin: 12px 0 16px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-.miya-wb-advanced > summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: #666;
-  list-style: none;
-}
-.miya-wb-advanced > summary::-webkit-details-marker { display: none; }
-.miya-wb-advanced[open] > summary {
-  margin-bottom: 10px;
-  color: #333;
-}
-
-/* ---- 激活诊断面板 ---- */
-.miya-wb-diag {
-  margin-top: 18px;
-}
-.miya-wb-diag__hint {
-  font-size: 12px;
-  line-height: 1.6;
-  color: #888;
-  margin: 0 0 12px;
-}
-.miya-wb-diag__out {
-  margin-top: 12px;
-}
-.miya-wb-diag__verdict {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 11px 13px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.5;
-  margin-bottom: 10px;
-  border: 1px solid transparent;
-}
-.miya-wb-diag__verdict.is-ok {
-  background: rgba(34, 139, 94, 0.08);
-  border-color: rgba(34, 139, 94, 0.22);
-  color: #1c6b49;
-}
-.miya-wb-diag__verdict.is-warn {
-  background: rgba(196, 137, 20, 0.09);
-  border-color: rgba(196, 137, 20, 0.24);
-  color: #8a5d09;
-}
-.miya-wb-diag__verdict.is-block {
-  background: rgba(190, 55, 55, 0.07);
-  border-color: rgba(190, 55, 55, 0.2);
-  color: #97302f;
-}
-.miya-wb-diag__verdict strong {
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-.miya-wb-diag__detail {
-  font-size: 12px;
-  line-height: 1.65;
-  color: #555;
-  margin: 0 0 10px;
-}
-.miya-wb-diag__steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.miya-wb-diag__step {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  line-height: 1.6;
-  padding: 6px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
-.miya-wb-diag__step:first-child { border-top: none; }
-.miya-wb-diag__mark {
-  flex: 0 0 auto;
-  width: 15px;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.miya-wb-diag__step.is-pass .miya-wb-diag__mark { color: #1c6b49; }
-.miya-wb-diag__step.is-warn .miya-wb-diag__mark { color: #b8860b; }
-.miya-wb-diag__step.is-warn { color: #7a5a10; }
-.miya-wb-diag__step.is-fail .miya-wb-diag__mark { color: #b3372f; }
-.miya-wb-diag__step.is-skip .miya-wb-diag__mark { color: #b0b0b0; }
-.miya-wb-diag__step.is-skip { color: #999; }
-.miya-wb-diag__k {
-  color: #888;
-  margin-right: 4px;
-}
-.miya-wb-diag__meta {
-  font-size: 11px;
-  color: #999;
-  margin-top: 8px;
-  line-height: 1.6;
-}
-@media (max-width: 720px) {
-  .miya-wb-st-editor .miya-wb-row5 {
-    grid-template-columns: 1fr 1fr;
-  }
-  .miya-wb-st-editor .miya-wb-row2 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── 世界书手风琴 ── */
-.miya-worldbook-app .ins-wb-book {
-  margin: 0 0 10px;
-  border-radius: 16px;
-  background: rgba(255,255,255,.78);
-  border: 1px solid rgba(0,0,0,.05);
-  overflow: hidden;
-  box-shadow: 0 4px 16px rgba(40,30,20,.04);
-}
-.miya-worldbook-app .ins-wb-book-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 4px;
-  background: rgba(250,248,244,.9);
-}
-.miya-worldbook-app .ins-wb-book-toggle {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  background: transparent;
-  text-align: left;
-  padding: 10px 8px;
-  cursor: pointer;
-  min-width: 0;
-}
-.miya-worldbook-app .ins-wb-book-arrow {
-  width: 18px;
-  color: #888;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.miya-worldbook-app .ins-wb-book-title {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.miya-worldbook-app .ins-wb-book-count {
-  font-size: 12px;
-  color: #999;
-  flex-shrink: 0;
-}
-.miya-worldbook-app .ins-wb-book-body {
-  padding: 6px 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.miya-worldbook-app .ins-wb-book.is-collapsed .ins-wb-book-head {
-  border-bottom: none;
-}
-
-/* ── 编辑器更紧凑（再压间距） ── */
-.miya-wb-st-editor .miya-wb-row5 {
-  gap: 4px !important;
-  margin-bottom: 4px !important;
-}
-.miya-wb-st-editor .miya-wb-row2 {
-  gap: 4px !important;
-  margin-bottom: 4px !important;
-}
-.miya-wb-st-editor .ins-field-label {
-  margin: 4px 0 2px !important;
-  font-size: 11px !important;
-  letter-spacing: 0.8px !important;
-}
-.miya-wb-st-editor .ins-text-input,
-.miya-wb-st-editor .ins-select {
-  padding: 6px 10px !important;
-  min-height: 36px;
-  border-radius: 12px !important;
-}
-.miya-wb-st-editor .ins-textarea {
-  margin-top: 2px;
-  padding: 10px 12px !important;
-  min-height: 120px;
-}
-.miya-wb-st-editor .miya-wb-advanced {
-  margin: 6px 0 8px !important;
-  padding: 6px 8px !important;
-}
-.miya-wb-st-editor .miya-wb-checks {
-  gap: 4px !important;
-  padding-bottom: 0 !important;
-}
-.miya-worldbook-app .ins-wb-editor-scroll .st-container {
-  padding-top: 4px !important;
-  padding-bottom: 8px !important;
-  padding-left: 16px !important;
-  padding-right: 16px !important;
-}
-.miya-worldbook-app .ins-wb-scope-pick,
-.miya-worldbook-app .ins-wb-reach-pick,
-.miya-worldbook-app .ins-wb-depth-pick {
-  gap: 4px !important;
-  margin: 4px 0 8px !important;
-}
-.miya-worldbook-app .ins-wb-scope-opt,
-.miya-worldbook-app .ins-wb-reach-opt,
-.miya-worldbook-app .ins-wb-depth-opt {
-  padding: 6px 8px !important;
-  border-radius: 14px !important;
-}
-.miya-worldbook-app .ins-wb-scope-opt strong,
-.miya-worldbook-app .ins-wb-reach-opt strong,
-.miya-worldbook-app .ins-wb-depth-opt strong {
-  margin-bottom: 2px !important;
-  font-size: 13px !important;
-}
-.miya-worldbook-app .ins-field-label {
-  margin: 4px 0 2px !important;
-}
-.miya-worldbook-app .ins-wb-body-head {
-  margin-top: 4px !important;
-}
-.miya-worldbook-app .ins-wb-editor-foot {
-  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-  gap: 8px !important;
-}
-.miya-worldbook-app .ins-wb-editor-foot .ins-chip {
-  padding: 12px !important;
-}
-
-/* ── 再次收紧（尽量让"内容"输入框在首屏内可见） ──
-   之前手机窄屏下 row5 会从 1 行折成 3 行、row2 从 1 行折成 2 行，
-   这是竖向空间被吃掉最多的地方，先把折行方式改紧凑一些。 */
-@media (max-width: 720px) {
-  .miya-wb-st-editor .miya-wb-row5 {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
-  .miya-wb-st-editor .miya-wb-row2 {
-    grid-template-columns: 1fr 1fr !important;
-  }
-}
-.miya-wb-st-editor .miya-wb-row5,
-.miya-wb-st-editor .miya-wb-row2 {
-  gap: 4px !important;
-  margin-bottom: 2px !important;
-}
-.miya-wb-st-editor .ins-field-label {
-  margin: 2px 0 1px !important;
-  font-size: 10px !important;
-}
-.miya-wb-st-editor .ins-text-input,
-.miya-wb-st-editor .ins-select {
-  padding: 5px 8px !important;
-  min-height: 32px !important;
-}
-.miya-wb-st-editor .miya-wb-checks {
-  gap: 2px !important;
-  padding-bottom: 0 !important;
-}
-.miya-wb-st-editor .miya-wb-check {
-  font-size: 12px !important;
-  gap: 6px !important;
-}
-.miya-wb-advanced {
-  margin: 3px 0 5px !important;
-  padding: 4px 8px !important;
-}
-.miya-wb-advanced > summary {
-  font-size: 12px !important;
-}
-.miya-wb-advanced[open] > summary {
-  margin-bottom: 6px !important;
-}
-.miya-worldbook-app .ins-wb-editor-scroll .st-container {
-  padding-top: 2px !important;
-}
-.miya-worldbook-app .ins-wb-editor .st-navbar {
-  padding: calc(env(safe-area-inset-top, 0px) + 6px) 16px 6px !important;
-  gap: 8px !important;
-}
-.miya-worldbook-app .ins-wb-editor .st-navback {
-  padding: 6px 10px 6px 6px !important;
-}
-.miya-worldbook-app .ins-wb-editor .st-navtitle {
-  font-size: 15px !important;
-}
-
-/* 顶栏「诊断」入口。
-   之前诊断面板只放在编辑器最底部（滚动容器 89% 处），打开编辑器时在视口外，
-   用户填完内容以为到底了就直接保存 —— 根本发现不了有这个功能。
-   放个常驻入口在顶栏，点击后滚动定位到面板并自动展开。 */
-.miya-worldbook-app .ins-wb-editor .st-navtitle {
-  flex: 1 1 auto;
-}
-.miya-wb-diagbtn {
-  flex: 0 0 auto;
-  font-family: inherit;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  padding: 6px 12px;
-  border-radius: 99px;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  background: rgba(255, 255, 255, 0.9);
-  color: #444;
-  cursor: pointer;
-}
-.miya-wb-diagbtn:active {
-  transform: scale(0.97);
-  background: rgba(0, 0, 0, 0.05);
-}
-/* 面板被高亮时给个短暂提示，让用户明白"就是这里" */
-.miya-wb-diag.is-flash {
-  box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.45);
-  transition: box-shadow 0.25s ease;
-}
-.miya-worldbook-app .ins-wb-body-head {
-  margin-top: 2px !important;
-}
-
-/* 图标化操作按钮 */
-.miya-worldbook-app .st-wb-add-btn.mi-ico-btn {
-  font-size: 0;
-  padding: 0;
-}
-.miya-worldbook-app .st-wb-add-btn.mi-ico-btn img {
-  width: 18px;
-  height: 18px;
-  filter: invert(1);
-  opacity: 1;
-}
-.miya-worldbook-app .ins-wb-link.mi-ico-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--st-border);
-  border-radius: 10px;
-  background: var(--st-card-bg);
-  color: var(--st-text-secondary);
-  text-decoration: none;
-  font-size: 0;
-}
-.miya-worldbook-app .ins-wb-link.mi-ico-btn img {
-  width: 14px;
-  height: 14px;
-  opacity: 0.85;
-}
-
-/* ─── 分组总开关（整组启停） ─────────────────────────────────────
-   独立于条目开关的一层：关组不会写回条目的 enabled，
-   所以重新打开分组时，组内原本的启停状态原样恢复。 */
-.miya-worldbook-app .ins-wb-group-op--power {
-  min-width: 32px;
-  padding: 4px 6px;
-  font-size: 11px;
-  line-height: 1;
-  color: #3f8f5f;
-  border-color: rgba(63, 143, 95, 0.45);
-  background: rgba(63, 143, 95, 0.08);
-}
-.miya-worldbook-app .ins-wb-group-op--power.is-off {
-  color: #9a9a9a;
-  border-color: var(--st-border);
-  background: var(--st-card-bg);
-}
-.miya-worldbook-app .ins-wb-group-op--power:active {
-  transform: scale(0.94);
-}
-
-/* 整组关闭：标题降饱和 + 加「已关闭」徽标，一眼能看出这组不生效 */
-.miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-title {
-  color: #9a9a9a;
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-}
-.miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-arrow {
-  color: #bbb;
-}
-.miya-worldbook-app .ins-wb-book-badge {
-  flex-shrink: 0;
-  margin-right: 6px;
-  padding: 1px 7px;
-  border-radius: 8px;
-  font-size: 10px;
-  line-height: 1.5;
-  color: #8a8a8a;
-  background: rgba(127, 127, 127, 0.12);
-}
-.miya-worldbook-app .ins-wb-book.is-group-off .ins-wb-book-count {
-  color: #bbb;
-}
-
-/* ------------------------------------------------------------------
- * 绑定联系人 · 失效绑定的清理入口
- *
- * 「已失效」卡片以前只能靠「点一下取消勾选」来移除 —— 隐式、难发现，
- * 且同一个孤立 ID 常被多条词条绑着，逐条打开太费事。
- * 这里给一个显式的批量清理按钮：只在真有失效绑定时出现。
- * ------------------------------------------------------------------ */
+/* 「清理失效绑定」 */
 .miya-worldbook-app .miya-wb-roles-head {
   display: flex;
   align-items: center;
@@ -1549,25 +1008,128 @@
   padding: 3px 10px;
   font-size: 11px;
   line-height: 1.5;
-  color: #b4543f;
-  background: rgba(180, 84, 63, 0.08);
-  border: 1px solid rgba(180, 84, 63, 0.35);
+  color: #B4543F;
+  background: rgba(180, 84, 63, .08);
+  border: 1px solid rgba(180, 84, 63, .35);
   border-radius: 6px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.miya-worldbook-app .ins-wb-orphan-purge:hover {
-  background: rgba(180, 84, 63, 0.16);
-  border-color: rgba(180, 84, 63, 0.55);
+  transition: background .15s ease, border-color .15s ease;
 }
 
 .miya-worldbook-app .ins-wb-orphan-purge:disabled {
-  opacity: 0.5;
+  opacity: .5;
   cursor: default;
 }
 
 .miya-worldbook-app .ins-wb-orphan-purge[hidden] {
   display: none;
+}
+
+/* ── 激活诊断 ── */
+.miya-worldbook-app .miya-wb-diag {
+  margin-top: 10px;
+}
+
+.miya-worldbook-app .miya-wb-diag__hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--wb-muted);
+  margin: 0 0 10px;
+}
+
+.miya-worldbook-app .miya-wb-diag__out {
+  margin-top: 10px;
+}
+
+.miya-worldbook-app .miya-wb-diag__verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+}
+
+.miya-worldbook-app .miya-wb-diag__verdict.is-ok {
+  background: rgba(34, 139, 94, .08);
+  border-color: rgba(34, 139, 94, .22);
+  color: #1C6B49;
+}
+
+.miya-worldbook-app .miya-wb-diag__verdict.is-warn {
+  background: rgba(196, 137, 20, .09);
+  border-color: rgba(196, 137, 20, .24);
+  color: #8A5D09;
+}
+
+.miya-worldbook-app .miya-wb-diag__verdict.is-block {
+  background: rgba(190, 55, 55, .07);
+  border-color: rgba(190, 55, 55, .2);
+  color: #97302F;
+}
+
+.miya-worldbook-app .miya-wb-diag__verdict strong {
+  font-size: 13px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.miya-worldbook-app .miya-wb-diag__detail {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--wb-ink-soft);
+  margin: 0 0 10px;
+}
+
+.miya-worldbook-app .miya-wb-diag__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.miya-worldbook-app .miya-wb-diag__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 6px 0;
+  border-top: 1px solid var(--wb-line);
+}
+
+.miya-worldbook-app .miya-wb-diag__step:first-child {
+  border-top: none;
+}
+
+.miya-worldbook-app .miya-wb-diag__mark {
+  flex: 0 0 auto;
+  width: 15px;
+  text-align: center;
+}
+
+.miya-worldbook-app .miya-wb-diag__step.is-pass .miya-wb-diag__mark { color: #1C6B49; }
+.miya-worldbook-app .miya-wb-diag__step.is-warn .miya-wb-diag__mark { color: #B8860B; }
+.miya-worldbook-app .miya-wb-diag__step.is-warn { color: #7A5A10; }
+.miya-worldbook-app .miya-wb-diag__step.is-fail .miya-wb-diag__mark { color: #B3372F; }
+.miya-worldbook-app .miya-wb-diag__step.is-skip .miya-wb-diag__mark { color: #B0B0B0; }
+.miya-worldbook-app .miya-wb-diag__step.is-skip { color: var(--wb-faint); }
+
+.miya-worldbook-app .miya-wb-diag__k {
+  color: var(--wb-faint);
+  margin-right: 4px;
+}
+
+.miya-worldbook-app .miya-wb-diag__meta {
+  font-size: 11px;
+  color: var(--wb-faint);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+/* 诊断面板被顶栏入口定位时的高亮 */
+.miya-worldbook-app .miya-wb-diag.is-flash {
+  box-shadow: 0 0 0 2px rgba(45, 107, 217, .35);
+  transition: box-shadow .25s ease;
 }

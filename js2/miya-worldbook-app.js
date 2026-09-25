@@ -14,6 +14,11 @@
 
   function $(id) { return document.getElementById(id); }
 
+  /* 内联 SVG（currentColor 随行内按钮变色，替换旧的 img 图标） */
+  var SVG_EXP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+  var SVG_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>';
+  var SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>';
+
   function ensureContactsReady() {
     var cs = global.miyaContactsStore;
     if (cs && typeof cs.whenReady === 'function') return cs.whenReady();
@@ -98,14 +103,13 @@
     return active ? active.getAttribute('data-wb-global-reach') || 'online_offline' : 'online_offline';
   }
 
-  function keywordPreview(entry) {
-    var scope = entry.scope === 'local' ? 'local' : 'global';
+  /** 词条关键行文案：有关键词优先展示，其次按常驻/触发兜底 */
+  function entryKeysText(entry) {
     var kws = Array.isArray(entry.keywords) ? entry.keywords : [];
-    var kwPart = !kws.length
-      ? '无关键词·随时命中'
-      : '关键词：' + kws.slice(0, 4).join(' · ') + (kws.length > 4 ? ' …' : '');
-    var reach = entry.globalReach || (scope === 'local' ? 'all' : 'online_offline');
-    return '生效：' + globalReachLabel(reach) + ' · ' + kwPart;
+    if (kws.length) {
+      return '关键词：' + kws.slice(0, 4).join(' · ') + (kws.length > 4 ? ' …' : '');
+    }
+    return entry.constant ? '常驻 · 无需关键词' : '无关键词 · 随时命中';
   }
 
   function filteredEntries() {
@@ -284,28 +288,25 @@
     return reach + ' · ' + names.join(' · ') + suffix;
   }
 
-  function renderEntryCard(entry, index) {
+  function renderEntryCard(entry) {
     var on = entry.enabled !== false;
     var scope = entry.scope === 'local' ? 'local' : 'global';
     var depth = store.normalizeDepth ? store.normalizeDepth(entry.depth) : (entry.depth || 'middle');
     var roleHint = roleHintLabel(entry);
-    var idx = typeof index === 'number' ? String(index + 1).padStart(2, '0') : '';
     return (
-      '<article class="ins-wb-card' + (on ? '' : ' is-off') + '" data-wb-id="' + esc(entry.id) + '">' +
-      (idx ? '<span class="ins-wb-card__idx" aria-hidden="true">' + idx + '</span>' : '') +
-      '<div class="ins-wb-card-head">' +
-      '<div class="ins-wb-card-tags">' +
-      '<span class="ins-wb-scope ins-wb-scope--' + scope + '">' + scopeLabel(scope) + '</span>' +
-      '<span class="ins-wb-depth ins-wb-depth--' + depth + '">' + depthLabel(depth) + '</span>' +
+      '<article class="wb-entry' + (on ? ' is-on' : '') + '" data-wb-id="' + esc(entry.id) + '">' +
+      '<div class="wb-entry-main">' +
+      '<div class="wb-entry-head">' +
+      '<span class="wb-entry-name">' + esc(entry.name || '未命名片段') + '</span>' +
+      '<span class="wb-entry-chip">' + esc(scopeLabel(scope)) + ' · ' + esc(depthLabel(depth)) + '</span>' +
       '</div>' +
-      '<button type="button" class="ins-toggle' + (on ? ' is-on' : '') + '" data-wb-toggle="' + esc(entry.id) + '" role="switch" aria-checked="' + on + '"></button>' +
+      '<p class="wb-entry-keys">' + esc(entryKeysText(entry)) + '</p>' +
+      '<p class="wb-entry-meta">' + esc(roleHint) + '</p>' +
       '</div>' +
-      '<h3 class="ins-wb-card-title">' + esc(entry.name) + '</h3>' +
-      '<p class="ins-wb-card-keys">' + esc(keywordPreview(entry)) + '</p>' +
-      '<footer class="ins-wb-card-foot">' +
-      '<span>' + esc(roleHint) + '</span>' +
-      '<button type="button" class="ins-wb-link mi-ico-btn" data-wb-edit="' + esc(entry.id) + '" title="编辑" aria-label="编辑"><img src="img/icons/edit-03.svg" alt="" width="15" height="15"></button>' +
-      '</footer>' +
+      '<div class="wb-entry-ops">' +
+      '<button type="button" class="wb-switch' + (on ? ' is-on' : '') + '" data-wb-toggle="' + esc(entry.id) + '" role="switch" aria-checked="' + on + '" aria-label="启用开关"></button>' +
+      '<button type="button" class="wb-act" data-wb-edit="' + esc(entry.id) + '" title="编辑" aria-label="编辑">' + SVG_PENCIL + '</button>' +
+      '</div>' +
       '</article>'
     );
   }
@@ -351,34 +352,31 @@
     groups.forEach(function (g) {
       var items = byGroup[g.id] || [];
       if (!items.length) return;
-      var collapsed = !!collapsedGroups[g.id];
+      var open = !collapsedGroups[g.id];
       /* 分组总开关（未分组是兜底容器，不提供开关） */
       var groupOff = !g.fixed && g.enabled === false;
-      var toggleOp = g.fixed ? '' : (
-        '<button type="button" class="ins-wb-group-op ins-wb-group-op--power' + (groupOff ? ' is-off' : '') + ' mi-ico-btn" ' +
-        'data-wb-group-toggle="' + esc(g.id) + '" ' +
-        'title="' + (groupOff ? '整组已关闭，点击启用' : '整组启用中，点击关闭') + '" ' +
-        'aria-label="' + (groupOff ? '启用整组' : '关闭整组') + '" aria-pressed="' + (groupOff ? 'false' : 'true') + '">' +
-        (groupOff ? '○' : '●') + '</button>'
-      );
-      var actions = g.fixed ? '' : (
-        '<span class="ins-wb-group-head-ops">' + toggleOp +
-        '<button type="button" class="ins-wb-group-op mi-ico-btn" data-wb-group-edit="' + esc(g.id) + '" title="重命名" aria-label="重命名"><img src="img/icons/edit-03.svg" alt="" width="16" height="16"></button>' +
-        '<button type="button" class="ins-wb-group-op ins-wb-group-op--del mi-ico-btn mi-ico-btn--danger" data-wb-group-del="' + esc(g.id) + '" title="删除世界书" aria-label="删除世界书"><img src="img/icons/trash-01.svg" alt="" width="16" height="16"></button>' +
-        '</span>'
-      );
-      html += '<section class="ins-wb-book' + (collapsed ? ' is-collapsed' : ' is-open') + (groupOff ? ' is-group-off' : '') + '" data-wb-book="' + esc(g.id) + '">' +
-        '<div class="ins-wb-book-head">' +
-        '<button type="button" class="ins-wb-book-toggle" data-wb-collapse="' + esc(g.id) + '" aria-expanded="' + !collapsed + '">' +
-        '<span class="ins-wb-book-arrow">' + (collapsed ? '▸' : '▾') + '</span>' +
-        '<span class="ins-wb-book-title">' + esc(g.name) + '</span>' +
-        (groupOff ? '<span class="ins-wb-book-badge">已关闭</span>' : '') +
-        '<span class="ins-wb-book-count">' + items.length + ' 条</span>' +
-        '</button>' + actions + '</div>';
-      if (!collapsed) {
-        html += '<div class="ins-wb-book-body">' + items.map(function (e, i) { return renderEntryCard(e, i); }).join('') + '</div>';
+      var groupOn = !groupOff;
+      var ops;
+      if (g.fixed) {
+        /* 默认分卷：开关渲染成禁用常开，明示「不可整组关闭」 */
+        ops = '<button type="button" class="wb-switch is-on" disabled title="默认分卷不可整组关闭" aria-label="默认分卷"></button>';
+      } else {
+        ops =
+          '<button type="button" class="wb-switch' + (groupOn ? ' is-on' : '') + '" data-wb-group-toggle="' + esc(g.id) + '" role="switch" aria-checked="' + groupOn + '"' +
+          ' title="' + (groupOn ? '整组启用中，点击关闭' : '整组已关闭，点击启用') + '"' +
+          ' aria-label="整组开关"></button>' +
+          '<button type="button" class="wb-act" data-wb-group-edit="' + esc(g.id) + '" title="重命名" aria-label="重命名">' + SVG_PENCIL + '</button>' +
+          '<button type="button" class="wb-act wb-act--del" data-wb-group-del="' + esc(g.id) + '" title="删除世界书" aria-label="删除世界书">' + SVG_TRASH + '</button>';
       }
-      html += '</section>';
+      html +=
+        '<section class="wb-row' + (groupOn ? ' is-on' : '') + (open ? ' is-open' : '') + (groupOff ? ' is-group-off' : '') + '" data-wb-book="' + esc(g.id) + '">' +
+        '<button type="button" class="wb-exp" data-wb-collapse="' + esc(g.id) + '" aria-expanded="' + open + '" aria-label="展开 / 收起">' + SVG_EXP + '</button>' +
+        '<button type="button" class="wb-row-name" data-wb-collapse="' + esc(g.id) + '">' + esc(g.name) + '</button>' +
+        '<span class="wb-chip' + (groupOn ? ' on' : '') + '">' + (groupOn ? '已开启' : '已关闭') + '</span>' +
+        '<span class="wb-count">' + items.length + ' 条</span>' +
+        ops +
+        '<div class="wb-row-body">' + items.map(renderEntryCard).join('') + '</div>' +
+        '</section>';
     });
 
     /* 说明：不再需要「孤儿条目」兜底分支。
@@ -386,7 +384,7 @@
        不存在归类后却无处显示的情况。若某条目所属分组被隐藏（未分组无内容时），
        它会自动落到最后一个可见分组下，数据始终可见。 */
 
-    list.innerHTML = html || rows.map(function (e, i) { return renderEntryCard(e, i); }).join('');
+    list.innerHTML = html || rows.map(renderEntryCard).join('');
   }
 
   function fillGroupSelect(selectedId) {
@@ -1285,9 +1283,9 @@
         store.toggleEntryEnabled(id, ent2.enabled === false).then(renderList);
         return;
       }
-      var card = e.target.closest('.ins-wb-card');
-      if (card && !e.target.closest('button')) {
-        var ent3 = store.getEntry(card.getAttribute('data-wb-id'));
+      var entryCard = e.target.closest('.wb-entry');
+      if (entryCard && !e.target.closest('button')) {
+        var ent3 = store.getEntry(entryCard.getAttribute('data-wb-id'));
         if (ent3) fillEditor(ent3);
       }
     });

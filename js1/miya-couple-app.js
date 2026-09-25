@@ -286,8 +286,13 @@
     if (!rows.length) {
       listEl.innerHTML =
         '<div class="cp-gate-empty">' +
-          '<p>还没有情侣空间</p>' +
-          '<p>点击上方按钮，向心仪的角色发出第一份邀请</p>' +
+          '<div class="cp-gate-empty__orn" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M12 20s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.4-7 10-7 10z"/>' +
+            '</svg>' +
+          '</div>' +
+          '<p class="cp-gate-empty__line1">还没有情侣空间</p>' +
+          '<p class="cp-gate-empty__line2">点击上方按钮，向心仪的角色发出第一份邀请</p>' +
         '</div>';
       return;
     }

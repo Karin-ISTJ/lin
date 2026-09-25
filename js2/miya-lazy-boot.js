@@ -12,7 +12,7 @@
     },
     coupleUi: {
       css: [
-        'css/miya-couple.css?v=13',
+        'css/miya-couple.css?v=14',
         'css/miya-couple-whisper.css?v=9',
         'css/miya-couple-photos.css?v=4'
       ],
@@ -24,7 +24,7 @@
         'js1/miya-couple-whisper-engine.js?v=4',
         'js1/miya-couple-whisper.js?v=4',
         'js1/miya-couple-photos.js?v=5',
-        'js1/miya-couple-app.js?v=11'
+        'js1/miya-couple-app.js?v=12'
       ]
     },
     diaryUi: {
