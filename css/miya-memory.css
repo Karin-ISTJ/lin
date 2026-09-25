@@ -160,7 +160,8 @@
 .miya-memory-app .mm-main::-webkit-scrollbar { display: none; }
 
 .miya-memory-app .mm-main > * {
-  width: 100%;
+  /* 注意：这里不能写 width:100% —— 会与 .mm-screen 的水平 margin
+     相加导致超宽，浏览器丢弃 margin-right，银幕卡片右边就没了边缘 */
   max-width: 520px;
   margin-left: auto;
   margin-right: auto;
@@ -224,20 +225,20 @@
   color: var(--mm-champagne-text);
 }
 
-/* 计数器栈：宽度按票号位数由 JS 内联设定（2 位=2ch，3 位=3ch…） */
+/* 计数器栈：宽度按票号位数由 JS 内联设定（2 位=2ch，3 位=3ch…）。
+   用 inline-grid 把所有数字叠进同一格 —— 数字留在正常行内流里，
+   基线与「/ 06」天然对齐（原 absolute + vertical-align 手调方案
+   在不同设备字体下会出现 02 高一截的不对齐） */
 .miya-memory-app .mm-cnt-stack {
-  position: relative;
-  display: inline-block;
+  display: inline-grid;
   width: 2ch;
-  height: 14px;
-  vertical-align: -2px;
+  vertical-align: baseline;
 }
 .miya-memory-app .mm-cnt {
-  position: absolute;
-  left: 0;
-  top: 0;
+  grid-area: 1 / 1;
   font-style: normal;
   font-weight: 700;
+  line-height: 1;
   color: var(--mm-champagne-text);
   transition: opacity 0.2s var(--mm-ease);
 }
@@ -409,7 +410,9 @@
   writing-mode: vertical-rl;
   font-size: 9.5px;
   font-weight: 500;
+  line-height: 1;
   letter-spacing: 0.38em;
+  white-space: nowrap;   /* 部分安卓机型竖排「入场券」会折成两列，禁换行 */
   color: var(--mm-dim);
 }
 
