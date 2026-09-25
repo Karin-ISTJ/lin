@@ -1,31 +1,47 @@
-/* 记忆 · 暖色刊面（与设置页/全站统一风格） */
+/* ============================================================
+   记忆阅览室 · v12「暗色放映厅」
+   设计令牌与结构移植自 preview-v12t.html：
+   深炭底、暖白文字、琥珀金唯一强调色；胶片孔 + 撕票线 + 票号票根；
+   银幕面板放映时亮起。
+   注意：手机系统状态栏（时间/信号/电量）与底部手势条由真实设备
+   提供，本样式表不渲染、也不预留其位置。
+   ============================================================ */
 .miya-memory-app {
-  /* 与 .miya-settings-app 同一套设计令牌，保证全站观感一致 */
-  --mm-paper: #F5F3EF;
-  --mm-panel: rgba(255, 255, 255, 0.72);
-  --mm-ink: #1A1A1A;
-  --mm-muted: #6B6B6B;
-  --mm-tertiary: #999999;
-  --mm-line: rgba(0, 0, 0, 0.08);
-  --mm-line-soft: rgba(0, 0, 0, 0.04);
-  --mm-accent: #007AFF;
-  --mm-accent-soft: rgba(0, 122, 255, 0.08);
-  --mm-accent-warm: #E85D4C;
-  --mm-card-bg: rgba(255, 255, 255, 0.72);
-  --mm-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --mm-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.03);
-  --mm-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(0, 0, 0, 0.04);
-  --mm-display: "Noto Serif SC", "Cormorant Garamond", serif;
-  --mm-ui: "Noto Serif SC", "Inter", serif;
+  --mm-bg: #17161f;            /* 深炭底（忌纯黑） */
+  --mm-bg-deep: #121118;       /* 更深一档 */
+  --mm-surface: #1b1a26;       /* 银幕面板 */
+  --mm-surface-lit: #222132;   /* 放映中的银幕 */
+  --mm-card: #252335;          /* 票根卡面 */
+  --mm-card-lit: #2a2840;      /* 选中票根卡面 */
+  --mm-hole: #101017;          /* 胶片孔（暗于卡面） */
+  --mm-ink: #f0ebdf;           /* 暖白主文字 */
+  --mm-ink-soft: #dcd6ca;      /* 次级文字 */
+  --mm-muted: #b3adbe;         /* 弱文字 */
+  --mm-dim: #9a95a8;           /* 0 值暗淡（对卡面 AA 达标） */
+  --mm-champagne: #d4b57c;         /* 琥珀金（全页唯一强调色） */
+  --mm-champagne-bright: #e2c68e;  /* 亮琥珀（选中态） */
+  --mm-champagne-text: #d0b27a;    /* 小号琥珀文字 */
+  --mm-champagne-dim: #bfa878;     /* 票号默认金墨 */
+  --mm-amber-deep: #241a09;        /* 琥珀按钮深字 */
+  --mm-danger: #c9867c;            /* 删除等警示（降饱和暖红，暗底可读） */
+  --mm-hairline: rgba(240, 235, 223, 0.09);
+  --mm-hairline-strong: rgba(212, 181, 124, 0.22);
+  --mm-font-sans: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --mm-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  --mm-ease: cubic-bezier(0.2, 0, 0, 1);
+
   position: fixed;
   inset: 0;
   z-index: 500;
   display: flex;
   flex-direction: column;
-  background: var(--mm-paper);
+  background:
+    radial-gradient(120% 380px at 50% -80px, rgba(212, 181, 124, 0.10), rgba(212, 181, 124, 0.035) 55%, transparent 78%),
+    linear-gradient(180deg, #1a1926 0%, var(--mm-bg) 45%, #14131d 100%);
   color: var(--mm-ink);
-  font-family: var(--mm-ui);
+  font-family: var(--mm-font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
 }
 
@@ -39,877 +55,960 @@
 }
 
 /* 兜底：本体默认不显示，只有 .is-open 才铺开。
-   与日记 App 同因：openMemoryApp 走 ensureStore() 异步链，
-   一旦上游 reject 且没有兜底，就会留下
-   「hidden 摘了、is-open 没加」的半开态 ——
-   本 App 是 fixed + inset:0，会盖住整屏却点不动。
-   显式兜底后，半开态自动退回不可见。 */
+   openMemoryApp 走 ensureStore() 异步链，一旦半开（hidden 摘了、
+   is-open 没加）会盖住整屏却点不动，显式退回不可见。 */
 .miya-memory-app:not(.is-open) {
   display: none;
 }
 
-/* 氛围背景：改为暖色柔和光晕（原网点/斜线漫画质感已移除） */
-.mm-veil {
+/* 胶片颗粒（全局，极低透明度，不挡点击） */
+.miya-memory-app::after {
+  content: '';
   position: absolute;
   inset: 0;
+  z-index: 3;
   pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(circle at 12% 0%, rgba(0, 122, 255, 0.04) 0%, transparent 70%),
-    radial-gradient(circle at 95% 100%, rgba(232, 93, 76, 0.03) 0%, transparent 60%);
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
 }
 
-.mm-veil::before,
-.mm-veil::after {
-  content: none;
+.miya-memory-app ::selection { background: rgba(212, 181, 124, 0.35); }
+.miya-memory-app button {
+  font-family: inherit;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.miya-memory-app button:focus-visible,
+.miya-memory-app .mm-ticket:focus-visible {
+  outline: 2px solid rgba(226, 198, 142, 0.85);
+  outline-offset: 2px;
 }
 
-/* 原作画装饰（放射线、四角边框、印章）在统一风格下全部隐藏 */
-.mm-burst,
-.mm-frame-corner {
-  display: none;
-}
-
-/* 顶部标题栏：对齐设置页的简洁药丸返回键 + 居中标题 */
-.mm-masthead {
+/* ========== 顶栏：返回 + 品牌 + 刷新 ========== */
+.miya-memory-app .mm-topbar {
   position: relative;
-  z-index: 2;
+  z-index: 4;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 0;
+  justify-content: space-between;
+  height: 56px;
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 0;
 }
 
-.mm-masthead::after {
-  content: none;
+.miya-memory-app .mm-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  pointer-events: none;
+}
+.miya-memory-app .mm-brand svg {
+  width: 22px;
+  height: 22px;
+  color: var(--mm-champagne);
+  transform: rotate(90deg);   /* 胶片格竖放，像一格格画幅 */
+}
+.miya-memory-app .mm-brand-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--mm-ink);
 }
 
-/* 返回键：与设置页同款圆角药丸造型 */
-.mm-back {
-  display: inline-flex;
+.miya-memory-app .mm-back,
+.miya-memory-app .mm-icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  align-self: center;
-  padding: 0;
-  border: 1px solid var(--mm-line);
-  border-radius: 14px;
-  background: var(--mm-card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: var(--mm-shadow-sm);
-  color: var(--mm-ink);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
+  color: var(--mm-ink-soft);
+  transition: transform 0.12s var(--mm-ease), color 0.2s, background 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
-
-.mm-back:active {
-  transform: scale(0.97);
+.miya-memory-app .mm-back svg,
+.miya-memory-app .mm-icon-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.miya-memory-app .mm-back:active,
+.miya-memory-app .mm-icon-btn:active {
+  transform: scale(0.9);
+  background: rgba(240, 235, 223, 0.06);
+  color: var(--mm-champagne-bright);
 }
 
-.mm-masthead__copy {
+/* ========== 主内容（宽屏居中兜底） ========== */
+.miya-memory-app .mm-main {
+  position: relative;
+  z-index: 2;
   flex: 1;
-  min-width: 0;
-  text-align: center;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  scrollbar-width: none;
+}
+.miya-memory-app .mm-main::-webkit-scrollbar { display: none; }
+
+.miya-memory-app .mm-main > * {
+  width: 100%;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.miya-memory-app .mm-topbar {
+  padding-left: max(12px, calc((100% - 520px) / 2));
+  padding-right: max(12px, calc((100% - 520px) / 2));
 }
 
-/* 小字标签在统一风格下不再展示（保留节点，避免影响 JS） */
-.mm-kicker {
-  display: none;
+/* ========== 大标题 ========== */
+.miya-memory-app .mm-title-block {
+  padding: 14px 20px 0;
 }
-
-.mm-title {
+.miya-memory-app .mm-page-title {
   margin: 0;
-  font-family: var(--mm-display);
-  font-size: 16px;
+  font-size: clamp(27px, 7.6vw, 32px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.18;
+  color: var(--mm-ink);
+}
+.miya-memory-app .mm-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--mm-muted);
+}
+
+/* ========== 票根带（横滑） ========== */
+.miya-memory-app .mm-strip-section {
+  margin-top: 24px;
+}
+.miya-memory-app .mm-strip-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 20px;
+  margin-bottom: 10px;
+  min-width: 0;
+  min-height: 17px;
+}
+.miya-memory-app .mm-strip-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 12.5px;
   font-weight: 500;
-  letter-spacing: 0.3px;
-  line-height: 1.2;
+  letter-spacing: 0.1em;
+  color: var(--mm-ink-soft);
+}
+.miya-memory-app .mm-reel-counter {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-family: var(--mm-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--mm-dim);
+}
+.miya-memory-app .mm-reel-counter b {
+  font-weight: 700;
+  color: var(--mm-champagne-text);
+}
+
+/* 计数器栈：宽度按票号位数由 JS 内联设定（2 位=2ch，3 位=3ch…） */
+.miya-memory-app .mm-cnt-stack {
+  position: relative;
+  display: inline-block;
+  width: 2ch;
+  height: 14px;
+  vertical-align: -2px;
+}
+.miya-memory-app .mm-cnt {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-style: normal;
+  font-weight: 700;
+  color: var(--mm-champagne-text);
+  transition: opacity 0.2s var(--mm-ease);
+}
+
+.miya-memory-app .mm-strip-wrap {
+  position: relative;
+  overflow: hidden;
+  max-width: 520px;
+  margin: 0 auto;
+  width: 100%;
+}
+.miya-memory-app .mm-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 16px 20px 22px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;  /* 原生动量惯性 */
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+.miya-memory-app .mm-strip::-webkit-scrollbar { display: none; }
+
+.miya-memory-app .mm-strip-hint {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 24px 20px 10px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1.9;
+  letter-spacing: 0.05em;
+  color: var(--mm-dim);
   text-align: center;
+  width: 100%;
+}
+
+/* 右侧渐隐遮罩（滑到底自动隐去） */
+.miya-memory-app .mm-strip-fade {
+  position: absolute;
+  top: 14px;
+  right: 0;
+  bottom: 20px;
+  width: 40px;
+  background: linear-gradient(90deg, rgba(23, 22, 31, 0), #17161f 82%);
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 1;
+}
+.miya-memory-app .mm-strip-fade.mm-off { opacity: 0; }
+
+/* ========== 票根 ========== */
+.miya-memory-app .mm-ticket {
+  position: relative;
+  flex: 0 0 auto;
+  width: min(62vw, 250px);
+  height: 160px;
+  border-radius: 14px;
+  text-align: left;
+  background:
+    radial-gradient(140% 90% at 22% -12%, rgba(240, 235, 223, 0.055), transparent 52%),
+    linear-gradient(180deg, #292739 0%, var(--mm-card) 58%, #201e2d 100%);
+  border: 1px solid rgba(212, 181, 124, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(240, 235, 223, 0.06),
+    0 10px 22px -14px rgba(8, 7, 14, 0.8);
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.24s, transform 0.2s var(--mm-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+/* 纸张噪点：只铺在票面，营造纸感 */
+.miya-memory-app .mm-grain {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23t)'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+}
+.miya-memory-app .mm-ticket:active { border-color: rgba(226, 198, 142, 0.6); }
+
+.miya-memory-app .mm-ticket.selected {
+  transform: translateY(-4px);
+  background:
+    radial-gradient(140% 90% at 22% -12%, rgba(226, 198, 142, 0.07), transparent 52%),
+    linear-gradient(180deg, #2f2d43 0%, var(--mm-card-lit) 56%, #252335 100%);
+  border-color: rgba(226, 198, 142, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(240, 235, 223, 0.08),
+    0 16px 30px -14px rgba(8, 7, 14, 0.85),
+    0 6px 22px -10px rgba(212, 181, 124, 0.22);
+}
+.miya-memory-app .mm-ticket.selected:active { border-color: rgba(226, 198, 142, 0.9); }
+
+/* 卡顶胶片冲孔：真冲孔质感 —— 亮缘透出 + 内阴影压痕 */
+.miya-memory-app .mm-film-holes {
+  position: absolute;
+  top: 8px;
+  left: 54px;
+  right: 12px;
+  height: 9px;
+  display: flex;
+  justify-content: space-between;
+  overflow: hidden;
+  pointer-events: none;
+}
+.miya-memory-app .mm-film-holes i {
+  width: 13px;
+  height: 9px;
+  border-radius: 2.5px;
+  background:
+    linear-gradient(180deg, rgba(240, 235, 223, 0.16), rgba(240, 235, 223, 0.05) 45%),
+    linear-gradient(180deg, #1a1926, var(--mm-hole) 70%);
+  box-shadow:
+    inset 0 2px 3px rgba(5, 4, 10, 0.9),
+    inset 0 -1px 1px rgba(240, 235, 223, 0.10);
+}
+
+/* 左侧撕票线：齿孔质感 */
+.miya-memory-app .mm-ticket-stub {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 46px;
+  background: linear-gradient(180deg, rgba(240, 235, 223, 0.028), transparent 30%);
+  pointer-events: none;
+}
+.miya-memory-app .mm-ticket-stub::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  background-image: radial-gradient(circle at 1px 3.5px, rgba(240, 235, 223, 0.22) 1.1px, transparent 1.6px);
+  background-size: 2px 7px;
+  background-repeat: repeat-y;
+}
+/* 撕票线两端的冲孔缺口 */
+.miya-memory-app .mm-ticket::before,
+.miya-memory-app .mm-ticket::after {
+  content: '';
+  position: absolute;
+  left: 46px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: var(--mm-bg);
+  box-shadow: inset 0 1px 2px rgba(5, 4, 10, 0.5);
+  z-index: 2;
+  pointer-events: none;
+}
+.miya-memory-app .mm-ticket::before { top: -7px; }
+.miya-memory-app .mm-ticket::after { bottom: -7px; }
+
+.miya-memory-app .mm-stub-text {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  display: flex;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.38em;
+  color: var(--mm-dim);
+}
+
+/* 票面内容 */
+.miya-memory-app .mm-ticket-main {
+  position: absolute;
+  left: 58px;
+  right: 14px;
+  top: 27px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.miya-memory-app .mm-ticket-no {
+  font-family: var(--mm-font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--mm-champagne-dim);
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+.miya-memory-app .mm-ticket.selected .mm-ticket-no { color: var(--mm-champagne-bright); }
+.miya-memory-app .mm-ticket-name {
+  margin-top: 5px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
   color: var(--mm-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* 印章与卷号：不再展示，仅保留等宽槽位维持标题居中 */
-.mm-masthead__badge {
-  display: block;
-  width: 38px;
-  flex-shrink: 0;
-}
-
-.mm-masthead__stamp,
-.mm-masthead__vol {
-  display: none;
-}
-
-/* 主体 · 上栏角色横滑 + 下栏详情纵滑 */
-.mm-stage {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  width: 100%;
-  max-width: 100%;
-}
-
-.miya-memory-app .mm-index {
-  flex: 0 0 auto;
-  flex-direction: column;
-  min-height: 0;
-  max-height: 34vh;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  border-right: none;
-  border-bottom: 1px solid var(--mm-line);
-}
-
-/* 标题栏已展示页面名，这里的小字标签重复，隐藏 */
-.miya-memory-app .mm-index__spine {
-  display: none;
-}
-
-.miya-memory-app .mm-index__spine-text {
-  writing-mode: horizontal-tb;
-  letter-spacing: 0.4em;
-  font-size: 10px;
-}
-
-.miya-memory-app .mm-index__scroll {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-
-.miya-memory-app .mm-index__scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.miya-memory-app .mm-index__track {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  gap: 10px;
-  width: max-content;
-  min-width: 100%;
-  padding: 10px 12px 14px;
-  box-sizing: border-box;
-}
-
-.miya-memory-app .mm-index__hint {
-  padding: 16px 12px;
-  white-space: normal;
-}
-
-.miya-memory-app .mm-ticket {
-  flex: 0 0 auto;
-  width: 128px;
-  max-width: 128px;
-  margin-bottom: 0;
-  padding-left: 24px;
-  transform: rotate(var(--mm-tilt, -0.8deg));
-}
-
-.miya-memory-app .mm-archive {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.miya-memory-app .mm-archive__inner,
-.miya-memory-app #miya-mem-detail {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-}
-
-.miya-memory-app .mm-hero,
-.miya-memory-app .mm-console,
-.miya-memory-app .mm-chapter,
-.miya-memory-app .mm-timeline {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.miya-memory-app .mm-hero__name {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  transform: none;
-}
-
-.miya-memory-app .mm-hero__stats {
-  transform: none;
-}
-
-.miya-memory-app .mm-clip,
-.miya-memory-app .mm-clip:nth-child(odd),
-.miya-memory-app .mm-clip:nth-child(even) {
-  width: 100%;
-  max-width: 100%;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  transform: none !important;
-  text-align: left !important;
-  box-sizing: border-box;
-}
-
-.miya-memory-app .mm-clip:nth-child(even) .mm-clip__head {
-  flex-direction: row;
-}
-
-.miya-memory-app .mm-clip__head {
-  max-width: 100%;
-}
-
-.miya-memory-app .mm-clip__body,
-.miya-memory-app .mm-console__hint {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.miya-memory-app .mm-console__row {
-  width: 100%;
-}
-
-.miya-memory-app .mm-console__actions {
-  margin-left: 0;
-  width: 100%;
-}
-
-.miya-memory-app .mm-btn {
-  white-space: normal;
-  text-align: center;
-}
-
-.mm-index {
-  position: relative;
-  display: flex;
-  min-height: 0;
-  border-right: none;
-  background: transparent;
-}
-
-.mm-index::before {
-  content: none;
-}
-
-.mm-index__spine {
-  flex-shrink: 0;
-  width: 22px;
-  border-right: 1px solid var(--mm-line-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-}
-
-.mm-index__spine-text {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  font-family: var(--mm-display);
-  font-size: 11px;
-  letter-spacing: 0.35em;
-  color: var(--mm-muted);
-}
-
-.mm-index__scroll {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 14px 10px 20px 8px;
-  -webkit-overflow-scrolling: touch;
-}
-
-.mm-index__hint {
-  margin: 0;
-  padding: 20px 8px;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  line-height: 1.7;
-  color: var(--mm-muted);
-}
-
-/* 角色票根 */
-.mm-ticket {
-  position: relative;
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--mm-line);
-  border-radius: 16px;
-  background: var(--mm-card-bg);
-  box-shadow: var(--mm-shadow-sm);
-  color: inherit;
-  cursor: pointer;
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-
-.mm-ticket::before,
-.mm-ticket::after {
-  content: none;
-}
-
-.mm-ticket.is-active {
-  border-color: var(--mm-accent);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--mm-shadow-md);
-}
-
-.mm-ticket:active {
-  transform: scale(0.98);
-}
-
-.mm-ticket__name {
-  display: block;
-  font-family: var(--mm-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 1.3;
-  margin-bottom: 4px;
-  color: var(--mm-ink);
-}
-
-.mm-ticket__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  color: var(--mm-muted);
-}
-
-.mm-ticket__chip {
-  font-style: normal;
-  border: none;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.045);
-  padding: 2px 6px;
-}
-
-.mm-ticket__chip--mega {
-  background: var(--mm-accent-soft);
-  color: var(--mm-accent);
-}
-
-/* 详情区 */
-.mm-archive {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  overflow-x: hidden;
-  background: transparent;
-}
-
-.mm-archive__inner {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 14px 14px calc(28px + env(safe-area-inset-bottom, 0px));
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-}
-
-.mm-void {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
-  text-align: center;
-  color: var(--mm-muted);
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  line-height: 1.8;
-  padding: 24px;
-}
-
-.mm-void::before {
-  content: none;
-}
-
-.mm-empty {
-  margin: 0;
-  padding: 16px 8px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--mm-muted);
-  border: none;
-}
-
-/* 角色报头 */
-.mm-hero {
-  position: relative;
-  margin-bottom: 12px;
-  padding: 16px;
-  border: 1px solid var(--mm-line);
-  border-radius: 20px;
-  background: var(--mm-card-bg);
-  box-shadow: var(--mm-shadow-md);
-}
-
-.mm-hero::before,
-.mm-hero::after {
-  content: none;
-}
-
-.mm-hero__name {
-  margin: 0 0 8px;
-  font-family: var(--mm-display);
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.25;
-}
-
-.mm-hero__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin: 0;
-  transform: skewX(1.5deg);
-}
-
-.mm-hero__stat {
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  color: var(--mm-muted);
-}
-
-.mm-hero__stat em {
-  font-style: normal;
-  color: var(--mm-ink);
-  font-size: 13px;
-  margin-left: 3px;
-}
-
-/* 生成控制台 */
-.mm-console {
-  position: relative;
-  margin-bottom: 12px;
-  padding: 16px;
-  border: 1px solid var(--mm-line);
-  border-radius: 20px;
-  background: var(--mm-card-bg);
-  box-shadow: var(--mm-shadow-md);
-}
-
-.mm-console__label {
-  display: block;
-  margin-bottom: 10px;
-  padding: 0;
-  background: transparent;
-  color: var(--mm-ink);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.mm-console__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 12px;
-  align-items: flex-end;
-}
-
-.mm-console__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
-  letter-spacing: 0;
-  color: var(--mm-muted);
-}
-
-.mm-console__field input {
-  width: 76px;
-  border: 1px solid var(--mm-line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--mm-ink);
-  font-family: var(--mm-ui);
-  font-size: 15px;
-  padding: 7px 10px;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.mm-console__field input:focus {
-  border-color: var(--mm-accent);
-  box-shadow: 0 0 0 3px var(--mm-accent-soft);
-}
-
-.mm-console__field--wide input {
-  width: 56px;
-  text-align: center;
-}
-
-.mm-console--auto {
-  margin-bottom: 16px;
-}
-
-.mm-console__hint {
-  margin: 12px 0 0;
-  font-size: 12px;
-  line-height: 1.65;
-  letter-spacing: 0;
-  color: var(--mm-muted);
-}
-
-.mm-ticket__chip--auto {
-  background: var(--mm-accent-soft);
-  color: var(--mm-accent);
-}
-
-.mm-ticket__chip--char {
-  background: rgba(232, 93, 76, 0.08);
-  color: var(--mm-accent-warm);
-}
-
-.mm-clip--char {
-  border: 1px solid var(--mm-line);
-  border-left: 3px solid var(--mm-accent);
-  width: 100%;
-  max-width: 100%;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  transform: none !important;
-  text-align: left !important;
-  box-sizing: border-box;
-}
-
-.mm-clip--char .mm-clip__head,
-.mm-clip--char:nth-child(even) .mm-clip__head {
-  flex-direction: row;
-}
-
-.mm-clip--char .mm-clip__acts {
-  flex-shrink: 0;
-}
-
-.mm-clip--char .mm-clip__body,
-.mm-clip--char .mm-clip__textarea,
-.mm-clip--char .mm-clip__edit-wrap {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.mm-clip--char::before {
-  content: none;
-}
-
-.mm-console__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.mm-btn {
-  border: 1px solid var(--mm-line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--mm-ink);
-  font-family: var(--mm-ui);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0;
-  padding: 9px 16px;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: var(--mm-shadow-sm);
-  -webkit-appearance: none;
-  appearance: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.mm-btn--fill {
-  background: var(--mm-accent);
-  color: #fff;
-  border-color: var(--mm-accent);
-}
-
-.mm-btn:active {
-  transform: scale(0.97);
-}
-
-/* 分镜区块 */
-.mm-chapter {
-  margin-bottom: 28px;
-}
-
-.mm-chapter__head {
+.miya-memory-app .mm-ticket-memo {
+  margin-top: 8px;
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 0 2px;
-  border-bottom: none;
+  gap: 5px;
 }
-
-.mm-chapter__no {
-  font-family: var(--mm-display);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mm-accent);
+.miya-memory-app .mm-memo-label,
+.miya-memory-app .mm-memo-unit {
+  font-size: 11.5px;
+  color: var(--mm-muted);
+}
+.miya-memory-app .mm-memo-num {
+  font-family: var(--mm-font-mono);
+  font-size: 25px;
+  font-weight: 700;
   line-height: 1;
+  color: var(--mm-dim);
+  font-style: normal;
+}
+.miya-memory-app .mm-ticket.has-memo .mm-memo-num { color: var(--mm-champagne-bright); }
+.miya-memory-app .mm-ticket-tags {
+  margin-top: auto;
+  display: flex;
+  gap: 13px;
+  font-size: 10.5px;
+  color: var(--mm-dim);
+  letter-spacing: 0.02em;
+}
+.miya-memory-app .mm-ticket-tags b {
+  font-family: var(--mm-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  color: var(--mm-dim);
+}
+.miya-memory-app .mm-ticket-tags b.on { color: var(--mm-champagne-text); }
+
+/* ========== 滑动进度条 ========== */
+.miya-memory-app .mm-dots {
+  position: relative;
+  height: 26px;
+  margin: 2px auto 0;
+  width: 148px;
+  max-width: 80vw;
+}
+.miya-memory-app .mm-dots-track {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: rgba(240, 235, 223, 0.14);
+}
+.miya-memory-app .mm-dots-fill {
+  position: absolute;
+  left: 0; top: 50%;
+  height: 3px;
+  width: 8%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--mm-champagne-bright);
+  box-shadow: 0 0 6px rgba(226, 198, 142, 0.35);
+}
+.miya-memory-app .mm-dot-btn {
+  position: absolute;
+  top: 0;
+  width: 44px;
+  height: 26px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.miya-memory-app .mm-dot-btn i {
+  width: 5px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(240, 235, 223, 0.35);
+  transition: background 0.2s;
+}
+.miya-memory-app .mm-dot-btn:active i { background: var(--mm-champagne-bright); }
+
+/* ========== 银幕面板（空态 / 放映详情共用） ========== */
+.miya-memory-app .mm-screen {
+  position: relative;
+  margin: 10px 20px 0;
+  border-radius: 18px;
+  border: 1px solid rgba(212, 181, 124, 0.22);
+  background: var(--mm-surface);
+  overflow: hidden;
+  transition: background 0.45s, border-color 0.45s;
+}
+/* 银幕扫描线 */
+.miya-memory-app .mm-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, rgba(240, 235, 223, 0.028) 0 1px, transparent 1px 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+/* 放映时银幕顶部透出的暖光 */
+.miya-memory-app .mm-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 62% at 50% -12%, rgba(212, 181, 124, 0.10), transparent 62%);
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  z-index: 1;
+}
+.miya-memory-app .mm-screen.lit {
+  background: var(--mm-surface-lit);
+  border-color: rgba(212, 181, 124, 0.42);
+}
+.miya-memory-app .mm-screen.lit::after { opacity: 1; }
+
+/* 空态：灯还亮着 */
+.miya-memory-app .mm-screen-empty {
+  position: relative;
+  z-index: 2;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 26px 24px 30px;
+  text-align: center;
+}
+.miya-memory-app .mm-screen-empty[hidden] { display: none; }
+.miya-memory-app .mm-proj {
+  width: min(62%, 236px);
+  height: auto;
+  margin-bottom: 20px;
+}
+.miya-memory-app .mm-empty-line {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--mm-ink-soft);
 }
 
-.mm-chapter__title {
-  margin: 0;
-  font-family: var(--mm-display);
-  font-size: 14px;
-  letter-spacing: 0;
+/* 放映详情 */
+.miya-memory-app .mm-screen-detail {
+  position: relative;
+  z-index: 2;
+  padding: 20px 20px 18px;
+}
+.miya-memory-app .mm-screen-detail[hidden] { display: none; }
+
+.miya-memory-app .mm-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.miya-memory-app .mm-eyebrow {
+  font-family: var(--mm-font-mono);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--mm-champagne-text);
+}
+.miya-memory-app .mm-eyebrow.live::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 7px;
+  margin-bottom: 1px;
+  border-radius: 50%;
+  background: var(--mm-champagne-bright);
+}
+.miya-memory-app .mm-detail-ticket-no {
+  font-family: var(--mm-font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--mm-dim);
+}
+.miya-memory-app .mm-detail-name {
+  margin: 7px 0 0;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
   color: var(--mm-ink);
 }
 
-.mm-chapter__sub {
-  margin-left: auto;
-  font-size: 11px;
-  letter-spacing: 0;
-  color: var(--mm-tertiary);
+/* 四项数据网格（细线分隔，非卡片堆叠） */
+.miya-memory-app .mm-stat-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--mm-hairline);
+  border: 1px solid var(--mm-hairline);
+  border-radius: 12px;
+  overflow: hidden;
 }
-
-/* 锯齿时间轴 */
-.mm-timeline {
+.miya-memory-app .mm-cell {
+  background: var(--mm-surface);
+  padding: 12px 14px 11px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  transition: background 0.45s;
 }
-
-.mm-clip {
-  position: relative;
-  width: 100%;
-  margin-bottom: 12px;
-  padding: 14px;
-  border: 1px solid var(--mm-line);
-  border-radius: 18px;
-  background: var(--mm-card-bg);
-  box-shadow: var(--mm-shadow-sm);
+.miya-memory-app .mm-screen.lit .mm-cell { background: var(--mm-surface-lit); }
+.miya-memory-app .mm-cell-key {
+  font-family: var(--mm-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--mm-dim);
 }
-
-.mm-clip:nth-child(odd),
-.mm-clip:nth-child(even) {
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
-  border-width: 1px;
-  border-color: var(--mm-line);
-  text-align: left;
+.miya-memory-app .mm-cell-num {
+  margin-top: 6px;
+  font-family: var(--mm-font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--mm-dim);
 }
-
-.mm-clip:nth-child(even) .mm-clip__head {
-  flex-direction: row;
+.miya-memory-app .mm-cell-num .mm-unit {
+  font-style: normal;
+  font-family: var(--mm-font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-left: 4px;
+  color: var(--mm-dim);
 }
-
-/* 重点片段：淡蓝底区分，保留强调但不做双线边框+斜纹 */
-.mm-clip--mega {
-  border: 1px solid rgba(0, 122, 255, 0.22);
-  background: var(--mm-accent-soft);
-  box-shadow: var(--mm-shadow-md);
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
-  text-align: left;
+.miya-memory-app .mm-cell-label {
+  margin-top: 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--mm-dim);
 }
+.miya-memory-app .mm-cell.on .mm-cell-key { color: var(--mm-champagne-text); }
+.miya-memory-app .mm-cell.on .mm-cell-num { color: var(--mm-champagne-bright); }
+.miya-memory-app .mm-cell.on .mm-cell-num .mm-unit { color: var(--mm-champagne-text); }
+.miya-memory-app .mm-cell.on .mm-cell-label { color: var(--mm-muted); }
 
-.mm-clip--mega .mm-clip__head {
-  flex-direction: row;
+/* ========== 控制台（角色记忆提炼 / 提炼台） ========== */
+.miya-memory-app .mm-console {
+  margin-top: 16px;
+  padding: 14px 14px 13px;
+  border: 1px solid var(--mm-hairline);
+  border-radius: 12px;
+  background: rgba(240, 235, 223, 0.02);
 }
-
-.mm-clip--mega::before {
-  content: none;
-}
-
-.mm-clip__connector {
-  display: block;
-  width: 2px;
-  height: 10px;
-  margin: -2px auto 2px;
-  background: var(--mm-line);
-  opacity: 0.5;
-}
-
-.mm-clip__head {
+.miya-memory-app .mm-console__row {
+  margin-top: 11px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  margin-bottom: 10px;
-  font-size: 12px;
-  letter-spacing: 0;
-  color: var(--mm-muted);
+  gap: 10px;
+}
+.miya-memory-app .mm-console__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--mm-ink-soft);
+}
+.miya-memory-app .mm-console__hint {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.75;
+  letter-spacing: 0.03em;
+  color: var(--mm-dim);
+}
+.miya-memory-app .mm-console__hint strong { color: var(--mm-muted); font-weight: 600; }
+
+/* 暗色数字输入框 */
+.miya-memory-app .mm-console input[type="number"] {
+  width: 78px;
+  padding: 8px 10px;
+  background: var(--mm-bg-deep);
+  border: 1px solid var(--mm-hairline);
+  border-radius: 10px;
+  color: var(--mm-ink);
+  font-family: var(--mm-font-mono);
+  font-size: 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.2s;
+}
+.miya-memory-app .mm-console input[type="number"]:focus {
+  outline: none;
+  border-color: rgba(226, 198, 142, 0.6);
 }
 
-.mm-clip__head strong {
-  font-family: var(--mm-display);
+/* 通用小按钮 */
+.miya-memory-app .mm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid var(--mm-hairline-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--mm-champagne-text);
   font-size: 13px;
   font-weight: 600;
-  color: var(--mm-ink);
-  flex: 1;
-  min-width: 0;
-}
-
-.mm-clip__acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-  margin-left: auto;
-}
-
-.mm-clip__edit,
-.mm-clip__del {
-  border: 1px solid var(--mm-line);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--mm-muted);
-  font-size: 11px;
-  letter-spacing: 0;
-  padding: 4px 10px;
-  cursor: pointer;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  transition: transform 0.12s var(--mm-ease), background 0.2s, color 0.2s, border-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
   appearance: none;
 }
-
-.mm-clip__edit:hover {
-  border-color: var(--mm-accent);
-  color: var(--mm-accent);
+.miya-memory-app .mm-btn:active {
+  transform: scale(0.97);
+  background: rgba(212, 181, 124, 0.1);
+}
+.miya-memory-app .mm-btn--fill {
+  background: var(--mm-champagne);
+  border-color: var(--mm-champagne);
+  color: var(--mm-amber-deep);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 235, 0.32);
+}
+.miya-memory-app .mm-btn--fill:active {
+  background: var(--mm-champagne-bright);
+}
+.miya-memory-app .mm-btn:disabled {
+  background: rgba(212, 181, 124, 0.12);
+  border-color: transparent;
+  color: #8f8462;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.mm-clip__del {
-  border-color: rgba(232, 93, 76, 0.3);
-  color: var(--mm-accent-warm);
+/* ========== 开始放映主按钮（琥珀底深字） ========== */
+.miya-memory-app .mm-play-btn {
+  margin-top: 16px;
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  background: var(--mm-champagne);
+  color: var(--mm-amber-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  box-shadow:
+    0 10px 24px -12px rgba(212, 181, 124, 0.4),
+    inset 0 1px 0 rgba(255, 248, 235, 0.32);
+  transition: transform 0.14s var(--mm-ease), filter 0.2s, background 0.3s, color 0.3s, box-shadow 0.3s;
+  -webkit-tap-highlight-color: transparent;
+}
+.miya-memory-app .mm-play-btn .mm-btn-ico { display: flex; }
+.miya-memory-app .mm-play-btn .mm-btn-ico svg { width: 17px; height: 17px; display: block; }
+.miya-memory-app .mm-play-btn:active {
+  transform: scale(0.97);
+  filter: brightness(1.06);
+}
+.miya-memory-app .mm-play-btn.playing {
+  background: transparent;
+  border: 1px solid rgba(212, 181, 124, 0.55);
+  color: var(--mm-champagne-bright);
+  box-shadow: none;
+  text-indent: 0;
+}
+.miya-memory-app .mm-play-btn:disabled {
+  background: rgba(212, 181, 124, 0.12);
+  color: #8f8462;
+  box-shadow: none;
+  cursor: not-allowed;
+  letter-spacing: 0.12em;
+  text-indent: 0;
 }
 
-.mm-clip__edit-wrap {
+/* 生成合卷次按钮：全宽描边 */
+.miya-memory-app .mm-btn--wide {
+  margin-top: 10px;
+  width: 100%;
+}
+
+/* ========== 章节（分镜 / 合卷 / 角色记忆） ========== */
+.miya-memory-app .mm-chapter {
+  margin-top: 22px;
+}
+.miya-memory-app .mm-chapter__head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid var(--mm-hairline);
+}
+.miya-memory-app .mm-chapter__no {
+  font-family: var(--mm-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--mm-champagne-text);
+  line-height: 1;
+}
+.miya-memory-app .mm-chapter__title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--mm-ink);
+}
+.miya-memory-app .mm-chapter__sub {
+  margin-left: auto;
+  font-family: var(--mm-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--mm-dim);
+}
+
+/* 时间轴卡片 */
+.miya-memory-app .mm-timeline {
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
-
-.mm-clip__textarea {
+.miya-memory-app .mm-empty {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--mm-dim);
+}
+.miya-memory-app .mm-clip {
+  position: relative;
+  margin-top: 12px;
+  padding: 12px 13px 11px;
+  border: 1px solid var(--mm-hairline);
+  border-radius: 13px;
+  background: rgba(240, 235, 223, 0.025);
+  text-align: left;
+}
+.miya-memory-app .mm-clip--mega {
+  border-color: rgba(212, 181, 124, 0.3);
+  background: rgba(212, 181, 124, 0.05);
+}
+.miya-memory-app .mm-clip--char {
+  border-color: rgba(212, 181, 124, 0.18);
+}
+.miya-memory-app .mm-clip__connector {
+  display: block;
+  width: 1px;
+  height: 12px;
+  margin-left: 22px;
+  background: linear-gradient(180deg, rgba(212, 181, 124, 0.4), rgba(212, 181, 124, 0.12));
+}
+.miya-memory-app .mm-clip__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.miya-memory-app .mm-clip__head strong {
+  font-family: var(--mm-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--mm-champagne-text);
+}
+.miya-memory-app .mm-tag {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 99px;
+  border: 1px solid rgba(212, 181, 124, 0.35);
+  color: var(--mm-champagne-text);
+}
+.miya-memory-app .mm-clip__acts {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.miya-memory-app .mm-clip__edit,
+.miya-memory-app .mm-clip__del {
+  min-width: 40px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  color: var(--mm-dim);
+  transition: color 0.2s, background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.miya-memory-app .mm-clip__edit:active { color: var(--mm-champagne-bright); background: rgba(212, 181, 124, 0.08); }
+.miya-memory-app .mm-clip__del:active { color: var(--mm-danger); background: rgba(201, 134, 124, 0.08); }
+.miya-memory-app .mm-clip__body {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.8;
+  letter-spacing: 0.02em;
+  color: var(--mm-ink-soft);
+  word-break: break-word;
+}
+.miya-memory-app .mm-clip__edit-wrap { margin-top: 8px; }
+.miya-memory-app .mm-clip__textarea {
   width: 100%;
   min-height: 120px;
-  box-sizing: border-box;
-  border: 1px solid var(--mm-line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.85);
+  padding: 10px 12px;
+  background: var(--mm-bg-deep);
+  border: 1px solid var(--mm-hairline);
+  border-radius: 10px;
   color: var(--mm-ink);
-  font-family: var(--mm-ui);
+  font-family: var(--mm-font-sans);
   font-size: 13px;
-  line-height: 1.6;
-  letter-spacing: 0;
-  padding: 12px;
+  line-height: 1.7;
   resize: vertical;
+  transition: border-color 0.2s;
+}
+.miya-memory-app .mm-clip__textarea:focus {
   outline: none;
+  border-color: rgba(226, 198, 142, 0.6);
 }
-
-.mm-clip__textarea:focus {
-  border-color: var(--mm-accent);
-  box-shadow: 0 0 0 3px var(--mm-accent-soft);
-}
-
-.mm-clip__edit-actions {
+.miya-memory-app .mm-clip__edit-actions {
+  margin-top: 9px;
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.mm-clip__body {
-  font-size: 13px;
-  line-height: 1.7;
-  color: #3A3A3A;
-  letter-spacing: 0;
-}
-
-.mm-tag {
-  font-style: normal;
-  font-size: 11px;
-  letter-spacing: 0;
-  border: none;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.045);
-  padding: 3px 8px;
-  color: var(--mm-muted);
-}
-
-/* Toast */
-.mm-toast {
-  position: fixed;
-  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+/* ========== Toast ========== */
+.miya-memory-app .mm-toast {
+  position: absolute;
   left: 50%;
-  transform: translateX(-50%);
-  background: rgba(26, 26, 26, 0.92);
-  color: #fff;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 14px;
-  font-size: 13px;
-  letter-spacing: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+  transform: translateX(-50%) translateY(10px);
+  z-index: 20;
+  max-width: min(82vw, 420px);
+  padding: 11px 18px;
+  border-radius: 99px;
+  background: rgba(37, 35, 53, 0.96);
+  border: 1px solid rgba(212, 181, 124, 0.4);
+  box-shadow: 0 14px 34px -14px rgba(8, 7, 14, 0.9);
+  color: var(--mm-ink-soft);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-align: center;
   opacity: 0;
-  transition: opacity 0.22s ease;
-  z-index: 600;
+  visibility: hidden;
   pointer-events: none;
-  box-shadow: var(--mm-shadow-lg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  transition: opacity 0.24s var(--mm-ease), transform 0.24s var(--mm-ease), visibility 0.24s;
 }
-
-.mm-toast.is-show {
+.miya-memory-app .mm-toast.is-show {
   opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
-/* 窄屏兜底（与 .miya-memory-app 布局一致） */
-@media (max-width: 520px) {
-  .miya-memory-app .mm-index {
-    max-height: 34vh;
-  }
-
-  .miya-memory-app .mm-ticket {
-    width: 120px;
-    max-width: 120px;
+/* ========== 动效克制：跟随系统减弱动效 ========== */
+@media (prefers-reduced-motion: reduce) {
+  .miya-memory-app *,
+  .miya-memory-app *::before,
+  .miya-memory-app *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

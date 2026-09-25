@@ -20,7 +20,7 @@
   <link rel="apple-touch-icon" href="img/miya-icon-180.png?v=53">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link id="miya-google-fonts" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <link id="miya-google-fonts" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=JetBrains+Mono:wght@400;600;700&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="css/style.css?v=46">
   <link rel="stylesheet" href="css/miya-desk-p1-weekcal.css?v=13">
@@ -3396,37 +3396,74 @@
   </div>
 
 
+  <!-- 记忆阅览室 · 暗色放映厅（v12 重设计）
+       注意：不渲染 preview 稿里的手机系统状态栏（时间/信号/Wi-Fi/电量）
+       与底部手势条 —— 那些由真实设备/系统提供，App 内不得伪造。 -->
   <div class="miya-memory-app" id="miya-memory-app" hidden aria-hidden="true">
-    <div class="mm-veil" aria-hidden="true"></div>
-    <div class="mm-burst" aria-hidden="true"></div>
-    <div class="mm-frame-corner mm-frame-corner--tl" aria-hidden="true"></div>
-    <div class="mm-frame-corner mm-frame-corner--br" aria-hidden="true"></div>
-
-    <header class="mm-masthead">
-      <button type="button" class="mm-back" id="miya-mem-back" aria-label="返回">←</button>
-      <div class="mm-masthead__copy">
-        <span class="mm-kicker">Mnemosyne · Dialogue Recall</span>
-        <h1 class="mm-title">记忆阅览室</h1>
+    <header class="mm-topbar">
+      <button type="button" class="mm-back" id="miya-mem-back" aria-label="返回">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>
+      </button>
+      <div class="mm-brand" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <rect x="5.5" y="3.5" width="13" height="17" rx="3.5"/>
+          <path d="M5.5 8h3M5.5 12h3M5.5 16h3M15.5 8h3M15.5 12h3M15.5 16h3"/>
+        </svg>
+        <span class="mm-brand-name">Karin</span>
       </div>
-      <div class="mm-masthead__badge" aria-hidden="true">
-        <span class="mm-masthead__stamp">忆</span>
-        <span class="mm-masthead__vol">RECALL</span>
-      </div>
+      <button type="button" class="mm-icon-btn" id="miya-mem-refresh" aria-label="刷新票根">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20.5 3.5v4.8h-4.8"/>
+          <path d="M20.5 15a8.7 8.7 0 1 1-2.1-9.1l2.1 2.4"/>
+        </svg>
+      </button>
     </header>
 
-    <div class="mm-stage">
-      <aside class="mm-index" aria-label="角色索引">
-        <div class="mm-index__spine" aria-hidden="true">
-          <span class="mm-index__spine-text">角色索引</span>
-        </div>
-        <div class="mm-index__scroll" id="miya-mem-roles"></div>
-      </aside>
-      <main class="mm-archive" aria-label="记忆详情">
-        <div class="mm-archive__inner" id="miya-mem-detail"></div>
-      </main>
-    </div>
+    <main class="mm-main">
+      <section class="mm-title-block">
+        <h1 class="mm-page-title">记忆阅览室</h1>
+        <p class="mm-subtitle">检票入场，重温每一段对戏记忆</p>
+      </section>
 
-    <div class="mm-toast" id="miya-mem-toast"></div>
+      <section class="mm-strip-section" aria-label="在映票根">
+        <div class="mm-strip-head">
+          <span class="mm-strip-label">在映票根</span>
+          <span class="mm-reel-counter" id="miya-mem-counter" aria-live="polite"></span>
+        </div>
+        <div class="mm-strip-wrap">
+          <div class="mm-strip" id="miya-mem-roles"></div>
+          <div class="mm-strip-fade" id="miya-mem-strip-fade" aria-hidden="true"></div>
+        </div>
+        <div class="mm-dots" id="miya-mem-dots" aria-label="票根位置"></div>
+      </section>
+
+      <section class="mm-screen" id="miya-mem-screen" aria-label="放映详情">
+        <div class="mm-screen-empty" id="miya-mem-empty">
+          <svg class="mm-proj" viewBox="0 0 240 120" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="放映机正向银幕投出光束">
+            <circle cx="52" cy="34" r="17" stroke="#8f8a9d" stroke-width="1.7"/>
+            <circle cx="52" cy="34" r="5" stroke="#8f8a9d" stroke-width="1.7"/>
+            <circle cx="92" cy="28" r="12" stroke="#8f8a9d" stroke-width="1.7"/>
+            <circle cx="92" cy="28" r="3.6" stroke="#8f8a9d" stroke-width="1.7"/>
+            <path d="M52 51v6M92 40v10" stroke="#8f8a9d" stroke-width="1.7"/>
+            <rect x="34" y="57" width="76" height="34" rx="7" stroke="#b0aab8" stroke-width="1.7"/>
+            <path d="M44 91v7M100 91v7" stroke="#8f8a9d" stroke-width="1.7"/>
+            <rect x="110" y="64" width="10" height="14" rx="3" stroke="#b0aab8" stroke-width="1.7"/>
+            <circle cx="126" cy="71" r="4" stroke="#b0aab8" stroke-width="1.7"/>
+            <g stroke="#d4b57c" stroke-width="1.7" stroke-dasharray="0.1 6" opacity="0.75">
+              <path d="M132 65L192 45"/>
+              <path d="M133 71L192 71"/>
+              <path d="M132 77L192 97"/>
+            </g>
+            <rect x="192" y="34" width="40" height="74" rx="6" stroke="#b0aab8" stroke-width="1.7"/>
+            <rect x="200" y="44" width="24" height="54" rx="3" stroke="#8f8a9d" stroke-width="1.4" opacity="0.7"/>
+          </svg>
+          <p class="mm-empty-line">取一张票根，灯就会为你暗下来</p>
+        </div>
+        <div class="mm-screen-detail" id="miya-mem-detail" hidden></div>
+      </section>
+    </main>
+
+    <div class="mm-toast" id="miya-mem-toast" role="status"></div>
   </div>
 
   <!-- 桌面歌词 · 全局悬浮 -->
