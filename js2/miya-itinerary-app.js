@@ -311,7 +311,8 @@
     var countEl = $('it-pick-count');
     if (countEl) {
       var n = st.getEnabledContactIds().length;
-      countEl.textContent = n + ' 已选';
+      /* 设计稿 .pick-count b：数字深蓝衬线加粗 */
+      countEl.innerHTML = '<b>' + n + '</b> 已选';
     }
   }
 

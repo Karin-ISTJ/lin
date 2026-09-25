@@ -667,3 +667,117 @@
 .miya-beautify-app .mi-btn--dark:active {
   background: var(--bf-blue-deep);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   图标面板 · 应用图标清爽蓝（v4.22 设计稿）
+
+   本稿与锁屏稿（v4.21）的开关/开关卡规格不同：
+   开关卡圆角 12 · padding 12/14 · 标题 14.5px · 开关 40×23（滑块 18）。
+   以下规则全部收窄到 [data-bf-panel="glyph"]，不影响锁屏 tab 已验收的
+   44×25 开关与 14px 圆角卡。
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 版头 kicker：本稿用浅蓝（非文字载体的装饰标签，3:1 达标） */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-atelier-panel-kicker {
+  color: var(--bf-blue);
+}
+
+/* 开关卡：更紧凑的白卡 */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-atelier-splash-pill {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-atelier-splash-pill strong {
+  font-size: 14.5px;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-atelier-splash-pill span {
+  font-size: 11px;
+}
+
+/* 开关：40×23 · 滑块 18px · 位移 17px */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-toggle {
+  width: 40px;
+  height: 23px;
+  border-radius: 12px;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-toggle::after {
+  top: 2.5px;
+  left: 2.5px;
+  width: 18px;
+  height: 18px;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-toggle.is-on::after {
+  transform: translateX(17px);
+}
+
+/* 分区小标题：「自定义布局 · 全部应用图标」 */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-atelier-panel-desc.is-custom-layout-only {
+  margin: 18px 0 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.10em;
+  line-height: 1.5;
+  color: var(--bf-muted);
+}
+
+/* 图标卡：白卡圆角 12 · padding 10/8 · 纵排 gap 8 */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick {
+  padding: 10px 8px;
+  gap: 8px;
+  border-radius: 12px;
+}
+
+/* 图标底座：48×48 圆角 11 淡灰蓝（原 56×56 圆角 14） */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick__preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
+  background: #EAF0F7;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick__preview.has-image {
+  background-size: cover;
+  background-position: center;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick__glyph {
+  color: #56616C;
+}
+
+/* 图标名：11px · 0.06em · ink-soft */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick__name {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--bf-ink-soft);
+}
+
+/* 「恢复默认」小按钮：26px 高 · 圆角 7 · #F3F6FA（原继承 chip 40px 高） */
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick__reset {
+  width: 100%;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--bf-border);
+  border-radius: 7px;
+  background: #F3F6FA;
+  color: var(--bf-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  box-shadow: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.miya-beautify-app [data-bf-panel="glyph"] .ins-icon-pick__reset:active {
+  background: #E9EFF7;
+  color: var(--bf-ink-soft);
+  transform: none;
+}

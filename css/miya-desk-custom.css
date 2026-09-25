@@ -1435,3 +1435,147 @@ html[data-miya-desk-layout="custom"] .foot .desk-pager__dot {
 html[data-miya-desk-layout="custom"] .foot {
   padding: 14px 20px calc(4px + env(safe-area-inset-bottom, 0px));
 }
+
+/* ═══════════════════════════════════════════════════════════
+   小组件弹层 · 清爽蓝（小组件库 / 编辑组件）
+   作用域限定 .desk-custom-wg-picker / .desk-custom-wg-editor 两个弹层根，
+   只重映射弹层内的 ins-chip / 标题 / 白卡，不影响其他模块共享的样式。
+   ═══════════════════════════════════════════════════════════ */
+.desk-custom-wg-picker,
+.desk-custom-wg-editor {
+  --wgx-blue: #4B8BF5;
+  --wgx-blue-deep: #2D6BD9;
+  --wgx-blue-press: #2559C7;
+  --wgx-ink: #1C2026;
+  --wgx-ink-soft: #4A525C;
+  --wgx-muted: #6B7480;
+  --wgx-border: #E5EAF0;
+  --wgx-line: #F0F3F7;
+  --wgx-fill: #F3F6FA;
+}
+
+/* 遮罩：清爽蓝灰半透明 */
+.desk-custom-wg-picker {
+  background: rgba(28, 32, 38, 0.34);
+}
+
+.desk-custom-wg-editor {
+  background: rgba(28, 32, 38, 0.36);
+}
+
+/* 弹层白卡 */
+.desk-custom-wg-picker__sheet,
+.desk-custom-wg-editor__sheet {
+  background: #FFFFFF;
+  border: 1px solid var(--wgx-border);
+  box-shadow: 0 18px 48px rgba(28, 32, 38, 0.14), 0 2px 8px rgba(28, 32, 38, 0.05);
+}
+
+/* 标题：衬线大标题（对齐清爽蓝标题体系） */
+.desk-custom-wg-picker__head h3,
+.desk-custom-wg-editor__head h3 {
+  font-family: 'Noto Serif SC', 'Songti SC', serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--wgx-ink);
+}
+
+/* head / foot 分隔线 */
+.desk-custom-wg-picker__head,
+.desk-custom-wg-editor__head {
+  border-bottom-color: var(--wgx-line);
+}
+
+.desk-custom-wg-editor__foot {
+  border-top-color: var(--wgx-line);
+}
+
+/* 关闭圆钮 */
+.desk-custom-wg-picker__close,
+.desk-custom-wg-editor__close {
+  background: var(--wgx-fill);
+  color: var(--wgx-ink-soft);
+  transition: background 0.18s ease, transform 0.14s ease;
+}
+
+.desk-custom-wg-picker__close:active,
+.desk-custom-wg-editor__close:active {
+  background: #E9EEF5;
+  transform: scale(0.94);
+}
+
+/* chip 按钮 → 清爽蓝药丸（弹层内生效） */
+.desk-custom-wg-picker .ins-chip,
+.desk-custom-wg-editor .ins-chip {
+  border: 1px solid var(--wgx-border);
+  background: #FFFFFF;
+  color: var(--wgx-ink-soft);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  transition: background 0.18s ease, transform 0.14s ease;
+}
+
+.desk-custom-wg-picker .ins-chip:active,
+.desk-custom-wg-editor .ins-chip:active {
+  background: var(--wgx-fill);
+  transform: scale(0.97);
+}
+
+/* 主按钮：深蓝底白字（自定义 / 保存） */
+.desk-custom-wg-picker .ins-chip--gold,
+.desk-custom-wg-editor .ins-chip--gold {
+  border-color: transparent;
+  background: var(--wgx-blue-deep);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(45, 107, 217, 0.28);
+}
+
+.desk-custom-wg-picker .ins-chip--gold:active,
+.desk-custom-wg-editor .ins-chip--gold:active {
+  background: var(--wgx-blue-press);
+}
+
+/* 次要 chip（取消等）：不再压暗，改灰字幽灵 */
+.desk-custom-wg-picker .ins-chip--dim,
+.desk-custom-wg-editor .ins-chip--dim {
+  opacity: 1;
+  color: var(--wgx-muted);
+}
+
+/* 库内小节标签 */
+.desk-custom-wg-picker__section h4 {
+  color: var(--wgx-muted);
+}
+
+/* 库内 item：白卡 + 清爽蓝按压 */
+.desk-custom-wg-picker__item {
+  border: 1px solid var(--wgx-border);
+  background: #FFFFFF;
+}
+
+.desk-custom-wg-picker__item:active {
+  border-color: var(--wgx-blue);
+}
+
+/* 编辑器字段 */
+.desk-custom-wg-editor__label {
+  color: var(--wgx-muted);
+}
+
+.desk-custom-wg-editor__img {
+  border-color: rgba(75, 139, 245, 0.38);
+  background: var(--wgx-fill);
+}
+
+.desk-custom-wg-editor__img.has-image {
+  border-color: rgba(75, 139, 245, 0.58);
+}
+
+.desk-custom-wg-editor__img-ph {
+  color: var(--wgx-muted);
+}

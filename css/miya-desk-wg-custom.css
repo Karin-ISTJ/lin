@@ -302,35 +302,50 @@
   margin: 10px 0 14px;
 }
 
-/* 编辑器控件回退（不依赖聊天页样式） */
+/* 编辑器控件回退（不依赖聊天页样式）· 清爽蓝 */
 .mi-cwg-tpl .mi-btn {
   appearance: none;
-  border: none;
+  border: 1px solid #E5EAF0;
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.06);
-  color: inherit;
+  background: #F1F4F8;
+  color: #4A525C;
+  transition: background 0.18s ease, transform 0.14s ease;
+}
+.mi-cwg-tpl .mi-btn:active {
+  background: #E9EEF5;
+  transform: scale(0.97);
 }
 .mi-cwg-tpl .mi-btn--dark {
-  background: #1c1a17;
+  border-color: transparent;
+  background: #2D6BD9;
   color: #fff;
+  box-shadow: 0 4px 12px rgba(45, 107, 217, 0.24);
+}
+.mi-cwg-tpl .mi-btn--dark:active {
+  background: #2559C7;
 }
 .mi-cwg-tpl .mi-btn--ghost {
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid #E5EAF0;
 }
 .mi-cwg-tpl .mi-btn--block { width: 100%; }
 .mi-cwg-tpl .mi-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid #E5EAF0;
   border-radius: 10px;
   padding: 8px 10px;
   font-size: 13px;
   background: #fff;
+  color: #1C2026;
+}
+.mi-cwg-tpl .mi-input:focus {
+  outline: none;
+  border-color: rgba(75, 139, 245, 0.6);
 }
 .mi-cwg-tpl .mi-input--area {
   resize: vertical;
@@ -384,7 +399,7 @@
   gap: 8px;
   padding: 10px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: #F5F8FC;
 }
 
 .mi-cwg-tpl__ta {
@@ -396,7 +411,7 @@
 .mi-cwg-tpl__preview {
   min-height: 120px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.04);
+  background: #F5F8FC;
   padding: 10px;
 }
 
@@ -417,7 +432,7 @@
 
 .mi-cwg-tpl-guide {
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: #F5F8FC;
   padding: 8px 10px;
 }
 
@@ -449,5 +464,6 @@
   -webkit-overflow-scrolling: touch;
   padding: 10px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.65);
+  background: #FFFFFF;
+  border: 1px solid #E5EAF0;
 }
