@@ -1443,9 +1443,8 @@ html[data-miya-desk-layout="custom"] .foot {
    ═══════════════════════════════════════════════════════════ */
 .desk-custom-wg-picker,
 .desk-custom-wg-editor {
-  --wgx-blue: #4B8BF5;
-  --wgx-blue-deep: #2D6BD9;
-  --wgx-blue-press: #2559C7;
+  --wgx-blue: #4B8BF5;      /* 主蓝：主按钮底（与 ST 预设 + 钮同款） */
+  --wgx-blue-deep: #4076D0; /* 主蓝深一档：按钮按下态 */
   --wgx-ink: #1C2026;
   --wgx-ink-soft: #4A525C;
   --wgx-muted: #6B7480;
@@ -1526,18 +1525,18 @@ html[data-miya-desk-layout="custom"] .foot {
   transform: scale(0.97);
 }
 
-/* 主按钮：深蓝底白字（自定义 / 保存） */
+/* 主按钮：主蓝底白字（自定义 / 保存） */
 .desk-custom-wg-picker .ins-chip--gold,
 .desk-custom-wg-editor .ins-chip--gold {
   border-color: transparent;
-  background: var(--wgx-blue-deep);
+  background: var(--wgx-blue);
   color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(45, 107, 217, 0.28);
+  box-shadow: 0 4px 12px rgba(75, 139, 245, 0.32);
 }
 
 .desk-custom-wg-picker .ins-chip--gold:active,
 .desk-custom-wg-editor .ins-chip--gold:active {
-  background: var(--wgx-blue-press);
+  background: var(--wgx-blue-deep);
 }
 
 /* 次要 chip（取消等）：不再压暗，改灰字幽灵 */

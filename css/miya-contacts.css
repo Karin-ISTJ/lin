@@ -14,7 +14,7 @@
   --mn-line: #F0F3F7;
 
   --mn-blue: #4B8BF5;          /* 唯一强调色 */
-  --mn-blue-deep: #2D6BD9;
+  --mn-blue-deep: #4B8BF5;
   --mn-blue-tint: rgba(75, 139, 245, 0.08);
   --mn-blue-glow: rgba(75, 139, 245, 0.12);
   --mn-danger: #E0564B;
@@ -262,7 +262,7 @@
 }
 
 .mn-btn--main:active,
-.mn-btn--fill:active { background: var(--mn-blue-deep); }
+.mn-btn--fill:active { background: #4076D0; }
 
 .mn-btn--sub {
   color: var(--mn-ink-soft);
@@ -1159,3 +1159,12 @@
 .mn-tavern-lic__foot .mn-btn { flex: 1; }
 
 body.mn-tavern-lic-open { overflow: hidden; }
+
+/* ══ 顶栏精简：移除列表页顶栏中间的品牌块（Karin）与右上角刷新键 ══
+   仅命中 .miya-contacts-app 的直接子级顶栏（列表页）；
+   档案编辑器顶栏（.mn-editor 内）的同名元素不受影响。
+   刷新键 DOM/JS 绑定保留，仅视觉移除。 */
+.miya-contacts-app > .mn-topbar .mn-brand,
+.miya-contacts-app > .mn-topbar #miya-ct-refresh {
+  display: none !important;
+}

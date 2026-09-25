@@ -166,7 +166,7 @@
 .qq-room {
   position: absolute; inset: 0; z-index: 30;
   display: flex; flex-direction: column;
-  background: #f5f5f3; font-family: var(--mc-font); overflow: hidden;
+  background: #F5F8FC; font-family: var(--mc-font); overflow: hidden;
   --qq-kb-offset: 0px;
 }
 .qq-room.is-open,
@@ -1036,11 +1036,11 @@
 .qq-card-xfer {
   color: var(--mc-ink);
   min-width: 210px;
-  background: linear-gradient(165deg, #F5F5F3 0%, #f5f4f0 55%, #eceae4 100%);
+  background: linear-gradient(165deg, #F5F8FC 0%, #f3f6fa 55%, #e9edf3 100%);
 }
 
 .qq-card-xfer--in {
-  background: linear-gradient(165deg, #F5F5F3 0%, #E8E8E8 50%, #efefec 100%);
+  background: linear-gradient(165deg, #F5F8FC 0%, #E8ECF1 50%, #eff1f4 100%);
 }
 
 .qq-card-xfer--out {

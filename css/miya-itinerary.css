@@ -2,7 +2,7 @@
    行程轨迹 · 清爽蓝 Editorial（v4.23 设计稿）
 
    令牌：--bg #F5F8FC / --card #FFF / --ink #1C2026
-         --blue #4B8BF5（浅蓝：开关轨道 · 下划线）/ --blue-deep #2D6BD9
+         --blue #4B8BF5（主蓝：蓝字 · 开关轨道 · 下划线 · 主按钮底）/ --blue-deep #4B8BF5
          --border #E5EAF0 / --line #F0F3F7 / 标题 Noto Serif SC 700
 
    布局骨架沿用旧版（frame/main/stage/page、4 列选人网格、时间轴），
@@ -19,7 +19,7 @@
   --it-hair2: #D8E0EA;                /* 加重边框（头像 ring 等） */
   --it-line: #F0F3F7;                 /* 分隔浅线 */
   --it-accent: #4B8BF5;               /* 浅蓝：开关轨道、下划线 */
-  --it-accent-deep: #2D6BD9;          /* 深蓝：蓝字、主按钮底 */
+  --it-accent-deep: #4B8BF5;          /* 主蓝（统一）：蓝字、主按钮底 */
   --it-accent-soft: rgba(75, 139, 245, 0.10);
   --it-blush: #F2F7FE;                /* 按下/高亮底 */
   --it-ava-bg: #E8EDF4;               /* 头像占位底 */
@@ -688,7 +688,7 @@
   padding: 14px 22px;
 }
 
-/* 按钮：ghost 白卡 / primary 深蓝底白字 */
+/* 按钮：ghost 白卡 / primary 主蓝底白字 */
 .it-btn {
   padding: 10px 20px;
   border: 1px solid var(--it-hair);
@@ -714,11 +714,11 @@
   background: var(--it-accent-deep);
   color: #ffffff;
   border-color: transparent;
-  box-shadow: 0 8px 18px -10px rgba(45, 107, 217, 0.55);
+  box-shadow: 0 8px 18px -10px rgba(75, 139, 245, 0.55);
 }
 
 .it-btn--primary:active {
-  background: #2559C7;
+  background: #4076D0;
 }
 
 .it-btn--primary:hover {

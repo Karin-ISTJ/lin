@@ -22,7 +22,7 @@
   --stp-border: #E5EAF0;
   --stp-line: #F0F3F7;
   --stp-blue: #4B8BF5;
-  --stp-blue-deep: #2D6BD9;
+  --stp-blue-deep: #4B8BF5;
   --stp-blue-tint: rgba(75, 139, 245, 0.08);
   --stp-danger: #E0564B;
   --stp-display: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
@@ -208,7 +208,7 @@
   box-shadow: 0 6px 14px -8px rgba(75, 139, 245, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.stp-icon-sq.is-primary:active { background: var(--stp-blue-deep); }
+.stp-icon-sq.is-primary:active { background: #4076D0; }
 
 .stp-icon-sq.is-danger { color: var(--stp-danger); }
 
@@ -615,7 +615,7 @@ body.stp-is-dragging { user-select: none; }
   box-shadow: 0 6px 14px -8px rgba(75, 139, 245, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.stp-btn--primary:active { background: var(--stp-blue-deep); }
+.stp-btn--primary:active { background: #4076D0; }
 
 .stp-editor {
   position: fixed;

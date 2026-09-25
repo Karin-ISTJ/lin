@@ -35,7 +35,7 @@
       ]
     },
     itineraryUi: {
-      css: ['css/miya-itinerary.css?v=5'],
+      css: ['css/miya-itinerary.css?v=6'],
       js: ['js2/miya-itinerary-app.js?v=15']
     },
     weatherUi: {

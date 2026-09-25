@@ -321,12 +321,12 @@
 }
 .mi-cwg-tpl .mi-btn--dark {
   border-color: transparent;
-  background: #2D6BD9;
+  background: #4B8BF5;
   color: #fff;
-  box-shadow: 0 4px 12px rgba(45, 107, 217, 0.24);
+  box-shadow: 0 4px 12px rgba(75, 139, 245, 0.28);
 }
 .mi-cwg-tpl .mi-btn--dark:active {
-  background: #2559C7;
+  background: #4076D0;
 }
 .mi-cwg-tpl .mi-btn--ghost {
   background: #fff;

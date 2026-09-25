@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-94">
+  <meta name="miya-sw-build" content="sw-96">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=53" type="image/png">
@@ -24,30 +24,30 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="css/style.css?v=46">
   <link rel="stylesheet" href="css/miya-desk-p1-weekcal.css?v=13">
-  <link rel="stylesheet" href="css/miya-desk-custom.css?v=55">
+  <link rel="stylesheet" href="css/miya-desk-custom.css?v=57">
   <link rel="stylesheet" href="css/miya-desk-wg-4x1.css?v=10">
   <link rel="stylesheet" href="css/miya-desk-wg-4x2.css?v=14">
   <link rel="stylesheet" href="css/miya-desk-wg-4x3.css?v=12">
   <link rel="stylesheet" href="css/miya-desk-wg-4x4.css?v=4">
   <link rel="stylesheet" href="css/miya-desk-wg-2x2.css?v=11">
   <link rel="stylesheet" href="css/miya-desk-wg-2x1.css?v=6">
-  <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=6">
+  <link rel="stylesheet" href="css/miya-desk-wg-custom.css?v=8">
   <link rel="stylesheet" href="css/miya-apps.css?v=51">
-  <link rel="stylesheet" href="css/miya-beautify.css?v=2">
-  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=30">
+  <link rel="stylesheet" href="css/miya-beautify.css?v=4">
+  <link rel="stylesheet" href="css/miya-st-prompt-presets.css?v=31">
   <link rel="stylesheet" href="css/miya-vault.css?v=6">
   <link rel="stylesheet" href="css/miya-settings.css?v=37">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=16">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=3">
-  <link rel="stylesheet" href="css/miya-contacts.css?v=8">
-  <link rel="stylesheet" href="css/miya-chat.css?v=63">
+  <link rel="stylesheet" href="css/miya-contacts.css?v=10">
+  <link rel="stylesheet" href="css/miya-chat.css?v=64">
   <link rel="stylesheet" href="css/miya-chat-group.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=6">
   <link rel="stylesheet" href="css/miya-chat-single-redpacket.css?v=10">
   <link rel="stylesheet" href="css/miya-chat-statusbar.css?v=3">
   <link rel="stylesheet" href="css/miya-chat-ins.css?v=56">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=3">
-  <link rel="stylesheet" href="css/miya-chat-bubble-beautify.css?v=5">
+  <link rel="stylesheet" href="css/miya-chat-bubble-beautify.css?v=6">
   <link rel="stylesheet" href="css/miya-icon-tint.css?v=4">
   <link rel="stylesheet" href="css/miya-chat-settings.css?v=52">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=8">
@@ -508,65 +508,84 @@
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="type" hidden>
-          <p class="ins-atelier-panel-kicker">04 · 字体</p>
-          <h2 class="ins-atelier-panel-title">全局字体</h2>
-          <div class="ins-atelier-type-stack">
-            <div class="ins-atelier-type-card ins-atelier-type-card--color">
-              <label class="ins-field-label">主屏文字颜色</label>
-              <div class="ins-text-pick" id="miya-bf-text-pick" role="group" aria-label="主屏文字颜色">
-                <button type="button" class="ins-text-swatch ins-text-swatch--black is-active" data-bf-text-mode="black" aria-label="黑色" title="黑色"><span>Aa</span></button>
-                <button type="button" class="ins-text-swatch ins-text-swatch--white" data-bf-text-mode="white" aria-label="白色" title="白色"><span>Aa</span></button>
-              </div>
+          <!-- 字体页 ·「全局字体」设计稿（v4.25）：双卡流（文字颜色 / 字体预览）。
+               功能钩子（miya-bf-text-pick · data-bf-text-mode · miya-bf-font-preview-badge ·
+               data-bf-font-upload / save-preset / apply / reset · miya-bf-font-name ·
+               miya-bf-font-preset-list · miya-bf-font-preview-input / size / size-lbl / sample ·
+               miya-bf-app-font-list）与原版一致，JS 无需改动。
+               「各软件字号」设计稿未覆盖，按同款卡片风格保留功能。 -->
+          <p class="bf-font-kicker">04 · 字体</p>
+          <h2 class="bf-font-title">全局字体</h2>
+
+          <!-- 主屏文字颜色 -->
+          <div class="bf-font-card">
+            <p class="bf-font-label">主屏文字颜色</p>
+            <div class="bf-font-colors" id="miya-bf-text-pick" role="group" aria-label="主屏文字颜色">
+              <button type="button" class="bf-font-coloropt bf-font-coloropt--light is-active" data-bf-text-mode="black" aria-label="黑色" title="黑色">Aa</button>
+              <button type="button" class="bf-font-coloropt bf-font-coloropt--dark" data-bf-text-mode="white" aria-label="白色" title="白色">Aa</button>
             </div>
-            <div class="ins-atelier-type-card ins-atelier-type-card--specimen">
-              <div class="ins-specimen-head">
-                <span class="ins-field-label">字体预览</span>
-                <em id="miya-bf-font-preview-badge">系统默认</em>
-              </div>
-              <div class="ins-font-actions">
-                <button type="button" class="ins-chip ins-chip--gold" data-bf-font-upload>上传字体</button>
-                <button type="button" class="ins-chip" data-bf-font-save-preset disabled>保存为预设</button>
-                <button type="button" class="ins-chip ins-chip--gold" data-bf-font-apply disabled>应用字体</button>
-                <button type="button" class="ins-chip ins-chip--dim" data-bf-font-reset>恢复默认</button>
-              </div>
-              <!-- 字体「链接导入」已移除：只保留本地上传。 -->
-              <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-font-name">支持 .woff / .woff2 / .ttf / .otf</p>
-              <div class="ins-font-presets">
-                <span class="ins-field-label">已存预设</span>
-                <div class="ins-archive-list ins-archive-list--font" id="miya-bf-font-preset-list"></div>
-              </div>
-              <div class="ins-font-preview-block">
-                <label class="ins-field-label" for="miya-bf-font-preview-input">预览文字</label>
-                <textarea class="ins-textarea ins-textarea--preview" id="miya-bf-font-preview-input" rows="2" spellcheck="false" placeholder="输入预览文字…"></textarea>
-                <div class="ins-range-row ins-range-row--font">
-                  <span>默认字号 <b id="miya-bf-font-preview-size-lbl">18</b></span>
-                  <!-- 上限 22：原上限 36 会把手滑拖出的极端值（如 32）当成合法字号，
-                       聊天界面随之整屏变大。12–22 已覆盖"缩小到放大"的全部实用范围。 -->
-                  <input type="range" class="ins-range ins-range--wide" id="miya-bf-font-preview-size" min="12" max="22" step="0.5" value="18">
-                </div>
-                <blockquote class="ins-specimen-quote" id="miya-bf-font-preview-sample"></blockquote>
-              </div>
+          </div>
+
+          <!-- 字体预览 -->
+          <div class="bf-font-card">
+            <div class="bf-font-cardhead">
+              <span class="bf-font-cardtitle">字体预览</span>
+              <em class="bf-font-cardlink" id="miya-bf-font-preview-badge">系统默认</em>
             </div>
-            <div class="ins-atelier-type-card ins-atelier-type-card--app-font">
-              <span class="ins-field-label">各软件字号</span>
-              <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight">单独调整；未单独设置的软件沿用默认字号</p>
-              <div class="ins-app-font-list" id="miya-bf-app-font-list"></div>
+
+            <div class="bf-font-btngroup">
+              <button type="button" class="bf-btn bf-btn--blue" data-bf-font-upload>上传字体</button>
+              <button type="button" class="bf-btn bf-btn--ghost" data-bf-font-save-preset disabled>保存为预设</button>
+              <button type="button" class="bf-btn bf-btn--pale" data-bf-font-apply disabled>应用字体</button>
+              <button type="button" class="bf-btn bf-btn--ghost" data-bf-font-reset>恢复默认</button>
             </div>
+            <!-- 字体「链接导入」已移除：只保留本地上传。 -->
+            <p class="bf-font-note" id="miya-bf-font-name">支持本地上传 · .woff / .woff2 / .ttf / .otf · 全局生效</p>
+
+            <div class="bf-font-divider"></div>
+            <p class="bf-font-subtitle">已存预设</p>
+            <div class="ins-archive-list ins-archive-list--font" id="miya-bf-font-preset-list"></div>
+
+            <div class="bf-font-divider"></div>
+            <p class="bf-font-subtitle">预览文字</p>
+            <div class="bf-font-previewwrap">
+              <textarea class="bf-font-previewinput" id="miya-bf-font-preview-input" rows="2" spellcheck="false" placeholder="输入预览文字…"></textarea>
+              <div class="ins-range-row ins-range-row--font">
+                <span>默认字号 <b id="miya-bf-font-preview-size-lbl">18</b></span>
+                <!-- 上限 22：原上限 36 会把手滑拖出的极端值（如 32）当成合法字号，
+                     聊天界面随之整屏变大。12–22 已覆盖"缩小到放大"的全部实用范围。 -->
+                <input type="range" class="ins-range ins-range--wide" id="miya-bf-font-preview-size" min="12" max="22" step="0.5" value="18">
+              </div>
+              <blockquote class="bf-font-sample" id="miya-bf-font-preview-sample"></blockquote>
+            </div>
+          </div>
+
+          <!-- 各软件字号（设计稿未覆盖 · 同卡风格保留功能） -->
+          <div class="bf-font-card">
+            <p class="bf-font-subtitle">各软件字号</p>
+            <p class="bf-font-note">单独调整；未单独设置的软件沿用默认字号</p>
+            <div class="ins-app-font-list" id="miya-bf-app-font-list"></div>
           </div>
         </section>
 
         <section class="ins-atelier-panel" data-bf-panel="vault" hidden>
-          <p class="ins-atelier-panel-kicker">05 · 方案</p>
-          <h2 class="ins-atelier-panel-title" id="miya-bf-preset-title">外观方案</h2>
-          <p class="ins-atelier-panel-desc ins-atelier-panel-desc--tight" id="miya-bf-preset-hint">保存壁纸、图标与字体组合，可随时切换</p>
-          <div class="ins-vault-compose">
-            <input type="text" class="ins-text-input" id="miya-bf-preset-name" placeholder="给这套外观起名…" maxlength="32">
-            <button type="button" class="ins-chip ins-chip--gold ins-chip--block" data-bf-preset-save>保存当前方案</button>
+          <!-- 方案页 · 外观方案设计稿（v4.25）：衬线大标题版头 + 46px 输入/主按钮 + 双 ghost 导出导入。
+               功能钩子（miya-bf-preset-name / data-bf-preset-save / miya-bf-preset-list /
+               data-bf-export / data-bf-import）与原版一致，JS 无需改动。 -->
+          <div class="bf-plan-head">
+            <p class="bf-plan-kicker">05 · 方案</p>
+            <h2 class="bf-plan-title" id="miya-bf-preset-title">外观方案</h2>
+            <p class="bf-plan-sub" id="miya-bf-preset-hint">保存壁纸、图标与字体组合，可随时切换</p>
           </div>
-          <div class="ins-archive-list ins-archive-list--clickable" id="miya-bf-preset-list"></div>
-          <div class="ins-dual-actions">
-            <button type="button" class="ins-chip" data-bf-export>导出 JSON</button>
-            <button type="button" class="ins-chip ins-chip--rose" data-bf-import>导入 JSON</button>
+
+          <input type="text" class="bf-plan-input" id="miya-bf-preset-name" placeholder="给这套外观起名…" maxlength="32">
+          <button type="button" class="bf-plan-save" data-bf-preset-save>保存当前方案</button>
+
+          <div class="bf-plan-list ins-archive-list ins-archive-list--clickable" id="miya-bf-preset-list"></div>
+
+          <div class="bf-plan-actions">
+            <button type="button" class="bf-plan-ghost" data-bf-export>导出 JSON</button>
+            <button type="button" class="bf-plan-ghost" data-bf-import>导入 JSON</button>
           </div>
         </section>
       </div>
