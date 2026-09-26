@@ -670,6 +670,7 @@
 
 .miya-beautify-app .mi-btn--dark {
   /* 主按钮标准渐变（与聊天/生图设置页同款） */
+  border: 1px solid transparent;
   background-color: #007AFF;
   background-image: linear-gradient(135deg, #007AFF, #5AC8FA);
   color: #FFFFFF;
@@ -859,6 +860,8 @@
   margin-top: 12px;
   width: 100%;
   height: 46px;
+  /* 透明描边钉死平面：防止任何外部/主题规则给按钮叠加深色边框 */
+  border: 1px solid transparent;
   border-radius: 999px;
   /* 主按钮标准渐变（与聊天/生图设置页同款） */
   background-color: #007AFF;
@@ -1069,6 +1072,7 @@
 
 .miya-beautify-app .bf-btn--blue {
   /* 主按钮标准渐变（与聊天/生图设置页同款） */
+  border: 1px solid transparent;
   background-color: #007AFF;
   background-image: linear-gradient(135deg, #007AFF, #5AC8FA);
   color: #FFFFFF;
@@ -1078,6 +1082,7 @@
 .miya-beautify-app .bf-btn--blue:active { background: #4076D0; }
 
 .miya-beautify-app .bf-btn--pale {
+  border: 1px solid transparent;
   background: #A8BEE2;
   color: var(--bf-ink);
 }
