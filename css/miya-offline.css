@@ -2017,8 +2017,9 @@
 /* v40: 楼层范围隐藏 —— 顶栏右上角的范围输入框（0-1 一次切换第 0~1 层） */
 .xw-journal-bar__right{display:flex;align-items:center;gap:4px;margin-left:auto;flex:0 0 auto;min-width:0}
 .xw-journal-bar__right .xw-journal-bar__tools{margin-left:0}
-.xw-floor-scope{display:flex;align-items:center;gap:2px;height:30px;padding:0 4px 0 8px;border:1px solid currentColor;border-radius:9px;opacity:.72;flex:0 0 auto}
-.xw-floor-scope:focus-within{opacity:1}
+/* 「收起/返回」键同款白底胶囊：无描边 + 白底 + 毛玻璃 + 轻阴影 */
+.xw-floor-scope{display:flex;align-items:center;gap:2px;height:30px;padding:0 4px 0 8px;border:0;border-radius:999px;flex:0 0 auto;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 1px 2px rgba(28,32,38,.03),0 4px 12px -6px rgba(28,32,38,.06);color:#6b7480}
+.xw-floor-scope:focus-within{box-shadow:0 0 0 2px rgba(75,139,245,.18),0 1px 2px rgba(28,32,38,.03)}
 .xw-floor-scope__input{width:46px;border:0;background:transparent;font:inherit;font-size:12px;line-height:1;text-align:center;padding:0;outline:none;color:inherit;-moz-appearance:textfield}
 .xw-floor-scope__input::placeholder{opacity:.5}
 .xw-floor-scope__input::-webkit-outer-spin-button,.xw-floor-scope__input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}

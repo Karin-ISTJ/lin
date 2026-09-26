@@ -1104,7 +1104,8 @@
     function renderExitBtn() {
         if (isJournalTheme()) return '';
         if (isVaultLikeView()) return renderVaultBackBtn('xw-exit');
-        return '<button type="button" class="xw-exit" id="xw-exit" aria-label="离开现场">收起</button>';
+        /* 用户指定：正片页左上角这枚键的文字由「收起」改为「返回」，与卷宗页返回键统一 */
+        return '<button type="button" class="xw-exit" id="xw-exit" aria-label="返回">返回</button>';
     }
 
     /*
@@ -1221,7 +1222,7 @@
             }
             if (ui.view === 'story') {
                 toolHtml +=
-                    '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
+                    '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="设置" aria-label="设置">' +
                     ICON_SET + '</button>';
             }
         }
@@ -3248,8 +3249,9 @@ function renderWriter() {
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8l2.25 5.95L20.2 12l-5.95 2.25L12 20.2l-2.25-5.95L3.8 12l5.95-2.25L12 3.8z" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/><path d="M18 4.5l.65 1.35L20 6.5l-1.35.65L18 8.5l-.65-1.35L16 6.5l1.35-.65L18 4.5z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>' +
             '</button>' +
             '<div class="xw-writer__tools-menu" id="xw-writer-tools-menu" hidden>' +
-            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-prefs">调参</button>' +
+            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-prefs">设置</button>' +
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-vault">卷宗</button>' +
+            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-memory">记忆表</button>' +
             '</div></div>' +
             /*
              * 「重回」键已移除（原来在输入框左边，id 为 xw-writer-undo）。
@@ -6348,6 +6350,16 @@ function renderWriter() {
                 toolsMenu.hidden = true;
                 ui.view = 'history';
                 render();
+            });
+            /* 记忆表：与线上聊天室工具栏同款入口。
+             * 记忆表按线上 chatId 分桶（线上线下共用同一桶），传 ui.chatId 即可；
+             * 面板 z-index(720) 高于线下 app(700)，能直接盖在离线界面上。 */
+            var toolMemory = $('xw-writer-tool-memory');
+            if (toolMemory) toolMemory.addEventListener('click', function () {
+                toolsMenu.hidden = true;
+                var mt = global.MiyaMemoryTableApp;
+                if (mt && typeof mt.open === 'function') mt.open(ui.chatId);
+                else toast('记忆表模块未加载');
             });
         }
 
