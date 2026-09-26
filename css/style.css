@@ -1174,7 +1174,7 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f1eb;
+  background: #F8F9FB;
   opacity: 1;
   transition: opacity 0.2s ease;
 }
@@ -1195,7 +1195,7 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
   font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
   font-size: 20px;
   letter-spacing: 0.28em;
-  color: #a68b6f;
+  color: #4B8BF5;
   text-indent: 0.28em;
   animation: miya-bootcover-fadein 0.45s ease both;
 }
@@ -1217,7 +1217,7 @@ html.miya-alt-app-icons .ins-icon-pick__glyph {
 }
 
 .miya-bootcover__hearts svg path {
-  fill: #c4a882;
+  fill: #4B8BF5;
 }
 
 .miya-bootcover__hearts svg:nth-child(2) {

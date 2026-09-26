@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-111">
+  <meta name="miya-sw-build" content="sw-113">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=53" type="image/png">
@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link id="miya-google-fonts" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=JetBrains+Mono:wght@400;600;700&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Great+Vibes&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=Italiana&family=Jost:wght@200;300;400;500&family=Long+Cang&family=LXGW+WenKai+SC&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&family=Nunito:wght@600;700;800&family=Outfit:wght@200;300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/style.css?v=46">
+  <link rel="stylesheet" href="css/style.css?v=47">
   <link rel="stylesheet" href="css/miya-desk-p1-weekcal.css?v=13">
   <link rel="stylesheet" href="css/miya-desk-custom.css?v=57">
   <link rel="stylesheet" href="css/miya-desk-wg-4x1.css?v=10">
@@ -38,20 +38,20 @@
   <link rel="stylesheet" href="css/miya-vault.css?v=6">
   <link rel="stylesheet" href="css/miya-settings.css?v=40">
   <link rel="stylesheet" href="css/miya-worldbook.css?v=17">
-  <link rel="stylesheet" href="css/miya-memory-table.css?v=3">
+  <link rel="stylesheet" href="css/miya-memory-table.css?v=5">
   <link rel="stylesheet" href="css/miya-contacts.css?v=10">
   <link rel="stylesheet" href="css/miya-chat.css?v=66">
   <link rel="stylesheet" href="css/miya-chat-group.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=6">
   <link rel="stylesheet" href="css/miya-chat-single-redpacket.css?v=10">
   <link rel="stylesheet" href="css/miya-chat-statusbar.css?v=3">
-  <link rel="stylesheet" href="css/miya-chat-ins.css?v=57">
+  <link rel="stylesheet" href="css/miya-chat-ins.css?v=58">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=3">
   <link rel="stylesheet" href="css/miya-chat-bubble-beautify.css?v=7">
   <link rel="stylesheet" href="css/miya-icon-tint.css?v=4">
-  <link rel="stylesheet" href="css/miya-chat-settings.css?v=56">
+  <link rel="stylesheet" href="css/miya-chat-settings.css?v=57">
   <link rel="stylesheet" href="css/miya-chat-album.css?v=9">
-  <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=15">
+  <link rel="stylesheet" href="css/miya-chat-me-ins.css?v=16">
   <link rel="stylesheet" href="css/miya-offline-card.css?v=6">
   <link rel="stylesheet" href="css/miya-offline.css?v=83">
   <link rel="stylesheet" href="css/miya-offline-plot.css?v=14">
@@ -624,12 +624,13 @@
   <!-- 记忆增强表格 -->
   <div id="miya-memory-table-app" aria-hidden="true">
     <div class="miya-mt-head">
-      <button type="button" id="miya-mt-back" aria-label="返回">返回</button>
+      <button type="button" id="miya-mt-back" aria-label="返回">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
       <h1 id="miya-mt-title">记忆表格</h1>
     </div>
     <div class="miya-mt-body">
       <div class="miya-mt-settings" id="miya-mt-settings"></div>
-      <div class="miya-mt-scope" id="miya-mt-scope"></div>
       <div class="miya-mt-tabs" id="miya-mt-tabs"></div>
       <div id="miya-mt-table-wrap"></div>
       <div class="miya-mt-actions">
@@ -640,7 +641,7 @@
         <button type="button" id="miya-mt-upgrade-all">升级全部</button>
         <button type="button" id="miya-mt-reset">重置空表</button>
       </div>
-      <p class="miya-mt-note" style="margin-top:14px">生成时会自动注入表格；AI 可在回复末尾用 &lt;tableEdit&gt; 更新。可在聊天工具栏打开本页。</p>
+      <p class="miya-mt-note" style="margin-top:14px">生成时会自动注入表格；AI 可在回复末尾用 &lt;tableEdit&gt; 更新。每个角色的记忆表相互独立，从谁的入口打开就是谁的。</p>
     </div>
   </div>
 
@@ -3615,9 +3616,9 @@
   <script defer src="js1/miya-chat-calls.js?v=5"></script>
   <script defer src="js1/miya-chat-html.js?v=5"></script>
   <script defer src="js2/miya-generation-lifecycle.js?v=3"></script>
-  <script defer src="js2/miya-memory-table-store.js?v=7"></script>
+  <script defer src="js2/miya-memory-table-store.js?v=9"></script>
   <script defer src="js2/miya-memory-table-engine.js?v=9"></script>
-  <script defer src="js2/miya-memory-table-app.js?v=10"></script>
+  <script defer src="js2/miya-memory-table-app.js?v=12"></script>
   <script defer src="js1/miya-chat-time-events.js?v=4"></script>
   <script defer src="js1/miya-chat-statusbar.js?v=10"></script>
   <script defer src="js1/miya-chat-farm.js?v=7"></script>

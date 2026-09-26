@@ -1,92 +1,188 @@
+/* Miya · 记忆表格 —— 世界书同款清爽蓝白（对齐设计稿 preview-mem9） */
 #miya-memory-table-app {
+  --mt-blue: #4B8BF5;
+  --mt-blue-tint: rgba(75, 139, 245, 0.09);
+  --mt-blue-line: rgba(75, 139, 245, 0.22);
+  --mt-bg: #F8F9FB;
+  --mt-card: #FFFFFF;
+  --mt-ink: #1C2026;
+  --mt-ink-2: #6B7480;
+  --mt-ink-3: #9AA4B0;
+  --mt-line: #E3E9F2;
   position: fixed;
   inset: 0;
   z-index: 720;
   display: none;
   flex-direction: column;
-  background: #f7f5f1;
-  color: #1a1a1a;
+  background: var(--mt-bg);
+  color: var(--mt-ink);
   font-family: "Jost", "Noto Sans SC", sans-serif;
 }
 #miya-memory-table-app.is-open { display: flex; }
+
+/* ── 顶栏 ── */
 .miya-mt-head {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
-  border-bottom: 1px solid rgba(0,0,0,.06);
-  background: rgba(255,255,255,.92);
+  border-bottom: 1px solid var(--mt-line);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .miya-mt-head h1 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   flex: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.miya-mt-head button {
+#miya-mt-back {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   border: none;
-  background: transparent;
-  font-size: 15px;
-  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--mt-blue-tint);
+  color: var(--mt-blue);
+  padding: 0;
   cursor: pointer;
+  transition: background 0.16s ease;
 }
+#miya-mt-back:active { background: rgba(75, 139, 245, 0.18); }
+#miya-mt-back svg { width: 18px; height: 18px; display: block; }
+
+/* ── 主体 ── */
 .miya-mt-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 12px 14px calc(20px + env(safe-area-inset-bottom, 0px));
 }
+
+/* ── 设置开关（AI 读取 / AI 写入 / 详细写入规则）── */
 .miya-mt-settings {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 8px 14px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--mt-card);
+  box-shadow: 0 2px 10px rgba(28, 42, 68, 0.05);
 }
-.miya-mt-check {
-  font-size: 13px;
+.miya-mt-sw-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  cursor: pointer;
 }
+.miya-mt-sw {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--mt-line);
+  background: #fff;
+  position: relative;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.miya-mt-sw.on {
+  background: var(--mt-blue);
+  border-color: var(--mt-blue);
+}
+.miya-mt-sw.on::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.miya-mt-sw-label {
+  font-size: 13px;
+  color: var(--mt-ink-2);
+}
+.miya-mt-sw-row:active .miya-mt-sw-label { color: var(--mt-ink); }
+
+/* ── 表分类 tab（事件/人物/地点…）── */
 .miya-mt-tabs {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
+  padding-bottom: 10px;
+  margin-bottom: 2px;
+  scrollbar-width: none;
 }
+.miya-mt-tabs::-webkit-scrollbar { display: none; }
 .miya-mt-tab {
   flex-shrink: 0;
-  border: 1px solid rgba(0,0,0,.08);
-  background: #fff;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-card);
+  color: var(--mt-ink-2);
   border-radius: 999px;
-  padding: 8px 12px;
+  padding: 7px 13px;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
 .miya-mt-tab.is-active {
-  background: #1a1a1a;
+  background: var(--mt-blue);
   color: #fff;
-  border-color: #1a1a1a;
+  border-color: var(--mt-blue);
+  font-weight: 500;
 }
+.miya-mt-tab.is-off { opacity: 0.55; }
 .miya-mt-tab i {
-  margin-left: 6px;
-  opacity: .7;
+  margin-left: 5px;
+  opacity: 0.75;
   font-style: normal;
   font-size: 11px;
 }
-.miya-mt-note {
-  font-size: 12px;
-  color: #888;
-  margin: 0 0 10px;
+
+/* ── 表卡 ── */
+.miya-mt-card {
+  border-radius: 16px;
+  background: var(--mt-card);
+  box-shadow: 0 4px 16px rgba(28, 42, 68, 0.06);
+  overflow: hidden;
 }
-.miya-mt-scroll {
-  overflow: auto;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(60,45,30,.06);
+.miya-mt-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgba(75, 139, 245, 0.08), rgba(75, 139, 245, 0.035));
+  border-bottom: 1px solid var(--mt-line);
 }
+.miya-mt-card-t {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mt-ink);
+}
+.miya-mt-card-note {
+  font-size: 11px;
+  color: var(--mt-blue);
+  background: var(--mt-blue-tint);
+  border-radius: 999px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.miya-mt-scroll { overflow: auto; -webkit-overflow-scrolling: touch; }
 .miya-mt-table {
   border-collapse: collapse;
   width: max-content;
@@ -95,24 +191,88 @@
 }
 .miya-mt-table th,
 .miya-mt-table td {
-  border: 1px solid rgba(0,0,0,.06);
-  padding: 8px 10px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--mt-line);
+  border-right: 1px solid var(--mt-line);
+  padding: 9px 10px;
   min-width: 88px;
   vertical-align: top;
 }
+.miya-mt-table th:last-child,
+.miya-mt-table td:last-child { border-right: none; }
+.miya-mt-table tbody tr:last-child td { border-bottom: none; }
 .miya-mt-table th {
-  background: #faf8f4;
-  font-weight: 500;
+  background: rgba(75, 139, 245, 0.06);
+  color: var(--mt-ink-2);
+  font-size: 12px;
+  font-weight: 600;
   position: sticky;
   top: 0;
+  z-index: 1;
 }
-.miya-mt-ri { width: 36px; min-width: 36px; color: #999; text-align: center; }
+.miya-mt-table td[contenteditable]:focus {
+  outline: none;
+  background: var(--mt-blue-tint);
+  box-shadow: inset 0 0 0 1.5px var(--mt-blue-line);
+}
+.miya-mt-table .miya-mt-ri {
+  width: 34px;
+  min-width: 34px;
+  color: var(--mt-ink-3);
+  text-align: center;
+  font-size: 11px;
+}
+.miya-mt-idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--mt-blue-tint);
+  color: var(--mt-blue);
+  font-size: 11px;
+  font-weight: 600;
+}
+.miya-mt-table .miya-mt-th-op,
+.miya-mt-table .miya-mt-td-op { width: 44px; min-width: 44px; text-align: center; }
 .miya-mt-del {
   border: none;
+  border-radius: 8px;
   background: transparent;
-  color: #c45;
+  color: var(--mt-ink-3);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
 }
+.miya-mt-del svg { width: 15px; height: 15px; display: block; }
+.miya-mt-del:hover { color: #E5484D; background: rgba(229, 72, 77, 0.09); }
+
+/* ── 空态 ── */
+.miya-mt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 34px 16px 38px;
+  color: var(--mt-ink-3);
+}
+.miya-mt-empty svg {
+  width: 34px;
+  height: 34px;
+  color: var(--mt-blue);
+  opacity: 0.45;
+  margin-bottom: 4px;
+}
+.miya-mt-empty-t { font-size: 13px; color: var(--mt-ink-2); }
+.miya-mt-empty-s { font-size: 12px; color: var(--mt-ink-3); }
+
+/* ── 操作按钮 ── */
 .miya-mt-actions {
   display: flex;
   flex-wrap: wrap;
@@ -120,40 +280,28 @@
   margin-top: 12px;
 }
 .miya-mt-actions button {
-  border: none;
+  border: 1px solid var(--mt-line);
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 9px 15px;
   font-size: 13px;
   cursor: pointer;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(0,0,0,.05);
+  background: var(--mt-card);
+  color: var(--mt-ink-2);
+  box-shadow: 0 2px 8px rgba(28, 42, 68, 0.04);
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
+.miya-mt-actions button:active { background: var(--mt-blue-tint); color: var(--mt-blue); }
 .miya-mt-actions .is-primary {
-  background: #1a1a1a;
+  background: var(--mt-blue);
   color: #fff;
+  border-color: var(--mt-blue);
+  font-weight: 500;
 }
+.miya-mt-actions .is-primary:active { background: #3D7BDF; color: #fff; }
 
-/* ── 作用域提示：明确「本表只属于当前聊天」+ 快速切到其他聊天的表 ── */
-.miya-mt-scope {
-  margin: 0 0 10px;
-}
-.miya-mt-scope .miya-mt-note {
-  margin: 0 0 6px;
-  line-height: 1.55;
-}
-.miya-mt-other {
-  display: inline-block;
-  margin: 0 6px 6px 0;
-  padding: 5px 10px;
-  border: 1px solid rgba(120,100,80,.28);
-  border-radius: 999px;
-  background: rgba(255,255,255,.72);
-  color: #6b5a48;
+.miya-mt-note {
   font-size: 12px;
-  cursor: pointer;
-  transition: background .16s ease, border-color .16s ease;
-}
-.miya-mt-other:hover {
-  background: #fff;
-  border-color: rgba(120,100,80,.5);
+  color: var(--mt-ink-3);
+  margin: 0 0 10px;
+  line-height: 1.6;
 }

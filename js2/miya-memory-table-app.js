@@ -63,31 +63,41 @@
     var s = store.loadSettings();
     var host = $('miya-mt-settings');
     if (!host) return;
+    /*
+     * 「启用记忆表」总开关已按需求移除 —— 记忆表固定启用
+     * （store.loadSettings 强制 enabled:true）。只保留三个子开关，
+     * 外观为设计稿的方块勾选块（.miya-mt-sw），不再用原生 checkbox。
+     */
+    function swHtml(id, on, label, title) {
+      return (
+        '<div class="miya-mt-sw-row"' + (title ? ' title="' + esc(title) + '"' : '') + '>' +
+        '<span class="miya-mt-sw' + (on ? ' on' : '') + '" id="' + id + '" role="checkbox" aria-checked="' + (!!on) + '" tabindex="0"></span>' +
+        '<span class="miya-mt-sw-label">' + esc(label) + '</span></div>'
+      );
+    }
     host.innerHTML =
-      '<label class="miya-mt-check"><input type="checkbox" id="miya-mt-en" ' +
-      (s.enabled ? 'checked' : '') +
-      '> 启用记忆表</label>' +
-      '<label class="miya-mt-check"><input type="checkbox" id="miya-mt-read" ' +
-      (s.isAiRead ? 'checked' : '') +
-      '> AI 读取</label>' +
-      '<label class="miya-mt-check"><input type="checkbox" id="miya-mt-write" ' +
-      (s.isAiWrite ? 'checked' : '') +
-      '> AI 写入</label>' +
-      '<label class="miya-mt-check" title="关闭后仅保留最小语法约束，每轮少约 300 tokens">' +
-      '<input type="checkbox" id="miya-mt-detailed" ' +
-      (s.detailedWriteRules !== false ? 'checked' : '') +
-      '> 详细写入规则</label>';
+      swHtml('miya-mt-read', s.isAiRead !== false, 'AI 读取') +
+      swHtml('miya-mt-write', s.isAiWrite !== false, 'AI 写入') +
+      swHtml('miya-mt-detailed', s.detailedWriteRules !== false, '详细写入规则', '关闭后仅保留最小语法约束，每轮少约 300 tokens');
     function bind(id, key) {
       var el = $(id);
       if (!el) return;
-      el.addEventListener('change', function () {
+      function toggle() {
         var cur = store.loadSettings();
-        cur[key] = !!el.checked;
+        cur[key] = !(el.classList.contains('on'));
+        el.classList.toggle('on', !!cur[key]);
+        el.setAttribute('aria-checked', String(!!cur[key]));
         store.saveSettings(cur);
         toast('已保存设置');
+      }
+      el.addEventListener('click', toggle);
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle();
+        }
       });
     }
-    bind('miya-mt-en', 'enabled');
     bind('miya-mt-read', 'isAiRead');
     bind('miya-mt-write', 'isAiWrite');
     bind('miya-mt-detailed', 'detailedWriteRules');
@@ -120,20 +130,20 @@
     var cols = table.columns || [];
     var rows = table.rows || [];
     var head =
-      '<tr><th class="miya-mt-ri">#</th>' +
+      '<tr class="miya-mt-tr-head"><th class="miya-mt-ri">#</th>' +
       cols
         .map(function (c, ci) {
           return '<th contenteditable="true" data-mt-col="' + ci + '">' + esc(c) + '</th>';
         })
         .join('') +
-      '<th></th></tr>';
+      '<th class="miya-mt-th-op" aria-label="操作"></th></tr>';
     var body = rows
       .map(function (row, ri) {
         return (
           '<tr data-mt-row="' +
           ri +
           '"><td class="miya-mt-ri">' +
-          ri +
+          '<span class="miya-mt-idx">' + ri + '</span>' +
           '</td>' +
           cols
             .map(function (_, ci) {
@@ -148,21 +158,40 @@
               );
             })
             .join('') +
-          '<td><button type="button" class="miya-mt-del" data-mt-del-row="' +
+          '<td class="miya-mt-td-op"><button type="button" class="miya-mt-del" data-mt-del-row="' +
           ri +
-          '">删</button></td></tr>'
+          '" aria-label="删除这一行">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button></td></tr>'
         );
       })
       .join('');
-    wrap.innerHTML =
-      '<p class="miya-mt-note">' +
-      esc(table.note || '') +
-      '</p>' +
-      '<div class="miya-mt-scroll"><table class="miya-mt-table"><thead>' +
-      head +
-      '</thead><tbody>' +
-      body +
-      '</tbody></table></div>';
+    /*
+     * 表卡：设计稿同款 —— 卡头（表名）+ 表格。
+     * 无数据时显示空态卡（图标 + 「还没有 XX 条目」+ 提示录入）。
+     */
+    var cardInner;
+    if (!rows.length) {
+      cardInner =
+        '<div class="miya-mt-card-head"><span class="miya-mt-card-t">' + esc(table.name || '') + '</span></div>' +
+        '<div class="miya-mt-empty">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>' +
+        '<span class="miya-mt-empty-t">还没有「' + esc(table.name || '此分类') + '」条目</span>' +
+        '<span class="miya-mt-empty-s">点下方「加一行」开始录入</span>' +
+        '</div>';
+    } else {
+      cardInner =
+        '<div class="miya-mt-card-head">' +
+        '<span class="miya-mt-card-t">' + esc(table.name || '') + '</span>' +
+        (table.note ? '<span class="miya-mt-card-note">' + esc(table.note) + '</span>' : '') +
+        '</div>' +
+        '<div class="miya-mt-scroll"><table class="miya-mt-table"><thead>' +
+        head +
+        '</thead><tbody>' +
+        body +
+        '</tbody></table></div>';
+    }
+    wrap.innerHTML = '<div class="miya-mt-card">' + cardInner + '</div>';
   }
 
   function getTables() {
@@ -223,8 +252,12 @@
       }
     } catch (e) {}
     if (!out) out = '未命名';
-    /* 附带 id 尾号，便于排查时对得上聊天记录 */
-    return out + '（' + cid.slice(-6) + '）';
+    /*
+     * 不再拼 id 尾号（原来输出「名字（a1b2c3）」）——
+     * 用户反馈那串英文数字看着像「两个 id」，其实只是聊天 id 后 6 位，
+     * 对辨认角色毫无帮助，按需求去掉，标题只保留角色名。
+     */
+    return out;
   }
 
   function render() {
@@ -235,49 +268,6 @@
     renderTable(tables[state.tableIndex]);
     var title = $('miya-mt-title');
     if (title) title.textContent = '记忆表格 · ' + describeChat(state.chatId);
-    renderScopeHint();
-  }
-
-  /**
-   * 显示「本页只属于当前这个聊天」以及「还有哪些聊天也存着表格」。
-   *
-   * 存在的理由：记忆表格按 chatId 分桶，一个聊天一张表。
-   * 用户遇到过「AI 说事件七，我哪里都找不到」——原因之一就是他不知道
-   * 这里只显示**当前聊天**的表，别的聊天的表在别处。
-   * 把这层信息摆明，就不需要靠猜。
-   */
-  function renderScopeHint() {
-    var host = $('miya-mt-scope');
-    if (!host) return;
-    var store = global.MiyaMemoryTableStore;
-    var others = [];
-    try {
-      var all = typeof store.listChatIds === 'function' ? store.listChatIds() : [];
-      others = all.filter(function (id) { return String(id) !== String(state.chatId); });
-    } catch (e) {}
-    var rowsHtml = '';
-    others.slice(0, 12).forEach(function (id) {
-      var n = 0;
-      try {
-        var ts = store.getChatTables(id) || [];
-        ts.forEach(function (t) {
-          if (t && t.id === 't_event') n = (t.rows || []).length;
-        });
-      } catch (e2) {}
-      rowsHtml +=
-        '<button type="button" class="miya-mt-other" data-mt-other="' + esc(id) + '">' +
-        esc(describeChat(id)) + '（事件 ' + n + ' 条）</button>';
-    });
-    if (!others.length) {
-      host.innerHTML =
-        '<p class="miya-mt-note">本表只属于「' + esc(describeChat(state.chatId)) +
-        '」。目前没有其他聊天存有记忆表。</p>';
-      return;
-    }
-    host.innerHTML =
-      '<p class="miya-mt-note">本表只属于「' + esc(describeChat(state.chatId)) +
-      '」——记忆表按聊天分开存，别的聊天看不到这里的行，反之亦然。</p>' +
-      '<p class="miya-mt-note">其他聊天的记忆表：' + rowsHtml + '</p>';
   }
 
   function bind() {
@@ -287,18 +277,10 @@
     var back = $('miya-mt-back');
     if (back) back.addEventListener('click', close);
     app.addEventListener('click', function (e) {
-      /* 切到「其他聊天」的记忆表：先保存当前编辑，再换桶重新渲染 */
-      var other = e.target.closest('[data-mt-other]');
-      if (other) {
-        var target = String(other.getAttribute('data-mt-other') || '').trim();
-        if (!target) return;
-        persist(readDomIntoTables()).then(function () {
-          state.chatId = target;
-          state.tableIndex = 0;
-          render();
-        });
-        return;
-      }
+      /*
+       * 「切换到其他聊天的记忆表」入口已按需求移除：
+       * 从哪个角色的入口点开，本页就是哪个角色的表（按 chatId 固定归属）。
+       */
       var tab = e.target.closest('[data-mt-tab]');
       if (tab) {
         persist(readDomIntoTables()).then(function () {

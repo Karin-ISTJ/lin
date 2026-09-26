@@ -1,22 +1,24 @@
-/* Miya Chat · INS 奶油软刊风 — 对齐设计稿 */
+/* Miya Chat · theme-soft —— 配色已对齐世界书「清爽蓝白」：
+   结构/布局不动，只把奶油米棕色系 token 映射为蓝白系
+   （强调 #4B8BF5、墨色 #1C2026、浅蓝 tint 代替金粉）。 */
 
 .theme-soft {
   --soft-font: "Noto Sans SC", "DM Sans", -apple-system, sans-serif;
   --soft-serif: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
   --soft-script: "Great Vibes", "Cormorant Garamond", cursive;
-  --soft-bg: #FFFFFF;
-  --soft-bg-2: #F5F5F5;
-  --soft-bg-3: #FAFAFA;
+  --soft-bg: #F8F9FB;
+  --soft-bg-2: #F5F7FA;
+  --soft-bg-3: #FAFBFC;
   --soft-surface: #FFFFFF;
   --soft-surface-2: #FFFFFF;
-  --soft-ink: #7A6E64;
-  --soft-ink-2: #9A8F86;
-  --soft-ink-3: #C9B6A6;
-  --soft-gold: #C9B896;
-  --soft-gold-soft: rgba(201, 184, 150, 0.28);
-  --soft-peach: #F0DED2;
-  --soft-coral: #ED9B62;
-  --soft-badge: #EB9558;
+  --soft-ink: #1C2026;
+  --soft-ink-2: #6B7480;
+  --soft-ink-3: #9AA4B0;
+  --soft-gold: #4B8BF5;
+  --soft-gold-soft: rgba(75, 139, 245, 0.12);
+  --soft-peach: #E8EEF7;
+  --soft-coral: #4B8BF5;
+  --soft-badge: #4B8BF5;
   --soft-line: rgba(0, 0, 0, 0.06);
   --soft-shadow: 0 4px 22px rgba(0, 0, 0, 0.04), 0 1px 4px rgba(0, 0, 0, 0.03);
   --soft-shadow-float: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -71,9 +73,9 @@
   z-index: 2;
   display: none;
   background:
-    linear-gradient(155deg, rgba(255, 252, 248, 0.9) 0%, rgba(232, 210, 195, 0.5) 45%, rgba(201, 184, 150, 0.35) 100%);
+    linear-gradient(155deg, rgba(255, 255, 255, 0.9) 0%, rgba(210, 224, 245, 0.5) 45%, rgba(75, 139, 245, 0.35) 100%);
   clip-path: polygon(50% 0%, 78% 28%, 68% 100%, 32% 100%, 22% 28%);
-  filter: drop-shadow(0 3px 6px rgba(120, 90, 70, 0.12));
+  filter: drop-shadow(0 3px 6px rgba(28, 32, 38, 0.12));
   opacity: 0.88;
 }
 
@@ -137,7 +139,7 @@
   z-index: 1;
   flex: 1;
   min-height: 0;
-  background: #ffffff;
+  background: var(--soft-bg, #F8F9FB);
 }
 
 .theme-soft .qq-page {
@@ -205,7 +207,7 @@
   place-items: center;
   cursor: pointer;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(120, 90, 70, 0.06);
+  box-shadow: 0 2px 8px rgba(28, 32, 38, 0.06);
 }
 
 .soft-topbar__back svg { width: 17px; height: 17px; }
@@ -267,7 +269,7 @@
 
 .soft-topbar__icon--gold {
   background: var(--soft-gold-soft);
-  color: #8A7868;
+  color: #6B7480;
 }
 
 
@@ -302,7 +304,7 @@
   color: var(--soft-ink);
   font-weight: 500;
   background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 1px 6px rgba(120, 90, 70, 0.06);
+  box-shadow: 0 1px 6px rgba(28, 32, 38, 0.06);
 }
 
 .soft-filter--menu {
@@ -346,11 +348,11 @@
   height: 54px;
   border-radius: 50%;
   padding: 2px;
-  background: linear-gradient(145deg, #F0DED2, #C9B896, #ED9B62);
+  background: linear-gradient(145deg, #E8EEF7, #4B8BF5, #4B8BF5);
 }
 
 .soft-story__ring--new {
-  background: linear-gradient(145deg, #ED9B62, #C9B896, #F0DED2);
+  background: linear-gradient(145deg, #4B8BF5, #4B8BF5, #E8EEF7);
 }
 
 .soft-story__ava,
@@ -462,7 +464,7 @@
 }
 
 .theme-soft .qq-chat-item--pinned {
-  background: rgba(237, 155, 98, 0.06);
+  background: rgba(75, 139, 245, 0.06);
   box-shadow: inset 3px 0 0 var(--soft-coral);
   border-radius: var(--soft-r);
 }
@@ -704,7 +706,7 @@
   padding: 2px 7px;
   border-radius: var(--soft-r-pill);
   background: var(--soft-gold-soft);
-  color: #8A7868;
+  color: #6B7480;
   letter-spacing: 0.04em;
 }
 
@@ -985,8 +987,8 @@
   inset: 0;
   border-radius: 50%;
   padding: 2px;
-  background: linear-gradient(145deg, #F0DED2, #C9B896, #ED9B62);
-  box-shadow: 0 0 16px rgba(237, 155, 98, 0.15);
+  background: linear-gradient(145deg, #E8EEF7, #4B8BF5, #4B8BF5);
+  box-shadow: 0 0 16px rgba(75, 139, 245, 0.15);
   pointer-events: none;
   z-index: 0;
 }
@@ -1024,8 +1026,8 @@
   letter-spacing: 0.04em;
   padding: 3px 7px;
   border-radius: var(--soft-r-pill);
-  background: linear-gradient(135deg, #F0DED2, #C9B896);
-  color: #6B5E54;
+  background: linear-gradient(135deg, #E8EEF7, #4B8BF5);
+  color: #1C2026;
   border: 1.5px solid #fff;
 }
 
@@ -1073,7 +1075,7 @@
   background: var(--soft-surface-2);
   border-radius: var(--soft-r);
   border: 1px solid var(--soft-line);
-  box-shadow: 0 1px 6px rgba(120, 90, 70, 0.03);
+  box-shadow: 0 1px 6px rgba(28, 32, 38, 0.03);
   cursor: pointer;
 }
 
@@ -1234,6 +1236,7 @@
 .theme-soft .noir-chat-search { display: none !important; }
 
 /* ── 覆盖 miya-chat.css 基础变量 ── */
+/* 页面底统一为世界书浅灰蓝 #F8F9FB，白色卡片（列表/浮窗）自然浮起 */
 .miya-chat-app.theme-soft,
 .miya-chat-app.theme-soft .qq-pages,
 .miya-chat-app.theme-soft .qq-page,
@@ -1242,7 +1245,7 @@
 .miya-chat-app.theme-soft .qq-page--feed,
 .miya-chat-app.theme-soft .qq-page--contacts,
 .miya-chat-app.theme-soft .qq-page--mine {
-  background: #ffffff !important;
+  background: var(--soft-bg, #F8F9FB) !important;
 }
 
 .miya-chat-app.theme-soft {
@@ -1264,7 +1267,7 @@
   box-shadow: var(--soft-shadow-float) !important;
 }
 
-.miya-chat-app.theme-soft .qq-pages { background: #ffffff; }
+.miya-chat-app.theme-soft .qq-pages { background: var(--soft-bg, #F8F9FB); }
 
 .miya-chat-app.theme-soft.qq-room-open .qq-pages {
   opacity: 0;
@@ -1367,12 +1370,12 @@
 /* ── 长按消息菜单 · INS 奶油风 ── */
 .theme-soft .qq-msg-menu {
   background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(201, 184, 150, 0.14);
+  border-color: rgba(75, 139, 245, 0.14);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 0 0 0.5px rgba(201, 184, 150, 0.08),
-    0 6px 22px rgba(120, 90, 70, 0.1),
-    0 2px 6px rgba(120, 90, 70, 0.05);
+    0 0 0 0.5px rgba(75, 139, 245, 0.08),
+    0 6px 22px rgba(28, 32, 38, 0.1),
+    0 2px 6px rgba(28, 32, 38, 0.05);
 }
 
 .theme-soft .qq-msg-menu__btn {
@@ -1384,14 +1387,14 @@
   background: linear-gradient(
     to bottom,
     transparent,
-    rgba(201, 184, 150, 0.22) 18%,
-    rgba(201, 184, 150, 0.22) 82%,
+    rgba(75, 139, 245, 0.22) 18%,
+    rgba(75, 139, 245, 0.22) 82%,
     transparent
   );
 }
 
 .theme-soft .qq-msg-menu__btn:active {
-  background: rgba(201, 184, 150, 0.12);
+  background: rgba(75, 139, 245, 0.12);
 }
 
 .theme-soft .qq-msg-menu__btn.is-danger {

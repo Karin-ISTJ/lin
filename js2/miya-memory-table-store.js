@@ -127,15 +127,24 @@
   }
 
   function loadSettings() {
+    var merged;
     try {
       var raw =
         typeof global.miyaSyncReadJsonKey === 'function'
           ? global.miyaSyncReadJsonKey(SETTINGS_KEY)
           : JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
-      return Object.assign(defaultSettings(), raw && typeof raw === 'object' ? raw : {});
+      merged = Object.assign(defaultSettings(), raw && typeof raw === 'object' ? raw : {});
     } catch (e) {
-      return defaultSettings();
+      merged = defaultSettings();
     }
+    /*
+     * 固定启用：总开关已从界面移除（用户要求记忆表永远开启）。
+     * 无论旧存储里写过 enabled:false，读出来一律强制 true ——
+     * 引擎三处检查（injectIntoMessages / 写入许可 / 上下文注入）
+     * 都走 loadSettings().enabled，这里兜底即可全覆盖。
+     */
+    merged.enabled = true;
+    return merged;
   }
 
   function saveSettings(s) {
