@@ -1097,7 +1097,7 @@
   }
 
   function renderHeartVoiceTemplates() {
-    setHead('自定义心声', '');
+    setHead('', '自定义心声');
     var mod = global.MiyaChatHeartVoiceTemplates;
     if (!mod || typeof mod.buildEditorHtml !== 'function') {
       return '<div class="mi-me-flow"><p class="mi-empty-hint">心声模版模块未加载，请刷新页面</p></div>';
@@ -1125,7 +1125,7 @@
   }
 
   function renderBubbleBeautify() {
-    setHead('气泡美化', '');
+    setHead('', '气泡美化');
     var mod = global.MiyaChatBubbleBeautify;
     if (!mod || typeof mod.buildPanelHtml !== 'function') {
       return '<div class="mi-me-flow"><p class="mi-empty-hint">气泡美化模块未加载，请刷新页面</p></div>';
@@ -1134,7 +1134,7 @@
   }
 
   function renderIconTint() {
-    setHead('图标着色', '');
+    setHead('', '图标着色');
     var mod = global.MiyaIconTint;
     if (!mod || typeof mod.buildPanelHtml !== 'function') {
       return '<div class="mi-me-flow"><p class="mi-empty-hint">图标着色模块未加载，请刷新页面</p></div>';

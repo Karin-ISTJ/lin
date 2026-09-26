@@ -1,16 +1,19 @@
-/* Miya · Memories Album — aesthetic cream UI */
+/* Miya · Memories Album — 世界书同款清爽蓝（冷灰蓝底 + 白卡 + 唯一强调蓝）
+ * 配色令牌对齐 miya-worldbook.css：--wb-bg #F5F8FC / --wb-card #FFF /
+ * --wb-ink #1C2026 / --wb-blue #4B8BF5 / --wb-border #E5EAF0。
+ * 相册自己的衬线标题 + 手写体装饰保留，只换色系。 */
 
 .mi-album-app {
-  --alb-bg: #f5f1eb;
-  --alb-cream: #faf8f4;
+  --alb-bg: #F5F8FC;
+  --alb-cream: #FFFFFF;
   --alb-white: #ffffff;
-  --alb-ink: #1a1a1a;
-  --alb-brown: #a68b6f;
-  --alb-brown-soft: #c4a882;
-  --alb-muted: #9a948c;
-  --alb-line: rgba(0, 0, 0, 0.06);
-  --alb-shadow: 0 12px 40px rgba(60, 45, 30, 0.08);
-  --alb-shadow-soft: 0 8px 24px rgba(60, 45, 30, 0.06);
+  --alb-ink: #1C2026;
+  --alb-brown: #4B8BF5;
+  --alb-brown-soft: #5AA0F2;
+  --alb-muted: #6B7480;
+  --alb-line: #E5EAF0;
+  --alb-shadow: 0 12px 40px rgba(28, 32, 38, 0.08);
+  --alb-shadow-soft: 0 8px 24px rgba(28, 32, 38, 0.06);
   --alb-r: 22px;
   --alb-r-lg: 28px;
   --alb-serif: "Cormorant Garamond", "Noto Serif SC", serif;
@@ -111,7 +114,7 @@
   padding: 0;
   border: 2px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  background: #e8e2da center/cover no-repeat;
+  background: #E5EAF0 center/cover no-repeat;
   box-shadow: var(--alb-shadow-soft);
   cursor: pointer;
   flex-shrink: 0;
@@ -215,7 +218,7 @@
   bottom: 0;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, transparent 50%, rgba(245, 241, 235, 0.95) 50%);
+  background: linear-gradient(135deg, transparent 50%, rgba(245, 248, 252, 0.95) 50%);
   border-bottom-right-radius: var(--alb-r-lg);
   pointer-events: none;
 }
@@ -225,7 +228,7 @@
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: cover;
-  background: #e8e2da;
+  background: #E5EAF0;
 }
 
 .mi-album-carousel__overlay {
@@ -428,7 +431,7 @@
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  background: #e8e2da;
+  background: #E5EAF0;
 }
 
 .mi-album-albums__info {
@@ -460,7 +463,7 @@
   justify-content: center;
   gap: 28px;
   padding: 12px 24px calc(14px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(180deg, transparent, rgba(245, 241, 235, 0.92) 28%, var(--alb-bg) 100%);
+  background: linear-gradient(180deg, transparent, rgba(245, 248, 252, 0.92) 28%, var(--alb-bg) 100%);
   pointer-events: none;
 }
 
@@ -503,7 +506,7 @@
   border: none;
   border-radius: 50%;
   background: linear-gradient(145deg, var(--alb-brown-soft), var(--alb-brown));
-  box-shadow: 0 10px 28px rgba(166, 139, 111, 0.45);
+  box-shadow: 0 10px 28px rgba(75, 139, 245, 0.35);
   color: #fff;
   cursor: pointer;
   display: flex;
@@ -581,7 +584,7 @@
   border: none;
   border-radius: var(--alb-r);
   overflow: hidden;
-  background: #e8e2da;
+  background: #E5EAF0;
   cursor: pointer;
   position: relative;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
@@ -670,7 +673,7 @@
   position: relative;
   border-radius: 2px;
   overflow: hidden;
-  background: #e8e2da;
+  background: #E5EAF0;
   aspect-ratio: 1;
 }
 
@@ -723,7 +726,7 @@
   height: 64px;
   border-radius: 14px;
   object-fit: cover;
-  background: #e8e2da;
+  background: #E5EAF0;
   flex-shrink: 0;
 }
 
@@ -820,7 +823,7 @@
   position: absolute;
   inset: 0;
   z-index: 30;
-  background: rgba(30, 25, 20, 0.32);
+  background: rgba(16, 20, 26, 0.32);
   backdrop-filter: blur(4px);
   animation: mi-alb-fade-in 0.22s ease;
 }
@@ -886,7 +889,7 @@
   max-height: 240px;
   object-fit: contain;
   border-radius: var(--alb-r);
-  background: #e8e2da;
+  background: #E5EAF0;
   margin-bottom: 16px;
 }
 
@@ -938,7 +941,7 @@
 }
 
 .mi-album-sheet__act--danger {
-  color: #888;
+  color: #6B7480;
 }
 
 .mi-album-sheet__vision {
@@ -1004,7 +1007,7 @@
   background: none;
   font-size: 18px;
   line-height: 1;
-  color: #999;
+  color: #939CA6;
   cursor: pointer;
 }
 
@@ -1182,7 +1185,7 @@
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
-  background: #e8e2da;
+  background: #E5EAF0;
 }
 
 .mi-album-avatar-row__avatar--empty {

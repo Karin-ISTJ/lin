@@ -96,6 +96,21 @@
   background: transparent;
 }
 
+/* 子界面顶栏单行化：相册式 26px 大标题太重，降为常规顶栏字号；
+   小字 kicker（album-date）与大标题内容重复，整行隐藏。 */
+.mi-me-page:not(.mi-me-page--album) .mi-album-header__album-title {
+  font-family: var(--alb-sans);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: var(--alb-ink);
+}
+
+.mi-me-page:not(.mi-me-page--album) .mi-album-header__album-date {
+  display: none;
+}
+
 /* 右上角关闭键已整体删除：保留等宽占位块，仅用于让标题保持视觉居中 */
 .mi-me-page:not(.mi-me-page--album) .mi-me-header__side--phantom {
   visibility: hidden;

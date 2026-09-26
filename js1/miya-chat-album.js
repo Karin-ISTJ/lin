@@ -302,9 +302,16 @@
    * 只是靠 CSS 把显示尺寸压小。这意味着一屏 20 张图就要按
    * 20 张原图的尺寸解码进内存 —— 在手机上滑相册最容易卡的就是这里。
    * 真正的缩略图应当是**另一份小得多的图**。
+   *
+   * 320 → 480：手机 DPR 普遍 2~3，两列网格每格 ~167px CSS 宽，
+   * 3x 屏需要 ~500px 物理像素，320px 放大后明显发虚；
+   * 480px 基本贴住物理像素，列表看起来是清晰的。
+   * 代价：缩略图体积大约翻倍（每张仍是几十 KB 量级），可忽略。
+   * 注意：旧照片已生成的 320px 缩略图不会自动重建，
+   * 但首页轮播大卡已改走主图，最显眼的糊点已经消掉。
    */
-  var ALBUM_THUMB_EDGE = 320;
-  var ALBUM_THUMB_QUALITY = 0.72;
+  var ALBUM_THUMB_EDGE = 480;
+  var ALBUM_THUMB_QUALITY = 0.78;
 
   function addPhotos(profileId, files, groupId) {
     var st = getStore();
@@ -1155,7 +1162,13 @@
 
   function renderCarouselCard(group, album, isBack) {    var photos = photosInGroup(album, group.id);
     var cover = groupCoverPhoto(album, group.id);
-    var blob = cover ? albumThumbId(cover) : '';
+    /*
+     * ⚠️ 轮播大卡必须用 cover.blobId（主图），不能用 albumThumbId()。
+     * 这张卡几乎占满屏宽（4:5），3x 屏要 ~1000px 物理像素，
+     * 塞 320px 的缩略图进去就是用户看到的「主图片很糊」。
+     * 一屏只有 front/back 两张卡，加载主图（长边 2560）完全可接受。
+     */
+    var blob = cover ? (cover.blobId || albumThumbId(cover)) : '';
     var name = displayGroupName(group);
     var date = formatAlbumDate(groupLatestTs(album, group.id));
     var count = photos.length;
@@ -1311,7 +1324,7 @@
             '<div><strong>批量操作</strong><span>识图 · 同步 · 删除</span></div>' +
             '<button type="button" class="mi-album-sheet__act' + (batchMode ? ' is-on' : '') + '" data-mq-alb-batch-toggle>' + (batchMode ? '进行中' : '开启') + '</button>' +
           '</div>' +
-          '<p style="margin:16px 0 8px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#9a948c;">Albums</p>' +
+          '<p style="margin:16px 0 8px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6B7480;">Albums</p>' +
           '<div class="mi-album-sheet__groups">' +
             groups.map(function (g) {
               return '<button type="button" class="mi-album-sheet__grp' + (g.id === gid ? ' is-active' : '') + '" data-mq-alb-open="' + esc(g.id) + '">' + esc(displayGroupName(g)) + '</button>';
@@ -1375,7 +1388,7 @@
           (rec
             ? '<textarea class="mi-album-sheet__vision" data-mq-alb-vision="' + esc(photo.id) + '" rows="5" placeholder="识图描述…">' + esc(photo.visionText) + '</textarea>' +
               '<button type="button" class="mi-album-sheet__act is-on" data-mq-alb-save-vision="' + esc(photo.id) + '">保存描述</button>'
-            : '<p style="font-size:12px;color:#9a948c;margin:8px 0;">尚未识图 · Char 不可使用</p>') +
+            : '<p style="font-size:12px;color:#6B7480;margin:8px 0;">尚未识图 · Char 不可使用</p>') +
         '</div>' +
       '</div>';
   }
