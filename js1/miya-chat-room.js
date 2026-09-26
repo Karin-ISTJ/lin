@@ -874,7 +874,9 @@
             '<div class="qq-room__head-name" id="qq-room-title"></div>' +
             '<div class="qq-room__head-status" id="qq-room-head-status"></div>' +
           '</div>' +
-          '<button type="button" class="qq-room__farm-btn" id="qq-room-farm" aria-label="小农场" title="小农场">🌱</button>' +
+          '<button type="button" class="qq-room__farm-btn" id="qq-room-farm" aria-label="星露农场" title="星露农场">🌱' +
+            '<span class="qq-room__farm-sun" id="qq-room-farm-sun" aria-hidden="true"></span>' +
+          '</button>' +
           '<button type="button" class="qq-room__offline-btn" id="qq-room-offline" aria-label="线下" title="线下">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.8V21h13V9.8"/><path d="M9.5 21v-6h5v6"/></svg>' +
           '</button>' +
@@ -4034,6 +4036,9 @@
     var ov = $('qq-room-overlay');
     if (ov) { ov.hidden = true; ov.innerHTML = ''; }
     restoreComposeAfterOverlay();
+    /* 速览关掉后顺手刷一下小太阳（熟地状态可能已变） */
+    var farmApiOv = global.MiyaChatFarm;
+    if (farmApiOv && typeof farmApiOv.refreshSunBadge === 'function') farmApiOv.refreshSunBadge();
   }
 
   function openOverlay(html) {
@@ -5774,6 +5779,7 @@
           return;
         }
         farmApi.openPanel(store, state.chatId, openOverlay, toast);
+        if (typeof farmApi.refreshSunBadge === 'function') farmApi.refreshSunBadge();
       });
     }
     var offlineBtn = $('qq-room-offline');
@@ -5873,6 +5879,19 @@
         e.preventDefault();
         e.stopPropagation();
         closeOverlay();
+        return;
+      }
+      // 星露速览：整头热区/进入按钮 → 一步跳进农场（退出自动回跳本聊天）
+      if (t.closest && t.closest('[data-farmgo]')) {
+        e.preventDefault();
+        e.stopPropagation();
+        var farmApiGo = global.MiyaChatFarm;
+        closeOverlay();
+        if (farmApiGo && state.chatId && typeof farmApiGo.enterFarm === 'function') {
+          farmApiGo.enterFarm(state.chatId, toast);
+        } else {
+          toast('农场未加载');
+        }
         return;
       }
       // 小农场面板
@@ -6115,6 +6134,11 @@
     var name = resolveDisplayName(ctx);
     if (title) title.textContent = name;
     if (status) status.textContent = resolveHeaderStatus(ctx);
+    /* 进房/回房即刷新小太阳角标（有熟地才亮） */
+    var farmApiHdr = global.MiyaChatFarm;
+    if (farmApiHdr && typeof farmApiHdr.refreshSunBadge === 'function') {
+      try { farmApiHdr.refreshSunBadge(); } catch (eFarmHdr) {}
+    }
     if (headAva) {
       if (ctx && ctx.isGroup) {
         var gg = global.MiyaChatGroup;

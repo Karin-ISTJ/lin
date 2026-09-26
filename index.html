@@ -13,7 +13,7 @@
     版本哨兵（配套 sw.js 的 BUILD）：app.js 收到 SW 广播的构建号后与本值比对，
     SW 更新 → 自动刷新一次页面。每次发版改 sw.js 时同步更新两者（只增不减）。
   -->
-  <meta name="miya-sw-build" content="sw-114">
+  <meta name="miya-sw-build" content="sw-117">
   <title>Karin</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="img/miya-icon.png?v=53" type="image/png">
@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="css/miya-worldbook.css?v=17">
   <link rel="stylesheet" href="css/miya-memory-table.css?v=5">
   <link rel="stylesheet" href="css/miya-contacts.css?v=10">
-  <link rel="stylesheet" href="css/miya-chat.css?v=66">
+  <link rel="stylesheet" href="css/miya-chat.css?v=67">
   <link rel="stylesheet" href="css/miya-chat-group.css?v=7">
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=6">
   <link rel="stylesheet" href="css/miya-chat-single-redpacket.css?v=10">
@@ -2993,8 +2993,12 @@
         <div class="fg-grid" id="fg-grid"></div>
       </section>
 
-      <!-- 主按钮 -->
-      <button type="button" class="fg-btn fg-btn--next" data-fg-next>进入次日 🌙</button>
+      <!-- 角色田（对手 = 当前聊天对象，TA 自己种浇收，也会偷你） -->
+      <section class="fg-field fg-field--rival" id="fg-rival-section" hidden aria-label="对手的农田">
+        <h3 class="fg-field__title" id="fg-rival-title">对手的农田</h3>
+        <div class="fg-grid" id="fg-rival-grid"></div>
+      </section>
+
       <div class="fg-footrow">
         <button type="button" class="fg-btn" data-fg-barn-open>仓库</button>
         <button type="button" class="fg-btn" data-fg-save>存档</button>
@@ -3573,7 +3577,7 @@
   <script defer src="js2/miya-backup.js?v=5"></script>
   <script defer src="js2/miya-perf.js?v=4"></script>
   <script defer src="js2/miya-token.js?v=2"></script>
-  <script defer src="js2/miya-lazy-boot.js?v=35"></script>
+  <script defer src="js2/miya-lazy-boot.js?v=36"></script>
   <script defer src="js1/miya-bg-timer.js?v=2"></script>
   <script defer src="js2/miya-zip-store.js?v=5"></script>
   <script defer src="js1/jszip.min.js"></script>
@@ -3623,8 +3627,8 @@
   <script defer src="js2/miya-memory-table-app.js?v=13"></script>
   <script defer src="js1/miya-chat-time-events.js?v=4"></script>
   <script defer src="js1/miya-chat-statusbar.js?v=10"></script>
-  <script defer src="js1/miya-chat-farm.js?v=7"></script>
-  <script defer src="js1/miya-chat-engine.js?v=116"></script>
+  <script defer src="js1/miya-chat-farm.js?v=8"></script>
+  <script defer src="js1/miya-chat-engine.js?v=117"></script>
   <script defer src="js1/miya-chat-group.js?v=13"></script>
   <script defer src="js1/miya-chat-group-redpacket.js?v=10"></script>
   <script defer src="js1/miya-chat-single-redpacket.js?v=9"></script>
@@ -3658,7 +3662,7 @@
   <script defer src="js1/miya-chat-order-ui.js?v=5"></script>
   <script defer src="js1/miya-chat-love-poem.js?v=2"></script>
   <script defer src="js1/miya-chat-backups.js?v=3"></script>
-  <script defer src="js1/miya-chat-room.js?v=117"></script>
+  <script defer src="js1/miya-chat-room.js?v=118"></script>
   <script defer src="js1/miya-chat-settings-panel.js?v=21"></script>
   <script defer src="js1/miya-chat-ui-theme.js?v=6"></script>
   <script defer src="js1/miya-chat-app.js?v=54"></script>

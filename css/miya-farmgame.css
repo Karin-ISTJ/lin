@@ -648,3 +648,42 @@
   .fg-plot.is-busy { animation: none; }
   .fg-fx--gain, .fg-toast { animation-duration: 0.8s; }
 }
+
+/* ── v2 现实时钟制补充 ─────────────────────────────────── */
+
+/* 地块小标签：倒计时 / 缺水 / 枯萎 / 快收 */
+.fg-plot__timer {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  color: #fff;
+  background: rgba(90, 62, 40, 0.55);
+  border-radius: 8px;
+  padding: 1px 3px;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fg-plot.is-mature .fg-plot__timer {
+  background: rgba(232, 116, 34, 0.82);
+  font-weight: 600;
+}
+
+/* 枯萎地块：灰败色调 */
+.fg-plot.is-withered {
+  filter: saturate(0.35) brightness(0.92);
+}
+.fg-plot.is-withered .fg-plot__timer {
+  background: rgba(90, 90, 90, 0.72);
+}
+
+/* 对手田区块 */
+.fg-field--rival { margin-top: 16px; padding-top: 12px; border-top: 1.5px dashed rgba(176, 146, 119, 0.35); }
+.fg-field--rival[hidden] { display: none; }
+.fg-rival-hot { color: #e87422 !important; font-weight: 700; }
+.fg-plot.is-rival-empty .fg-plot__plus { color: rgba(255, 255, 255, 0.5); }

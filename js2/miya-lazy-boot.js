@@ -59,12 +59,12 @@
         'js2/miya-fun-app.js?v=3'
       ]
     },
-    /* 星露农场：回合制小游戏（与聊天双人农场 miya-chat-farm.js 互不相干） */
+    /* 星露农场：现实时钟制（聊天页 🌱 速览也会按需加载本组） */
     farmUiGame: {
-      css: ['css/miya-farmgame.css?v=13'],
+      css: ['css/miya-farmgame.css?v=14'],
       js: [
-        'js2/miya-farmgame-store.js?v=5',
-        'js2/miya-farmgame-app.js?v=13'
+        'js2/miya-farmgame-store.js?v=6',
+        'js2/miya-farmgame-app.js?v=14'
       ]
     }
   };

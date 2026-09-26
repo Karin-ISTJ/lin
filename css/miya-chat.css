@@ -6543,3 +6543,65 @@ html.is-ios .qq-room__input {
 .qq-farm__wh-price{font-size:11px;opacity:.6}
 .qq-farm__wh-foot{margin-top:8px}
 
+
+/* ── 🌱 星露速览（原双人小农场面板壳，内容改为纯状态展示） ── */
+
+/* 小太阳角标：顶栏 🌱 右上角，有熟地才亮（金黄渐变 + 轻呼吸） */
+.qq-room__farm-btn{position:relative}
+.qq-room__farm-sun{
+  position:absolute;top:1px;right:0;width:11px;height:11px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #ffe082 0%, #ffc107 55%, #ff9800 100%);
+  box-shadow:0 0 6px rgba(255,193,7,.85), 0 0 1px rgba(255,152,0,.9);
+  opacity:0;transform:scale(.3);transition:opacity .35s ease, transform .35s ease;
+  pointer-events:none;
+}
+.qq-room__farm-sun.is-on{
+  opacity:1;transform:scale(1);
+  animation:farm-sun-breathe 2.6s ease-in-out infinite;
+}
+@keyframes farm-sun-breathe{
+  0%,100%{box-shadow:0 0 6px rgba(255,193,7,.85), 0 0 1px rgba(255,152,0,.9);transform:scale(1)}
+  50%{box-shadow:0 0 11px rgba(255,193,7,1), 0 0 3px rgba(255,152,0,1);transform:scale(1.18)}
+}
+@media (prefers-reduced-motion: reduce){
+  .qq-room__farm-sun.is-on{animation:none}
+}
+
+/* 速览：头部整块热区（进入 →） */
+.qq-farm__head--go{
+  appearance:none;border:0;background:transparent;width:100%;text-align:left;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:8px 6px;margin:-4px -6px 6px;border-radius:12px;cursor:pointer;
+}
+.qq-farm__head--go:active{background:rgba(0,0,0,.04)}
+.qq-farm__go{
+  font-size:13px;font-weight:700;color:#2e7d32;flex-shrink:0;
+  background:rgba(46,125,50,.1);border:1px solid rgba(46,125,50,.3);
+  border-radius:999px;padding:4px 12px;
+}
+
+/* 速览：状态格（异常标亮） */
+.qq-farm__stat-grid{display:flex;gap:8px;margin-bottom:10px}
+.qq-farm__stat{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;
+  background:rgba(255,255,255,.88);border:1px solid rgba(80,120,60,.14);
+  border-radius:12px;padding:8px 2px;
+}
+.qq-farm__stat b{font-size:18px;line-height:1.1;color:#33691e}
+.qq-farm__stat small{font-size:10px;opacity:.6;white-space:nowrap}
+.qq-farm__stat.is-warn{border-color:rgba(232,116,34,.45);background:rgba(255,243,224,.95)}
+.qq-farm__stat.is-warn b{color:#e87422}
+.qq-farm__stat.is-warn small{opacity:.85;color:#e87422}
+
+/* 速览：信息行 */
+.qq-farm__meta{font-size:12px;opacity:.8;line-height:1.7}
+.qq-farm__meta b{font-weight:700}
+
+/* 速览：动态时间戳 */
+.qq-farm__log-time{font-style:normal;opacity:.5;font-size:10px;margin-left:4px}
+
+/* 速览：底部进入按钮 */
+.qq-farm__enter{
+  display:block;width:100%;margin-top:14px;padding:11px 0;border-radius:14px;
+  font-size:14px;text-align:center;cursor:pointer;
+}

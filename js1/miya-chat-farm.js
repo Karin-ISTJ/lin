@@ -1,988 +1,293 @@
-/* miya-chat-farm.js — 双人小农场
- * 自选播种 · 现实时钟生长 · 浇水 · 收获入仓 · 售卖进钱包
- * 四叶草基础6%，每失手+0.5%（封顶12%）；小动物基础12%，每失手+1%（封顶20%）
- * 概率按玩家/角色各自累计；四叶草不可直接播种
- * AI：<miyafarm> 标签 + 自然语言正则
+/* miya-chat-farm.js — 聊天页 🌱 · 星露速览
+ *
+ * 原「双人小农场」已整体并入星露农场（miya-farmgame-store/app，现实时钟制）。
+ * 本模块改造为「星露速览 + 跳转 + 通知」四件事：
+ *   1. 🌱 速览面板（保留原面板视觉）：熟 X 块 / 缺水 X 块 / 枯 X 块 / 可偷 X 块
+ *      + 今日日期·季节 + 体力，纯状态展示、异常标亮、无就地操作；
+ *   2. 头部「进入 →」+ 整头热区，一步跳进农场（来源=当前聊天，退出自动回跳）；
+ *   3. 小太阳角标：顶栏 🌱 右上角，有熟地才亮（金黄渐变 + 轻呼吸）；
+ *   4. 角色偷菜事件 → 聊天里收到一条系统消息（旧 <miyafarm> 标签解析与
+ *      提示词注入已摘除，角色农场行为只走事件通知，杜绝幽灵指令）。
+ *   5. 旧小农场仓库存货按售价折算进星露金币 + 告别信进农场信箱（一次性）。
  */
 (function (global) {
   'use strict';
 
-  var TAG = /<miyafarm>([\s\S]*?)<\/miyafarm\s*>/gi;
-  var MAX_PLOTS = 8;
-  var MAX_LOG = 40;
-  var STAGE_MS = 2 * 3600000;       // 每阶段约 2 小时
-  // 概率递增（连续未中时缓慢上升，出货后清零）。注意这不是"保底必出"，
-  // 只是概率逐次提高，所以文案统一表述为「每失手一次 +N%」。
-  var FOUR_LEAF_BASE = 0.06;        // 四叶草基础 6%
-  var FOUR_LEAF_STEP = 0.005;       // 每失手 +0.5%
-  var FOUR_LEAF_CAP = 0.12;         // 封顶 12%
-  var ANIMAL_BASE = 0.12;           // 小动物基础 12%
-  var ANIMAL_STEP = 0.01;           // 每失手 +1%
-  var ANIMAL_CAP = 0.20;            // 封顶 20%
+  var MAX_LOG = 3;
+  var badgeTimer = 0;
 
-  // 小动物：不可种植，收获时概率出现；售价更高且各不相同
-  var ANIMALS = {
-    bear:     { id: 'bear',     name: '小熊', icon: '🐻', sellPrice: 120, kind: 'animal' },
-    koala:    { id: 'koala',    name: '考拉', icon: '🐨', sellPrice: 110, kind: 'animal' },
-    rabbit:   { id: 'rabbit',   name: '兔子', icon: '🐰', sellPrice: 45,  kind: 'animal' },
-    fox:      { id: 'fox',      name: '狐狸', icon: '🦊', sellPrice: 95,  kind: 'animal' },
-    sheep:    { id: 'sheep',    name: '小羊', icon: '🐑', sellPrice: 70,  kind: 'animal' },
-    squirrel: { id: 'squirrel', name: '松鼠', icon: '🐿️', sellPrice: 55,  kind: 'animal' },
-    beaver:   { id: 'beaver',   name: '海狸', icon: '🦫', sellPrice: 80,  kind: 'animal' },
-    goose:    { id: 'goose',    name: '鹅',   icon: '🪿', sellPrice: 60,  kind: 'animal' },
-    parrot:   { id: 'parrot',   name: '鹦鹉', icon: '🦜', sellPrice: 100, kind: 'animal' },
-    eagle:    { id: 'eagle',    name: '鹰',   icon: '🦅', sellPrice: 150, kind: 'animal' }
-  };
-  var ANIMAL_IDS = Object.keys(ANIMALS);
-
-  // 可播种作物：icon 为成熟外观；stages 含从种子到成熟
-  // sellPrice：仓库售价（元）
-  // seed: false 表示不可直接购买/播种（仅四叶草）
-  var CROPS = {
-    // 花草
-    hyacinth: { id: 'hyacinth', name: '风信子', stages: ['🌱', '🌿', '🪻'], matureIndex: 2, sellPrice: 12, seed: true },
-    sunflower: { id: 'sunflower', name: '向日葵', stages: ['🌱', '🌿', '🌻'], matureIndex: 2, sellPrice: 10, seed: true },
-    blossom: { id: 'blossom', name: '小黄花', stages: ['🌱', '🌿', '🌼'], matureIndex: 2, sellPrice: 6, seed: true },
-    clover: { id: 'clover', name: '三叶草', stages: ['🌱', '🌿', '☘️'], matureIndex: 2, sellPrice: 8, seed: true },
-    fourleaf: { id: 'fourleaf', name: '四叶草', stages: ['🌱', '🌿', '🍀'], matureIndex: 2, sellPrice: 88, seed: false },
-
-    // 浆果水果
-    strawberry: { id: 'strawberry', name: '草莓', stages: ['🌱', '🌿', '🍓'], matureIndex: 2, sellPrice: 9, seed: true },
-    cherry: { id: 'cherry', name: '樱桃', stages: ['🌱', '🌿', '🍒'], matureIndex: 2, sellPrice: 11, seed: true },
-    apple: { id: 'apple', name: '苹果', stages: ['🌱', '🌿', '🍎'], matureIndex: 2, sellPrice: 8, seed: true },
-    greenapple: { id: 'greenapple', name: '青苹果', stages: ['🌱', '🌿', '🍏'], matureIndex: 2, sellPrice: 8, seed: true },
-    tomato: { id: 'tomato', name: '番茄', stages: ['🌱', '🌿', '🍅'], matureIndex: 2, sellPrice: 7, seed: true },
-    chili: { id: 'chili', name: '辣椒', stages: ['🌱', '🌿', '🌶️'], matureIndex: 2, sellPrice: 7, seed: true },
-    watermelon: { id: 'watermelon', name: '西瓜', stages: ['🌱', '🌿', '🍉'], matureIndex: 2, sellPrice: 14, seed: true },
-    peach: { id: 'peach', name: '桃子', stages: ['🌱', '🌿', '🍑'], matureIndex: 2, sellPrice: 10, seed: true },
-    orange: { id: 'orange', name: '橙子', stages: ['🌱', '🌿', '🍊'], matureIndex: 2, sellPrice: 8, seed: true },
-    mango: { id: 'mango', name: '芒果', stages: ['🌱', '🌿', '🥭'], matureIndex: 2, sellPrice: 12, seed: true },
-    pineapple: { id: 'pineapple', name: '菠萝', stages: ['🌱', '🌿', '🍍'], matureIndex: 2, sellPrice: 13, seed: true },
-    lemon: { id: 'lemon', name: '柠檬', stages: ['🌱', '🌿', '🍋'], matureIndex: 2, sellPrice: 7, seed: true },
-    melon: { id: 'melon', name: '甜瓜', stages: ['🌱', '🌿', '🍈'], matureIndex: 2, sellPrice: 11, seed: true },
-    pear: { id: 'pear', name: '梨', stages: ['🌱', '🌿', '🍐'], matureIndex: 2, sellPrice: 8, seed: true },
-    blueberry: { id: 'blueberry', name: '蓝莓', stages: ['🌱', '🌿', '🫐'], matureIndex: 2, sellPrice: 12, seed: true },
-    grape: { id: 'grape', name: '葡萄', stages: ['🌱', '🌿', '🍇'], matureIndex: 2, sellPrice: 10, seed: true },
-    kiwi: { id: 'kiwi', name: '猕猴桃', stages: ['🌱', '🌿', '🥝'], matureIndex: 2, sellPrice: 11, seed: true },
-    avocado: { id: 'avocado', name: '牛油果', stages: ['🌱', '🌿', '🥑'], matureIndex: 2, sellPrice: 15, seed: true },
-
-    // 蔬菜谷物
-    carrot: { id: 'carrot', name: '胡萝卜', stages: ['🌱', '🌿', '🥕'], matureIndex: 2, sellPrice: 6, seed: true },
-    corn: { id: 'corn', name: '玉米', stages: ['🌱', '🌿', '🌽'], matureIndex: 2, sellPrice: 7, seed: true },
-    pea: { id: 'pea', name: '豌豆', stages: ['🌱', '🌿', '🫛'], matureIndex: 2, sellPrice: 6, seed: true },
-    leafy: { id: 'leafy', name: '生菜', stages: ['🌱', '🌿', '🥬'], matureIndex: 2, sellPrice: 5, seed: true },
-    broccoli: { id: 'broccoli', name: '西兰花', stages: ['🌱', '🌿', '🥦'], matureIndex: 2, sellPrice: 8, seed: true },
-    chestnut: { id: 'chestnut', name: '板栗', stages: ['🌱', '🌿', '🌰'], matureIndex: 2, sellPrice: 9, seed: true },
-    bean: { id: 'bean', name: '豆子', stages: ['🌱', '🌿', '🫘'], matureIndex: 2, sellPrice: 5, seed: true },
-
-    // 兼容旧存档
-    wheat: { id: 'wheat', name: '小麦', stages: ['🌱', '🌿', '🌾'], matureIndex: 2, sellPrice: 5, seed: true },
-    rose: { id: 'rose', name: '玫瑰', stages: ['🌱', '🌿', '🌷', '💐'], matureIndex: 3, sellPrice: 16, seed: true },
-    green: { id: 'green', name: '绿植', stages: ['🌱', '🌿', '🍀'], matureIndex: 2, sellPrice: 4, seed: true }
+  /* ── 旧小农场售价表（迁移折算用；id 与旧 miya-chat-farm.js 存档一致） ── */
+  var LEGACY_PRICES = {
+    hyacinth: 12, sunflower: 10, blossom: 6, clover: 8, fourleaf: 88,
+    strawberry: 9, cherry: 11, apple: 8, greenapple: 8, tomato: 7, chili: 7,
+    watermelon: 14, peach: 10, orange: 8, mango: 12, pineapple: 13, lemon: 7,
+    melon: 11, pear: 8, blueberry: 12, grape: 10, kiwi: 11, avocado: 15,
+    carrot: 6, corn: 7, pea: 6, leafy: 5, broccoli: 8, chestnut: 9, bean: 5,
+    wheat: 5, rose: 16, green: 4,
+    bear: 120, koala: 110, rabbit: 45, fox: 95, sheep: 70,
+    squirrel: 55, beaver: 80, goose: 60, parrot: 100, eagle: 150
   };
 
-  var CROP_IDS = Object.keys(CROPS);
-  var SEED_IDS = CROP_IDS.filter(function (id) { return CROPS[id].seed !== false; });
-
-  function now() { return Date.now(); }
-  function num(v) { var n = Number(v); return Number.isFinite(n) ? n : 0; }
-  function clean(v, max) { return String(v == null ? '' : v).trim().slice(0, max || 200); }
-  function uid(prefix) {
-    return (prefix || 'fp') + '_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
-  }
   function esc(s) {
-    return String(s || '').replace(/[&<>"']/g, function (c) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function cropOf(id) { return CROPS[id] || ANIMALS[id] || null; }
-  function isAnimal(id) { return !!ANIMALS[id]; }
-  function matureIcon(crop) {
-    if (!crop) return '❓';
-    if (crop.kind === 'animal' && crop.icon) return crop.icon;
-    if (!crop.stages) return crop.icon || '❓';
-    return crop.stages[crop.matureIndex] || crop.stages[crop.stages.length - 1];
-  }
-  function formatDelta(ms) {
-    if (ms <= 0) return '即将';
-    var h = Math.floor(ms / 3600000);
-    var m = Math.floor((ms % 3600000) / 60000);
-    if (h > 0) return h + '小时' + (m ? m + '分' : '');
-    return Math.max(1, m) + '分钟';
-  }
-  function formatMoney(n) {
-    var v = Math.round((Number(n) || 0) * 100) / 100;
-    var s = v.toFixed(2);
-    if (s.slice(-3) === '.00') return s.slice(0, -3);
-    return s;
+
+  /* ── 懒加载：确保星露农场 store/app 就绪 ── */
+  var storePromise = null;
+  function ensureStore() {
+    if (global.MiyaFarmGameStore) return Promise.resolve(global.MiyaFarmGameStore);
+    if (typeof global.miyaLazyEnsureApp !== 'function') return Promise.resolve(null);
+    if (!storePromise) {
+      storePromise = Promise.resolve(global.miyaLazyEnsureApp('farmgame'))
+        .then(function () { return global.MiyaFarmGameStore || null; })
+        .catch(function () { return null; });
+    }
+    return storePromise;
   }
 
-  function getBg(store, chatId) {
-    var s = store && store.getChatSettings ? store.getChatSettings(chatId) || {} : {};
-    return s.backgroundMessage || {};
+  /* ── 对手名（当前聊天对象） ── */
+  function resolveRivalName(chatId) {
+    var st = global.miyaChatStore;
+    if (!st || !chatId) return '';
+    try {
+      var ch = st.findChat ? st.findChat(chatId) : null;
+      if (!ch) return '';
+      if (ch.type === 'group') return String(ch.title || '群聊').trim() || '群聊';
+      var contact = ch.contactId && st.findContact ? st.findContact(ch.contactId) : null;
+      return String((contact && (contact.remarkName || contact.name)) || ch.title || 'TA').trim() || 'TA';
+    } catch (e) {
+      return 'TA';
+    }
   }
 
-  function emptyFarm() {
-    return { playerPlots: [], rolePlots: [], warehouse: {}, log: [], missFour: 0, missAnimal: 0, updatedAt: now() };
-  }
-
-  function load(store, chatId) {
-    var raw = getBg(store, chatId).farm;
-    if (!raw || typeof raw !== 'object') return emptyFarm();
-    var wh = raw.warehouse && typeof raw.warehouse === 'object' ? raw.warehouse : {};
-    var warehouse = {};
-    Object.keys(wh).forEach(function (k) {
-      var n = Math.floor(num(wh[k]));
-      if (n > 0 && (CROPS[k] || ANIMALS[k])) warehouse[k] = n;
+  /* ── 跳进星露农场（来源 = 聊天，退出自动回跳本聊天） ── */
+  function enterFarm(chatId, toast) {
+    ensureStore().then(function (STORE) {
+      var name = resolveRivalName(chatId);
+      if (STORE && chatId && typeof STORE.setRival === 'function') {
+        STORE.setRival(chatId, name);
+      }
+      var fg = global.MiyaFarmGame;
+      if (fg && typeof fg.open === 'function') {
+        fg.open({ source: 'chat', chatId: String(chatId || ''), chatName: name });
+      } else if (toast) {
+        toast('农场还没加载好，再点一次试试');
+      }
     });
-    return {
-      playerPlots: Array.isArray(raw.playerPlots) ? raw.playerPlots.map(normPlot).filter(Boolean) : [],
-      rolePlots: Array.isArray(raw.rolePlots) ? raw.rolePlots.map(normPlot).filter(Boolean) : [],
-      warehouse: warehouse,
-      log: Array.isArray(raw.log) ? raw.log.slice(-MAX_LOG) : [],
-      missFour: Math.max(0, Math.floor(num(raw.missFour))),
-      missAnimal: Math.max(0, Math.floor(num(raw.missAnimal))),
-      /* 角色侧的概率累计必须一起带出，否则每次 load 都会把它抹成 0 */
-      missFourRole: Math.max(0, Math.floor(num(raw.missFourRole))),
-      missAnimalRole: Math.max(0, Math.floor(num(raw.missAnimalRole))),
-      updatedAt: num(raw.updatedAt) || now()
-    };
   }
 
-  function save(store, chatId, farm) {
-    if (!store || !store.saveChatSettings) return Promise.resolve();
-    farm.updatedAt = now();
-    return store.saveChatSettings(chatId, { backgroundMessage: { farm: farm } });
+  /* ── 角色偷菜事件 → 聊天系统消息 ── */
+  function handleFarmEvents(evs) {
+    (evs || []).forEach(function (ev) {
+      if (ev && ev.type === 'rivalSteal' && ev.chatId) sendStealNotice(ev);
+    });
   }
 
-  function normPlot(p) {
-    if (!p || typeof p !== 'object') return null;
-    var crop = cropOf(p.cropId);
-    if (!crop) return null;
-    return {
-      id: clean(p.id, 40) || uid('fp'),
-      cropId: crop.id,
-      stage: Math.max(0, Math.min(num(p.stage), crop.matureIndex)),
-      plantedAt: num(p.plantedAt) || now(),
-      wateredAt: num(p.wateredAt) || num(p.plantedAt) || now(),
-      lastTickAt: num(p.lastTickAt) || num(p.plantedAt) || now(),
-      stolen: p.stolen === true,
-      stolenAt: num(p.stolenAt) || 0
-    };
+  function sendStealNotice(ev) {
+    var st = global.miyaChatStore;
+    if (!st || typeof st.addMessage !== 'function' || !ev.chatId) return;
+    var text = '🕵️ ' + (ev.name || '对方') + '偷走了你的' + (ev.cropIcon || '') + (ev.cropName || '作物') +
+      '！打开 🌱 星露农场，去TA的田里反击 →';
+    Promise.resolve(st.addMessage(ev.chatId, { role: 'system', type: 'text', content: text }))
+      .then(function () {
+        var room = global.miyaChatRoom;
+        if (room && typeof room.getOpenChatId === 'function' &&
+            String(room.getOpenChatId()) === String(ev.chatId) &&
+            typeof room.refresh === 'function') {
+          room.refresh({ animate: false, preserveScrollTop: true, preserveLoadedCount: true, toBottom: true });
+        }
+      })
+      .catch(function () {});
   }
 
-  function pushLog(farm, text, kind) {
-    farm.log = (farm.log || []).concat([{ at: now(), text: clean(text, 140), kind: clean(kind, 20) || 'info' }]);
-    if (farm.log.length > MAX_LOG) farm.log = farm.log.slice(-MAX_LOG);
-  }
-
-  function addToWarehouse(farm, cropId, qty) {
-    qty = Math.floor(num(qty)) || 1;
-    if ((!CROPS[cropId] && !ANIMALS[cropId]) || qty <= 0) return;
-    farm.warehouse = farm.warehouse || {};
-    farm.warehouse[cropId] = (farm.warehouse[cropId] || 0) + qty;
-  }
-
-  /* 软保底计数按「谁在操作」分开累计：玩家和角色的运气互不影响。
-     旧存档只有顶层 missFour/missAnimal，读取时作为玩家的初始值做兼容。 */
-  function missKey(owner, kind) {
-    return owner === 'role' ? (kind === 'four' ? 'missFourRole' : 'missAnimalRole')
-      : (kind === 'four' ? 'missFour' : 'missAnimal');
-  }
-
-  function readMiss(farm, owner, kind) {
-    farm = farm || {};
-    var k = missKey(owner, kind);
-    var v = farm[k];
-    if (v == null && owner !== 'role') {
-      /* 兼容旧字段：老存档的顶层计数视为玩家的历史累计 */
-      v = kind === 'four' ? farm.missFour : farm.missAnimal;
-    }
-    return Math.max(0, Math.floor(num(v)));
-  }
-
-  function writeMiss(farm, owner, kind, v) {
-    farm[missKey(owner, kind)] = Math.max(0, Math.floor(num(v)));
-    if (owner !== 'role') {
-      /* 同步回旧字段，保证备份/旧版本读取时数值仍然连贯 */
-      if (kind === 'four') farm.missFour = farm[missKey(owner, kind)];
-      else farm.missAnimal = farm[missKey(owner, kind)];
+  /* ── 小太阳角标：有熟地才亮 ── */
+  function refreshSunBadge() {
+    var sun = document.getElementById('qq-room-farm-sun');
+    if (!sun) return;
+    var STORE = global.MiyaFarmGameStore;
+    if (!STORE) { sun.classList.remove('is-on'); ensureStore(); return; }
+    try {
+      STORE.sync();
+      handleFarmEvents(STORE.takeEvents());
+      var s = STORE.getState();
+      var has = s.plots.some(function (p) {
+        return p && STORE.plotMature(p) && !STORE.plotWithered(p);
+      });
+      sun.classList.toggle('is-on', has);
+    } catch (e) {
+      sun.classList.remove('is-on');
     }
   }
 
-  function fourLeafChance(farm, owner) {
-    var miss = readMiss(farm, owner, 'four');
-    return Math.min(FOUR_LEAF_CAP, FOUR_LEAF_BASE + miss * FOUR_LEAF_STEP);
-  }
-
-  function animalChance(farm, owner) {
-    var miss = readMiss(farm, owner, 'animal');
-    return Math.min(ANIMAL_CAP, ANIMAL_BASE + miss * ANIMAL_STEP);
-  }
-
-  /** 三叶草收获：是否变为四叶草（软保底，按 owner 独立累计） */
-  function rollFourLeaf(farm, owner) {
-    var p = fourLeafChance(farm, owner);
-    if (Math.random() < p) {
-      writeMiss(farm, owner, 'four', 0);
-      return true;
+  /* ── 旧小农场仓库存货折算迁移（一次性；旧存档保留不清） ── */
+  var migrateTried = 0;
+  var migrateDone = false;
+  function migrateLegacyFarms() {
+    if (migrateDone) return;
+    var st = global.miyaChatStore;
+    var STORE = global.MiyaFarmGameStore;
+    if (!st || typeof st.getChats !== 'function' || typeof st.getChatSettings !== 'function' || !STORE) {
+      /* 聊天仓库尚未水合好：稍后重试（最多 ~10 次） */
+      if (migrateTried++ < 10) setTimeout(migrateLegacyFarms, 5000);
+      return;
     }
-    writeMiss(farm, owner, 'four', readMiss(farm, owner, 'four') + 1);
+    migrateDone = true;
+    try {
+      var s = STORE.getState();
+      if (s.legacyMigrated) return;
+      var chats = [];
+      try { chats = st.getChats() || []; } catch (e) { chats = []; }
+      var total = 0, missFour = 0, missAnimal = 0;
+      chats.forEach(function (ch) {
+        if (!ch || !ch.id) return;
+        var settings = null;
+        try { settings = st.getChatSettings(ch.id) || null; } catch (e) { return; }
+        var farm = settings && settings.backgroundMessage && settings.backgroundMessage.farm;
+        if (!farm || typeof farm !== 'object') return;
+        var wh = farm.warehouse || {};
+        Object.keys(wh).forEach(function (k) {
+          var q = Math.floor(Number(wh[k]) || 0);
+          if (q > 0 && LEGACY_PRICES[k]) total += LEGACY_PRICES[k] * q;
+        });
+        missFour = Math.max(missFour, Math.floor(Number(farm.missFour) || 0), Math.floor(Number(farm.missFourRole) || 0));
+        missAnimal = Math.max(missAnimal, Math.floor(Number(farm.missAnimal) || 0), Math.floor(Number(farm.missAnimalRole) || 0));
+      });
+      STORE.applyLegacyMigration(total, missFour, missAnimal);
+    } catch (e) {
+      migrateDone = false;
+    }
+  }
+
+  /* ── 速览面板 ── */
+  function shell(inner) {
+    return '<div class="qq-sheet qq-sheet--farm">' +
+      '<div class="qq-sheet__panel qq-sheet__panel--farm">' + inner + '</div></div>';
+  }
+
+  function statHtml(num, label, warn) {
+    return '<span class="qq-farm__stat' + (warn ? ' is-warn' : '') + '">' +
+      '<b>' + num + '</b><small>' + label + '</small></span>';
+  }
+
+  function renderPanel(STORE, chatId) {
+    var s = STORE.getState();
+    var cal = STORE.calendarNow();
+
+    var mature = 0, dry = 0, withered = 0, rivalMature = 0;
+    s.plots.forEach(function (p) {
+      if (!p) return;
+      if (STORE.plotWithered(p)) { withered++; return; }
+      if (STORE.plotMature(p)) { mature++; return; }
+      if (!p.watered) dry++;
+    });
+    s.rivalPlots.forEach(function (p) {
+      if (p && STORE.plotMature(p) && !STORE.plotWithered(p)) rivalMature++;
+    });
+
+    var currentName = resolveRivalName(chatId);
+    var rivalLine;
+    if (s.rival.chatId && String(s.rival.chatId) === String(chatId)) {
+      rivalLine = '🕵️ 对手：' + esc(s.rival.name || '对方') +
+        (rivalMature > 0 ? ' · 熟 ' + rivalMature + ' 块可偷！' : ' · TA的田还没熟');
+    } else if (s.rival.chatId) {
+      rivalLine = '🕵️ 当前对手：' + esc(s.rival.name || '对方') +
+        ' · 进入后切换为「' + esc(currentName || '当前聊天对象') + '」';
+    } else {
+      rivalLine = '🕵️ 进入后绑定对手：' + esc(currentName || '当前聊天对象');
+    }
+
+    var mailRows = (s.mail || []).slice(0, MAX_LOG).map(function (m) {
+      var mc = STORE.calendarNow(m.ts || Date.now());
+      return '<div class="qq-farm__log-item">' + esc(m.icon + ' ' + m.text) +
+        ' <i class="qq-farm__log-time">' + mc.dateText + '</i></div>';
+    }).join('') || '<div class="qq-farm__empty">暂无动态 · 天气、乌鸦和对手的偷袭都会写信来</div>';
+
+    return '<div class="qq-farm" id="qq-farm-panel">' +
+      '<button type="button" class="qq-farm__head qq-farm__head--go" data-farmgo aria-label="进入星露农场">' +
+        '<span class="qq-farm__title">🌱 星露农场</span>' +
+        '<span class="qq-farm__go">进入 →</span>' +
+      '</button>' +
+      '<div class="qq-farm__hint">现实一天 = 游戏一天 · 作物按现实时间生长（浇水才长）· 熟了会被偷，别忘回来收</div>' +
+      '<div class="qq-farm__section">' +
+        '<div class="qq-farm__stat-grid">' +
+          statHtml(mature, '熟 (块)', mature > 0) +
+          statHtml(dry, '缺水 (块)', dry > 0) +
+          statHtml(withered, '枯萎 (块)', withered > 0) +
+          statHtml(rivalMature, '可偷 (块)', rivalMature > 0) +
+        '</div>' +
+        '<div class="qq-farm__meta">📅 ' + cal.dateText + ' · ' + cal.weekday + ' · ' + cal.season.name + '天</div>' +
+        '<div class="qq-farm__meta">⚡ 体力 ' + s.energy + '/' + s.maxEnergy + '（每天 0 点回满） · 🪙 金币 ' + s.gold + '</div>' +
+        '<div class="qq-farm__meta">' + rivalLine + '</div>' +
+      '</div>' +
+      '<div class="qq-farm__section">' +
+        '<div class="qq-farm__section-title">农场动态</div>' +
+        '<div class="qq-farm__log">' + mailRows + '</div>' +
+      '</div>' +
+      '<button type="button" class="qq-farm__btn qq-farm__btn--main qq-farm__enter" data-farmgo>进入星露农场 →</button>' +
+      '</div>';
+  }
+
+  function renderPanelLoading() {
+    return '<div class="qq-farm" id="qq-farm-panel">' +
+      '<button type="button" class="qq-farm__head qq-farm__head--go" data-farmgo aria-label="进入星露农场">' +
+        '<span class="qq-farm__title">🌱 星露农场</span>' +
+        '<span class="qq-farm__go">进入 →</span>' +
+      '</button>' +
+      '<div class="qq-farm__hint">现实一天 = 游戏一天 · 速览加载中…</div>' +
+      '<div class="qq-farm__empty">正在唤醒星露农场…</div>' +
+      '</div>';
+  }
+
+  /* store, chatId 参数保留旧签名兼容（room 的调用点不变） */
+  function openPanel(store, chatId, openOverlay, toast) {
+    if (!openOverlay) return;
+    openOverlay(shell(renderPanelLoading()));
+    ensureStore().then(function (STORE) {
+      if (!STORE) {
+        openOverlay(shell(renderPanelLoading()));
+        return;
+      }
+      try {
+        STORE.sync();
+        handleFarmEvents(STORE.takeEvents());
+        migrateLegacyFarms();
+        refreshSunBadge();
+      } catch (e) {}
+      openOverlay(shell(renderPanel(STORE, chatId)));
+    });
+  }
+
+  /* 兼容旧接口：速览是纯状态展示，无就地操作 */
+  function handlePanelClick(store, chatId, el, toast, openOverlay) {
+    if (!el || !el.closest) return false;
+    if (el.closest('[data-farmgo]')) return false;   /* 跳转由聊天室统一处理 */
     return false;
   }
 
-  function maybeAttractAnimal(farm, sourceName, owner) {
-    var p = animalChance(farm, owner);
-    if (Math.random() >= p) {
-      writeMiss(farm, owner, 'animal', readMiss(farm, owner, 'animal') + 1);
-      return null;
-    }
-    writeMiss(farm, owner, 'animal', 0);
-    var id = ANIMAL_IDS[Math.floor(Math.random() * ANIMAL_IDS.length)];
-    var a = ANIMALS[id] || null;
-    if (!a) return null;
-    addToWarehouse(farm, a.id, 1);
-    pushLog(farm, '收获' + (sourceName || '作物') + '时，吸引来了' + a.icon + a.name + '！', 'animal');
-    return a;
+  /* 常驻轻量轮询：熟地亮太阳（面板/农场里的动作也会即时触发刷新） */
+  function startBadgeTimer() {
+    if (badgeTimer) return;
+    badgeTimer = setInterval(function () {
+      if (document.hidden) return;
+      refreshSunBadge();
+    }, 60000);
   }
 
-  /**
-   * 推进一块地的状态。
-   *
-   * 这里只做一件事：按现实时钟把生长阶段往前推。
-   *
-   * 历史上这里还有一套「发芽后断水 DRY_KILL_MS 就枯死」的机制，已经移除：
-   * 全部作物的成熟期都只有 4~6 小时，远短于枯萎阈值，那套判定在任何时间点
-   * 都不可能触发（是一段死代码），而规则上它又只会惩罚「睡了一觉/出差回来」
-   * 的玩家 —— 一个休闲农场不该因为玩家离线而没收收成。
-   *
-   * 因此现在的规则很简单：种下 → 到点长大 → 到点成熟 → 成熟后永久停在原地，
-   * 不枯萎、不腐烂、不会自己消失，等到被收获为止。
-   */
-  function tickPlot(plot, at) {
-    at = at || now();
-    if (!plot || plot.stolen) return plot;
-    var crop = cropOf(plot.cropId);
-    if (!crop) return plot;
-
-    if (plot.stage < crop.matureIndex) {
-      var elapsed = at - (plot.plantedAt || at);
-      var expected = Math.min(crop.matureIndex, Math.floor(elapsed / STAGE_MS));
-      if (expected > plot.stage) plot.stage = expected;
-    }
-
-    plot.lastTickAt = at;
-    return plot;
-  }
-
-  function tickFarm(farm, at) {
-    at = at || now();
-    farm.playerPlots = (farm.playerPlots || []).map(function (p) { return tickPlot(p, at); });
-    farm.rolePlots = (farm.rolePlots || []).map(function (p) { return tickPlot(p, at); });
-    return farm;
-  }
-
-  /* 已经被偷走的「洞」只作为即时反馈存在，不需要长期占着地块数组。
-     之前 stolen 地块永不清理，数组会一直膨胀（玩家看不到也删不掉）。 */
-  var STOLEN_KEEP_MS = 30 * 60000;   // 保留 30 分钟后自动清理
-
-  function pruneStolen(list, at) {
-    at = at || now();
-    return (list || []).filter(function (p) {
-      if (!p || !p.stolen) return true;
-      var since = at - num(p.stolenAt || p.lastTickAt || p.plantedAt || 0);
-      return since < STOLEN_KEEP_MS;
-    });
-  }
-
-  function reconcile(store, chatId, at) {
-    var t = at || now();
-    var farm = tickFarm(load(store, chatId), t);
-    farm.playerPlots = pruneStolen(farm.playerPlots, t);
-    farm.rolePlots = pruneStolen(farm.rolePlots, t);
-    /* 同步写内存即可；磁盘落盘由 save 内部调度 */
-    save(store, chatId, farm).catch(function () {});
-    return farm;
-  }
-
-  function plotIcon(plot) {
-    if (!plot) return '⬜';
-    if (plot.stolen) return '🕳️';
-    var crop = cropOf(plot.cropId);
-    if (!crop) return '❓';
-    return crop.stages[Math.max(0, Math.min(plot.stage, crop.stages.length - 1))];
-  }
-
-  function plotLabel(plot) {
-    var crop = cropOf(plot.cropId);
-    if (!crop) return '空地';
-    if (plot.stolen) return crop.name + '（被偷）';
-    if (plot.stage >= crop.matureIndex) return crop.name + '（成熟）';
-    return crop.name + '（生长中）';
-  }
-
-  function nextStageIn(plot, at) {
-    at = at || now();
-    if (!plot || plot.stolen) return 0;
-    var crop = cropOf(plot.cropId);
-    if (!crop || plot.stage >= crop.matureIndex) return 0;
-    return Math.max(0, (plot.plantedAt || at) + (plot.stage + 1) * STAGE_MS - at);
-  }
-
-  function findPlot(list, plotId) {
-    for (var i = 0; i < (list || []).length; i++) if (list[i].id === plotId) return list[i];
-    return null;
-  }
-
-  function activePlotCount(list) {
-    return (list || []).filter(function (p) { return !p.stolen; }).length;
-  }
-
-  // —— 操作 ——
-  /*
-   * 所有会改农场的操作都遵循同一个模式：
-   *   「读最新 → 改 → 写内存」必须在同一次同步执行里完成，
-   *   只有磁盘落盘（IO）走队列串行。
-   *
-   * 关键点：store.saveChatSettings 内部是「同步改 metaCache + 异步落盘」。
-   * 因此这里必须**当场同步调用** saveChatSettings，下一次 load 才能立刻读到新值；
-   * 如果把 saveChatSettings 放进 Promise 队列里，虽然最终会存住，
-   * 但同步返回时读到的还是旧数据（表现为「种下去立刻查是 0 株」），
-   * 而且连点时会各自基于旧快照互相覆盖。
-   *
-   * 队列只用来保证「磁盘写入不并发」，不承担内存可见性。
-   */
-  function mutateFarm(store, chatId, mutator) {
-    var t = now();
-    var farm = tickFarm(load(store, chatId), t);
-    farm.playerPlots = pruneStolen(farm.playerPlots, t);
-    farm.rolePlots = pruneStolen(farm.rolePlots, t);
-
-    var r = mutator(farm) || {};
-    if (!r.ok) {
-      /* 即使失败也把 tick/prune 的结果落盘，保证生长状态不丢 */
-      save(store, chatId, farm).catch(function () {});
-      return { ok: false, error: r.error || '操作失败' };
-    }
-
-    /* 同步写入内存（返回的 Promise 只代表磁盘落盘，不影响内存可见性） */
-    var saved = save(store, chatId, farm);
-    if (!r.deferred) {
-      saved.catch(function () {});
-      return r;
-    }
-
-    /* deferred（售卖入账）：等落盘完成后再执行副作用，并把最终结果返回 */
-    return saved.then(function () { return r.deferred; }).catch(function (e) {
-      return { ok: false, error: (e && e.message) || '保存失败' };
-    });
-  }
-
-  /**
-   * mutateFarm 的「永远返回 Promise」包装。
-   *
-   * 为什么需要它：mutateFarm 为了兼顾同步调用方（plant/water/harvest 等
-   * 都要当场拿到结果去弹 toast 和重渲染），失败时返回的是裸对象、成功时才返回
-   * Promise —— 返回类型不固定。而 sell / sellAll 因为要等入账完成，调用方写的是
-   * `sell(...).then(...)`。一旦走到「仓库没有该作物」「钱包不可用」这类失败分支，
-   * mutateFarm 返回裸对象，`.then` 就是 undefined，直接 TypeError。
-   *
-   * 所以这里统一抹平：无论成败都包成 Promise，让异步调用方可以无条件 .then。
-   * 不要改 mutateFarm 本体去「一律返回 Promise」—— 那会打断上面几个同步调用方。
-   */
-  function mutateFarmAsync(store, chatId, mutator) {
-    try {
-      return Promise.resolve(mutateFarm(store, chatId, mutator));
-    } catch (e) {
-      return Promise.resolve({ ok: false, error: (e && e.message) || '操作失败' });
-    }
-  }
-
-  function plant(store, chatId, owner, cropId) {
-    var crop = cropOf(cropId);
-    if (!crop) return { ok: false, error: '未知作物' };
-    if (isAnimal(cropId) || crop.seed === false) return { ok: false, error: crop.name + '不能用种子种，只能碰运气获得' };
-    return mutateFarm(store, chatId, function (farm) {
-      var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
-      if (activePlotCount(farm[key]) >= MAX_PLOTS) {
-        return { ok: false, error: '地块已满（最多' + MAX_PLOTS + '块）' };
-      }
-      var plot = {
-        id: uid('fp'),
-        cropId: crop.id,
-        stage: 0,
-        plantedAt: now(),
-        wateredAt: now(),
-        lastTickAt: now(),
-        stolen: false
-      };
-      farm[key].push(plot);
-      pushLog(farm, (owner === 'role' ? '对方' : '你') + '种下了' + crop.name, 'plant');
-      return { ok: true, plot: plot, farm: farm };
-    });
-  }
-
-  function water(store, chatId, owner, plotId) {
-    return mutateFarm(store, chatId, function (farm) {
-      var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
-      var plot = findPlot(farm[key], plotId);
-      if (!plot) return { ok: false, error: '找不到这块地' };
-      if (plot.stolen) return { ok: false, error: '已经被偷走了' };
-      plot.wateredAt = now();
-      var cname = (cropOf(plot.cropId) || {}).name || '作物';
-      pushLog(farm, (owner === 'role' ? '你帮对方' : '你') + '浇了' + cname, 'water');
-      return { ok: true, plot: plot, farm: farm };
-    });
-  }
-
-  /** 收获：进仓库；三叶草有概率变四叶草 */
-  function harvest(store, chatId, owner, plotId, by) {
-    return mutateFarm(store, chatId, function (farm) {
-      var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
-      var plot = findPlot(farm[key], plotId);
-      if (!plot) return { ok: false, error: '找不到这块地' };
-      if (plot.stolen) return { ok: false, error: '已经被偷走了' };
-      var crop = cropOf(plot.cropId);
-      if (!crop || plot.stage < crop.matureIndex) return { ok: false, error: '还没成熟' };
-
-      var gotId = crop.id;
-      var gotName = crop.name;
-      var lucky = false;
-      /* 收获产物一律进玩家仓库（自己收 / 帮对方收都是），
-         所以概率按玩家的池子累计，不能用角色田的操作去消耗玩家运气。 */
-      if (crop.id === 'clover' && rollFourLeaf(farm, 'player')) {
-        gotId = 'fourleaf';
-        gotName = '四叶草';
-        lucky = true;
-      }
-
-      farm[key] = farm[key].filter(function (p) { return p.id !== plotId; });
-
-      // 自己收 / 帮对方收 → 进玩家仓库；并有概率吸引小动物
-      addToWarehouse(farm, gotId, 1);
-      var animal = maybeAttractAnimal(farm, gotName, 'player');
-
-      var who = by || (owner === 'role' ? '你帮对方' : '你');
-      if (lucky) {
-        pushLog(farm, who + '收获三叶草时发现了幸运的四叶草！', 'lucky');
-      } else {
-        pushLog(farm, who + '收获了' + gotName + '（已入仓）', 'harvest');
-      }
-      return { ok: true, cropId: gotId, name: gotName, lucky: lucky, animal: animal, farm: farm };
-    });
-  }
-
-  function steal(store, chatId, fromOwner, plotId, by) {
-    /* 只允许偷对方的地。fromOwner='player' 表示「偷玩家的地」——那是自己，
-       会凭空销毁作物且不入仓（历史上出现过「你偷走了你的三叶草」）。 */
-    if (fromOwner !== 'role') return { ok: false, error: '不能偷自己的地' };
-    return mutateFarm(store, chatId, function (farm) {
-      var key = 'rolePlots';
-      var plot = findPlot(farm[key], plotId);
-      if (!plot) return { ok: false, error: '找不到这块地' };
-      if (plot.stolen) return { ok: false, error: '这块地没得偷' };
-      var crop = cropOf(plot.cropId);
-      if (!crop || plot.stage < crop.matureIndex) return { ok: false, error: '还没成熟，偷不了' };
-
-      var gotId = crop.id;
-      var gotName = crop.name;
-      /* 偷东西的玩家承担概率累计 */
-      if (crop.id === 'clover' && rollFourLeaf(farm, 'player')) {
-        gotId = 'fourleaf';
-        gotName = '四叶草';
-      }
-
-      /* 标记被偷 + 入玩家仓库 + 可能吸引小动物 */
-      plot.stolen = true;
-      plot.stolenAt = now();
-      addToWarehouse(farm, gotId, 1);
-      var animal = maybeAttractAnimal(farm, gotName, 'player');
-
-      var thief = by || '你';
-      pushLog(farm, thief + '偷走了对方的' + gotName + '（已入仓）', 'steal');
-      return { ok: true, cropId: gotId, name: gotName, animal: animal, farm: farm };
-    });
-  }
-
-  /** 角色偷玩家的地：摘走整块地，不留僵尸地块，作物也不进玩家仓库 */
-  function roleStealPlayer(store, chatId, plotId, cropId, by) {
-    return mutateFarm(store, chatId, function (farm) {
-      var target = plotId
-        ? findPlot(farm.playerPlots, plotId)
-        : (cropId ? firstMatureByCrop(farm.playerPlots, cropId) : firstMature(farm.playerPlots));
-      if (!target) return { ok: false, error: '没有可偷的作物' };
-      if (target.stolen) return { ok: false, error: '这块地没得偷' };
-      var c = cropOf(target.cropId);
-      if (!c || target.stage < c.matureIndex) return { ok: false, error: '还没成熟，偷不了' };
-
-      farm.playerPlots = farm.playerPlots.filter(function (p) { return p.id !== target.id; });
-      pushLog(farm, (by || '对方') + '偷走了你的' + c.name, 'steal');
-      return { ok: true, stolen: true, cropId: c.id, name: c.name, farm: farm };
-    });
-  }
-
-  /** 清理地块：只处理被偷走的地（枯萎机制已移除，被偷的地需要手动翻新） */
-  function clearPlot(store, chatId, owner, plotId) {
-    return mutateFarm(store, chatId, function (farm) {
-      var key = owner === 'role' ? 'rolePlots' : 'playerPlots';
-      var plot = findPlot(farm[key], plotId);
-      if (!plot) return { ok: false, error: '找不到' };
-      if (!plot.stolen) return { ok: false, error: '这块地不用清理' };
-      farm[key] = farm[key].filter(function (p) { return p.id !== plotId; });
-      pushLog(farm, '翻新了被偷空的地块', 'clear');
-      return { ok: true, farm: farm };
-    });
-  }
-
-  function resolveProfileId(store, chatId) {
-    try {
-      if (store.findChat) {
-        var ch = store.findChat(chatId);
-        if (ch && ch.profileId) return String(ch.profileId);
-      }
-      if (store.getActiveProfile) {
-        var p = store.getActiveProfile();
-        if (p && p.id) return String(p.id);
-      }
-    } catch (e) {}
-    return '';
-  }
-
-  /** 售卖仓库作物 → 面具钱包 */
-  function sell(store, chatId, cropId, qty) {
-    var crop = cropOf(cropId);
-    if (!crop) return Promise.resolve({ ok: false, error: '未知作物' });
-    return mutateFarmAsync(store, chatId, function (farm) {
-      var want = Math.floor(num(qty));
-      if (!(want > 0)) want = farm.warehouse[cropId] || 0;
-      var have = farm.warehouse[cropId] || 0;
-      if (have <= 0) return { ok: false, error: '仓库里没有' + crop.name };
-      if (want > have) want = have;
-
-      var unit = num(crop.sellPrice) || 1;
-      var total = Math.round(unit * want * 100) / 100;
-      var profileId = resolveProfileId(store, chatId);
-      if (!profileId || typeof store.adjustWalletBalance !== 'function') {
-        return { ok: false, error: '钱包不可用' };
-      }
-
-      farm.warehouse[cropId] = have - want;
-      if (farm.warehouse[cropId] <= 0) delete farm.warehouse[cropId];
-      pushLog(farm, '卖出' + crop.name + '×' + want + '，+' + formatMoney(total) + ' 已入钱包', 'sell');
-      /* 用 deferred 让「扣库存 + 入账」在同一个队列任务里完成；
-         mutateFarm 会等这个 Promise 结束再继续下一个操作。 */
-      return {
-        ok: true,
-        deferred: store.adjustWalletBalance(profileId, total).then(function (bal) {
-          if (global.MiyaChatWallet && global.miyaChatApp && typeof global.miyaChatApp.refreshProfileUI === 'function') {
-            try { global.miyaChatApp.refreshProfileUI(); } catch (e) {}
-          }
-          return { ok: true, amount: total, balance: bal, name: crop.name, qty: want, farm: farm };
-        }).catch(function (err) {
-          /* 入账失败 → 把库存加回去，避免东西没了钱也没到 */
-          farm.warehouse[cropId] = (farm.warehouse[cropId] || 0) + want;
-          return { ok: false, error: (err && err.message) || '入账失败' };
-        }),
-        farm: farm
-      };
-    });
-  }
-
-  function sellAll(store, chatId) {
-    return mutateFarmAsync(store, chatId, function (farm) {
-      var ids = Object.keys(farm.warehouse || {}).filter(function (k) { return farm.warehouse[k] > 0; });
-      if (!ids.length) return { ok: false, error: '仓库是空的' };
-
-      var total = 0;
-      var lines = [];
-      ids.forEach(function (id) {
-        var c = cropOf(id);
-        var q = farm.warehouse[id] || 0;
-        if (!c || q <= 0) return;
-        total += Math.round((num(c.sellPrice) || 1) * q * 100) / 100;
-        lines.push(c.name + '×' + q);
-      });
-      total = Math.round(total * 100) / 100;
-      var profileId = resolveProfileId(store, chatId);
-      if (!profileId || typeof store.adjustWalletBalance !== 'function') {
-        return { ok: false, error: '钱包不可用' };
-      }
-
-      var snapshot = farm.warehouse;
-      farm.warehouse = {};
-      pushLog(farm, '清空仓库售出（' + lines.join('、') + '），+' + formatMoney(total) + ' 已入钱包', 'sell');
-      return {
-        ok: true,
-        deferred: store.adjustWalletBalance(profileId, total).then(function (bal) {
-          if (global.miyaChatApp && typeof global.miyaChatApp.refreshProfileUI === 'function') {
-            try { global.miyaChatApp.refreshProfileUI(); } catch (e) {}
-          }
-          return { ok: true, amount: total, balance: bal, farm: farm };
-        }).catch(function (err) {
-          /* 入账失败 → 仓库原样还回去，避免东西没了钱也没到 */
-          farm.warehouse = snapshot;
-          return { ok: false, error: (err && err.message) || '入账失败' };
-        })
-      };
-    });
-  }
-
-  // —— AI 正则 / 标签 ——
-  var NAME_TO_ID = {};
-  CROP_IDS.forEach(function (id) { NAME_TO_ID[CROPS[id].name] = id; });
-  var CROP_NAME_RE = Object.keys(NAME_TO_ID).sort(function (a, b) { return b.length - a.length; }).join('|');
-  var RE_STEAL_PLAYER = new RegExp('(?:偷(?:走|了)?|摘走了?|薅走了?)(?:了)?(?:你的|你种的|你家的)?(' + CROP_NAME_RE + ')', 'g');
-  /* 把字句：「我把你的番茄偷走了」—— 动词挪到了作物后面，上面的正则认不出 */
-  var RE_STEAL_PLAYER_BA = new RegExp('(?:把|将)(?:你的|你种的|你家的)?(' + CROP_NAME_RE + ')(?:给)?(?:偷走|偷了|摘走|摘了|薅走|薅了)', 'g');
-  var RE_HELP_HARVEST = new RegExp('(?:帮你(?:收|收获|摘)|给你收了|帮你把)(?:了)?(?:你的)?(' + CROP_NAME_RE + ')', 'g');
-  var RE_ROLE_PLANT = new RegExp('(?:我(?:也)?种了|我在农场种了|我播了)(?:一[颗株垄批])?(' + CROP_NAME_RE + ')', 'g');
-
-  function matchCropName(name) { return NAME_TO_ID[name] || null; }
-
-  /*
-   * 否定/意愿守卫：这些词紧挨在动词前面时，句子是「我没有偷」「别偷」「想偷…算了」
-   * 这类"只是说说"，不该真正执行。正则本身不看语义，只认句式，
-   * 所以在命中后再检查匹配起点前的几个字符。
-   * （历史包袱：这条路以前因为参数写反永远失败，否定句误触发根本暴露不出来；
-   *  Bug 4 修复后正则真正生效，这个坑才显形。）
-   */
-  var NEG_BEFORE = /(?:没有|不曾|并未|不会|没|不|别|莫|未|休|想)$/;
-  function isJustSaying(src, idx) {
-    var head = String(src).slice(Math.max(0, idx - 4), idx);
-    return NEG_BEFORE.test(head);
-  }
-
-  function firstMature(list) {
-    for (var i = 0; i < (list || []).length; i++) {
-      var p = list[i];
-      var c = cropOf(p.cropId);
-      if (c && !p.stolen && p.stage >= c.matureIndex) return p;
-    }
-    return null;
-  }
-  function firstMatureByCrop(list, cropId) {
-    for (var i = 0; i < (list || []).length; i++) {
-      var p = list[i];
-      var c = cropOf(p.cropId);
-      if (c && p.cropId === cropId && !p.stolen && p.stage >= c.matureIndex) return p;
-    }
-    return null;
-  }
-
-  function applyNaturalLanguage(store, chatId, text) {
-    var src = String(text || '');
-    if (!src || !CROP_NAME_RE) return { applied: 0 };
-    var applied = 0;
-    var m;
-    /*
-     * 这里是「角色偷玩家的菜」，必须走 roleStealPlayer。
-     * 原先调的是 steal(store, chatId, 'player', ...) —— 而 steal 的第一行就是
-     * `if (fromOwner !== 'role') return {ok:false, error:'不能偷自己的地'}`
-     * （那条守卫是防玩家偷自己的地）。参数写反导致这条路 100% 失败，
-     * 角色的「我偷了你的番茄」永远不会生效。标签路径没这个问题，它正确地用了 roleStealPlayer。
-     */
-    function stealOne(cid) {
-      var farm = reconcile(store, chatId);
-      var target = firstMatureByCrop(farm.playerPlots, cid) || firstMature(farm.playerPlots);
-      if (!target) return false;
-      roleStealPlayer(store, chatId, target.id, cid, '对方');
-      return true;
-    }
-    RE_STEAL_PLAYER.lastIndex = 0;
-    while ((m = RE_STEAL_PLAYER.exec(src))) {
-      var cid = matchCropName(m[1]);
-      if (!cid || isJustSaying(src, m.index)) continue;
-      if (stealOne(cid)) applied++;
-    }
-    RE_STEAL_PLAYER_BA.lastIndex = 0;
-    while ((m = RE_STEAL_PLAYER_BA.exec(src))) {
-      var cidB = matchCropName(m[1]);
-      if (!cidB || isJustSaying(src, m.index)) continue;
-      if (stealOne(cidB)) applied++;
-    }
-    RE_HELP_HARVEST.lastIndex = 0;
-    while ((m = RE_HELP_HARVEST.exec(src))) {
-      var cid2 = matchCropName(m[1]);
-      if (!cid2 || isJustSaying(src, m.index)) continue;
-      var farm2 = reconcile(store, chatId);
-      var t2 = firstMatureByCrop(farm2.playerPlots, cid2) || firstMature(farm2.playerPlots);
-      if (t2) { harvest(store, chatId, 'player', t2.id, '对方帮你'); applied++; }
-    }
-    RE_ROLE_PLANT.lastIndex = 0;
-    while ((m = RE_ROLE_PLANT.exec(src))) {
-      var cid3 = matchCropName(m[1]);
-      if (!cid3 || CROPS[cid3].seed === false || isJustSaying(src, m.index)) continue;
-      if (plant(store, chatId, 'role', cid3).ok) applied++;
-    }
-    return { applied: applied };
-  }
-
-  function extractAndStore(store, chatId, text) {
-    var src = String(text || '');
-    var found = [];
-    var m;
-    TAG.lastIndex = 0;
-    while ((m = TAG.exec(src))) {
-      var body = m[1].trim();
-      var obj = null;
-      try { obj = JSON.parse(body); } catch (err) {
-        try { obj = JSON.parse(body.replace(/[“”]/g, '"').replace(/，/g, ',').replace(/：/g, ':')); } catch (err2) {}
-      }
-      if (!obj || typeof obj !== 'object') continue;
-      var action = clean(obj.action || obj.act, 20).toLowerCase();
-      var cropId = clean(obj.cropId || obj.crop || '', 20);
-      if (obj.cropName && !cropId) cropId = matchCropName(obj.cropName) || '';
-      var res = null;
-      if (action === 'plant') res = plant(store, chatId, obj.owner === 'player' ? 'player' : 'role', cropId);
-      else if (action === 'water') res = water(store, chatId, obj.owner === 'player' ? 'player' : 'role', obj.plotId);
-      else if (action === 'harvest') res = harvest(store, chatId, obj.owner === 'player' ? 'player' : 'role', obj.plotId, obj.by || '对方');
-      else if (action === 'steal') {
-        /* AI 是「对方」，它只能偷玩家的地，走 roleStealPlayer 统一收口。 */
-        res = roleStealPlayer(store, chatId, obj.plotId, cropId, obj.by || '对方');
-      } else if (action === 'help_harvest') {
-        var farmH = reconcile(store, chatId);
-        var tH = obj.plotId ? findPlot(farmH.playerPlots, obj.plotId)
-          : (cropId ? firstMatureByCrop(farmH.playerPlots, cropId) : firstMature(farmH.playerPlots));
-        if (tH) res = harvest(store, chatId, 'player', tH.id, '对方帮你');
-      }
-      if (res && res.ok) found.push(res);
-    }
-    /*
-     * 自然语言兜底只在「没有标签」时才跑。
-     *
-     * 原因：提示词同时教了标签和自然语言两种写法（见 buildPromptContext 末尾），
-     * 模型很可能两样都写 —— 比如「我种了向日葵<miyafarm>{"action":"plant",...}</miyafarm>」。
-     * 若这里把含标签的原文再交给正则跑一遍，同一件事会被执行两次
-     * （实测角色田会一次种下 2 株）。标签是结构化声明，优先级更高、更准，
-     * 所以有标签就只认标签，把自然语言解析让给「纯口语、无标签」的场景。
-     */
-    if (!found.length) applyNaturalLanguage(store, chatId, src);
-    return { text: src.replace(TAG, '').trim(), events: found };
-  }
-
-  function buildPromptContext(store, chatId, at) {
-    var farm = reconcile(store, chatId, at || now());
-    var lines = ['【双人小农场】真实时间生长。可播种作物由玩家在面板自选。四叶草不能播种，只能收三叶草时概率出现。'];
-    function summarize(list, title) {
-      if (!list.length) { lines.push(title + '：空地'); return; }
-      list.slice(0, MAX_PLOTS).forEach(function (p) {
-        var crop = cropOf(p.cropId);
-        var extra = (!p.stolen && crop && p.stage < crop.matureIndex)
-          ? ('，约' + formatDelta(nextStageIn(p, at)) + '后下一阶段') : '';
-        lines.push(title + '：' + plotIcon(p) + ' ' + plotLabel(p) + extra);
-      });
-    }
-    summarize(farm.playerPlots, '玩家田');
-    summarize(farm.rolePlots, '角色田');
-    var whKeys = Object.keys(farm.warehouse || {});
-    if (whKeys.length) {
-      lines.push('玩家仓库：' + whKeys.map(function (k) {
-        return ((CROPS[k] || {}).name || k) + '×' + farm.warehouse[k];
-      }).join('、'));
-    }
-    if (farm.log && farm.log.length) lines.push('最近动态：' + farm.log[farm.log.length - 1].text);
-    lines.push(
-      '标签：<miyafarm>{"action":"plant|steal|help_harvest|harvest|water","cropId":"tomato|clover|...","owner":"role|player"}</miyafarm>',
-      '也可说「我偷了你的番茄」「帮你收了草莓」「我种了向日葵」。禁止直接种四叶草。'
-    );
-    return lines.join('\n');
-  }
-
-  // —— UI ——
-  function renderPlotCard(plot, owner, at) {
-    at = at || now();
-    var crop = cropOf(plot.cropId);
-    var icon = plotIcon(plot);
-    var name = plotLabel(plot);
-    var sub = plot.stolen ? '被人偷走了'
-      : (crop && plot.stage >= crop.matureIndex) ? '可以收获了'
-      : '约' + formatDelta(nextStageIn(plot, at)) + '后长大一点';
-
-    var actions = '';
-    if (plot.stolen) {
-      actions = '<button type="button" class="qq-farm__btn" data-farm-act="clear" data-farm-owner="' + owner + '" data-farm-id="' + esc(plot.id) + '">清理</button>';
-    } else if (crop && plot.stage >= crop.matureIndex) {
-      if (owner === 'player') {
-        actions = '<button type="button" class="qq-farm__btn qq-farm__btn--main" data-farm-act="harvest" data-farm-owner="player" data-farm-id="' + esc(plot.id) + '">收获</button>';
-      } else {
-        actions =
-          '<button type="button" class="qq-farm__btn qq-farm__btn--main" data-farm-act="harvest" data-farm-owner="role" data-farm-id="' + esc(plot.id) + '">帮收</button>' +
-          '<button type="button" class="qq-farm__btn qq-farm__btn--warn" data-farm-act="steal" data-farm-owner="role" data-farm-id="' + esc(plot.id) + '">偷菜</button>';
-      }
-    } else {
-      actions = '<button type="button" class="qq-farm__btn" data-farm-act="water" data-farm-owner="' + owner + '" data-farm-id="' + esc(plot.id) + '">浇水</button>';
-    }
-
-    return '<div class="qq-farm__plot">' +
-      '<div class="qq-farm__plot-icon">' + icon + '</div>' +
-      '<div class="qq-farm__plot-body">' +
-        '<div class="qq-farm__plot-name">' + esc(name) + '</div>' +
-        '<div class="qq-farm__plot-sub">' + esc(sub) + '</div>' +
-        '<div class="qq-farm__plot-actions">' + actions + '</div>' +
-      '</div></div>';
-  }
-
-  function renderWarehouse(farm) {
-    var keys = Object.keys(farm.warehouse || {}).filter(function (k) { return farm.warehouse[k] > 0; });
-    if (!keys.length) return '<div class="qq-farm__empty">仓库空空的，收获后会放在这里</div>';
-    var rows = keys.map(function (id) {
-      var c = CROPS[id];
-      if (!c) return '';
-      var q = farm.warehouse[id];
-      var price = num(c.sellPrice) || 1;
-      return '<div class="qq-farm__wh-row">' +
-        '<span class="qq-farm__wh-icon">' + matureIcon(c) + '</span>' +
-        '<span class="qq-farm__wh-name">' + esc(c.name) + ' ×' + q + (c.kind === 'animal' ? ' · 动物' : '') + '</span>' +
-        '<span class="qq-farm__wh-price">¥' + formatMoney(price) + '/个</span>' +
-        '<button type="button" class="qq-farm__btn qq-farm__btn--main" data-farm-act="sell" data-farm-crop="' + id + '" data-farm-qty="1">卖1</button>' +
-        (q > 1 ? '<button type="button" class="qq-farm__btn" data-farm-act="sell" data-farm-crop="' + id + '" data-farm-qty="' + q + '">全卖</button>' : '') +
-        '</div>';
-    }).join('');
-    return rows +
-      '<div class="qq-farm__wh-foot">' +
-        '<button type="button" class="qq-farm__btn qq-farm__btn--main" data-farm-act="sell_all">全部卖出到钱包</button>' +
-      '</div>';
-  }
-
-  function renderPanel(store, chatId, at) {
-    at = at || now();
-    var farm = reconcile(store, chatId, at);
-
-    var plantOpts = SEED_IDS.map(function (id) {
-      var c = CROPS[id];
-      return '<button type="button" class="qq-farm__seed" data-farm-act="plant" data-farm-crop="' + id + '" title="' + esc(c.name) + ' ¥' + formatMoney(c.sellPrice) + '">' +
-        matureIcon(c) + '<span>' + esc(c.name) + '</span></button>';
-    }).join('');
-
-    var playerHtml = farm.playerPlots.length
-      ? farm.playerPlots.map(function (p) { return renderPlotCard(p, 'player', at); }).join('')
-      : '<div class="qq-farm__empty">还没有作物，在下方选种子种下</div>';
-    var roleHtml = farm.rolePlots.length
-      ? farm.rolePlots.map(function (p) { return renderPlotCard(p, 'role', at); }).join('')
-      : '<div class="qq-farm__empty">对方田里空空的</div>';
-    var logHtml = (farm.log || []).slice(-8).reverse().map(function (l) {
-      return '<div class="qq-farm__log-item">' + esc(l.text) + '</div>';
-    }).join('') || '<div class="qq-farm__empty">暂无动态</div>';
-
-    return '<div class="qq-farm" id="qq-farm-panel">' +
-      '<div class="qq-farm__head">' +
-        '<div class="qq-farm__title">🌱 小农场</div>' +
-        '<button type="button" class="qq-farm__close" data-sheet-close aria-label="关闭">关闭</button>' +
-      '</div>' +
-      '<div class="qq-farm__hint">自己选种子 · 现实时钟生长（成熟后不会枯萎）· 收获入仓 · 售卖进钱包<br/>☘️ 收三叶草时 ' + Math.round(FOUR_LEAF_BASE * 100) + '% 概率出 🍀，每失手一次概率 +' + (FOUR_LEAF_STEP * 100) + '%（封顶 ' + Math.round(FOUR_LEAF_CAP * 100) + '%）· 收获时 ' + Math.round(ANIMAL_BASE * 100) + '% 概率吸引小动物，每失手一次 +' + (ANIMAL_STEP * 100) + '%（封顶 ' + Math.round(ANIMAL_CAP * 100) + '%）</div>' +
-      '<div class="qq-farm__section">' +
-        '<div class="qq-farm__section-title">我的田（' + activePlotCount(farm.playerPlots) + '/' + MAX_PLOTS + '）</div>' +
-        '<div class="qq-farm__plots">' + playerHtml + '</div>' +
-        '<div class="qq-farm__section-title" style="margin-top:12px">选种子播种</div>' +
-        '<div class="qq-farm__seeds">' + plantOpts + '</div>' +
-      '</div>' +
-      '<div class="qq-farm__section">' +
-        '<div class="qq-farm__section-title">对方的田</div>' +
-        '<div class="qq-farm__plots">' + roleHtml + '</div>' +
-      '</div>' +
-      '<div class="qq-farm__section">' +
-        '<div class="qq-farm__section-title">仓库 / 售卖</div>' +
-        '<div class="qq-farm__wh">' + renderWarehouse(farm) + '</div>' +
-      '</div>' +
-      '<div class="qq-farm__section">' +
-        '<div class="qq-farm__section-title">动态</div>' +
-        '<div class="qq-farm__log">' + logHtml + '</div>' +
-      '</div>' +
-      '</div>';
-  }
-
-  function openPanel(store, chatId, openOverlay, toast) {
-    if (!store || !chatId || !openOverlay) return;
-    openOverlay(
-      '<div class="qq-sheet qq-sheet--farm">' +
-        '<div class="qq-sheet__panel qq-sheet__panel--farm">' +
-          renderPanel(store, chatId, now()) +
-        '</div></div>'
-    );
-  }
-
-  function handlePanelClick(store, chatId, el, toast, openOverlay) {
-    if (!el || !store || !chatId) return false;
-    var btn = el.closest ? el.closest('[data-farm-act]') : null;
-    if (!btn) return false;
-    var act = btn.getAttribute('data-farm-act');
-    var owner = btn.getAttribute('data-farm-owner') || 'player';
-    var plotId = btn.getAttribute('data-farm-id');
-    var cropId = btn.getAttribute('data-farm-crop');
-    var qty = num(btn.getAttribute('data-farm-qty'));
-
-    function done(res, okMsg) {
-      if (!res) return;
-      if (!res.ok) { if (toast) toast(res.error || '做不到'); return; }
-      if (toast && okMsg) toast(okMsg);
-      if (openOverlay) openPanel(store, chatId, openOverlay, toast);
-    }
-
-    if (act === 'plant' && cropId) {
-      var r = plant(store, chatId, 'player', cropId);
-      done(r, r.ok ? ('种下了' + ((cropOf(cropId) || {}).name || '')) : '');
-      return true;
-    }
-    if (act === 'water') {
-      var w = water(store, chatId, owner, plotId);
-      done(w, w.ok ? '浇好了' : '');
-      return true;
-    }
-    if (act === 'harvest') {
-      var h = harvest(store, chatId, owner, plotId, owner === 'role' ? '你帮对方' : '你');
-      var hMsg = '';
-      if (h.ok) {
-        hMsg = h.lucky ? '幸运！收获了四叶草' : ('收获了' + (h.name || '') + '，已入仓');
-        if (h.animal) hMsg += ' · 还来了' + h.animal.icon + h.animal.name + '！';
-      }
-      done(h, hMsg);
-      return true;
-    }
-    if (act === 'steal') {
-      var s = steal(store, chatId, 'role', plotId, '你');
-      var sMsg = s.ok ? ('偷到了' + (s.name || '') + '，已入仓') : '';
-      if (s.ok && s.animal) sMsg += ' · 还来了' + s.animal.icon + s.animal.name + '！';
-      done(s, sMsg);
-      return true;
-    }
-    if (act === 'clear') {
-      done(clearPlot(store, chatId, owner, plotId), '清理了');
-      return true;
-    }
-    if (act === 'sell' && cropId) {
-      sell(store, chatId, cropId, qty || 1).then(function (res) {
-        done(res, res.ok ? ('卖出' + res.name + '，+' + formatMoney(res.amount) + ' 已入钱包') : '');
-      });
-      return true;
-    }
-    if (act === 'sell_all') {
-      sellAll(store, chatId).then(function (res) {
-        done(res, res.ok ? ('全部卖出，+' + formatMoney(res.amount) + ' 已入钱包') : '');
-      });
-      return true;
-    }
-    return true;
-  }
+  /* 启动：延迟做一次迁移扫描 + 角标轮询 */
+  setTimeout(function () {
+    ensureStore().then(function () { migrateLegacyFarms(); });
+    startBadgeTimer();
+  }, 3500);
 
   global.MiyaChatFarm = {
-    CROPS: CROPS,
-    ANIMALS: ANIMALS,
-    SEED_IDS: SEED_IDS,
-    load: load,
-    reconcile: reconcile,
-    plant: plant,
-    water: water,
-    harvest: harvest,
-    steal: steal,
-    roleStealPlayer: roleStealPlayer,
-    clearPlot: clearPlot,
-    sell: sell,
-    sellAll: sellAll,
-    extractAndStore: extractAndStore,
-    buildPromptContext: buildPromptContext,
-    renderPanel: renderPanel,
     openPanel: openPanel,
     handlePanelClick: handlePanelClick,
-    plotIcon: plotIcon
+    enterFarm: enterFarm,
+    refreshSunBadge: refreshSunBadge,
+    handleFarmEvents: handleFarmEvents,
+    migrateLegacyFarms: migrateLegacyFarms,
+    ensureStore: ensureStore
   };
 })(window);
