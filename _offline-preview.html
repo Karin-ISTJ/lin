@@ -99,5 +99,58 @@
     </div>
   </div>
 </div>
+<div class="xw-drawer xw-drawer--manga is-open" id="xw-settings-sheet" style="opacity:1;pointer-events:auto;">
+  <div class="xw-drawer__panel">
+    <div class="xw-drawer__nav"><button class="xw-vault-back xw-exit" type="button">← 返回</button></div>
+    <div class="xw-drawer__sheet">
+      <div class="xw-drawer__head xw-manga-head">
+        <p class="xw-drawer__kicker">SETTINGS</p>
+        <h3>调参</h3>
+        <p>生成参数 / 内容绑定 / 本卷纪要</p>
+      </div>
+      <div class="xw-manga-grid">
+        <section class="xw-manga-panel">
+          <div class="xw-field">
+            <label>温度</label>
+            <input type="number" value="0.9">
+          </div>
+          <div class="xw-field xw-field--panel">
+            <label>输出方式</label>
+            <select><option>流式</option></select>
+            <p class="xw-field__hint">开启后逐字显示，生成更快看到</p>
+          </div>
+          <div class="xw-field">
+            <label>思维链</label>
+            <select><option>隐藏</option></select>
+          </div>
+        </section>
+        <section class="xw-manga-panel">
+          <div class="xw-field">
+            <label>挂载世界书</label>
+            <div class="xw-wb-list">
+              <div class="xw-wb-row"><span class="xw-wb-row__name">星露谷·主线</span><button type="button">×</button></div>
+              <div class="xw-wb-row"><span class="xw-wb-row__name">小镇人物志</span><button type="button">×</button></div>
+            </div>
+            <div class="xw-wb-add"><button class="xw-btn" type="button">＋ 从世界书选择</button></div>
+          </div>
+          <div class="xw-field">
+            <label>本卷纪要</label>
+            <div class="xw-sum-list">
+              <div class="xw-sum-entry">
+                <p class="xw-sum-entry-meta">09-26 · 12 层</p>
+                <p class="xw-sum-entry-body">农场秋收完毕，两人去镇上赶集…</p>
+                <div class="xw-sum-entry-actions"><button type="button">删除</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="xw-drawer__foot xw-manga-foot">
+        <button class="xw-btn" type="button">重置</button>
+        <button class="xw-btn xw-btn--solid" id="mol-params-save" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

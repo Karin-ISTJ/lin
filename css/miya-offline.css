@@ -94,22 +94,22 @@
   min-height: 0;
 }
 
-/* 左上角退出 — 非顶栏 */
+/* 左上角退出 — 非顶栏（也在 body 下的调参抽屉里复用，颜色写字面量与令牌同值） */
 .xw-exit {
   position: absolute;
   top: calc(10px + env(safe-area-inset-top, 0));
   left: 14px;
   z-index: 30;
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
   border-radius: 999px;
   padding: 7px 14px;
   font-size: 12px;
   letter-spacing: 0.12em;
-  color: var(--xw-soft);
+  color: #6b7480;
   cursor: pointer;
-  box-shadow: var(--xw-shadow);
+  box-shadow: 0 1px 2px rgba(28, 32, 38, 0.03), 0 4px 12px -6px rgba(28, 32, 38, 0.06);
 }
 
 /* 卷宗页返回键 — 与「聊天设置」页一致的「← 返回」样式，左上角覆盖显示 */
@@ -121,7 +121,7 @@
   padding: 8px 12px 8px 8px;
   letter-spacing: normal;
   font-size: 13px;
-  color: var(--xw-ink);
+  color: #1c2026;
 }
 .xw-vault-back.xw-exit svg { flex: 0 0 auto; }
 
@@ -970,11 +970,14 @@
  *    「排布 / 外观」全部下沉到 .xw-drawer__sheet ——
  *    因为 panel 是滚动容器，把 padding 加在它身上会让底部操作条被滚走。
  */
+/* ⚠️ 调参抽屉由 JS 挂在 document.body 下（miya-appointment-app.js appendChild(sheet)），
+   不在 .miya-offline-app 内 —— --xw-* 变量在这里全部取不到（同世界书 toast 的处境），
+   所以本段一律写字面量，值与世界书清爽蓝令牌保持一致。 */
 .xw-drawer {
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: var(--xw-bg);
+  background: #f8f9fb;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
@@ -1029,19 +1032,20 @@
   inset: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  background: var(--xw-bg);
+  background: #f8f9fb;
 }
 
 .xw-drawer.is-open .xw-drawer__panel { opacity: 1; }
 
 /* ── 调参页：世界书同款清爽蓝编辑器（原黑白漫画分镜已退役）──
    类名沿用 xw-drawer--manga / xw-manga-*（JS 不动），
-   观感对齐 .ins-wb-editor：冷灰蓝底 + 白卡 + 细边 + 蓝色聚焦。 */
+   观感对齐 .ins-wb-editor：冷灰蓝底 + 白卡 + 细边 + 蓝色聚焦。
+   挂在 body 下拿不到 --xw-*，全部字面量。 */
 .xw-drawer--manga .xw-drawer__panel {
-  --xw-manga-ink: var(--xw-ink);
-  --xw-manga-paper: var(--xw-paper);
+  --xw-manga-ink: #1c2026;
+  --xw-manga-paper: #ffffff;
   --xw-manga-tone: rgba(28, 32, 38, 0.06);
-  background-color: var(--xw-bg);
+  background-color: #f8f9fb;
   background-image: none;
 }
 
@@ -1072,12 +1076,12 @@
 }
 
 .xw-manga-head {
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   border-radius: 14px;
   padding: 14px 12px 12px;
   margin-bottom: 14px;
-  background: var(--xw-paper);
-  box-shadow: var(--xw-shadow);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(28, 32, 38, 0.03), 0 4px 12px -6px rgba(28, 32, 38, 0.06);
   position: relative;
 }
 
@@ -1089,33 +1093,34 @@
   width: 48px;
   height: 2px;
   border-radius: 1px;
-  background: linear-gradient(90deg, var(--xw-blue-soft), transparent);
+  background: linear-gradient(90deg, rgba(75, 139, 245, 0.16), transparent);
 }
 
 .xw-drawer__kicker {
   font-size: 10px;
   letter-spacing: 0.24em;
-  color: var(--xw-soft);
+  color: #6b7480;
   text-transform: uppercase;
 }
 
 .xw-drawer--manga .xw-drawer__kicker {
-  color: var(--xw-ink);
+  color: #1c2026;
   font-weight: 500;
 }
 
 .xw-drawer__head h3 {
   margin: 8px 0 4px;
   font-size: 20px;
-  font-weight: 500;
-  font-family: var(--xw-serif);
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  letter-spacing: 0.02em;
+  color: #1c2026;
 }
 
 .xw-drawer__head p {
   margin: 0;
   font-size: 11px;
-  color: var(--xw-soft);
+  color: #6b7480;
   line-height: 1.6;
 }
 
@@ -1145,12 +1150,12 @@
 }
 
 .xw-manga-panel {
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   border-radius: 14px;
   padding: 14px 12px 8px;
   margin-bottom: 12px;
-  background: var(--xw-paper);
-  box-shadow: var(--xw-shadow);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(28, 32, 38, 0.03), 0 4px 12px -6px rgba(28, 32, 38, 0.06);
 }
 
 .xw-field { margin-bottom: 14px; }
@@ -1158,7 +1163,7 @@
 .xw-field--panel {
   margin-bottom: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px dashed var(--xw-line);
+  border-bottom: 1px dashed #f0f3f7;
 }
 
 .xw-field--panel:last-child {
@@ -1177,7 +1182,7 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: var(--xw-soft);
+  color: #6b7480;
   margin-bottom: 6px;
 }
 
@@ -1185,7 +1190,7 @@
   margin: 6px 0 0;
   font-size: 10px;
   line-height: 1.5;
-  color: var(--xw-soft);
+  color: #939ca6;
   font-style: italic;
 }
 
@@ -1194,12 +1199,12 @@
 .xw-field textarea {
   width: 100%;
   padding: 9px 11px;
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   border-radius: 12px;
-  font-family: var(--xw-sans);
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   font-size: 13px;
-  background: var(--xw-paper);
-  color: var(--xw-ink);
+  background: #ffffff;
+  color: #1c2026;
   transition: border-color 0.2s ease;
 }
 
@@ -1207,7 +1212,7 @@
 .xw-drawer--manga .xw-field select:focus,
 .xw-drawer--manga .xw-field textarea:focus {
   outline: none;
-  border-color: var(--xw-blue);
+  border-color: #4b8bf5;
 }
 
 .xw-wb-add {
@@ -1221,10 +1226,10 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   border-radius: 12px;
   font-size: 12px;
-  background: var(--xw-paper);
+  background: #ffffff;
 }
 
 .xw-wb-row__name { flex: 1; min-width: 0; }
@@ -1233,7 +1238,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  color: var(--xw-ink);
+  color: #1c2026;
   font-size: 16px;
   line-height: 1;
   padding: 0 4px;
@@ -1243,21 +1248,21 @@
 
 .xw-note-entry {
   padding: 10px;
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   border-radius: 12px;
   font-size: 12px;
-  background: var(--xw-paper);
+  background: #ffffff;
 }
 
-.xw-note-entry-meta { font-size: 10px; color: var(--xw-soft); margin-bottom: 4px; }
+.xw-note-entry-meta { font-size: 10px; color: #6b7480; margin-bottom: 4px; }
 .xw-note-entry-body { margin: 0; line-height: 1.6; }
 
 .xw-note-entry-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .xw-note-entry-actions button {
   font-size: 10px;
-  border: 1px solid var(--xw-hair);
-  background: var(--xw-paper);
+  border: 1px solid #e5eaf0;
+  background: #ffffff;
   padding: 4px 10px;
   border-radius: 8px;
   cursor: pointer;
@@ -1265,7 +1270,7 @@
 }
 
 .xw-manga-foot {
-  border-top: 1px solid var(--xw-hair);
+  border-top: 1px solid #e5eaf0;
   padding-top: 14px;
 }
 
@@ -1277,8 +1282,8 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #ffffff;
-  background: var(--xw-blue);
-  border-color: var(--xw-blue);
+  background: #4b8bf5;
+  border-color: #4b8bf5;
   box-shadow: 0 6px 14px -8px rgba(75, 139, 245, 0.55);
 }
 
@@ -1287,25 +1292,25 @@
   min-height: 40px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--xw-ink);
+  color: #1c2026;
 }
 
 .xw-sum-list { display: flex; flex-direction: column; gap: 8px; }
 
 .xw-sum-entry {
   padding: 10px;
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   border-radius: 10px;
   font-size: 12px;
 }
 
-.xw-sum-entry-meta { font-size: 10px; color: var(--xw-soft); margin-bottom: 4px; }
+.xw-sum-entry-meta { font-size: 10px; color: #6b7480; margin-bottom: 4px; }
 .xw-sum-entry-body { margin: 0; line-height: 1.6; }
 
 .xw-sum-entry-actions { display: flex; gap: 6px; margin-top: 6px; }
 .xw-sum-entry-actions button {
   font-size: 10px;
-  border: 1px solid var(--xw-hair);
+  border: 1px solid #e5eaf0;
   background: transparent;
   padding: 3px 8px;
   border-radius: 999px;
@@ -1324,32 +1329,33 @@
 .xw-drawer--manga .xw-drawer__foot {
   margin-top: 0;
   padding: 12px 0 14px;
-  background: var(--xw-bg);
-  box-shadow: 0 -1px 0 var(--xw-hair);
+  background: #f8f9fb;
+  box-shadow: 0 -1px 0 #e5eaf0;
 }
 
 .xw-drawer__foot button,
 .xw-btn {
   padding: 10px 16px;
   border-radius: 12px;
-  border: 1px solid var(--xw-hair);
-  background: var(--xw-paper);
+  border: 1px solid #e5eaf0;
+  background: #ffffff;
   font-size: 12px;
   letter-spacing: 0.08em;
   cursor: pointer;
+  color: #1c2026;
 }
 
 .xw-drawer--manga .xw-btn--solid {
-  background: var(--xw-blue);
+  background: #4b8bf5;
   color: #fff;
-  border-color: var(--xw-blue);
+  border-color: #4b8bf5;
   box-shadow: 0 6px 14px -8px rgba(75, 139, 245, 0.55);
 }
 
 .xw-btn--solid {
-  background: var(--xw-blue);
+  background: #4b8bf5;
   color: #fff;
-  border-color: var(--xw-blue);
+  border-color: #4b8bf5;
 }
 
 /* 世界书同款 Toast：白卡胶囊 + 细边 + 大阴影（对齐 .mw-toast） */
