@@ -107,7 +107,7 @@
   flex: none;
   height: 38px;
   padding: 0 14px 0 10px;
-  border-radius: 19px;
+  border-radius: 999px;
   background: var(--wb-card);
   border: 1px solid var(--wb-border);
   box-shadow: var(--wb-shadow);

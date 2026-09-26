@@ -2647,20 +2647,151 @@
     }
     if (pick && ids.indexOf(pick) < 0) ids.push(pick);
     if (current && ids.indexOf(current) < 0) ids.push(current);
+    var optionsHtml;
     if (!ids.length) {
       /* 没缓存也没配置：维持原版形态 —— 只有一个占位项 */
-      return '<select class="ins-select" id="' + id + '">' +
-        '<option value="">' + (current ? esc(current) : '选择模型') + '</option>' +
-      '</select>';
+      optionsHtml = '<option value="">' + (current ? esc(current) : '选择模型') + '</option>';
+    } else {
+      ids.sort();
+      var chosen = pick || current;
+      optionsHtml = '<option value="">选择模型</option>' +
+        ids.map(function (m) {
+          return '<option value="' + esc(m) + '"' + (m === chosen ? ' selected' : '') + '>' + esc(m) + '</option>';
+        }).join('');
     }
-    ids.sort();
-    var chosen = pick || current;
-    return '<select class="ins-select" id="' + id + '">' +
-      '<option value="">选择模型</option>' +
-      ids.map(function (m) {
-        return '<option value="' + esc(m) + '"' + (m === chosen ? ' selected' : '') + '>' + esc(m) + '</option>';
-      }).join('') +
-    '</select>';
+    /*
+     * 原生 <select> 在手机上弹的是系统级选项卡：模型一多占满整屏，
+     * 不选中就很难退出（没有可点的空白遮罩）。
+     * 这里把 select 藏起来只当「值容器」—— 保存、草稿、预设载入、
+     * ⟳ 拉取、缓存水合仍然全部读写它，链路一行不改；视觉上换成显示框，
+     * 点开自定义底部抽屉（openModelDrawer）：搜索过滤 + 点遮罩即关。
+     * 抽屉列表每次打开时遍历 select.options 生成，任何既有代码更新了
+     * select，抽屉天然拿到最新列表。
+     */
+    var boxText = (pick || current) ? esc(pick || current) : '选择模型';
+    return '<div class="mq-model-pick">' +
+      '<select class="ins-select" id="' + id + '" hidden>' + optionsHtml + '</select>' +
+      '<button type="button" class="mq-model-pick__box" data-mq-modelbox="' + id + '" aria-haspopup="listbox">' +
+        '<span class="mq-model-pick__text">' + boxText + '</span>' +
+        '<span class="mq-model-pick__chev">▾</span>' +
+      '</button>' +
+    '</div>';
+  }
+
+  /* ── 对话 API · 模型选择抽屉 ─────────────────────────────────
+   *
+   * 替代原生 select 的系统选项卡：底部抽屉 + 搜索过滤 + 点遮罩即关。
+   * 只负责展示与选择，值仍存在那个（隐藏的）#mq-api-model 里；
+   * 选中后手动派发 change（bubbles），既有的委托草稿记录照常生效。
+   */
+  var modelDrawerEl = null;
+  function closeModelDrawer() {
+    if (!modelDrawerEl) return;
+    var el = modelDrawerEl;
+    modelDrawerEl = null;
+    el.classList.remove('is-open');
+    document.removeEventListener('keydown', onModelDrawerKeydown, true);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 240);
+  }
+  function onModelDrawerKeydown(e) {
+    if (e.key === 'Escape') { e.stopPropagation(); closeModelDrawer(); }
+  }
+  function fireSelectChange(selEl) {
+    var ev;
+    try { ev = new Event('change', { bubbles: true }); }
+    catch (err) {
+      ev = document.createEvent('Event');
+      ev.initEvent('change', true, false);
+    }
+    selEl.dispatchEvent(ev);
+  }
+  function openModelDrawer(selEl) {
+    closeModelDrawer();
+    var opts = [];
+    for (var i = 0; i < selEl.options.length; i++) {
+      var o = selEl.options[i];
+      opts.push({ value: String(o.value || ''), label: String(o.textContent || o.value || '') });
+    }
+    var cur = String(selEl.value || '');
+    var drawer = document.createElement('div');
+    drawer.className = 'mq-model-drawer';
+    drawer.innerHTML =
+      '<div class="mq-model-drawer__mask"></div>' +
+      '<div class="mq-model-drawer__panel" role="dialog" aria-modal="true" aria-label="选择模型">' +
+        '<div class="mq-model-drawer__head">' +
+          '<div class="mq-model-drawer__title">选择模型</div>' +
+          '<button type="button" class="mq-model-drawer__close" aria-label="关闭">×</button>' +
+        '</div>' +
+        '<div class="mq-model-drawer__search">' +
+          '<input type="text" placeholder="搜索模型…" autocomplete="off" spellcheck="false">' +
+        '</div>' +
+        '<div class="mq-model-drawer__list"></div>' +
+      '</div>';
+    var list = drawer.querySelector('.mq-model-drawer__list');
+    var searchInput = drawer.querySelector('.mq-model-drawer__search input');
+    var emptyHint = document.createElement('div');
+    emptyHint.className = 'mq-model-drawer__empty';
+    emptyHint.style.display = 'none';
+    list.appendChild(emptyHint);
+
+    opts.forEach(function (opt) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mq-model-drawer__item' + (opt.value === cur ? ' is-cur' : '');
+      var span = document.createElement('span');
+      span.textContent = opt.label;
+      span.title = opt.label;
+      b.appendChild(span);
+      b.addEventListener('click', function () {
+        /* 抽屉开着时若发生重绘，select 会被换出新节点 —— 永远写 DOM 里最新的那个 */
+        var live = document.getElementById(selEl.id) || selEl;
+        var changed = String(live.value || '') !== opt.value;
+        closeModelDrawer();
+        if (!changed) return;   // 原值重复选择不必派发 change
+        live.value = opt.value;
+        syncModelBoxText(live);
+        /* 既有 change 委托（记草稿 state.apiModelPick）照常收到 */
+        fireSelectChange(live);
+      });
+      list.appendChild(b);
+    });
+
+    function applyFilter() {
+      var q = String(searchInput.value || '').trim().toLowerCase();
+      var shown = 0;
+      var nodes = list.querySelectorAll('.mq-model-drawer__item');
+      for (var i = 0; i < nodes.length; i++) {
+        var hit = !q || nodes[i].textContent.toLowerCase().indexOf(q) >= 0;
+        nodes[i].style.display = hit ? '' : 'none';
+        if (hit) shown++;
+      }
+      emptyHint.style.display = shown ? 'none' : '';
+      emptyHint.textContent = opts.length <= 1
+        ? '列表为空 —— 先填好网关和密钥，点 ⟳ 拉取模型'
+        : '没有匹配的模型';
+    }
+    searchInput.addEventListener('input', applyFilter);
+    applyFilter();
+
+    /* 点空白（遮罩）即关 —— 不选模型也能一键退出 */
+    drawer.querySelector('.mq-model-drawer__mask').addEventListener('click', closeModelDrawer);
+    drawer.querySelector('.mq-model-drawer__close').addEventListener('click', closeModelDrawer);
+    document.addEventListener('keydown', onModelDrawerKeydown, true);
+    document.body.appendChild(drawer);
+    modelDrawerEl = drawer;
+    /* 双 rAF：确保初始 translateY(100%) 先完成布局，transition 才会跑 */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { drawer.classList.add('is-open'); });
+    });
+  }
+  /* 显示框文本与 select.value 保持一致：拉取、水合、预设载入、抽屉选择
+     这些更新 select 的路径之后都调它，显示框就不会说谎。 */
+  function syncModelBoxText(selEl) {
+    if (!selEl || !pageEl) return;
+    var box = pageEl.querySelector('[data-mq-modelbox="' + selEl.id + '"]');
+    if (!box) return;
+    var txt = box.querySelector('.mq-model-pick__text');
+    if (txt) txt.textContent = String(selEl.value || '').trim() || '选择模型';
   }
 
   function renderApiChatSub() {
@@ -2735,7 +2866,7 @@
           '<input type="password" class="ins-text-input" id="mq-api-key" placeholder="sk-…" autocomplete="off" value="' + esc(cfg.apiKey || '') + '">' +
           '<button type="button" class="ins-icon-btn" id="mq-api-fetch" title="拉取模型">⟳</button>' +
         '</div>' +
-        '<label class="ins-field-label" for="mq-api-model">模型</label>' +
+        '<label class="ins-field-label">模型</label>' +
         modelSelectHtml('mq-api-model', cfg.model, mainBase, mainKey,
           modelDraftPick(state.apiModelPick, state.apiModelPickBase, cfg.model)) +
         '<label class="ins-field-label">温度 <span id="mq-api-temp-lbl">' + esc(num(cfg.temperature, 1)) + '</span></label>' +
@@ -2909,6 +3040,8 @@
       }
     }
     el.value = val;
+    /* 模型的值走的是隐藏 select + 显示框：值变了显示框要跟着改 */
+    if (el && el.id === 'mq-api-model') syncModelBoxText(el);
   }
 
   /* 把一份预设写回表单。不改 state、不落盘 —— 用户随后点「保存」才生效，
@@ -3108,6 +3241,7 @@
         return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
       }).join('');
       if (current) selEl.value = current;
+      syncModelBoxText(selEl);
     }
     fill('#mq-api-model', '#mq-api-base', '#mq-api-key');
   }
@@ -3156,6 +3290,7 @@
         return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
       }).join('');
       selEl.value = current;
+      syncModelBoxText(selEl);
       toast('已获取 ' + ids.length + ' 个模型');
     }
 
@@ -3639,6 +3774,14 @@
       /* 子视图内的页内返回键已删除（顶栏的返回键接管），
          这里保留一行兼容处理：若旧缓存页面里还残留该节点，点了也能回去。 */
       if (e.target.closest('[data-mq-set-sub-back]')) { closeSubView(); return; }
+
+      /* 模型显示框 → 打开选择抽屉（隐藏的原生 select 只当值容器） */
+      var mbox = e.target.closest('[data-mq-modelbox]');
+      if (mbox) {
+        var msel = document.getElementById(mbox.getAttribute('data-mq-modelbox'));
+        if (msel) openModelDrawer(msel);
+        return;
+      }
 
       /* 子视图入口 */
       var subNav = e.target.closest('[data-mq-set-sub]');

@@ -272,7 +272,7 @@
   min-width: 38px;
   padding: 7px 16px;
   border: none;
-  border-radius: 14px;
+  border-radius: 999px;
   /* 同 .st-action-btn--primary：纯色兜底 + 渐变，避免 var() 失效导致
      整条 background 被丢弃、按钮变成白底白字。 */
   background-color: #007AFF;
@@ -841,7 +841,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-radius: 16px;
+  border-radius: 999px;
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 500;
@@ -859,7 +859,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-radius: 16px;
+  border-radius: 999px;
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 500;
@@ -2224,3 +2224,198 @@
   width: 100%;
   margin-bottom: 8px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   对话 API · 模型选择（显示框 + 底部抽屉）
+   替代原生 <select> 的系统选项卡：模型多时占满整屏且难点空白退出。
+   select 被隐藏只当值容器（保存/草稿/预设载入/拉取链路不变），
+   显示框点击弹出抽屉：搜索过滤 + 点遮罩即关 + Esc 关闭。
+   ═══════════════════════════════════════════════════════════ */
+.mq-model-pick { position: relative; }
+.mq-model-pick select[hidden] { display: none !important; }
+
+.mq-model-pick__box {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--st-border-strong, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: #FFFFFF;
+  font-size: 15px;
+  color: var(--st-text-primary, #1A1A1A);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mq-model-pick__box:active { transform: scale(0.99); }
+.mq-model-pick__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mq-model-pick__chev { flex-shrink: 0; color: #999999; font-size: 13px; }
+
+/* ── 抽屉 ── */
+.mq-model-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 780;   /* 盖过聊天设置页 640，低于 mi-toast 900 */
+}
+.mq-model-drawer__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  touch-action: none;   /* 遮罩层吞掉滑动，背景不跟着滚 */
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.mq-model-drawer__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0 auto;
+  max-width: 560px;
+  max-height: 68vh;
+  display: flex;
+  flex-direction: column;
+  background: #F8F9FB;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -12px 48px rgba(15, 23, 42, 0.18);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+  transform: translateY(100%);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mq-model-drawer.is-open .mq-model-drawer__mask { opacity: 1; }
+.mq-model-drawer.is-open .mq-model-drawer__panel { transform: translateY(0); }
+
+.mq-model-drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 8px;
+  flex-shrink: 0;
+}
+.mq-model-drawer__title {
+  flex: 1;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1C2026;
+}
+.mq-model-drawer__close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  color: #666666;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mq-model-drawer__close:active { transform: scale(0.94); }
+
+.mq-model-drawer__search {
+  padding: 6px 16px 10px;
+  flex-shrink: 0;
+}
+.mq-model-drawer__search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: #FFFFFF;
+  font-size: 14px;
+  color: #1C2026;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mq-model-drawer__search input:focus {
+  border-color: rgba(75, 139, 245, 0.45);
+  box-shadow: 0 0 0 3px rgba(75, 139, 245, 0.10);
+}
+
+.mq-model-drawer__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 4px 10px 14px;
+}
+.mq-model-drawer__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 14px;
+  color: #1C2026;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+.mq-model-drawer__item:active { background: rgba(75, 139, 245, 0.08); }
+.mq-model-drawer__item span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mq-model-drawer__item.is-cur {
+  background: #FFFFFF;
+  color: #4B8BF5;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 32, 38, 0.04);
+}
+.mq-model-drawer__item.is-cur::after { content: '✓'; font-weight: 700; flex-shrink: 0; }
+
+.mq-model-drawer__empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #67707C;
+}
+
+/* ── 自由生图 · 实际发送提示词（折叠透出）─────────────────────
+   让用户看到全局预置词/人设外貌到底拼了什么 —— 「输入小麦出二次元男」
+   这类污染一眼可见，不用再靠猜。 */
+.miya-ig-free-prompt {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  text-align: left;
+}
+.miya-ig-free-prompt summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #4B8BF5;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  user-select: none;
+}
+.miya-ig-free-prompt p {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #4A525C;
+  word-break: break-all;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+.miya-ig-free-prompt p b { color: #1C2026; }

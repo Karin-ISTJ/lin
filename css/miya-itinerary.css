@@ -692,7 +692,7 @@
 .it-btn {
   padding: 10px 20px;
   border: 1px solid var(--it-hair);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--it-paper);
   cursor: pointer;
   font-family: var(--it-body);

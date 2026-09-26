@@ -35,7 +35,7 @@
       ]
     },
     itineraryUi: {
-      css: ['css/miya-itinerary.css?v=6'],
+      css: ['css/miya-itinerary.css?v=7'],
       js: ['js2/miya-itinerary-app.js?v=15']
     },
     weatherUi: {
@@ -46,7 +46,7 @@
       ]
     },
     memoryUi: {
-      css: ['css/miya-memory.css?v=13'],
+      css: ['css/miya-memory.css?v=14'],
       js: ['js2/miya-memory-app.js?v=13']
     },
     funUi: {

@@ -840,27 +840,42 @@
     return out.join(', ');
   }
 
-  function buildPromptBundle(contactId, sceneDesc) {
+  /*
+   * opts.clean —— 「纯净模式」：跳过一切预置词，只按用户输入出图。
+   *
+   * 背景（用户实测踩坑）：在生图设置的「正向提示词」里存过二次元角色
+   * 描述（或载入过提示词预设）之后，自由生图输入「小麦」也会生成
+   * 二次元男主 —— 因为这个 bundle 会把全局正向词拼在用户输入前面，
+   * 联系人生图还会再拼角色人设外貌（前 600 字）。画风词对联系人生图
+   * 是特性，对「我就想画一片麦田」的自由生图就是污染。
+   *
+   * clean 只在自由生图显式传入时生效；联系人生图链路不变
+   * （人设外貌是角色一致性的核心，不能因开关丢失）。
+   */
+  function buildPromptBundle(contactId, sceneDesc, opts) {
+    var clean = !!(opts && opts.clean);
     var cfg = getImageGenConfig();
     var contact = null;
     var st = getStore();
     if (st && contactId) contact = st.findContact(contactId);
     var cImg = getContactImageGenSettings(contactId);
-    var genderTags = buildGenderPromptTags(contact);
+    var genderTags = clean ? { positive: '', negative: '' } : buildGenderPromptTags(contact);
     var posParts = [];
-    if (cfg.positivePrompt) posParts.push(cfg.positivePrompt);
+    if (!clean && cfg.positivePrompt) posParts.push(cfg.positivePrompt);
     if (genderTags.positive) posParts.push(genderTags.positive);
-    if (cImg.customPrompt) {
-      posParts.push(cImg.customPrompt);
-    } else {
-      var personaHint = extractPersonaAppearance(contact);
-      if (personaHint) posParts.push(personaHint);
+    if (!clean) {
+      if (cImg.customPrompt) {
+        posParts.push(cImg.customPrompt);
+      } else {
+        var personaHint = extractPersonaAppearance(contact);
+        if (personaHint) posParts.push(personaHint);
+      }
     }
     var scene = trim(sceneDesc);
     if (scene) posParts.push(scene);
     posParts.push('masterpiece, best quality, highly detailed, coherent composition, natural lighting');
     var negParts = [];
-    if (cfg.negativePrompt) negParts.push(cfg.negativePrompt);
+    if (!clean && cfg.negativePrompt) negParts.push(cfg.negativePrompt);
     if (genderTags.negative) negParts.push(genderTags.negative);
     negParts.push('lowres, bad anatomy, bad hands, blurry, watermark, text, logo, cropped, worst quality');
     return {
@@ -1667,7 +1682,7 @@
         return Promise.reject(new Error('contact_disabled'));
       }
       var cfg = getImageGenConfig();
-      var bundle = buildPromptBundle(contactId, sceneDesc);
+      var bundle = buildPromptBundle(contactId, sceneDesc, { clean: !!overrides.noPreset });
       if (!trim(bundle.positive)) return Promise.reject(new Error('empty_prompt'));
       var refPromise = overrides.referenceDataUrl != null
         ? Promise.resolve(overrides.referenceDataUrl)
@@ -1687,8 +1702,21 @@
         };
         /* 强度只在调用方明确要时透传；不传时下游各自落到与从前一致的缺省值 */
         if (overrides.referenceStrength != null) req.referenceStrength = overrides.referenceStrength;
-        if (cfg.provider === 'novelai') return generateNovelAi(req);
-        return generateOpenAi(req);
+        var gen = cfg.provider === 'novelai'
+          ? generateNovelAi(req)
+          : generateOpenAi(req);
+        return gen.then(function (blob) {
+          /*
+           * 把实际发送的提示词挂回结果（沿用 miyaRefFellBack 的先例）：
+           * 自由生图用它做「实际发送提示词」透出 —— 用户能看到
+           * 全局预置词、人设外貌到底拼了什么，污染一眼可见。
+           */
+          try {
+            blob.miyaPrompt = positive;
+            blob.miyaNegative = bundle.negative;
+          } catch (e) { /* 某些环境 Blob 不可扩展时静默跳过，不影响出图 */ }
+          return blob;
+        });
       });
     });
   }
@@ -2306,6 +2334,24 @@
     });
   }
 
+  /*
+   * 自由生图「包含预置提示词」开关。
+   * 单独存 localStorage（不进 getImageGenConfig）：它只影响自由生图
+   * 的默认行为，与联系人/接口配置无关；独立 key 读写最省事，
+   * 也避免动配置结构牵连备份与迁移。
+   */
+  var FREE_NO_PRESET_KEY = 'miya-image-gen-free-nopreset-v1';
+  function freeNoPresetEnabled() {
+    try { return global.localStorage.getItem(FREE_NO_PRESET_KEY) === '1'; }
+    catch (e) { return false; }
+  }
+  function setFreeNoPresetEnabled(on) {
+    try {
+      if (on) global.localStorage.setItem(FREE_NO_PRESET_KEY, '1');
+      else global.localStorage.removeItem(FREE_NO_PRESET_KEY);
+    } catch (e) { /* 存不了就当次会话内失效，不阻断 */ }
+  }
+
   function runFreeGeneration() {
     if (freeGenState.busy) return Promise.resolve(false);
     var el = document.getElementById('miya-st-ig-free-preview');
@@ -2324,6 +2370,7 @@
       (useRef ? '正在按垫图生成…' : '生成中…') + '</p></div>');
     return generateImageForScene('', prompt, {
       skipContactCheck: true,
+      noPreset: freeNoPresetEnabled(),
       referenceDataUrl: useRef ? freeGenState.refDataUrl : '',
       /*
        * 有垫图才传强度，没有就**完全不传** ——
@@ -2362,6 +2409,18 @@
             '<img src="' + esc(url) + '" alt="自由生图">' +
             '<p class="miya-ig-free-caption">' + esc(prompt) + '</p>' +
             refNote +
+            /*
+             * 「实际发送提示词」透出：全局预置词、性别标签、人设外貌
+             * 拼了什么、拼在第几段，展开一眼可见 ——
+             * 「输入小麦出二次元男」这类污染不用再靠猜。
+             */
+            (blob.miyaPrompt || blob.miyaNegative
+              ? '<details class="miya-ig-free-prompt">' +
+                '<summary>实际发送的提示词</summary>' +
+                (blob.miyaPrompt ? '<p><b>正向：</b>' + esc(blob.miyaPrompt) + '</p>' : '') +
+                (blob.miyaNegative ? '<p><b>反向：</b>' + esc(blob.miyaNegative) + '</p>' : '') +
+                '</details>'
+              : '') +
             /*
              * 给移动端留一句「长按可存」的提示。
              * 桌面端下载按钮直接可用，这句显示出来也无害；
@@ -3283,6 +3342,15 @@
       }
       if (t.closest('#miya-st-ig-free-run')) {
         runFreeGeneration();
+        return;
+      }
+      /* 自由生图「包含预置提示词」开关：关掉后只按输入的描述出图 */
+      if (t.closest('#miya-st-ig-free-nopreset')) {
+        var npBtn = t.closest('#miya-st-ig-free-nopreset');
+        var npOn = !npBtn.classList.contains('is-on');
+        npBtn.classList.toggle('is-on', npOn);
+        npBtn.setAttribute('aria-checked', npOn ? 'true' : 'false');
+        setFreeNoPresetEnabled(!npOn);   /* 开关名是「包含」，存储键是「排除」——注意取反 */
         return;
       }
       if (t.closest('#miya-st-ig-free-save')) {

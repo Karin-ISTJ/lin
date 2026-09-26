@@ -1616,8 +1616,8 @@ body.miya-app-open .phone {
   font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.14em;
-  padding: 9px 16px;
-  border-radius: 2px;
+  padding: 12px 20px;
+  border-radius: 999px;
   cursor: pointer;
 }
 
@@ -2657,7 +2657,7 @@ html.miya-custom-desk-icon-frameless
 }
 
 .miya-dialog-btn {
-  padding: 9px 18px;
+  padding: 12px 20px;
   border: 1px solid rgba(0, 0, 0, 0.15);
   background: transparent;
   color: var(--ins-ink-dim);
@@ -2665,7 +2665,7 @@ html.miya-custom-desk-icon-frameless
   font-size: 11px;
   letter-spacing: 0.12em;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 999px;
 }
 
 .miya-dialog-btn--primary {

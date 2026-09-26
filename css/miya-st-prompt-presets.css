@@ -596,7 +596,7 @@ body.stp-is-dragging { user-select: none; }
   border: 1px solid var(--stp-border);
   background: var(--stp-card);
   color: var(--stp-ink-soft);
-  border-radius: 17px;
+  border-radius: 999px;
   padding: 8px 18px;
   font-size: 13px;
   font-weight: 600;
