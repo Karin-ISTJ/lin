@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- 线下「清爽蓝」皮肤预览（仅目检用，复用真实 miya-offline.css 与类名） -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>线下 · 清爽蓝预览</title>
+<link rel="stylesheet" href="css/miya-offline.css?v=81">
+<style>
+  body { margin: 0; }
+  .pv-stage { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="pv-stage">
+  <div class="miya-offline-app is-open" id="miya-offline-app">
+    <div id="xw-root" class="xw-root">
+      <div class="xw-bg" aria-hidden="true"><span class="xw-bg__mesh"></span><span class="xw-bg__dots"></span></div>
+      <div class="xw-shell">
+        <button type="button" class="xw-exit">← 退出</button>
+
+        <div class="xw-main" style="padding-top:70px;">
+          <!-- 选角 hub -->
+          <div class="xw-hub">
+            <p class="xw-hub__brand">MIYA · OFFLINE</p>
+            <h1 class="xw-hub__title">星露农场</h1>
+            <p class="xw-hub__hint">选一位角色开始线下场景。界面配色与世界书对齐，背景 #F8F9FB。</p>
+            <div class="xw-cast">
+              <button class="xw-cast-node is-on">
+                <span class="xw-cast-node__ring"></span>
+                <span class="xw-cast-node__face" style="background:linear-gradient(135deg,#c9d8f0,#e8eef8);display:block;"></span>
+                <span class="xw-cast-node__name">角色 A</span>
+              </button>
+              <button class="xw-cast-node">
+                <span class="xw-cast-node__ring"></span>
+                <span class="xw-cast-node__face" style="background:linear-gradient(135deg,#e6dccf,#f2ede4);display:block;"></span>
+                <span class="xw-cast-node__name">角色 B</span>
+              </button>
+              <button class="xw-cast-node">
+                <span class="xw-cast-node__ring"></span>
+                <span class="xw-cast-node__face" style="background:linear-gradient(135deg,#d8e6d8,#eef5ee);display:block;"></span>
+                <span class="xw-cast-node__name">角色 C</span>
+              </button>
+            </div>
+            <div class="xw-hub__actions">
+              <button class="xw-hub__start">开始场景</button>
+              <p class="xw-hub__tip">选中 1 位角色 · 多人可连选</p>
+            </div>
+          </div>
+
+          <!-- 卷宗列表 -->
+          <div class="xw-vault">
+            <div class="xw-vault__head">
+              <div>
+                <h2 class="xw-vault__title">卷宗</h2>
+                <p class="xw-vault__desc">已保存的线下场景</p>
+              </div>
+              <div class="xw-vault__actions">
+                <button class="xw-ribbon__act">＋ 新建聊天</button>
+                <button class="xw-ribbon__act xw-ribbon__act--ghost">导入</button>
+              </div>
+            </div>
+            <div class="xw-vault__list">
+              <div class="xw-vault-row">
+                <button class="xw-vault-row__open">
+                  <span class="xw-vault-row__name">秋日农场的一下午</span>
+                  <span class="xw-vault-row__stat"><span class="xw-vault-row__when">09-26 14:20</span> · 2 人 · 12 层</span>
+                </button>
+                <div class="xw-vault-row__acts">
+                  <button class="xw-vault-row__mini">TXT</button>
+                  <button class="xw-vault-row__mini">JSON</button>
+                  <button class="xw-vault-row__mini xw-vault-row__mini--del">删</button>
+                </div>
+              </div>
+              <div class="xw-vault-row">
+                <button class="xw-vault-row__open">
+                  <span class="xw-vault-row__name">镇上赶集</span>
+                  <span class="xw-vault-row__stat"><span class="xw-vault-row__when">09-25 21:03</span> · 1 人 · 6 层</span>
+                </button>
+                <div class="xw-vault-row__acts">
+                  <button class="xw-vault-row__mini">TXT</button>
+                  <button class="xw-vault-row__mini">JSON</button>
+                  <button class="xw-vault-row__mini xw-vault-row__mini--del">删</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部输入栏（固定胶囊样式段生效） -->
+        <div class="xw-writer">
+          <div class="xw-writer__tools">
+            <button class="xw-writer__tools-toggle" aria-label="工具">✦</button>
+          </div>
+          <textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder="写下你说的话或做的事…"></textarea>
+          <button class="xw-writer__go" id="xw-writer-go" aria-label="发送">↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
