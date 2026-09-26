@@ -543,106 +543,6 @@
   }
 
   /**
-   * 把所有会话的表结构升级到最新默认表。
-   *
-   * ── 为什么需要它 ──
-   * defaultTables() 只对「还没有表的会话」生效（getChatTables 读不到桶时
-   * 才回落到默认表）。老会话早就把旧结构的表落在存储里了，改了默认表
-   * 它们也纹丝不动 —— 用户升级后打开老聊天，看到的还是旧的 5 张表。
-   *
-   * ── 迁移策略：按 id 对齐，数据尽量带走 ──
-   *   1) 先按默认表的 id 找老表：
-   *        · 找到同名同 id 的  → 保留其行数据，用新列名/新说明覆盖
-   *        · 老表 id 是 t_task 之类没匹配上的 → 也按 name 再找一次
-   *   2) 老表里有、新默认表没有的 → **原样保留**（用户自己加的表不能丢）
-   *   3) 新默认表有、老表没有的   → 以空表补上
-   *
-   * 行数据按列名对齐：老列若在新列里存在，值搬过去；否则丢弃。
-   * 这样「月日→日期」这种改名会丢数据，但不会把值塞到错误的列里 ——
-   * 宁缺勿错，错列的记忆比丢失的记忆更危险。
-   *
-   * @param {boolean} [dropRows=false] true = 只换表头，行全部清空（彻底重来）
-   * @returns {Promise<{chats:number, added:number, kept:number}>}
-   */
-  function upgradeAllChats(dropRows) {
-    var all = loadAll();
-    var defaults = defaultTables().map(normalizeTable);
-    var chats = 0, added = 0, kept = 0;
-
-    Object.keys(all.chats || {}).forEach(function (chatId) {
-      var pack = all.chats[chatId];
-      var oldTables = (pack && Array.isArray(pack.tables)) ? pack.tables.map(normalizeTable) : [];
-      if (!oldTables.length) { chats++; return; }
-
-      /* 用过的老表 id，避免重复匹配 */
-      var used = {};
-      var merged = [];
-
-      defaults.forEach(function (def) {
-        /* 先按 id 找，找不到再按表名找（老版本可能 id 不同但名字一样） */
-        var old = null;
-        for (var i = 0; i < oldTables.length; i++) {
-          if (used[i]) continue;
-          if (oldTables[i].id === def.id) { old = oldTables[i]; used[i] = 1; break; }
-        }
-        if (!old) {
-          for (var j = 0; j < oldTables.length; j++) {
-            if (used[j]) continue;
-            if (String(oldTables[j].name) === String(def.name)) { old = oldTables[j]; used[j] = 1; break; }
-          }
-        }
-
-        if (!old) { merged.push(def); added++; return; }
-
-        /* 找到老表：换表头，行数据按列名对齐搬过来 */
-        var rows = [];
-        if (!dropRows) {
-          var idxMap = {};   /* 新列下标 -> 老列下标 */
-          def.columns.forEach(function (c, ni) {
-            var oi = old.columns.indexOf(c);
-            if (oi >= 0) idxMap[ni] = oi;
-          });
-          rows = (old.rows || []).map(function (r) {
-            var out = def.columns.map(function () { return ''; });
-            Object.keys(idxMap).forEach(function (ni) {
-              var v = r[idxMap[ni]];
-              out[Number(ni)] = v == null ? '' : String(v);
-            });
-            return out;
-          }).filter(function (r) {
-            return r.some(function (c) { return String(c || '').trim() !== ''; });
-          });
-        }
-        merged.push({
-          id: def.id,
-          name: def.name,
-          note: def.note,
-          enabled: old.enabled !== false,
-          columns: def.columns,
-          rows: rows
-        });
-        kept++;
-      });
-
-      /* 保留用户自建的、默认表里没有的表（原样，含它们的行） */
-      oldTables.forEach(function (t, i) {
-        if (!used[i]) merged.push(t);
-      });
-
-      all.chats[chatId] = {
-        tables: merged,
-        rowSource: dropRows ? {} : (pack.rowSource || {}),
-        updatedAt: Date.now()
-      };
-      chats++;
-    });
-
-    return saveAll(all).then(function () {
-      return { chats: chats, added: added, kept: kept };
-    });
-  }
-
-  /**
    * 按来源楼层回收记忆表的行 —— 本修复的核心。
    *
    * 删除楼层时调用，把「由这些楼层生成的行」从表里精确摘掉，
@@ -940,7 +840,6 @@
     removeRowsBySource: removeRowsBySource,
     ensureChat: ensureChat,
     resetChat: resetChat,
-    upgradeAllChats: upgradeAllChats,
     dropChat: dropChat,
     listChatIds: listChatIds,
     exportChat: exportChat,

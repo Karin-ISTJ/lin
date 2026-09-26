@@ -324,20 +324,6 @@
         });
         return;
       }
-      if (e.target.closest('#miya-mt-upgrade-all')) {
-        if (!confirm(
-          '把所有聊天的记忆表升级为最新的 6 张表结构？\n\n' +
-          '· 同名的表会保留已有行数据（按列名对齐）\n' +
-          '· 默认表里没有的自建表会原样保留\n' +
-          '· 建议先「导出」备份\n\n继续？'
-        )) return;
-        global.MiyaMemoryTableStore.upgradeAllChats(false).then(function (res) {
-          state.tableIndex = 0;
-          render();
-          toast('已升级 ' + res.chats + ' 个聊天（数据保留）');
-        });
-        return;
-      }
       if (e.target.closest('#miya-mt-export')) {
         var data = global.MiyaMemoryTableStore.exportChat(state.chatId);
         var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
