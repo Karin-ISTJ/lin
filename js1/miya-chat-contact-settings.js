@@ -1624,6 +1624,7 @@
        */
       renderApiNavBar('api-chat', '对话 API', '对话模型服务端点与密钥', 'api-chat') +
       renderApiNavBar('api-voice', '语音合成', '语音合成服务端点与密钥', 'api-voice') +
+      renderApiNavBar('api-memory', '记忆 API', '记忆提炼专用线路，留空跟随对话 API', 'api-memory') +
 
       renderZone('basic', '基础', '身份、头像、通知与主动消息',
         subBlock('身份与显示', '', formCard(
@@ -2294,11 +2295,11 @@
      * 控件读成空值 / 关闭 / 默认值并真实落库 —— 实测会清空备注与语音 ID、
      * 关掉免打扰 / 天气感知 / 时间感知 / 主动发消息、清空世界书排序。
      * 所以子视图内点顶栏保存一律转为保存当前子视图：
-     *   · api-chat / api-voice → 走 saveSubViewForm（这两个页面的**唯一**保存入口）
+     *   · api-chat / api-voice / api-memory → 走 saveSubViewForm（这三个页面的**唯一**保存入口）
      *   · 其余子视图没有可存表单，提示即可，绝不触碰根级配置
      */
     if (state.subView) {
-      if (state.subView === 'api-chat' || state.subView === 'api-voice') {
+      if (state.subView === 'api-chat' || state.subView === 'api-voice' || state.subView === 'api-memory') {
         saveSubViewForm(state.subView);
       } else {
         toast('本页无需保存');
@@ -2470,6 +2471,7 @@
   var SUB_VIEW_TITLES = {
     'api-chat': '对话 API',
     'api-voice': '语音合成',
+    'api-memory': '记忆 API',
     'backup': '备份与恢复',
     'notify': '通知与提示音',
     'chat-defaults': '聊天默认值'
@@ -2523,6 +2525,23 @@
       toast('语音合成已保存');
       return;
     }
+    if (key === 'api-memory') {
+      /*
+       * 记忆 API：嵌套对象存法（与 minimaxTts 同模式）——
+       * 先取现有 memoryApi 再覆盖表单字段，绝不用「只有三项的全新对象」
+       * 整体替换，防止未来 memoryApi 扩展出新字段时被这里悄悄抹掉。
+       * 三项全空 = 回落跟随对话 API（解析层 resolveMemoryConfig 负责）。
+       */
+      var cfgMem = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
+      var mem = Object.assign({}, cfgMem.memoryApi || {}, {
+        baseUrl: val('#mq-mem-base'),
+        apiKey: val('#mq-mem-key'),
+        model: val('#mq-mem-model')
+      });
+      if (typeof global.miyaSetApiConfig === 'function') global.miyaSetApiConfig({ memoryApi: mem });
+      toast('记忆 API 已保存');
+      return;
+    }
   }
 
   /* 发一条测试通知。与旧设置 App 里那段行为一致：
@@ -2571,6 +2590,7 @@
   function renderSubView(key) {
     if (key === 'api-chat') return renderApiChatSub();
     if (key === 'api-voice') return renderApiVoiceSub();
+    if (key === 'api-memory') return renderApiMemorySub();
     if (key === 'backup') return renderBackupSub();
     if (key === 'notify') return renderNotifySub();
     if (key === 'chat-defaults') return renderChatDefaultsSub();
@@ -2876,6 +2896,56 @@
     );
   }
 
+  /* ── 记忆 API 子视图 ──────────────────────────────────────────
+   *
+   * 记忆提炼是独立于主回复的二次 API 调用（见
+   * js1/miya-chat-memory-extract.js 的 resolveMemoryConfig）。
+   * 此前它跟随对话 API，用户换主模型/换中转就被连带改掉，
+   * 且部分中转对同密钥并发限流（主回复进行中再发提炼会被 429 拒掉）。
+   * 这里给三条独立字段；三项全留空 = 回落跟随对话 API，老用户零迁移。
+   *
+   * 模型下拉与对话 API 共用同一套「保值」规则（modelSelectHtml）：
+   * select 赋不存在的值会静默变空串，列表里没有当前值就必须先补 option；
+   * 缓存分桶同样按 `baseUrl|密钥尾4位`，与对话 API 各自独立。
+   */
+  function memoryApiCfg() {
+    var cfg = (global.miyaGetApiConfigCached && global.miyaGetApiConfigCached()) || {};
+    return cfg.memoryApi && typeof cfg.memoryApi === 'object' ? cfg.memoryApi : {};
+  }
+
+  function renderApiMemorySub() {
+    var mem = memoryApiCfg();
+    /*
+     * 桶键取旧表单里的线路值（未保存的手填值）—— 重绘时正式配置可能是
+     * 保存前的旧值，按配置找缓存桶必然落空；旧 DOM 还没被换掉时先把
+     * 旧表单的线路值抓出来当桶键。与 renderApiChatSub 的 prevVal 同理。
+     */
+    function prevVal(sel) {
+      var el = pageEl ? pageEl.querySelector(sel) : null;
+      return el ? String(el.value || '').trim() : null;
+    }
+    var prevBase = prevVal('#mq-mem-base');
+    var prevKey = prevVal('#mq-mem-key');
+    var base = prevBase != null ? prevBase : (mem.baseUrl || '');
+    var key = prevKey != null ? prevKey : (mem.apiKey || '');
+    return subShell('记忆 API', '角色记忆自动提炼使用的线路。',
+      '<div class="st-form-card ins-form-block mi-set-subview__card">' +
+        '<h4 class="st-form-section__title">记忆线路</h4>' +
+        '<label class="ins-field-label" for="mq-mem-base">网关地址</label>' +
+        '<input type="text" class="ins-text-input" id="mq-mem-base" placeholder="https://api.openai.com" autocomplete="off" spellcheck="false" value="' + esc(mem.baseUrl || '') + '">' +
+        '<label class="ins-field-label" for="mq-mem-key">密钥</label>' +
+        '<div class="ins-inline-field">' +
+          '<input type="password" class="ins-text-input" id="mq-mem-key" placeholder="sk-…" autocomplete="off" value="' + esc(mem.apiKey || '') + '">' +
+          '<button type="button" class="ins-icon-btn" id="mq-mem-fetch" title="拉取模型">⟳</button>' +
+        '</div>' +
+        '<label class="ins-field-label">模型</label>' +
+        modelSelectHtml('mq-mem-model', mem.model, base, key, '') +
+        '<p class="st-form-hint">三项全留空 = 跟随对话 API；只填部分字段时，缺的项逐字段回退对话 API。适合把记忆提炼挂到便宜或独立的中转上。</p>' +
+      '</div>' +
+      '<p class="st-form-hint">改完点右上角「保存」生效。</p>'
+    );
+  }
+
   /* ── 对话 API · 接口预设 ──────────────────────────────────────
    *
    * 下拉渲染 + 载入 / 保存 / 删除三个动作。
@@ -2978,6 +3048,11 @@
        * 一次，保证下拉拿到的是最新的那份列表。幂等，节点不在就跳过。
        */
       hydrateChatModelOptions();
+      return;
+    }
+    if (key === 'api-memory') {
+      /* 模型下拉补缓存：与 api-chat 同一套幂等第二层防御 */
+      hydrateMemoryModelOptions();
       return;
     }
     if (key === 'chat-defaults') {
@@ -3224,26 +3299,32 @@
    * 列表里就追加为 option，绝不退回空 —— select.value 一旦被置空，
    * 用户下一次点「保存」就会把模型清空写进配置。
    */
-  function hydrateChatModelOptions() {
+  function fillModelOptionsFromCache(selId, baseId, keyId) {
     if (!pageEl) return;
     var cache = global.miyaApiModelCache;
     if (!cache || typeof cache.read !== 'function') return;
-    function fill(selId, baseId, keyId) {
-      var selEl = pageEl.querySelector(selId);
-      if (!selEl) return;
-      var baseEl = pageEl.querySelector(baseId);
-      var keyEl = pageEl.querySelector(keyId);
-      var ids = cache.read(baseEl ? baseEl.value : '', keyEl ? keyEl.value : '');
-      if (!ids || !ids.length) return;
-      var current = String(selEl.value || '').trim();
-      if (current && ids.indexOf(current) < 0) ids = ids.concat([current]);
-      selEl.innerHTML = '<option value="">选择模型</option>' + ids.map(function (id) {
-        return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
-      }).join('');
-      if (current) selEl.value = current;
-      syncModelBoxText(selEl);
-    }
-    fill('#mq-api-model', '#mq-api-base', '#mq-api-key');
+    var selEl = pageEl.querySelector(selId);
+    if (!selEl) return;
+    var baseEl = pageEl.querySelector(baseId);
+    var keyEl = pageEl.querySelector(keyId);
+    var ids = cache.read(baseEl ? baseEl.value : '', keyEl ? keyEl.value : '');
+    if (!ids || !ids.length) return;
+    var current = String(selEl.value || '').trim();
+    if (current && ids.indexOf(current) < 0) ids = ids.concat([current]);
+    selEl.innerHTML = '<option value="">选择模型</option>' + ids.map(function (id) {
+      return '<option value="' + esc(id) + '">' + esc(id) + '</option>';
+    }).join('');
+    if (current) selEl.value = current;
+    syncModelBoxText(selEl);
+  }
+
+  function hydrateChatModelOptions() {
+    fillModelOptionsFromCache('#mq-api-model', '#mq-api-base', '#mq-api-key');
+  }
+
+  /* 记忆 API 的重绘后回填：与对话 API 同一策略、同一份缓存（幂等） */
+  function hydrateMemoryModelOptions() {
+    fillModelOptionsFromCache('#mq-mem-model', '#mq-mem-base', '#mq-mem-key');
   }
 
   /* ── 对话 API · 拉取模型 ──────────────────────────────────────
@@ -3255,15 +3336,15 @@
    * 下次进来能先出缓存，不必再点一次 ⟳ —— 这正是那个缓存模块
    * 当初存在的理由，只是设置 App 删除后没人再调用它。
    */
-  function fetchChatModels() {
+  function fetchModelsInto(baseSel, keySel, modelSel, btnSel) {
     if (!pageEl) return;
     function val(sel) {
       var el = pageEl.querySelector(sel);
       return el ? String(el.value || '').trim() : '';
     }
-    var base = val('#mq-api-base');
-    var key = val('#mq-api-key');
-    var selEl = pageEl.querySelector('#mq-api-model');
+    var base = val(baseSel);
+    var key = val(keySel);
+    var selEl = pageEl.querySelector(modelSel);
     if (!selEl) return;
 
     if (typeof global.miyaOpenAiApiRoot !== 'function') {
@@ -3273,7 +3354,7 @@
     var root = global.miyaOpenAiApiRoot(base);
     if (!root) { toast('请先填写网关地址'); return; }
 
-    var btn = pageEl.querySelector('#mq-api-fetch');
+    var btn = pageEl.querySelector(btnSel);
     if (btn) btn.disabled = true;
 
     function applyOptions(ids) {
@@ -3329,6 +3410,15 @@
     }).then(function () {
       if (btn) btn.disabled = false;
     });
+  }
+
+  /* 两个入口共用同一条拉取链路（GET {root}/models + 缓存分桶） */
+  function fetchChatModels() {
+    fetchModelsInto('#mq-api-base', '#mq-api-key', '#mq-api-model', '#mq-api-fetch');
+  }
+
+  function fetchMemoryModels() {
+    fetchModelsInto('#mq-mem-base', '#mq-mem-key', '#mq-mem-model', '#mq-mem-fetch');
   }
 
   /*
@@ -3806,6 +3896,7 @@
         return;
       }
       if (e.target.closest('#mq-api-fetch')) { fetchChatModels(); return; }
+      if (e.target.closest('#mq-mem-fetch')) { fetchMemoryModels(); return; }
 
       var bkExport = e.target.closest('[data-mq-set-backup-export]');
       if (bkExport) {

@@ -233,7 +233,8 @@
     var om = openRe.exec(s);
     if (!om) return null;
     var contentStart = om.index + om[0].length;
-    var closeRe = /[<＜]\s*\/\s*tableEdit\s*[>＞]/i;
+    /* closeRe 带 g：保证 lastIndex=contentStart 生效，从开标签之后找闭合 */
+    var closeRe = /[<＜]\s*\/\s*tableEdit\s*[>＞]/gi;
     closeRe.lastIndex = contentStart;
     var cm = closeRe.exec(s);
     return {
@@ -263,49 +264,133 @@
     return s.trim();
   }
 
+  /*
+   * 动作名归一：模型偶尔会写 INSERTROW / InsertRow 这类大小写变体，
+   * 旧实现严格匹配小写直接整条丢弃。这里把已知动作归一到规范拼写。
+   */
+  function canonicalActionName(name) {
+    var s = String(name || '');
+    if (/^insertrow$/i.test(s)) return 'insertRow';
+    if (/^updaterow$/i.test(s)) return 'updateRow';
+    if (/^deleterow$/i.test(s)) return 'deleteRow';
+    return s;
+  }
+
+  /*
+   * 全角引号配对表：开引号 → 闭引号。
+   * 半角引号自身闭合；全角开引号由对应全角闭引号闭合。
+   * （与下方 normalizeCjkPunct 的 CJK_QUOTE_PAIR 独立 —— 这里的
+   *   QUOTE_CLOSE_MAP 只服务动作切分时的括号深度扫描。）
+   */
+  var QUOTE_CLOSE_MAP = { '"': '"', "'": "'", '“': '”', '‘': '’' };
+
+  /*
+   * ── 动作切分：括号深度扫描（记忆表格「多动作并成一条」的根治）──
+   *
+   * 旧实现用正则 /(insertRow|updateRow|deleteRow)\s*[（(]\s*([\s\S]*?)\s*[）)]\s*(?=$|;|\n|,|$)/gi
+   * 切动作，其结尾 lookahead 依赖「) 之后紧跟分隔符（$ ; \n ,）」。
+   * 但提示词「正确范例」教的相邻动作格式是：
+   *   <!-- updateRow(...) --><!-- insertRow(...) -->
+   * 剥掉注释后两条动作之间**只剩空白**，lookahead 撞不上任何分隔符；
+   * 而实参体又是 [\s\S]*? 非贪婪，于是第二条动作的文本被并进第一条的
+   * rawArgs —— parseArgs 解析失败 → 整轮写入全部丢弃（实测复现：
+   * 范例原文解析出 1 条残缺动作，落库 0 行）。
+   *
+   * 现在改为括号深度计数扫描：
+   *   · 从动作名后的 '(' 开始计数，深度归 0 即实参体结束，
+   *     中间不管有什么分隔符都不会提前/滞后截断；
+   *   · 引号状态机跳过字符串内的括号（半角 + 全角引号配对），
+   *     单元格正文里出现 '(' ')' '）' 也不会骗到深度计数；
+   *   · 闭括号缺失（输出被截断）时取到文末，交由 parseArgs 决定生死。
+   */
+  function extractActionsFromBody(body) {
+    var s = String(body || '');
+    var actions = [];
+    var nameRe = /(insertRow|updateRow|deleteRow)/gi;
+    var m;
+    while ((m = nameRe.exec(s))) {
+      var op = canonicalActionName(m[1]);
+      var i = skipWs(s, m.index + m[1].length);
+      /* 动作名后必须是左括号（容忍全角），否则视为普通文本提及，跳过 */
+      if (s[i] !== '(' && s[i] !== '（') continue;
+      i += 1;
+      var depth = 1;
+      var argsStart = i;
+      var argsEnd = -1;
+      var quote = ''; /* 待匹配的闭引号字符；空串 = 当前不在字符串内 */
+      while (i < s.length) {
+        var ch = s[i];
+        if (quote) {
+          if (ch === '\\') { i += 2; continue; } /* 转义：连下一个字符一起跳 */
+          if (ch === quote) quote = '';
+          i += 1;
+          continue;
+        }
+        if (QUOTE_CLOSE_MAP[ch]) { quote = QUOTE_CLOSE_MAP[ch]; i += 1; continue; }
+        if (ch === '(' || ch === '（') { depth += 1; i += 1; continue; }
+        if (ch === ')' || ch === '）') {
+          depth -= 1;
+          if (depth === 0) { argsEnd = i; i += 1; break; }
+          i += 1;
+          continue;
+        }
+        i += 1;
+      }
+      if (argsEnd < 0) {
+        /* 括号未闭合（输出被截断）：实参体取到文末 */
+        argsEnd = s.length;
+        nameRe.lastIndex = s.length;
+      } else {
+        /* 从闭括号之后继续找下一条动作 —— rawArgs 内部的动作名字样不会重复命中 */
+        nameRe.lastIndex = i;
+      }
+      var raw = s.slice(argsStart, argsEnd).trim();
+      if (raw) actions.push({ op: op, rawArgs: raw });
+    }
+    return actions;
+  }
+
   function parseTableEditBlock(text) {
     var s = String(text || '');
-    var range = findTableEditRange(s);
-    if (!range) return [];
-    var body = s.slice(range.contentStart, range.contentEnd);
-    /*
-     * 注释剥离同样兼容全角尖括号（＜!-- --＞）。
-     * 这步不只是清理：动作正则的结尾 lookahead（$ | ; | \n | ,）依赖
-     * 「) 之后没有别的字符」—— 全角注释符残留时，) 后面紧跟着 --＞，
-     * lookahead 撞上 ＜ 直接失败，整条动作被丢弃。
-     */
-    body = body.replace(/[<＜]!--([\s\S]*?)--[>＞]/g, '$1');
-    /*
-     * 无闭合标签时，body 会一直延伸到文末，可能带上正文。
-     * 这里再切一刀：只保留到最后一个动作的右括号为止，
-     * 避免正文里恰好出现的括号干扰后续匹配。
-     */
-    if (!range.closed) {
-      var lastClose = body.lastIndexOf(')');
-      if (lastClose >= 0) body = body.slice(0, lastClose + 1);
-    }
     var actions = [];
     /*
-     * 动作匹配放宽：
-     *   · 容忍中文括号 （）  —— 模型常把 ( ) 打成全角
-     *   · 结尾不强制要求 $ / ; / 换行 —— 缺闭合标签时后面可能直接是文本
-     *   · 参数体用「非贪婪到最近的右括号」会漏掉嵌套对象，
-     *     所以改用「贪婪到本行最后一个右括号」的策略（见下方循环）
+     * 一轮回复可能出现**多段** <tableEdit>（正文写一次、旁白再写一次）。
+     * 旧实现只取 findTableEditRange 找到的第一段，后面段落里的动作
+     * 被静默丢弃。现在全局逐段收集，直到文末。
      */
-    var re = /(insertRow|updateRow|deleteRow)\s*[（(]\s*([\s\S]*?)\s*[）)]\s*(?=$|;|\n|,|$)/gi;
-    var hit;
-    var cursor = 0;
-    while ((hit = re.exec(body))) {
-      var raw = hit[2].trim();
-      if (!raw) continue;
+    var openRe = /[<＜]\s*tableEdit\s*[>＞]/gi;
+    var om;
+    while ((om = openRe.exec(s))) {
+      var contentStart = om.index + om[0].length;
       /*
-       * 嵌套对象里的 '}' 后面可能紧跟 ')'，上面的非贪婪在遇到
-       * 对象内部的 ')' 时不会出错（对象用 {} 而非 ()），
-       * 但为了稳妥，若解析出的实参以 '}' 或 '"' 未收尾，则向后扩展。
+       * closeRe 必须带 g 标志：无 g 时 exec 忽略 lastIndex 从头搜索，
+       * 第二段 tableEdit 的闭合标签会错落到第一段的闭合处，
+       * body 切出空串、openRe.lastIndex 回退 → 外层 while 死循环。
+       * （原 findTableEditRange 同样写法，只因只处理第一段而未暴露。）
        */
-      actions.push({ op: hit[1], rawArgs: raw });
-      cursor = re.lastIndex;
-      if (cursor >= body.length) break;
+      var closeRe = /[<＜]\s*\/\s*tableEdit\s*[>＞]/gi;
+      closeRe.lastIndex = contentStart;
+      var cm = closeRe.exec(s);
+      var closed = !!cm;
+      var body = s.slice(contentStart, closed ? cm.index : s.length);
+      /*
+       * 注释剥离兼容全角尖括号（＜!-- --＞）。
+       * 这步不只是清理：动作切分依赖「动作名紧邻左括号」——
+       * 全角注释符残留时会在动作名前混入杂质，还会把相邻动作的
+       * 边界搅乱。
+       */
+      body = body.replace(/[<＜]!--([\s\S]*?)--[>＞]/g, '$1');
+      if (!closed) {
+        /*
+         * 无闭合标签时 body 会延伸到文末，可能带上正文。
+         * 切到最后一个右括号为止，避免正文里的括号干扰动作扫描。
+         */
+        var lastClose = body.lastIndexOf(')');
+        if (lastClose >= 0) body = body.slice(0, lastClose + 1);
+      }
+      actions = actions.concat(extractActionsFromBody(body));
+      if (closed) openRe.lastIndex = cm.index + cm[0].length;
+      else break;
     }
     return actions;
   }
@@ -863,7 +948,24 @@
       } else if (act.op === 'updateRow') {
         var riu = Number(args[1]);
         var dataU = args[2] && typeof args[2] === 'object' ? args[2] : {};
-        if (Number.isFinite(riu) && riu >= 0 && riu < table.rows.length) {
+        /*
+         * 空表 + 第 0 行兜底。
+         *
+         * 写入规则教模型「时空表恒定一行，绝不 insertRow」，但新聊天的
+         * 空表上照章办事的 updateRow(0,…) 会因「行序号越界」被拒 ——
+         * 时空表永远等不到第一行，规则与引擎互相矛盾。
+         * 这里把「空表且 rowIndex===0」的 updateRow 等价为追加首行，
+         * 语义与 insertRow 一致（空表推入即第 0 行，不会触发裁剪）。
+         */
+        if (table.rows.length === 0 && riu === 0) {
+          var rowFirst = table.columns.map(function (_, ci) {
+            var v = dataU[ci] != null ? dataU[ci] : dataU[String(ci)];
+            return sanitizeCell(v);
+          });
+          table.rows.push(rowFirst);
+          placements.push({ tableIndex: ti, rowIndex: 0, op: 'updateRow' });
+          log.push('updateRow ' + ti + ',0(空表首行)');
+        } else if (Number.isFinite(riu) && riu >= 0 && riu < table.rows.length) {
           table.columns.forEach(function (_, ci) {
             if (dataU[ci] != null || dataU[String(ci)] != null) {
               var v = dataU[ci] != null ? dataU[ci] : dataU[String(ci)];
@@ -960,10 +1062,14 @@
        *
        * 一轮回复里可能出现多段 <tableEdit>（正文写一次、旁白再写一次），
        * 只取首尾会漏掉中间的 —— 直接用全局匹配把所有段都留下来。
+       *
+       * 结尾用 (?:</tableEdit>|$) 而不是强制闭合标签：输出被截断时
+       * </tableEdit> 缺失，旧正则整段匹配失败 → mtRaw 丢失 →
+       * 线下生成确认后无数据可补写。$ 兜底把截断块也收进保管箱。
        */
       var allBlocks =
         String(replyText).match(
-          /[<＜]\s*tableEdit\s*[>＞][\s\S]*?[<＜]\s*\/\s*tableEdit\s*[>＞]/gi
+          /[<＜]\s*tableEdit\s*[>＞][\s\S]*?(?:[<＜]\s*\/\s*tableEdit\s*[>＞]|$)/gi
         ) || [];
       return {
         text: clean,

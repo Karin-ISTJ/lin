@@ -38,6 +38,34 @@
         };
     }
 
+    /**
+     * 记忆提炼线路解析 —— 「记忆 API」独立配置。
+     *
+     * 为什么单独一条线路：记忆提炼是**独立于主回复的二次 API 调用**。
+     * 挂在对话 API 上时，换主模型/换中转会连带改掉记忆线路；且部分中转
+     * 对同密钥并发限流，主回复进行中再发记忆提炼会被 429 拒掉。
+     *
+     * 优先级：
+     *   ① cfg.memoryApi（baseUrl/apiKey/model 任一非空）→ 走专用线路，
+     *      缺哪个字段就逐字段回退对话 API（部分混搭合法）；
+     *   ② cfg.memoryApi 全空 → 回落 resolveSummaryConfig（老行为：
+     *      总结 API 优先，否则对话 API），老用户配置零迁移成本。
+     */
+    function resolveMemoryConfig(cfg) {
+        cfg = cfg && typeof cfg === 'object' ? cfg : getApiConfig();
+        var mem = cfg.memoryApi && typeof cfg.memoryApi === 'object' ? cfg.memoryApi : {};
+        var memBase = String(mem.baseUrl || '').trim();
+        var memKey = String(mem.apiKey || '').trim();
+        var memModel = String(mem.model || '').trim();
+        if (!(memBase || memKey || memModel)) return resolveSummaryConfig(cfg);
+        return {
+            baseUrl: memBase || String(cfg.baseUrl || '').trim(),
+            apiKey: memKey || String(cfg.apiKey || '').trim(),
+            model: memModel || String(cfg.model || '').trim(),
+            useDedicated: true
+        };
+    }
+
     function normalizeBaseUrl(base) {
         var t = String(base || '').trim().replace(/\/+$/, '');
         if (!t) return '';
@@ -281,14 +309,14 @@
             .join('\n');
         if (!excerpt) return Promise.resolve(false);
 
-        var sc = resolveSummaryConfig(getApiConfig());
+        var sc = resolveMemoryConfig(getApiConfig());
         var base = normalizeBaseUrl(sc.baseUrl);
         if (!base || !sc.apiKey || !sc.model) {
             if (!silent && global.miyaDialog && global.miyaDialog.alert) {
                 global.miyaDialog.alert({
                     title: '未配置 API',
                     message: sc.useDedicated
-                        ? '总结 API 需填写地址、密钥和模型；也可清空总结 API 后使用聊天 API。'
+                        ? '记忆 API 需填写地址、密钥和模型；也可清空记忆 API 后跟随聊天 API。'
                         : '请在主屏设置中填写聊天 API 地址、密钥和模型。'
                 });
             }

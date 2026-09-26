@@ -45,7 +45,7 @@
   <link rel="stylesheet" href="css/miya-chat-group-redpacket.css?v=6">
   <link rel="stylesheet" href="css/miya-chat-single-redpacket.css?v=10">
   <link rel="stylesheet" href="css/miya-chat-statusbar.css?v=3">
-  <link rel="stylesheet" href="css/miya-chat-ins.css?v=58">
+  <link rel="stylesheet" href="css/miya-chat-ins.css?v=59">
   <link rel="stylesheet" href="css/miya-chat-app-beautify.css?v=3">
   <link rel="stylesheet" href="css/miya-chat-bubble-beautify.css?v=7">
   <link rel="stylesheet" href="css/miya-icon-tint.css?v=4">
@@ -1158,9 +1158,12 @@
               <span class="soft-quick-card__label">公众号</span>
             </button>
           </div>
-          <div class="soft-section-head ins-hide-when-white fg-hide-when-green">
-            <span class="soft-section-head__title">特别关注</span>
-          </div>
+          <!--
+            「特别关注」四字标题已按需求去掉：分组大卡压缩后版面本身已能说明分区，
+            且 soft-section-head 空标题块固定占一行高度，空分区显得突兀。
+            星标行 #soft-contacts-star-row 保留 —— 容器为空时由
+            .soft-stories--compact:empty { display:none } 自动隐藏，不留空白。
+          -->
           <div class="soft-stories soft-stories--compact ins-hide-when-white fg-hide-when-green" id="soft-contacts-star-row"></div>
           <div class="soft-contacts-wrap">
             <div id="qq-group-list"></div>
@@ -3605,7 +3608,7 @@
   <script defer src="js1/miya-chat-awareness.js?v=15"></script>
   <script defer src="js1/miya-chat-online-format.js?v=63"></script>
   <script defer src="js1/miya-chat-summary.js?v=10"></script>
-  <script defer src="js1/miya-chat-memory-extract.js?v=5"></script>
+  <script defer src="js1/miya-chat-memory-extract.js?v=6"></script>
   <script defer src="js1/miya-chat-translate.js?v=11"></script>
   <script defer src="js1/miya-chat-image.js?v=5"></script>
   <script defer src="js1/miya-chat-album.js?v=14"></script>
@@ -3616,7 +3619,7 @@
   <script defer src="js1/miya-chat-html.js?v=5"></script>
   <script defer src="js2/miya-generation-lifecycle.js?v=3"></script>
   <script defer src="js2/miya-memory-table-store.js?v=10"></script>
-  <script defer src="js2/miya-memory-table-engine.js?v=9"></script>
+  <script defer src="js2/miya-memory-table-engine.js?v=10"></script>
   <script defer src="js2/miya-memory-table-app.js?v=13"></script>
   <script defer src="js1/miya-chat-time-events.js?v=4"></script>
   <script defer src="js1/miya-chat-statusbar.js?v=10"></script>
@@ -3649,7 +3652,7 @@
   <script defer src="js1/miya-chat-bubble-beautify.js?v=9"></script>
   <script defer src="js2/miya-icon-tint.js?v=5"></script>
   <script defer src="js1/miya-chat-me.js?v=35"></script>
-  <script defer src="js1/miya-chat-contact-settings.js?v=99"></script>
+  <script defer src="js1/miya-chat-contact-settings.js?v=100"></script>
   <script defer src="js1/miya-chat-voice-tts.js?v=5"></script>
   <script defer src="js1/miya-chat-voice-record.js?v=3"></script>
   <script defer src="js1/miya-chat-order-ui.js?v=5"></script>

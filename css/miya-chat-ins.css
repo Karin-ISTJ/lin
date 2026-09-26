@@ -328,6 +328,12 @@
 .soft-stories::-webkit-scrollbar { display: none; }
 
 .soft-stories--compact { padding-bottom: 8px; margin-bottom: 10px; }
+/*
+ * 星标行空容器隐藏：联系人页「特别关注」标题已删，星标行直接顶在
+ * 快捷入口后面 —— 没有星标联系人时它只剩 padding/margin 的空白，
+ * :empty 让它安静消失（渲染层填充星标头像后自动恢复显示）。
+ */
+.soft-stories--compact:empty { display: none; }
 
 .soft-story {
   flex-shrink: 0;
@@ -798,27 +804,33 @@
 }
 
 /* ── 联系人 ── */
+/*
+ * 快捷入口大卡 → 横排胶囊（群聊/标签/公众号）。
+ * 原版竖排「图标上、文字下」固定 78px 行高，在联系人页首屏占掉近 1/4，
+ * 用户反馈「有点占地方」。改横排胶囊后行高压到 52px，图标与文字同行，
+ * 视觉密度接近原生 iOS 联系人页的分组行，三项一行排完。
+ */
 .soft-quick-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  /* 固定行高，让卡片内的图标+文字能在卡片中心垂直居中 */
-  grid-auto-rows: 78px;
+  /* 固定行高，让胶囊内的图标+文字能在卡片中心垂直居中 */
+  grid-auto-rows: 52px;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .soft-quick-card {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  /* 撑满网格行高并整体垂直居中：此前卡片高度随内容收缩，图标+文字整体偏上约 8px */
+  /* 撑满网格行高并整体垂直居中 */
   justify-content: center;
   height: 100%;
-  gap: 7px;
-  padding: 12px 4px;
+  gap: 8px;
+  padding: 8px 6px;
   box-sizing: border-box;
   border: none;
-  border-radius: var(--soft-r);
+  border-radius: var(--soft-r-pill, 999px);
   background: var(--soft-surface-2);
   box-shadow: var(--soft-shadow);
   cursor: pointer;
@@ -827,9 +839,9 @@
 }
 
 .soft-quick-card__icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
   background: var(--soft-bg-3);
   display: grid;
   place-items: center;
@@ -837,7 +849,10 @@
   flex: none;
 }
 
-.soft-quick-card__icon svg { display: block; width: 17px; height: 17px; stroke-width: 1.4; }
+.soft-quick-card__icon svg { display: block; width: 15px; height: 15px; stroke-width: 1.4; }
+/* 图标同样以 <img class="mi-ico-img"> 形式出现（项目图标库统一走 img），
+   与 svg 同规格约束，避免漏出原始 18px 尺寸把胶囊撑高 */
+.soft-quick-card__icon img.mi-ico-img { display: block; width: 15px; height: 15px; }
 
 .soft-quick-card__label {
   font-size: 11px;
@@ -1119,6 +1134,24 @@
   box-sizing: border-box;
 }
 
+/*
+ * 底栏下方遮罩：浮动胶囊底栏离屏幕底边还有一段空隙（safe-area + 8px），
+ * 滚动内容会从这条缝里钻出来 —— 文字贴着胶囊圆弧上下穿行，观感很怪。
+ * ::after 从底栏下沿向下延伸 56px，用页面底色盖住这段滚动内容；
+ * pointer-events:none 保证它绝不拦截点击（底栏下方本无交互目标）。
+ * left/right 各外扩 14px：盖住圆角胶囊两侧可能露出的边角。
+ */
+.soft-tabbar::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: -14px;
+  right: -14px;
+  height: 56px;
+  background: var(--soft-bg);
+  pointer-events: none;
+}
+
 .soft-tabbar__pendant { display: none !important; }
 
 /* 头像回桌面按钮：与四个 tab 同高对齐，不挤占布局 */
@@ -1362,7 +1395,7 @@
 
 @media (max-width: 360px) {
   .soft-quick-grid { gap: 6px; }
-  .soft-quick-card { padding: 10px 2px; }
+  .soft-quick-card { padding: 6px 4px; }
   .soft-quick-card__label { font-size: 10px; }
   .soft-topbar__title { font-size: 20px; }
 }
