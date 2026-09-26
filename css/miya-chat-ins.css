@@ -1210,18 +1210,18 @@
   transition: all 0.28s;
 }
 
-/* ── 对话室：INS 紧凑气泡 · 自定义美化时不覆盖 ── */
+/* ── 对话室：清爽蓝白气泡（对齐世界书）· 自定义美化时不覆盖 ── */
 .theme-soft #qq-room:not(.mq-has-custom-css) .qq-room__row--them .qq-room__bubble,
 .theme-soft #mq-bf-preview-room:not(.mq-has-custom-css) .qq-room__row--them .qq-room__bubble {
-  background: #f7f5f2;
-  color: #3d3834;
-  border: 1px solid rgba(122, 110, 100, 0.08);
+  background: #ffffff;
+  color: #1C2026;
+  border: 1px solid #E5EAF0;
   border-radius: 14px 14px 14px 3px;
   box-shadow: none;
 }
 .theme-soft #qq-room:not(.mq-has-custom-css) .qq-room__row--me .qq-room__bubble,
 .theme-soft #mq-bf-preview-room:not(.mq-has-custom-css) .qq-room__row--me .qq-room__bubble {
-  background: linear-gradient(135deg, #3A3532, #1A1A1A);
+  background: #4B8BF5;
   color: #FAFAFA;
   border: none;
   border-radius: 14px 14px 3px 14px;

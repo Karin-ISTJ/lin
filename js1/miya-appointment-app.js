@@ -3263,7 +3263,8 @@ function renderWriter() {
              * （它是这一层的版本，不是整个场景的），位置也不占输入栏。
              */
             '<textarea class="xw-writer__field" id="xw-writer-input" rows="1" placeholder=""></textarea>' +
-            '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">↑</button>' +
+            /* 发送键与线上聊天室同款纸飞机图标（ICON_SEND），不再用 ↑ 字符 */
+            '<button type="button" class="xw-writer__go" id="xw-writer-go" aria-label="推进场景">' + ICON_SEND + '</button>' +
             '</footer>'
         );
     }

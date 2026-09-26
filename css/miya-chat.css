@@ -212,7 +212,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(245, 245, 243, 0.88);
+  background: rgba(248, 249, 251, 0.88);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -261,7 +261,7 @@
   position: relative;
   z-index: 50;
   padding: 0 24px;
-  background: rgba(245, 245, 243, 0.92);
+  background: rgba(248, 249, 251, 0.94);
   backdrop-filter: blur(12px) saturate(140%);
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
@@ -380,7 +380,8 @@
 
 .qq-room__scroll {
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: 0 20px 16px; position: relative; z-index: 1;
+  /* 顶部留白：第一条消息不能紧贴顶栏 */
+  padding: 14px 20px 16px; position: relative; z-index: 1;
   scroll-behavior: auto;
   overflow-anchor: none;
   scrollbar-width: none;
@@ -445,15 +446,15 @@
   transition: transform 0.3s var(--mc-ease), box-shadow 0.3s var(--mc-ease);
 }
 .qq-room__row--them .qq-room__bubble {
-  background: #fafaf8;
-  color: #333;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  color: #1C2026;
+  border: 1px solid #E5EAF0;
   border-radius: 16px 16px 16px 4px;
 }
 .qq-room__row--me .qq-room__bubble {
-  background: #e8e4e0;
-  color: #333;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  background: #4B8BF5;
+  color: #ffffff;
+  border: 1px solid transparent;
   border-radius: 16px 16px 4px 16px;
 }
 
@@ -480,16 +481,16 @@
 }
 #qq-room:not(.mq-has-custom-css) .qq-room__row--them .qq-room__bubble,
 #mq-bf-preview-room:not(.mq-has-custom-css) .qq-room__row--them .qq-room__bubble {
-  background: #f4f4f4;
-  color: #262626;
-  border: 1px solid rgba(0, 0, 0, 0.045);
+  background: #ffffff;
+  color: #1C2026;
+  border: 1px solid #E5EAF0;
   border-radius: 14px 14px 14px 3px;
 }
 #qq-room:not(.mq-has-custom-css) .qq-room__row--me .qq-room__bubble,
 #mq-bf-preview-room:not(.mq-has-custom-css) .qq-room__row--me .qq-room__bubble {
-  background: #efefef;
-  color: #262626;
-  border: 1px solid rgba(0, 0, 0, 0.035);
+  background: #4B8BF5;
+  color: #ffffff;
+  border: 1px solid transparent;
   border-radius: 14px 14px 3px 14px;
 }
 #qq-room:not(.mq-has-custom-css) .qq-room__typing-row {
@@ -541,8 +542,8 @@
 }
 
 .qq-room__tool-icon.is-active {
-  color: var(--mc-ink);
-  background: rgba(0, 0, 0, 0.06);
+  color: #2D6BD9;
+  background: rgba(75, 139, 245, 0.1);
   border-radius: 8px;
 }
 .qq-room__tool-icon.is-dim {
@@ -829,7 +830,7 @@
 .qq-room__foot {
   flex-shrink: 0;
   z-index: 2;
-  background: rgba(245, 245, 243, 0.94);
+  background: rgba(248, 249, 251, 0.94);
   backdrop-filter: blur(12px) saturate(140%);
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   padding: 12px 20px calc(10px + var(--mc-safe-b));
@@ -906,8 +907,8 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  background: #fafaf8;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  border: 1px solid #E5EAF0;
   border-radius: 20px;
   padding: 8px 12px 8px 8px;
   transition: border-color 0.3s var(--mc-ease), box-shadow 0.3s var(--mc-ease);
@@ -954,8 +955,8 @@
   stroke-linejoin: round;
 }
 .qq-room__input-box:focus-within {
-  border-color: rgba(0, 0, 0, 0.18);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border-color: rgba(75, 139, 245, 0.55);
+  box-shadow: 0 2px 12px rgba(75, 139, 245, 0.12);
 }
 .qq-room__input {
   flex: 1;
@@ -990,12 +991,12 @@
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  color: #bbbbbb;
+  color: #4B8BF5;
   transition: color 0.3s var(--mc-ease), transform 0.15s var(--mc-ease);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-.qq-room__send:hover { color: #888888; }
+.qq-room__send:hover { color: #2D6BD9; }
 .qq-room__send:active { transform: scale(0.94); }
 .qq-room__send svg {
   width: 20px;
@@ -2702,7 +2703,10 @@ textarea.qq-sheet__input {
 }
 
 .qq-room__row--me .qq-room__bubble-trans-line {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.32);
+}
+.qq-room__row--me .qq-room__bubble-trans-kicker {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .qq-room__bubble-trans-text {
