@@ -278,6 +278,17 @@
   pointer-events: none;
 }
 
+/* 统一质感：美化页所有 ins-chip 与字体页 bf-btn 同款平面——
+   去玻璃 blur、去悬浮黑影、去描边，只留贴地淡投影 */
+.miya-beautify-app .ins-chip {
+  border: 1px solid transparent;
+  background: var(--bf-card);
+  color: var(--bf-ink-soft);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: var(--bf-shadow);
+}
+
 /* 主按钮：主蓝底白字（对应设计稿 .btn-primary，与 ST 预设 + 钮同款） */
 .miya-beautify-app .ins-chip--gold {
   border: 1px solid transparent;
@@ -292,9 +303,9 @@
   background: #4076D0;
 }
 
-/* 强调 chip（原黑边白底）：维持幽灵形态，文字加深 */
+/* 强调 chip：同款平面幽灵钮（透明边 + 白底 + 淡影） */
 .miya-beautify-app .ins-chip--rose {
-  border: 1px solid var(--bf-border);
+  border: 1px solid transparent;
   background: var(--bf-card);
   color: var(--bf-ink-soft);
 }
@@ -911,7 +922,7 @@
 .miya-beautify-app .bf-plan-ghost {
   height: 46px;
   border: 1px solid var(--bf-border);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--bf-card);
   box-shadow: var(--bf-shadow);
   color: var(--bf-ink-soft);

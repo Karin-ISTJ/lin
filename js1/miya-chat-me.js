@@ -835,6 +835,37 @@
     '</div>';
   }
 
+  /* ── 钱包卡配色主题（用户可在钱包页切换，localStorage 持久化） ── */
+  var WALLET_CARD_THEMES = [
+    { id: 'classic',  name: '可可棕', cls: '' },
+    { id: 'obsidian', name: '曜石黑', cls: 'mi-wcard--obsidian' },
+    { id: 'midnight', name: '午夜蓝', cls: 'mi-wcard--midnight' },
+    { id: 'emerald',  name: '翡翠绿', cls: 'mi-wcard--emerald' },
+    { id: 'burgundy', name: '勃艮第', cls: 'mi-wcard--burgundy' }
+  ];
+  var WALLET_THEME_KEY = 'miya-wallet-card-theme-v1';
+
+  function getWalletTheme() {
+    try {
+      var v = localStorage.getItem(WALLET_THEME_KEY);
+      for (var i = 0; i < WALLET_CARD_THEMES.length; i++) {
+        if (WALLET_CARD_THEMES[i].id === v) return v;
+      }
+    } catch (e) { /* 隐私模式等场景忽略 */ }
+    return 'classic';
+  }
+
+  function setWalletTheme(id) {
+    try { localStorage.setItem(WALLET_THEME_KEY, id); } catch (e) { /* 忽略 */ }
+  }
+
+  function walletThemeClass() {
+    for (var i = 0; i < WALLET_CARD_THEMES.length; i++) {
+      if (WALLET_CARD_THEMES[i].id === getWalletTheme()) return WALLET_CARD_THEMES[i].cls;
+    }
+    return '';
+  }
+
   function walletCardHtml(opts) {
     var o = opts || {};
     var compact = !!o.compact;
@@ -844,6 +875,7 @@
       (compact ? ' mi-wcard--compact' : '') +
       (hero ? ' mi-wcard--hero' : '') +
       (o.active ? ' is-active' : '') +
+      (walletThemeClass() ? ' ' + walletThemeClass() : '') +
       (!interactive ? ' mi-wcard--static' : '');
     var tag = o.tag ? '<span class="mi-wcard__badge">' + esc(o.tag) + '</span>' : '';
     var ava = o.avatarId
@@ -901,8 +933,18 @@
         stackIndex: i
       });
     }).join('');
+    var themeBar = '<div class="mi-wcard-themebar" role="group" aria-label="银行卡配色">' +
+      WALLET_CARD_THEMES.map(function (t) {
+        var on = t.id === getWalletTheme();
+        return '<button type="button" class="mi-wcard-swatch' + (on ? ' is-active' : '') + '" data-mq-wcard-theme="' + t.id + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+          '<span class="mi-wcard-swatch__dot mi-wcard-swatch__dot--' + t.id + '" aria-hidden="true"></span>' +
+          '<span>' + esc(t.name) + '</span>' +
+        '</button>';
+      }).join('') +
+    '</div>';
     return '<div class="mi-me-flow mi-me-flow--wallet">' +
       '<div class="mi-wallet-stack">' + cards + '</div>' +
+      themeBar +
       walletNoteHtml('每个面具拥有独立余额，聊天转账会从此处扣款或入账') +
     '</div>';
   }
@@ -1328,6 +1370,13 @@
         } else if (hubAct === 'icontint') {
           push('icontint');
         }
+        return;
+      }
+
+      if (e.target.closest('[data-mq-wcard-theme]')) {
+        var sw = e.target.closest('[data-mq-wcard-theme]');
+        setWalletTheme(sw.getAttribute('data-mq-wcard-theme'));
+        renderTop();
         return;
       }
 

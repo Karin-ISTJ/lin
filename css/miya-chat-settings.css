@@ -2321,11 +2321,8 @@
 
 .mi-wallet-stack .mi-wcard:first-child { margin-top: 0; }
 
-.mi-wallet-stack .mi-wcard:hover,
-.mi-wallet-stack .mi-wcard:focus-visible {
-  transform: translateY(-6px) scale(1.012);
-  z-index: 4;
-}
+/* 点击不变形：移除 hover 上浮与按压缩放（手机端 tap 会触发 hover
+   且不自动恢复，卡片会停在错位状态，看起来"形状变了"） */
 
 .mi-wallet-stack .mi-wcard.is-active {
   z-index: 3;
@@ -2373,15 +2370,13 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.02) 40%, rgba(255,255,255,0.14));
+  background: linear-gradient(135deg, var(--wcard-edge-hi, rgba(255,255,255,0.22)), rgba(255,255,255,0.02) 40%, var(--wcard-edge-lo, rgba(255,255,255,0.14)));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
 }
-
-.mi-wcard:active { transform: scale(0.985); }
 
 .mi-wcard--static {
   cursor: default;
@@ -2433,7 +2428,7 @@
   width: 34px;
   height: 26px;
   border-radius: 5px;
-  background: linear-gradient(145deg, #d4c4a0 0%, #b8a070 38%, #e8dcc0 100%);
+  background: var(--wcard-chip, linear-gradient(145deg, #d4c4a0 0%, #b8a070 38%, #e8dcc0 100%));
   box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 2px 6px rgba(0,0,0,0.25);
   opacity: 0.92;
 }

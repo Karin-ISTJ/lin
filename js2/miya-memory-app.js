@@ -588,19 +588,6 @@
 
     $('miya-mem-back').addEventListener('click', closeMemoryApp);
 
-    var refreshBtn = $('miya-mem-refresh');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', function () {
-        /* 刷新：重置选中与放映状态，回到第一张票根 */
-        selectedChatId = null;
-        editingClip = null;
-        generating = false;
-        renderRoleList();
-        renderSummaryDetail(null);
-        goToIndex(0);
-      });
-    }
-
     var dotsWrap = $('miya-mem-dots');
     if (dotsWrap) {
       dotsWrap.addEventListener('click', function (e) {
