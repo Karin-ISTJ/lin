@@ -1,0 +1,19 @@
+- generic [ref=e2]:
+  - generic "自定义主屏幕" [ref=e5]:
+    - list [ref=e7]:
+      - generic [ref=e8]:
+        - button "世界书" [ref=e10] [cursor=pointer]
+        - button "记忆" [ref=e16] [cursor=pointer]
+        - button "聊天" [ref=e22] [cursor=pointer]
+        - button "美化" [ref=e28] [cursor=pointer]
+        - button "ST预设" [ref=e34] [cursor=pointer]
+        - button "情侣空间" [ref=e40] [cursor=pointer]
+        - button "行程轨迹" [ref=e46] [cursor=pointer]
+        - button "日记" [ref=e52] [cursor=pointer]
+        - button "娱乐" [ref=e58] [cursor=pointer]
+        - button "生图" [ref=e64] [cursor=pointer]
+        - button "星露农场" [ref=e70] [cursor=pointer]
+  - contentinfo:
+    - navigation "程序坞" [ref=e78]:
+      - button "隐藏程序坞" [ref=e79]
+      - button "联系人" [ref=e81] [cursor=pointer]

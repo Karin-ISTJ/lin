@@ -837,13 +837,13 @@
 
   /* ── 钱包卡配色主题（用户可在钱包页切换，localStorage 持久化） ── */
   var WALLET_CARD_THEMES = [
-    { id: 'classic',  name: '可可棕', cls: '' },
     { id: 'obsidian', name: '曜石黑', cls: 'mi-wcard--obsidian' },
     { id: 'midnight', name: '午夜蓝', cls: 'mi-wcard--midnight' },
     { id: 'emerald',  name: '翡翠绿', cls: 'mi-wcard--emerald' },
     { id: 'burgundy', name: '勃艮第', cls: 'mi-wcard--burgundy' }
   ];
   var WALLET_THEME_KEY = 'miya-wallet-card-theme-v1';
+  var WALLET_THEME_DEFAULT = 'obsidian';
 
   function getWalletTheme() {
     try {
@@ -852,7 +852,7 @@
         if (WALLET_CARD_THEMES[i].id === v) return v;
       }
     } catch (e) { /* 隐私模式等场景忽略 */ }
-    return 'classic';
+    return WALLET_THEME_DEFAULT;
   }
 
   function setWalletTheme(id) {

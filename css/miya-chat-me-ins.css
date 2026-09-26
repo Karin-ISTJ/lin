@@ -488,30 +488,31 @@
 }
 
 /* ── 钱包卡 · 配色主题（钱包页可切换，localStorage 持久化） ──
-   基础卡的 --wcard-bg 默认可可棕（见下方「钱包」规则）；以下四款
-   覆盖底色渐变 / 芯片渐变 / 高光描边三组变量。 */
-.mi-me-page:not(.mi-me-page--album) .mi-wcard--obsidian {
+   注意特异性：`.mi-me-page:not(.x)` 里 :not() 括号内的类计入特异性，
+   下方「钱包」默认规则与本组同为 0,3,0——故这里用 .mi-wcard 复合类
+   提到 0,4,0，确保主题必胜默认棕底。 */
+.mi-me-page:not(.mi-me-page--album) .mi-wcard.mi-wcard--obsidian {
   --wcard-bg: linear-gradient(145deg, #060607 0%, #1b1c1f 45%, #0a0a0c 100%);
   --wcard-chip: linear-gradient(145deg, #e2e6ec 0%, #a6adb8 38%, #d0d5dc 100%);
   --wcard-edge-hi: rgba(255, 255, 255, 0.30);
   --wcard-edge-lo: rgba(255, 255, 255, 0.18);
 }
 
-.mi-me-page:not(.mi-me-page--album) .mi-wcard--midnight {
+.mi-me-page:not(.mi-me-page--album) .mi-wcard.mi-wcard--midnight {
   --wcard-bg: linear-gradient(145deg, #0a1830 0%, #1d3263 45%, #071022 100%);
   --wcard-chip: linear-gradient(145deg, #e8d9b0 0%, #c0a468 38%, #f0e4c4 100%);
   --wcard-edge-hi: rgba(160, 190, 255, 0.30);
   --wcard-edge-lo: rgba(160, 190, 255, 0.14);
 }
 
-.mi-me-page:not(.mi-me-page--album) .mi-wcard--emerald {
+.mi-me-page:not(.mi-me-page--album) .mi-wcard.mi-wcard--emerald {
   --wcard-bg: linear-gradient(145deg, #072a20 0%, #0f4534 45%, #041d15 100%);
   --wcard-chip: linear-gradient(145deg, #e8d9b0 0%, #c0a468 38%, #f0e4c4 100%);
   --wcard-edge-hi: rgba(150, 220, 190, 0.28);
   --wcard-edge-lo: rgba(150, 220, 190, 0.12);
 }
 
-.mi-me-page:not(.mi-me-page--album) .mi-wcard--burgundy {
+.mi-me-page:not(.mi-me-page--album) .mi-wcard.mi-wcard--burgundy {
   --wcard-bg: linear-gradient(145deg, #340e1b 0%, #58192e 45%, #230a13 100%);
   --wcard-chip: linear-gradient(145deg, #f0cfc4 0%, #d19a8c 38%, #f5ded4 100%);
   --wcard-edge-hi: rgba(255, 180, 170, 0.28);
@@ -560,7 +561,6 @@
   flex-shrink: 0;
 }
 
-.mi-wcard-swatch__dot--classic  { background: linear-gradient(145deg, #5c4a3a, #2e2520); }
 .mi-wcard-swatch__dot--obsidian { background: linear-gradient(145deg, #1b1c1f, #060607); }
 .mi-wcard-swatch__dot--midnight { background: linear-gradient(145deg, #1d3263, #071022); }
 .mi-wcard-swatch__dot--emerald  { background: linear-gradient(145deg, #0f4534, #041d15); }
@@ -568,9 +568,10 @@
 
 /* ── 钱包 ── */
 .mi-me-page:not(.mi-me-page--album) .mi-wcard {
-  --wcard-bg: linear-gradient(145deg, #3d3228 0%, #5c4a3a 42%, #2e2520 100%);
+  /* 默认兜底底色：曜石黑（可可棕已按需移除，卡片默认即黑款） */
+  --wcard-bg: linear-gradient(145deg, #060607 0%, #1b1c1f 45%, #0a0a0c 100%);
   border-radius: var(--alb-r);
-  /* 卡影钉住原棕调：银行卡配色整体保持原样，不随全局冷白变量走 */
+  /* 卡影钉住暖调：深色卡在冷白页面上保持沉稳落地影 */
   box-shadow: 0 12px 40px rgba(60, 45, 30, 0.08);
 }
 
