@@ -64,6 +64,11 @@
 
   /* ── 跳进星露农场（来源 = 聊天，退出自动回跳本聊天） ── */
   function enterFarm(chatId, toast) {
+    /* 贴手势同步解锁 BGM：open() 在 ensureStore 异步链之后才执行，
+       移动端 WebView 不再认它是用户手势、play() 会被拦；
+       在点击的这一刻先把音频静音解锁，open 后恢复出声 */
+    var fgEarly = global.MiyaFarmGame;
+    if (fgEarly && typeof fgEarly.unlockAudio === 'function') fgEarly.unlockAudio();
     ensureStore().then(function (STORE) {
       var name = resolveRivalName(chatId);
       if (STORE && chatId && typeof STORE.setRival === 'function') {

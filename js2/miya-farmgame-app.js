@@ -60,6 +60,27 @@
     return bgmAudio;
   }
   function bgmPlaying() { return !!bgmAudio && !bgmAudio.paused && !bgmAudio.ended; }
+  /* play() 被自动播放策略拦下时：在 document 上挂一次性恢复。
+     enterFarm 的 open() 走异步链，移动端 WebView 不认它是手势，
+     用户进农场后第一次触摸屏幕（任意处）就把音乐续上。 */
+  var bgmArm = null;
+  function armBgmResume() {
+    if (!bgmPending || bgmArm) return;
+    bgmArm = function () {
+      document.removeEventListener('pointerdown', bgmArm, true);
+      document.removeEventListener('touchstart', bgmArm, true);
+      bgmArm = null;
+      if (bgmPending) { bgmPending = false; tryStartBgm(); }
+    };
+    document.addEventListener('pointerdown', bgmArm, true);
+    document.addEventListener('touchstart', bgmArm, true);
+  }
+  function disarmBgmResume() {
+    if (!bgmArm) return;
+    document.removeEventListener('pointerdown', bgmArm, true);
+    document.removeEventListener('touchstart', bgmArm, true);
+    bgmArm = null;
+  }
   function syncBgmBtn() {
     var btn = $('fg-bgm');
     if (!btn) return;
@@ -69,12 +90,26 @@
   function tryStartBgm() {
     if (!bgmPrefOn()) { syncBgmBtn(); return; }
     var a = ensureBgm();
+    a.muted = false;
     var pr = a.play();
-    if (pr && pr.catch) pr.catch(function () { bgmPending = true; });
+    if (pr && pr.catch) pr.catch(function () { bgmPending = true; armBgmResume(); });
     syncBgmBtn();
   }
+  /* 手势同步栈内解锁音频（enterFarm 在点击时刻调用）：
+     静音起播骗过自动播放策略——解锁过的元素之后随时可播可出声。
+     open() 走异步链后 play() 不再被WebView 认作手势，必须提前在这里解锁。 */
+  function unlockAudio() {
+    if (!bgmPrefOn()) return false;
+    var a = ensureBgm();
+    if (bgmPlaying()) return true;
+    a.muted = true;
+    var pr = a.play();
+    if (pr && pr.catch) pr.catch(function () { a.muted = false; bgmPending = true; });
+    return true;
+  }
   function stopBgm() {
-    if (bgmAudio) bgmAudio.pause();
+    disarmBgmResume();
+    if (bgmAudio) { bgmAudio.pause(); bgmAudio.muted = false; }
     bgmPending = false;
     syncBgmBtn();
   }
@@ -989,6 +1024,7 @@
   global.MiyaFarmGame = {
     open: open,
     close: close,
+    unlockAudio: unlockAudio,
     isOpened: function () { var a = getApp(); return !!a && !a.hidden; }
   };
 })(typeof window !== 'undefined' ? window : self);

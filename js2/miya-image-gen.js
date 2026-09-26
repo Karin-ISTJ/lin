@@ -2969,6 +2969,18 @@
         return false;
       }
       applyOaPresetRow(row);
+      /* 载入 = 立即生效（对齐「对话 API」面板的语义）。
+         只填表单会让接口三元组停留在「只活在 DOM 里的中间态」：
+         生图请求读的是已落盘的正式配置（miyaGetApiConfigCached），
+         于是用户看到的是切换后的 URL/密钥，发出去的却是切换前的。
+         这里当场写进正式配置并落盘 —— 切了就是切了。 */
+      saveImageGenConfig({
+        openai: {
+          baseUrl: trim(row.openai.baseUrl),
+          apiKey: trim(row.openai.apiKey),
+          model: trim(row.openai.model)
+        }
+      });
       toast('已载入「' + label + '」');
       return true;
     }).catch(function () {
