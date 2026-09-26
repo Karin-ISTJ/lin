@@ -99,8 +99,6 @@
         '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" ' + _I + '/><path d="M16.2 16.2L21 21" ' + _I + '/></svg>';
     var ICON_MORE =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.35" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.35" fill="currentColor" stroke="none"/></svg>';
-    var ICON_STYLE =
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.35 4.05L17.5 9l-4.15 1.45L12 14.5l-1.35-4.05L6.5 9l4.15-1.45L12 3.5z" ' + _I + '/><path d="M18.2 14.2l.85 2.55L21.6 17.6l-2.55.85-.85 2.55-.85-2.55-2.55-.85 2.55-.85.85-2.55z" ' + _I + '/></svg>';
     var ICON_BRANCH =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v6a4 4 0 0 0 4 4h6" ' + _I + '/><path d="M15 12l4 3-4 3" ' + _I + '/><path d="M7 5v14" ' + _I + '/></svg>';
     var ICON_EYE =
@@ -1144,12 +1142,7 @@
         return '<div class="xw-floor-scope-float">' + inner + '</div>';
     }
 
-    function renderDockBeautifyBtn() {
-        return (
-            '<button type="button" class="xw-dock__btn" id="xw-dock-beautify" title="现场样式">' +
-            '<span class="xw-dock__glyph">式</span><span class="xw-dock__lbl">样式</span></button>'
-        );
-    }
+    /* 「现场样式」切换功能已移除 —— 线下样式固定（见 miya-offline.css 末尾固定段） */
 
     function renderDockExpandBtn() {
         return (
@@ -1231,9 +1224,6 @@
                     '<button type="button" class="xw-journal-bar__ico" id="xw-dock-prefs" title="调参" aria-label="调参">' +
                     ICON_SET + '</button>';
             }
-            toolHtml +=
-                '<button type="button" class="xw-journal-bar__ico" id="xw-dock-beautify" title="样式" aria-label="样式">' +
-                ICON_STYLE + '</button>';
         }
 
         /*
@@ -3258,7 +3248,6 @@ function renderWriter() {
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8l2.25 5.95L20.2 12l-5.95 2.25L12 20.2l-2.25-5.95L3.8 12l5.95-2.25L12 3.8z" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/><path d="M18 4.5l.65 1.35L20 6.5l-1.35.65L18 8.5l-.65-1.35L16 6.5l1.35-.65L18 4.5z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>' +
             '</button>' +
             '<div class="xw-writer__tools-menu" id="xw-writer-tools-menu" hidden>' +
-            '<button type="button" class="xw-writer__tool" id="xw-writer-tool-beautify">样式</button>' +
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-prefs">调参</button>' +
             '<button type="button" class="xw-writer__tool" id="xw-writer-tool-vault">卷宗</button>' +
             '</div></div>' +
@@ -3283,7 +3272,6 @@ function renderWriter() {
         return (
             '<div class="xw-journal-dock-stubs" hidden aria-hidden="true">' +
             '<button type="button" id="xw-dock-prefs"></button>' +
-            '<button type="button" id="xw-dock-beautify"></button>' +
             '<button type="button" id="xw-dock-vault"></button></div>'
         );
     }
@@ -6349,13 +6337,6 @@ function renderWriter() {
                 e.stopPropagation();
                 toolsMenu.hidden = !toolsMenu.hidden;
             });
-            var toolBeautify = $('xw-writer-tool-beautify');
-            if (toolBeautify) toolBeautify.addEventListener('click', function () {
-                toolsMenu.hidden = true;
-                var api = global.MiyaOfflineBeautify;
-                if (api && typeof api.openBeautifyDrawer === 'function') api.openBeautifyDrawer();
-                else toast('样式模块未加载');
-            });
             var toolPrefs = $('xw-writer-tool-prefs');
             if (toolPrefs) toolPrefs.addEventListener('click', function () {
                 toolsMenu.hidden = true;
@@ -6439,17 +6420,6 @@ function renderWriter() {
 
         var setBtn = $('xw-dock-prefs');
         if (setBtn) setBtn.addEventListener('click', openSettingsSheet);
-
-        var bfBtn = $('xw-dock-beautify');
-        if (bfBtn) {
-            bfBtn.addEventListener('click', function () {
-                if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.openBeautifyDrawer) {
-                    global.MiyaOfflineBeautify.openBeautifyDrawer();
-                } else {
-                    toast('样式模块未加载');
-                }
-            });
-        }
 
         /* 卷宗条（xw-ribbon-*）已整体移除，其上的
            「归档成纪要 / 命名 / 续写这一幕」三个绑定一并删除：
@@ -6629,9 +6599,8 @@ function renderWriter() {
     }
 
     function applyOfflineBeautify() {
-        if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.applyBeautify) {
-            global.MiyaOfflineBeautify.applyBeautify();
-        }
+        /* 主题/自定义 CSS 切换已移除：线下样式固定为 miya-offline.css
+           末尾的「线下固定样式」段，无需再往 app 上挂主题类。 */
     }
 
     /**
@@ -6736,11 +6705,6 @@ function renderWriter() {
         }
         if (st && typeof st.whenReady === 'function') {
             hydrate = hydrate.then(function () { return st.whenReady(); });
-        }
-        if (global.MiyaOfflineBeautify && global.MiyaOfflineBeautify.whenPresetsReady) {
-            hydrate = hydrate.then(function () {
-                return global.MiyaOfflineBeautify.whenPresetsReady();
-            });
         }
         /*
          * 在选场次之前先把「上次待在哪个聊天」读进缓存。

@@ -5,12 +5,12 @@ var CACHE = 'miya-v324-karin';
  * app.js 会在收到 SW 广播时比对两者：SW 比页面新 → 自动刷新一次页面。
  * 只增不减：每次改动 sw.js / 任何需要立刻生效的资源策略时 bump 尾号。
  */
-var BUILD = 'sw-106';
+var BUILD = 'sw-107';
 /* SWR 竞速超时：超过此时长未获网络响应就用缓存顶上（后台继续拉新版）。
    本地/快服务器 304 协商远低于此值（行为同旧 networkFirst）；
    慢服务器 200 个协商请求不再各等一个完整 RTT —— 首屏从分钟级回秒级。 */
 var NETWORK_TIMEOUT_MS = 400;
-var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './css/miya-offline.css', './css/miya-offline-themes.css', './css/miya-offline-card.css', './css/miya-offline-plot.css', './js1/app.js', './js1/miya-appointment-app.js', './js1/miya-appointment-engine.js', './js1/miya-appointment-store.js', './js2/miya-offline-plot.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
+var FILES = ['./', './index.html', './css/style.css', './css/miya-apps.css', './css/miya-chat.css', './css/miya-offline.css', './css/miya-offline-card.css', './css/miya-offline-plot.css', './js1/app.js', './js1/miya-appointment-app.js', './js1/miya-appointment-engine.js', './js1/miya-appointment-store.js', './js2/miya-offline-plot.js', './manifest.json', './img/miya-icon.png', './img/miya-icon-192.png', './img/miya-icon-512.png'];
 /* BGM（farm-bgm-1.mp3, 1.9M）已从预缓存摘除：农场 BGM 走运行时 cacheFirst
    （首次在线播放时拉取一次即永久缓存），不再拖慢 SW install/activate。 */
 /* html/css/js/json + PWA icons: always prefer network so home-screen name/icon update */

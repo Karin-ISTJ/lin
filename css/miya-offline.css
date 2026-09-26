@@ -15,8 +15,11 @@
    * 让各主题可以单独调（不定义时回退到 --xw-ink，视觉上仍然协调）。
    */
   --xw-floor-mark: #8b7355;
-  --xw-serif: "Cormorant Garamond", "Noto Serif SC", serif;
-  --xw-sans: "Jost", "Noto Sans SC", sans-serif;
+  /* 方案 E · 无衬线系统原生风：西文/数字走系统 UI 字体（iOS SF / 安卓 Roboto），
+     中文回退苹方/雅黑 —— 数字与汉字同源统一，oldstyle 突兀感消失。
+     serif/sans 两个变量指到同一个栈：正文、标题、UI 全部统一。 */
+  --xw-serif: -apple-system, system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --xw-sans: -apple-system, system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   position: fixed;
   inset: 0;
   z-index: 520;
@@ -2292,4 +2295,139 @@
 
 #miya-offline-app .qq-room__time-event-btn:active {
   opacity: 0.7;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   线下固定样式（原「现场样式」切换功能已移除，此段永远生效）
+   纤细修长 + 高级极简风 · 底栏原版
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 1. 底栏整体：控制上下内边距，保持修长整洁 */
+#miya-offline-app .xw-writer {
+  padding: 8px 14px !important;
+  gap: 10px !important;
+  background: #FAFAFA !important;      /* 高级冷亮灰 */
+  border-top: 1px solid #ECECEC !important; /* 极细分隔线 */
+  align-items: center !important;
+}
+
+/* 2. 输入框：黄金 36px 瘦长胶囊，兼顾舒适度与纤细感 */
+#miya-offline-app .xw-writer__field,
+#miya-offline-app #xw-writer-input {
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 16px !important;
+  border-radius: 18px !important;      /* 完美胶囊圆角 */
+  background: #FFFFFF !important;     /* 纯白输入区 */
+  border: 1px solid #E3E3E8 !important; /* 精致淡灰边框 */
+  font-size: 13.5px !important;
+  color: #1A1A1A !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important; /* 极轻微悬浮感 */
+  transition: border-color 0.2s ease !important;
+}
+
+/* 输入框聚焦时变清晰 */
+#miya-offline-app #xw-writer-input:focus {
+  border-color: #B0B0B8 !important;
+  outline: none !important;
+}
+
+/* 3. 左侧「撤销/重置」按键 (34px) */
+#miya-offline-app #xw-writer-undo,
+#miya-offline-app .xw-writer__undo {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  border-radius: 50% !important;
+  background: #F0F0F2 !important;
+  border: 1px solid #E0E0E5 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  transition: background-color 0.2s ease !important;
+}
+
+#miya-offline-app #xw-writer-undo:active {
+  background: #E4E4E8 !important;
+}
+
+/* 4. 右侧「发送」按键：冷黑高亮 (34px) */
+#miya-offline-app #xw-writer-go,
+#miya-offline-app .xw-writer__go {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  border-radius: 50% !important;
+  background: #111111 !important;     /* 纯粹深黑 */
+  border: none !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  transition: opacity 0.2s ease !important;
+}
+
+#miya-offline-app #xw-writer-go:active {
+  opacity: 0.8;
+}
+
+/* 5. 适配图标大小 */
+#miya-offline-app #xw-writer-undo svg,
+#miya-offline-app .xw-writer__undo svg {
+  width: 15px !important;
+  height: 15px !important;
+  stroke: #4A4A4A !important;
+}
+
+#miya-offline-app #xw-writer-go svg,
+#miya-offline-app .xw-writer__go svg {
+  width: 15px !important;
+  height: 15px !important;
+  stroke: #FFFFFF !important;
+}
+
+/* ── 正文排版（仅追加，绝不碰上面底栏尺寸） ── */
+
+/* 1. 正文：16px、1.9 行距、去斜体 */
+#miya-offline-app .xw-txt--theirs,
+#miya-offline-app .xw-txt--mine,
+#miya-offline-app .xw-chat__text,
+#miya-offline-app .xw-script {
+  font-size: 16px !important;
+  font-style: normal !important;
+  line-height: 1.9 !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* 2. 旁白引语调整 */
+#miya-offline-app .xw-txt--aside,
+#miya-offline-app .xw-txt--callout {
+  font-size: 15px !important;
+  font-style: normal !important;
+  line-height: 1.9 !important;
+}
+
+/* 3. 终极防斜体 */
+#miya-offline-app .xw-main,
+#miya-offline-app .xw-main * {
+  font-style: normal !important;
+  font-synthesis: none !important;
+}
+
+/* 4. 正文字色：柔和炭黑 */
+#miya-offline-app .xw-txt--theirs,
+#miya-offline-app .xw-txt--mine,
+#miya-offline-app .xw-txt--aside,
+#miya-offline-app .xw-script {
+  color: #3C3C3C !important;
+}
+
+/* 5. 对话高亮：浅灰蓝块 */
+#miya-offline-app .xw-txt--callout {
+  background-color: #E9EEF7 !important;
+  color: #2C3A52 !important;
 }
