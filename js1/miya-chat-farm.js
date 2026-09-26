@@ -260,6 +260,10 @@
         migrateLegacyFarms();
         refreshSunBadge();
       } catch (e) {}
+      /* 农场组此刻已加载完毕：静音预起播 BGM（muted 免手势），
+         用户点「进入→」时音乐已经处于待命状态，open 后立即出声 */
+      var fgReady = global.MiyaFarmGame;
+      if (fgReady && typeof fgReady.unlockAudio === 'function') fgReady.unlockAudio();
       openOverlay(shell(renderPanel(STORE, chatId)));
     });
   }

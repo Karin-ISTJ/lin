@@ -368,8 +368,13 @@
       if (window.miyaFunApp && window.miyaFunApp.open) window.miyaFunApp.open();
     },
     farmgame: function () {
-      /* 星露农场：懒加载组 farmUiGame 先保证 store/app 就绪再 open */
-      if (window.MiyaFarmGame && window.MiyaFarmGame.open) window.MiyaFarmGame.open();
+      /* 星露农场：懒加载组 farmUiGame 已就绪（launchApp 先 ensure 再进这里）。
+         open() 本身在 ensure 的 then 之后执行、已脱离用户手势，
+         移动端 WebView 会拦掉 unmuted 的 play() —— 所以进 open 前先贴着
+         现有调用栈解锁一次（muted 起播免手势），open 后恢复出声。 */
+      var fg = window.MiyaFarmGame;
+      if (fg && typeof fg.unlockAudio === 'function') fg.unlockAudio();
+      if (fg && fg.open) fg.open();
     },
     imagegen: function () {
       /* 生图设置已从「桌面设置 App」独立出来成自己的全屏页

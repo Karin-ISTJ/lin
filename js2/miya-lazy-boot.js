@@ -64,7 +64,7 @@
       css: ['css/miya-farmgame.css?v=14'],
       js: [
         'js2/miya-farmgame-store.js?v=6',
-        'js2/miya-farmgame-app.js?v=15'
+        'js2/miya-farmgame-app.js?v=16'
       ]
     }
   };

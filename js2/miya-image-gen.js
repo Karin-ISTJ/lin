@@ -3395,13 +3395,16 @@
         deleteOaPreset();
         return;
       }
-      if (t.closest('#miya-st-ig-oa-preset-pick')) {
-        loadOaPreset();
-        return;
-      }
+      /* 注意：接口预设下拉的载入绑在下面的 change 监听里，不绑 click。
+         移动端 WebView 选择 option 只触发 change 不触发 click，
+         绑 click 会出现「桌面碰巧能用、手机永远不载入」的分裂行为。 */
     });
 
     root.addEventListener('change', function (e) {
+      if (e.target && e.target.id === 'miya-st-ig-oa-preset-pick') {
+        loadOaPreset();
+        return;
+      }
       if (e.target && e.target.name === 'miya-st-ig-provider') {
         syncProviderPanels(e.target.value === 'novelai' ? 'novelai' : 'openai');
       }

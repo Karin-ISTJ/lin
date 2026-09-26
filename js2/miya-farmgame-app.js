@@ -64,13 +64,18 @@
      enterFarm 的 open() 走异步链，移动端 WebView 不认它是手势，
      用户进农场后第一次触摸屏幕（任意处）就把音乐续上。 */
   var bgmArm = null;
-  function armBgmResume() {
-    if (!bgmPending || bgmArm) return;
+  function armBgmResume(force) {
+    if (bgmArm) return;
+    if (!force && !bgmPending) return;
     bgmArm = function () {
       document.removeEventListener('pointerdown', bgmArm, true);
       document.removeEventListener('touchstart', bgmArm, true);
       bgmArm = null;
-      if (bgmPending) { bgmPending = false; tryStartBgm(); }
+      /* 已经在出声就不折腾；否则手势栈内重试 —— 手势内的 play()
+         就是移动端认可的「解锁」，iOS unmute 失败的场景也靠这里救回 */
+      if (bgmAudio && bgmPlaying() && !bgmAudio.muted) return;
+      bgmPending = false;
+      tryStartBgm();
     };
     document.addEventListener('pointerdown', bgmArm, true);
     document.addEventListener('touchstart', bgmArm, true);
@@ -298,6 +303,9 @@
     syncNow();
     renderAll();
     tryStartBgm();
+    /* 无论 play 是否被拦都挂触摸兜底：iOS 上「muted 预起播后 unmute」
+       可能不生效且探测不到，首次触摸时在手势栈内重试必然解锁成功 */
+    armBgmResume(true);
     STORE.hydrateFromIdb().then(function () { syncNow(); renderAll(); });
     if (!syncTimer) {
       syncTimer = setInterval(function () {
