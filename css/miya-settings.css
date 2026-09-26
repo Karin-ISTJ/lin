@@ -1,8 +1,8 @@
 /* miya · 设置 — 暖色玻璃刊面 */
 
 .miya-settings-app {
-  --st-bg: #F5F3EF;
-  --st-bg-warm: #F0EDE7;
+  --st-bg: #F8F9FB;
+  --st-bg-warm: #F1F4F8;
   --st-card-bg: rgba(255, 255, 255, 0.72);
   --st-card-bg-hover: rgba(255, 255, 255, 0.88);
   --st-text-primary: #1A1A1A;
@@ -942,7 +942,7 @@
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #E8E4DF, #D5D0CA);
+  background: linear-gradient(135deg, #E8ECF1, #D2D9E2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2073,7 +2073,7 @@
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #E8E4DF, #D5D0CA);
+  background: linear-gradient(135deg, #E8ECF1, #D2D9E2);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -65,7 +65,7 @@
   gap: 14px;
   padding: 16px 12px;
   border-radius: 12px;
-  background: #F5F8FC;
+  background: #F8F9FB;
   overflow: hidden;
 }
 /* 预览房间内复用 qq-room__row / __bubble 全局类，这里补齐基线与重置 */
